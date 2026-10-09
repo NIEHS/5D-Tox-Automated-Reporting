@@ -817,8 +817,11 @@ NCBI renders the HTML book page from the XML on its own servers after
 acceptance. We never hold their production stylesheet. The
 `bookshelf` surface is our lookalike of that page:
 
-- It reproduces the reader content: a contents landing page (title block,
-  abstract, the parts with their sections nested), one page per part with
+- It reproduces the reader content: a contents landing page laid out like the
+  real one for NIEHS Report 10 (title, subtitle, series, authors with an
+  affiliations toggle, publication line, copyright, the abstract with inline
+  part headings, the contents with sections nested, About the Series, and
+  Cite this Page in the rail), one page per part with
   Previous/Next, tables and figures as thumbnail cards that open in a
   lightbox, and cross-references that work across pages.
 - It renders what the book says: labels and headings come from the BITS.

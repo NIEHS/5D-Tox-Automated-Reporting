@@ -7,6 +7,7 @@ book's — the same way.
 """
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -59,10 +60,20 @@ def test_references_page_is_the_numbered_list(page):
 
 def test_contents_has_the_abstract_and_nested_sections(page):
     contents = _article(page, "contents")
-    assert '<div class="bk-abstract"><h2>Abstract</h2>' in contents
+    assert '<div class="bk-abstract" itemprop="description"><h2>Abstract</h2>' in contents
     methods = contents.split('href="#bp-methods">', 1)[1].split("</li></ul>", 1)[0]
     assert "Study Design" in methods and 'class="bk-contents c-nested"' in methods
-    assert '<span class="c-label">Appendix A</span>' in contents
+    assert re.search(r'>Appendix A\. [^<]+</a>', contents)
+
+
+def test_landing_shows_the_series_facts_the_book_declares(page):
+    contents = _article(page, "contents")
+    assert '<p class="bk-series-line"><i>NIEHS Report</i></p>' in contents
+    assert "<h3>About the Series</h3>" in contents
+    assert "ISSN (Electronic): 2768-5632" in contents
+    assert 'data-obj="obj-copyright"' in contents
+    assert 'data-obj="obj-cite"' in page and "[Internet]." in page
+    assert "Other titles in this collection" in page and "NIEHS Report Series" in page
 
 
 def test_a_chunked_bundle_renders_like_the_book(tmp_path):
@@ -88,3 +99,47 @@ def test_published_bundle_renders():
     assert '<div class="bk-formula" id="e-2-01"><math' in html
     assert 'class="bk-media"' in _article(html, "a-2-F")
     assert "data:image/jpeg;base64," in _article(html, "a-2-C")
+
+
+# The real Bookshelf landing page of NIEHS Report 10 (NBK589955).
+LANDING = (Path(__file__).resolve().parents[1] / "fixtures" / "reference" / "NIEHS-10"
+           / "bookshelf-landing.html")
+
+
+def _txt(el) -> str:
+    return " ".join("".join(el.itertext()).replace(" ", " ").split())
+
+
+def _landing_facts(root) -> dict:
+    """What a reader sees on a book's landing page, from either the real page
+    or the facsimile's Contents article."""
+    meta = root.xpath(".//div[contains(@class,'meta-content')]")[0]
+    box = root.xpath(".//div[h3='About the Series']")[0]
+    return {
+        "title": _txt(meta.xpath(".//h1")[0]),
+        "subtitle": _txt(meta.xpath(".//div[@class='subtitle']")[0]),
+        "series": _txt(meta.xpath(".//p[i]")[0]),
+        "authors": _txt(meta.xpath(".//p[@class='contrib-group']")[0]),
+        "publication": _txt(meta.xpath(".//div[contains(@class,'half_rhythm')]")[0]),
+        "affiliations": [_txt(a) for a in meta.xpath(".//div[@class='affiliation']")],
+        "abstract": [(_txt(h), len(h.xpath("following-sibling::p")))
+                     for h in root.xpath(".//h4[@class='inline']")],
+        "contents": [(len(a.xpath("ancestor::ul")), _txt(a))
+                     for a in root.xpath(".//a[contains(@class,'toc-item')]")],
+        "about_series": [_txt(d) for d in box.xpath("div")],
+    }
+
+
+def test_published_book_landing_matches_the_real_bookshelf_page():
+    """The published NIEHS-10 bundle through the facsimile gives the landing
+    page Bookshelf serves for it: title block, abstract, contents, series box
+    and the Cite this Page text."""
+    from lxml import html as lhtml
+
+    if not (BOOKSHELF / "NIEHS-10" / "TOC.nxml").exists():
+        pytest.skip("published NIEHS-10 bundle not downloaded (assets/cebs/_bookshelf)")
+    real = lhtml.fromstring(LANDING.read_text(encoding="utf-8"))
+    page = lhtml.fromstring(render_book_file(BOOKSHELF / "NIEHS-10"))
+    ours = page.xpath("//article[@data-slug='contents']")[0]
+    assert _landing_facts(ours) == _landing_facts(real)
+    assert _txt(page.xpath("//p[@class='bk-cite']")[0]) == _txt(real.xpath("//div[@class='bk_tt']")[0])

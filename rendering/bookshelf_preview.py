@@ -35,6 +35,10 @@ XSLT, and reproducing it would be impersonation.  A prominent banner marks every
 page as a preview, not an NCBI/NIEHS page.  It is a preview of the ultimate
 deliverable, never a substitute for NCBI's own QA render.
 
+The Contents landing — title block, abstract, contents, About the Series — and
+the rail's Cite this Page are rendering.bookshelf_landing, matched to the real
+landing page of NIEHS Report 10.
+
 It renders a chunked Bookshelf bundle (TOC.nxml + one file per part) the same
 way — our `bits` surface, or a PUBLISHED book from assets/cebs/_bookshelf — so
 ours and the published report of a study can be read side by side.
@@ -412,40 +416,6 @@ class _Page:
     subnav: list[tuple[str, str]] = field(default_factory=list)  # (id, heading)
 
 
-_MONTH_ABBR = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
-               "Nov", "Dec")
-
-
-def _meta(root) -> dict:
-    """The book-level facts the masthead and the Contents landing show."""
-    bm = root.find("book-meta")
-
-    def get(path):
-        return _ws_text(bm.find(path)) if bm is not None else ""
-
-    authors = []
-    if bm is not None:
-        for c in bm.findall("contrib-group/contrib"):
-            given, surname = _ws_text(c.find("name/given-names")), _ws_text(c.find("name/surname"))
-            name = " ".join(x for x in (given, surname) if x) or _ws_text(c.find("string-name"))
-            if name:
-                authors.append(name)
-    series = root.find("collection-meta[@collection-type='book-series']")
-    month = get("pub-date/month")
-    return {
-        "title": get("book-title-group/book-title") or "Untitled",
-        "subtitle": get("book-title-group/subtitle"),
-        "authors": authors,
-        "publisher": get("publisher/publisher-name"),
-        "loc": get("publisher/publisher-loc"),
-        "issn": _ws_text(series.find("issn")) if series is not None else get("issn"),
-        "year": get("pub-date/year"),
-        "month": _MONTH_ABBR[int(month) - 1] if month.isdigit() and 1 <= int(month) <= 12 else "",
-        "doi": get("book-id[@book-id-type='doi']"),
-        "abstract": bm.find("abstract") if bm is not None else None,
-    }
-
-
 def _part_slug(part_el, kind: str, n: int) -> str:
     """A page's anchor: the part's @id (our book), else its <book-part-id> (a
     chunked bundle, where the id moved onto the wrapper)."""
@@ -542,50 +512,6 @@ def _page_article(page: _Page) -> str:
             f'{page.body}</div></article>')
 
 
-def _abstract_html(abs_el) -> str:
-    """The structured abstract: each part's first paragraph led by its run-in
-    label (Background. / Methods. / …)."""
-    parts: list[str] = []
-    for sec in abs_el.findall("sec"):
-        label = _title_text(sec)
-        for p in sec.findall("p"):
-            run_in = f'<span class="abs-label">{_esc(label)}.</span> ' if label else ""
-            parts.append(f'<p class="abstract-p">{run_in}{_inline(p)}</p>')
-            label = ""  # only the first paragraph of a sec gets the run-in label
-    title = _ws_text(abs_el.find("title")) or "Abstract"
-    return f'<div class="bk-abstract"><h2>{_esc(title)}</h2>{"".join(parts)}</div>'
-
-
-def _contents_article(pages: list[_Page], m: dict) -> str:
-    """The book's landing page: the title block (title, subtitle, authors,
-    publication line), the abstract the book-meta carries, and the Contents —
-    every part in reading order, a body part's sections nested under it (the
-    published <toc> shape)."""
-    lis = []
-    for p in pages:
-        lab = f'<span class="c-label">{_esc(p.label)}</span> ' if p.label else ""
-        nested = ""
-        if p.kind == "chapter" and p.subnav:
-            nested = '<ul class="bk-contents c-nested">' + "".join(
-                f'<li><a href="#{_esc(sid)}">{_esc(stitle)}</a></li>'
-                for sid, stitle in p.subnav) + "</ul>"
-        lis.append(f'<li class="c-{p.kind}"><a href="#{_esc(p.slug)}">'
-                   f'{lab}{_esc(p.title)}</a>{nested}</li>')
-    sub = f'<div class="book-h1-sub">{_esc(m["subtitle"])}</div>' if m["subtitle"] else ""
-    authors = (f'<div class="bk-authors">{_esc(", ".join(m["authors"]))}</div>'
-               if m["authors"] else "")
-    when = " ".join(x for x in (m["year"], m["month"]) if x)
-    pubinfo = ": ".join(x for x in (m["loc"], m["publisher"]) if x)
-    pubinfo = "; ".join(x for x in (pubinfo, when) if x)
-    publine = f'<div class="bk-pubinfo">{_esc(pubinfo)}.</div>' if pubinfo else ""
-    abstract = _abstract_html(m["abstract"]) if m["abstract"] is not None else ""
-    return (f'<article class="bk-page" data-slug="contents" hidden>'
-            f'<div class="meta-content"><h1 class="book-h1">{_esc(m["title"])}</h1>'
-            f'{sub}{authors}{publine}</div>'
-            f'<div class="body-content">{abstract}<h2>Contents</h2>'
-            f'<ul class="bk-contents">{"".join(lis)}</ul></div></article>')
-
-
 def _secnav(chain: list[dict]) -> str:
     lis = []
     for p in chain:
@@ -595,21 +521,12 @@ def _secnav(chain: list[dict]) -> str:
     return '<ul class="bk-secnav">' + "".join(lis) + "</ul>"
 
 
-def _views_panel(downloads: list[dict] | None) -> str:
-    items = ['<li><a id="bk-print" href="#">Print this page</a></li>']
+def _views_panel(downloads: list[dict] | None, cite: str) -> str:
+    items = ['<li><a id="bk-print" href="#">Print this page</a></li>', cite]
     for d in downloads or []:
         if d.get("href") and d.get("label"):
             items.append(f'<li><a href="{_esc(d["href"])}">{_esc(d["label"])}</a></li>')
     return '<ul class="rail-links">' + "".join(items) + "</ul>"
-
-
-def _citation(m: dict) -> str:
-    bits = [x for x in (m["publisher"], m["loc"], m["year"]) if x]
-    src = ". ".join(bits)
-    tail = f" {_esc(src)}." if src else ""
-    return ("This is a preview of how the report will read on NCBI Bookshelf, "
-            "generated by rlm-bmdx from the report&#8217;s BITS/JATS submission "
-            f"XML.{tail}")
 
 
 # ---------------------------------------------------------------------------
@@ -617,8 +534,10 @@ def _citation(m: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | None) -> str:
+    from rendering import bookshelf_landing as landing
+
     _OBJ_COUNTER["seq"] = itertools.count(1)
-    m = _meta(root)
+    m = landing.book_facts(root)
     pages = _collect_pages(root, base_dir, images)
 
     # The navigation chain: Contents first, then every page.
@@ -627,7 +546,7 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
     chain += [{"slug": p.slug, "kind": p.kind, "title": p.title, "label": p.label}
               for p in pages]
 
-    articles = _contents_article(pages, m) + "".join(_page_article(p) for p in pages)
+    articles = landing.contents_article(pages, m) + "".join(_page_article(p) for p in pages)
 
     bits = [x for x in (m["subtitle"], m["publisher"], m["loc"], m["year"]) if x]
     if m["issn"]:
@@ -647,14 +566,15 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
 </header>
 <div class="bk-container">
   <div class="bk-main" id="maincontent">
-    <div class="pre-content"><div class="bk_prnt"><p class="small">{_citation(m)}</p></div></div>
+    <div class="pre-content"><div class="bk_prnt"><p class="small">A preview of how the report will read on NCBI Bookshelf, generated by rlm-bmdx from the report&#8217;s BITS XML.</p></div></div>
     <div class="pagination bk-pager" id="bk-pager-top"></div>
     <div class="bk-pages">{articles}</div>
     <div class="pagination bk-pager" id="bk-pager-bottom"></div>
-    <div class="post-content"><p class="small">Preview generated by rlm-bmdx from the report&#8217;s BITS/JATS &lt;book&gt; via rendering/bookshelf_preview.py. Not an NCBI/NIEHS page.</p></div>
+    <div class="post-content">{landing.post_content(m)}<p class="small">Preview generated by rlm-bmdx from the report&#8217;s BITS/JATS &lt;book&gt; via rendering/bookshelf_preview.py. Not an NCBI/NIEHS page.</p></div>
   </div>
   <aside class="bk-rail" id="rightcolumn">
-    <div class="rail-panel"><div class="rail-title">Views</div>{_views_panel(downloads)}</div>
+    <div class="rail-panel"><div class="rail-title">Views</div>{_views_panel(downloads, landing.cite_item(m))}</div>
+    {landing.collection_panel(m)}
     <div class="rail-panel"><div class="rail-title">Sections</div>{_secnav(chain)}</div>
   </aside>
 </div>
@@ -817,8 +737,16 @@ a:hover{text-decoration:underline;}
   margin:6px 0 14px; padding-bottom:10px; border-bottom:2px solid #dbe2e8;}
 .meta-content h1 .label{color:var(--muted); font-weight:700; font-size:1.02rem;
   display:block; margin-bottom:2px; text-transform:uppercase; letter-spacing:.05em;}
-.book-h1{font-size:1.7rem; color:#12263a; margin:6px 0 2px;}
-.book-h1-sub{color:var(--muted); font-size:.9rem; margin-bottom:16px;}
+.meta-content h1.book-h1{font-size:1.7rem; color:#12263a; margin:6px 0 4px; padding:0; border:0;}
+.meta-content .subtitle{font-size:1.15rem; color:#22333f; margin:0 0 6px;}
+.meta-content p{margin:4px 0;}
+.meta-content p.contrib-group{line-height:1.5;}
+.bk-authinfo{margin:4px 0 8px; font-size:.92rem;}
+.bk-authinfo summary{color:var(--link); cursor:pointer;}
+.bk-authinfo h4{margin:10px 0 4px; font-size:.95rem;}
+.bk-authinfo .affiliation{margin:2px 0;}
+ul.bk-meta-links{list-style:none; margin:6px 0 14px; padding:0; display:flex; gap:18px;
+  font-size:.88rem;}
 /* body content */
 .body-content h2{font-size:1.3rem; font-weight:700; color:#1b3a4b; margin:26px 0 8px;
   padding-bottom:5px; border-bottom:1px solid var(--hline);}
@@ -826,8 +754,10 @@ a:hover{text-decoration:underline;}
 .body-content h4{font-size:1.0rem; font-weight:700; color:#2a2a2a; margin:18px 0 6px;}
 .body-content h5,.body-content h6{font-size:.96rem; font-weight:700; margin:14px 0 6px;}
 .body-content p{margin:0 0 12px;}
-.abstract-p{margin-bottom:10px;}
-.abs-label{font-weight:700;}
+.bk-abs-sec{margin:0 0 12px;}
+.bk-abstract h4.inline{display:inline; font-size:1em; margin:0 .3em 0 0;}
+.bk-abstract h4.inline + p{display:inline;}
+.bk-abstract h4.inline + p + p{margin-top:12px;}
 sup{font-size:.72em;} sub{font-size:.72em;}
 .xref{white-space:nowrap;}
 /* "In this Page" mini-toc */
@@ -872,16 +802,15 @@ ul.bk-list{margin:0 0 12px 22px;}
 ol.ref-list{font-size:.9rem; line-height:1.5; padding-left:26px;}
 ol.ref-list li{margin:0 0 8px;}
 /* contents landing */
-.c-group{margin:0 0 20px;}
-.c-group-h{font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted); border-bottom:1px solid var(--rule); padding-bottom:4px; margin-bottom:8px;}
 ul.bk-contents{list-style:none; margin:0; padding:0;}
 ul.bk-contents li{margin:5px 0; font-size:.98rem;}
-ul.bk-contents .c-label{color:var(--muted); font-weight:600; margin-right:.4em;}
 ul.bk-contents.c-nested{margin:4px 0 6px 20px;}
 ul.bk-contents.c-nested li{font-size:.9rem; margin:3px 0;}
-.bk-authors{margin:4px 0 6px; line-height:1.5;}
-.bk-pubinfo{color:var(--muted); font-size:.92rem; margin-bottom:14px;}
+.bk-pubinfo{margin:6px 0 4px;}
+.bk-series{margin-top:26px;}
+.bk-series h3{margin:0 0 6px; font-size:1rem;}
+.bk-cite{font-size:.95rem; line-height:1.5;}
+.rail-text{display:block; padding:7px 14px; font-size:.9rem;}
 .bk-abstract{margin-bottom:22px;}
 ul.bk-simple{list-style:none; margin-left:0; padding-left:0;}
 ul.bk-simple>li{margin:0 0 12px;}
