@@ -83,9 +83,45 @@ The structure YAML now matches the published BITS book one-to-one (ADR-0028), an
   - theoretical inhaled dose;
   - five appendices of chemistry and internal concentration.
 
-  This is G3 conformance gap 8 ("structure") and needs a 2026 report-type template.
-- **RR-8 and NIEHS-02 … 06 are not compared.** They are older single-part books (one `book-part` with sections inside), a layout ours does not follow.
+  This is G3 conformance gap 8 ("structure") and needs a 2026 report-type template. *(Done the same day: see the next section.)*
+- **RR-8 and NIEHS-02 … 06 are not compared.** They are older single-part books (one `book-part` with sections inside), a layout ours does not follow. *(Done the same day: see the next section.)*
 - **Abstract Methods shows as pending in every report.** The abstract-overlay call that builds it never produces text. This is a content fix.
+
+## Each report from its own document definition (2026-10-09, ADR-0029)
+
+Each published report now renders from its own definition,
+`templates/studies/<DTXSID>/document.yaml`. That file extends its generation's
+base in `templates/eras/` and states only how the report differs:
+
+| Era | Reports | Packaging |
+|---|---|---|
+| `ntp-rr-2018` | RR-8 | single-file, NTP Research Report series |
+| `niehs-2022` | NIEHS-02 … 06 | single-file |
+| `niehs-2023` | NIEHS-07 … 10 | chunked |
+| `niehs-2026` | NIEHS-12, 13 | chunked |
+
+All 12 were re-rendered (docx, html, jats, bits, pdf). Every BITS book is
+DTD-valid and StyleChecker-clean.
+
+**Section structure against the published books:**
+- **RR-8 and NIEHS-02 … 10:** identical. What still differs is content and
+  objects:
+  - the title (sex and strain form; RR-8's NTP wording);
+  - the report number and authors;
+  - the 2022 Appendix B and RR-8 B/C/E tables;
+  - the F file lists (`<media>`);
+  - the 2023 per-tissue PCA and eFDR objects.
+  Unlike the earlier comparison, NIEHS-07 … 09 now have A.1 and Appendix D
+  follows the published structure. The BMDS flowcharts are pending: our
+  pipeline does not run BMDS 2.7.
+- **NIEHS-12 and 13:** 65 section lines differ. All of them are:
+  - per-species or per-tissue sections (Rats/Mice; Heart … Ovary), which the
+    data must supply (G3 gap 5: one species is modelled);
+  - Appendix B's method sections, which are the study's own content.
+
+`tests/unit/test_report_definitions.py` checks the outlines, the DTD and each
+book's series ISSN. The ISSN is per book: NIEHS-02 … 04, 07, 08 and RR-8 carry
+2473-4756.
 
 ## Still open (ranked)
 
@@ -100,7 +136,7 @@ The structure YAML now matches the published BITS book one-to-one (ADR-0028), an
    - NIEHS-09 male total T4.
 
    This is probably the trend/pairwise test choice for those endpoints.
-4. **Methods headings for microarray studies** still say "Library Creation, and Sequencing" / "Sequencing Quality Checks". They come from `SUBSECTION_SKELETON` and the document tree, so changing them is a structure change.
+4. ~~**Methods headings for microarray studies**~~ Fixed 2026-10-09: the 2022 and 2018 era definitions give the microarray Methods ("RNA Isolation and cDNA Synthesis", "Analysis of GeneChip Data Quality").
 5. **Presentation differences:**
    - published G2 prints BMDs to 3 decimals and we print 1 (`report_bmd_decimals` keys on gene-level analyses, which the CEBS NIEHS-10 project has);
    - published G1 prints doses as integers.

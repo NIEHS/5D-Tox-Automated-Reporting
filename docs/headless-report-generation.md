@@ -786,6 +786,13 @@ content version. The command line writes only to `--out`.
 **How our report maps onto a BITS book.** The structure is the published
 book's (ADR-0028), and the template declares it: each top-level node names its
 BITS `element` and `book_part_type`, so the YAML reads like the book's part list.
+The table below is the shared template's (the 2023 books, chunked). A
+published study's own definition (ADR-0029, B.1) may be packaged
+`single-file` instead, as RR-8 and NIEHS-02 … 06 are: one whole-book
+`<book-part>`, titled with the book title, whose front matter adds an `<ack>`,
+whose body is top-level `<sec>` chapters, and whose back holds the
+`<ref-list>` and the `<app>`s. The `bits` surface then writes it as one
+`TOC.nxml`.
 
 | Our document | BITS 2.0 |
 |---|---|
@@ -841,6 +848,7 @@ acceptance. We never hold their production stylesheet. The
 | PMC StyleChecker | Zero errors from NLM's StyleChecker (style `book` and `article`), run offline from the vendored v5.48 transforms (`assets/stylechecker`) | `rendering/jats_stylecheck.py`, the same test |
 | BITS grammar | The template and the reference report's structure instantiate as a valid BITS profile; part declarations and flow-before-sub-sections are enforced | `tests/unit/test_bits_profile.py`, `tests/unit/test_bits_part_declaration.py` |
 | Published structure | The NIEHS-10 book's outline equals the published book's, apart from a listed set of content gaps; the chunked bundle round-trips | `tests/unit/test_bits_published_structure.py`, `tests/unit/test_bits_book.py`; `report_qc` `structure` for every study |
+| Report definitions | Each of the 12 published reports, built from its document definition, has its published book's section structure (apart from listed content and data gaps), validates against the DTD and carries its published series ISSN | `tests/unit/test_report_definitions.py` |
 | No placeholders | `--strict` refuses a LaTeX or PDF build while any `[… pending]` remains | `tooling/generate_report.py` |
 
 **Previewing a book online.** NCBI's online tools are the PMC Article Previewer
@@ -884,10 +892,13 @@ holds as of 2026-10-07.
   the pivot drops: cohort (Core or Biosample), observation day, terminal flag
   and units. Nothing reads the raw `.bm2`, `.txt` or `.xlsx` uploads directly.
 - **The document tree sets the structure.** Headings, their order and the
-  table and figure numbers come from the template
-  (`templates/niehs-5day-report.yaml`), or from a saved view's own structure.
-  A study's overlay (`templates/studies/<id>/view.yaml`) selects what is
-  shown. Numbers are given by position, never typed in.
+  table and figure numbers come from the study's document definition, or from
+  a saved view's own structure. A new study's definition is the shared
+  template (`templates/niehs-5day-report.yaml`). A published study has its
+  own (`templates/studies/<id>/document.yaml`, ADR-0029): its era's base
+  (`templates/eras/`) plus that report's alterations. A study's overlay
+  (`templates/studies/<id>/view.yaml`) selects what is shown. Numbers are
+  given by position, never typed in.
 - **The method profile sets how the data is analysed.** The statistical
   tests, thresholds, BMD acceptance criteria, internal-dose rules, GO ranking
   and number formats come from the study's pinned profile (`profiles/*.yaml`,
@@ -916,6 +927,7 @@ is a method setting, the setting's name in the profile is given, with its
 | Label | File | What it sets |
 |---|---|---|
 | `template.yaml` | `templates/niehs-5day-report.yaml`, the report type | Sections, their order and headings, the Methods subsections, which data each section shows, the appendix text files it names, page breaks (`styles`), and charts (`charts`, `chart_style`, `chart_types`) |
+| `document.yaml` | A published study's definition, `templates/studies/<id>/document.yaml`, extending an era (`templates/eras/<era>.yaml`) that extends the template (ADR-0029) | What that report's structure does differently: `changes` (set / remove / insert / move nodes), `packaging` (chunked or single-file), `object_position`, `book_meta` (series, ISSN, publisher). A title may name the study's chemical (`${chemical_name}`) |
 | `view.yaml` | A study overlay, `templates/studies/<id>/view.yaml`, or a saved view, `sessions/<id>/views/<name>.yaml` | Selections (`filters`: organs, sex, assays, genes, gene sets); a saved view can also carry its own structure; an overlay's `methods:` block overrides profile settings for that study |
 | `profile.yaml` | The pinned method profile, `profiles/<name>.yaml` | Statistical tests and thresholds, BMD engine, eligibility, BMR fallback and acceptance, internal-dose rules, GO ranking and display, the settings expected in a `.bm2` |
 

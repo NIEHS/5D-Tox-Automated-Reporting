@@ -55,13 +55,20 @@ decided the form: **an era base, plus alterations to it and additions to it.**
    3. the study's definition;
    4. the shared template.
 
-   The same layer gives the study's `book_meta` and `packaging`.
+   The same layer gives the study's `book_meta`, `packaging` and
+   `object_position`.
 4. **Renderers stay generic.** Emitters and the Bookshelf facsimile handle BITS
    shapes (part elements, single-file versus chunked packaging), never reports or
    eras. Whatever differs between reports is in the definitions.
 5. **The published books are the check.** Each published report's outline is a
    committed fixture. A test builds each report from its definition and compares the
    two outlines, apart from a commented list of known *content* gaps.
+
+6. **A definition states structure, never data.** A title may name a study
+   fact the data holds (`${chemical_name}`, filled per study by
+   `document_tree.study_tree`). A definition never lists what the data
+   decides: which species or tissues a study has, or how many tables there
+   are.
 
 ## Consequences
 
@@ -71,5 +78,32 @@ decided the form: **an era base, plus alterations to it and additions to it.**
   template.
 - The single-file packaging (2018, 2022) needs the emitter, the bundle writer and
   the facsimile to handle the whole-book `book-part` shape.
+  `render_capabilities.PACKAGING_PART_ELEMENTS` names the part elements each
+  packaging holds. The template loader and the emitter both refuse a part
+  that the packaging cannot hold.
 - The template's other blocks (filters, charts, chart and layout styles) still come
   from the shared template and the study view; a definition may carry them later.
+
+## Outcome (2026-10-09)
+
+| Definition | Extends | Reports |
+|---|---|---|
+| `eras/niehs-2023` | `niehs-5day-report` | NIEHS-07 … 10 |
+| `eras/niehs-2022` (single-file) | `eras/niehs-2023` | NIEHS-02 … 06 |
+| `eras/ntp-rr-2018` (single-file, NTP series) | `eras/niehs-2022` | RR-8 |
+| `eras/niehs-2026` | `eras/niehs-2023` | NIEHS-12, 13 (13 moves A.3 before A.2) |
+
+- **Section structure:** RR-8 and NIEHS-02 … 10 match their published books
+  exactly.
+- **NIEHS-12 and 13** differ only where the difference is data or content:
+  - the per-species and per-tissue sections (the pipeline models one species,
+    G3 conformance gap 5);
+  - the study's analytical-method sections.
+  `tests/unit/test_report_definitions.py` lists these.
+- **The series ISSN** is a per-book fact. NIEHS-02 … 04, 07, 08 and RR-8
+  carry 2473-4756; the others carry 2768-5632.
+- **Section labels and headings that had been written into content are now
+  nodes:**
+  - Appendix E's "E.1";
+  - NIEHS-10's "A.1 Quantitation of … in Plasma".
+  Their labels follow the appendix letter.
