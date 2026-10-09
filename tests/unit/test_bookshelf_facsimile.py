@@ -195,3 +195,35 @@ def test_published_part_page_matches_the_real_bookshelf_page(real_page):
     ours = page.xpath(f"//article[@data-slug='{real_page.stem}']")
     assert ours, f"no facsimile page for {real_page.stem}"
     assert _part_page_facts(ours[0]) == _part_page_facts(real)
+
+
+def _words(text: str) -> "collections.Counter":
+    import collections
+    return collections.Counter(re.findall(r"\w+", text.replace(" ", " ")))
+
+
+@pytest.mark.parametrize("report", ["NIEHS-07", "NIEHS-08", "NIEHS-09", "NIEHS-10",
+                                    "NIEHS-12", "NIEHS-13"])
+def test_facsimile_drops_no_text_of_a_published_part(report):
+    """Every word of every part of a published chunked book reaches the
+    facsimile's page for it — no element's content is silently dropped (as
+    <break/> once joined "then<break/>20" into "then20")."""
+    from lxml import etree, html as lhtml
+
+    bundle = BOOKSHELF / report
+    if not (bundle / "TOC.nxml").exists():
+        pytest.skip(f"published {report} bundle not downloaded (assets/cebs/_bookshelf)")
+    page = lhtml.fromstring(render_book_file(bundle))
+    parser = etree.XMLParser(load_dtd=False, no_network=True, resolve_entities=False)
+    for f in sorted(bundle.glob("*.nxml")):
+        if f.name == "TOC.nxml":
+            continue
+        root = etree.parse(str(f), parser).getroot()
+        part = next(c for c in root if isinstance(c.tag, str)
+                    and c.tag not in ("collection-meta", "book-meta"))
+        for meta in part.findall("book-part-meta"):
+            for c in [c for c in meta if c.tag != "title-group"]:
+                meta.remove(c)
+        ours = page.xpath(f"//article[@data-slug='{f.stem}']")[0]
+        missing = _words(" ".join(part.itertext())) - _words(" ".join(ours.itertext()))
+        assert not missing, f"{report} {f.stem}: {list(missing.elements())[:20]}"

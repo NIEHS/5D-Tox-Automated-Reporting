@@ -132,6 +132,10 @@ def _inline_child(child) -> str:
         return f"<sub>{inner}</sub>"
     if tag == "sup":
         return f"<sup>{inner}</sup>"
+    if tag == "underline":
+        return f"<u>{inner}</u>"
+    if tag == "break":
+        return "<br/>"
     if tag == "monospace":
         return f'<code class="bk_tt">{inner}</code>'
     # Unknown inline element: keep its text content, drop the wrapper.
