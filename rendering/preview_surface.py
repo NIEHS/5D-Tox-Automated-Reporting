@@ -80,6 +80,12 @@ def render_surface(
     surface, which renders it as the page's right-rail Download panel; every other
     surface ignores it.
     """
+    from document_model.document_tree import rendering_tree
+    with rendering_tree(tree):          # cross-references number from the study's tree
+        return _render_surface(data, tree, surface, section_filter, downloads)
+
+
+def _render_surface(data, tree, surface, section_filter, downloads):
     if surface == "docx":
         from rendering.docx_generator import generate_docx
         return generate_docx(data, tree)
@@ -88,20 +94,20 @@ def render_surface(
         return generate_html(data, section_filter=section_filter, tree=tree)
     if surface == "jats":
         from rendering.jats_generator import generate_bits
-        return generate_bits(data)
+        return generate_bits(data, tree)
     if surface == "bookshelf":
         from rendering.jats_generator import generate_bits
         from rendering.bookshelf_preview import render_book_xml, chart_images
         # Inline chart PNGs (base64 in the data) so the preview is self-contained;
         # the BITS <graphic> only carries a filename.
         return render_book_xml(
-            generate_bits(data), images=chart_images(data), downloads=downloads
+            generate_bits(data, tree), images=chart_images(data), downloads=downloads
         )
     if surface == "bits":
         from rendering.jats_generator import generate_bits
         from rendering.bits_bundle import bundle_zip
         from rendering.bookshelf_preview import chart_images
-        return bundle_zip(generate_bits(data), images=chart_images(data))
+        return bundle_zip(generate_bits(data, tree), images=chart_images(data))
     if surface == "latex":
         raise NotImplementedError(
             f"Preview surface {surface!r} is provisioned but not implemented yet"
@@ -230,6 +236,11 @@ def _preview_inputs(dtxsid: str, view: str) -> tuple[dict, "list | None"]:
     chemical_name, casrn = _identity(dtxsid)
     data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, view=view)
     tree = build_view_tree(dtxsid, view)
+    # The study's series facts, packaging and object placement come from its
+    # document definition (ADR-0029), like its tree.
+    from document_model.view_config import study_document_facts
+    for key, value in study_document_facts(dtxsid).items():
+        data.setdefault(key, value)
     return data, tree
 
 

@@ -1101,11 +1101,11 @@ def _build_body(data: dict) -> etree._Element:
 # imports this module.
 # ---------------------------------------------------------------------------
 
-def generate_bits(data: dict) -> str:
+def generate_bits(data: dict, tree=None) -> str:
     """Project the report to a BITS <book> XML string — see
     rendering.bits_book.generate_bits."""
     from rendering.bits_book import generate_bits as _generate_bits
-    return _generate_bits(data)
+    return _generate_bits(data, tree)
 
 
 # ---------------------------------------------------------------------------

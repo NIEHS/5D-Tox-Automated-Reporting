@@ -33,6 +33,7 @@ book_meta:
 
 @pytest.fixture()
 def templates(tmp_path, monkeypatch):
+    import document_model.document_config  # noqa: F401 — builds the shared tree first
     monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
 
     def write(name: str, text: str) -> None:
@@ -112,3 +113,34 @@ def test_an_extends_cycle_fails(templates):
     templates("y", "extends: x\n")
     with pytest.raises(ValueError, match="cycle"):
         dt.load_template("x")
+
+
+def test_a_study_renders_from_its_own_definition(templates):
+    """With no session view or session document, a study's tree, series facts,
+    packaging and object placement come from templates/studies/<DTXSID>/."""
+    from document_model.view_config import build_view_tree, study_document_facts
+
+    templates("studies/DTXSID0000001/document", """
+        extends: base
+        packaging: single-file
+        object_position: {back: float}
+        changes:
+          - remove: foreword
+    """)
+    tree = build_view_tree("DTXSID0000001", "default")
+    assert [n.id for n in tree] == ["methods"]
+    facts = study_document_facts("DTXSID0000001")
+    assert facts["packaging"] == "single-file"
+    assert facts["object_position"] == {"back": "float"}
+    assert facts["book_meta"]["series"]["title"] == "Old Series"
+
+
+def test_find_node_resolves_in_the_tree_being_rendered():
+    from document_model.document_node import DocNode
+    from document_model.document_tree import find_node, rendering_tree
+
+    mine = [DocNode(id="background", title="Mine", node_type="narrative", level=1)]
+    assert find_node("background").title != "Mine"
+    with rendering_tree(mine):
+        assert find_node("background").title == "Mine"
+    assert find_node("background").title != "Mine"

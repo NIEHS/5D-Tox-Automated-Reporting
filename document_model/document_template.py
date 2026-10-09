@@ -740,6 +740,24 @@ def load_book_meta(name: str) -> dict:
     return raw
 
 
+_POSITIONS = ("float", "anchor")
+
+
+def load_object_position(name: str) -> dict:
+    """The BITS @position of tables and figures per region (ADR-0029):
+    ``{body: float, back: anchor}`` style; a region left out gets no
+    @position.  Shape-checked loudly."""
+    raw = _load_raw(name)
+    block = raw.get("object_position") if isinstance(raw, dict) else None
+    if block is None:
+        return {}
+    if not isinstance(block, dict) or not all(
+            k in ("front", "body", "back") and v in _POSITIONS for k, v in block.items()):
+        raise ValueError(f"template {name!r}: object_position maps front/body/back "
+                         f"to one of {_POSITIONS}, got {block!r}")
+    return block
+
+
 def load_packaging(name: str) -> str:
     """How the report's BITS is packaged (ADR-0029): ``chunked`` (a TOC.nxml and
     one file per part, NIEHS-07 on) unless the definition says ``single-file``

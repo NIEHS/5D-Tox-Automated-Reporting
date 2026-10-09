@@ -24,6 +24,9 @@ from document_model.document_node import DocNode  # node shape; re-exported so e
                                    # `from document_tree import DocNode` keeps working
 from document_model.document_template import build_tree
 
+import contextlib
+import contextvars
+
 
 # The node SHAPE is defined in document_node.py (DocNode, re-exported above);
 # the registry of node TYPES and their capabilities / containment / required
@@ -569,7 +572,9 @@ def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None
     back to a linear pre-order walk, since those callers don't share the cache.
     """
     if tree is None:
-        return _DOCUMENT_INDEX.get(node_id)
+        tree = _RENDERING_TREE.get()
+        if tree is None:
+            return _DOCUMENT_INDEX.get(node_id)
 
     for node in tree:
         if node.id == node_id:
@@ -579,6 +584,26 @@ def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None
             if found:
                 return found
     return None
+
+
+# The tree a render is walking, when it is not DOCUMENT_TREE (a study's own
+# definition, ADR-0029, or a session view).  find_node(id) with no explicit tree
+# looks there, so a cross-reference ("Table N") resolves against the numbers of
+# the tree actually rendered.
+_RENDERING_TREE: contextvars.ContextVar = contextvars.ContextVar("rendering_tree", default=None)
+
+
+@contextlib.contextmanager
+def rendering_tree(tree: list[DocNode] | None):
+    """Within the block, `find_node(id)` resolves against `tree` (no-op for None)."""
+    if tree is None:
+        yield
+        return
+    token = _RENDERING_TREE.set(tree)
+    try:
+        yield
+    finally:
+        _RENDERING_TREE.reset(token)
 
 
 def collect_data_keys(node: DocNode) -> set[str]:

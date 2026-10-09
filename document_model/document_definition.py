@@ -8,6 +8,7 @@ another definition and states only how it differs:
 
     extends: eras/niehs-2023          # a name under templates/; chains allowed
     packaging: single-file            # chunked (default) | single-file
+    object_position: {back: float}    # tables/figures float or anchor, per region
     book_meta: {...}                  # deep-merged over the base's
     changes:                          # applied in order
       - set: appendix-d               # replace fields on a node (null removes one)
@@ -40,7 +41,8 @@ import yaml
 from common.dtxsid import validate_dtxsid
 
 PACKAGINGS = ("chunked", "single-file")
-_DEFINITION_KEYS = frozenset({"extends", "packaging", "book_meta", "changes"})
+_DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
+                              "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -86,6 +88,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         if raw["packaging"] not in PACKAGINGS:
             raise ValueError(f"definition {name!r}: packaging must be one of {PACKAGINGS}")
         out["packaging"] = raw["packaging"]
+    if raw.get("object_position"):
+        out["object_position"] = {**(out.get("object_position") or {}), **raw["object_position"]}
     if raw.get("book_meta"):
         out["book_meta"] = _deep_merge(out.get("book_meta") or {}, raw["book_meta"])
     for i, change in enumerate(raw.get("changes") or []):

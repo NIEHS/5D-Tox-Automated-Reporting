@@ -632,6 +632,14 @@ book_meta:
     license_href: https://creativecommons.org/publicdomain/zero/1.0/
     statement: This is a work of the US government and distributed under the terms of the Public Domain
 
+# ADR-0029: how the BITS is packaged and where tables/figures sit.  The body's
+# float (Bookshelf shows a card that opens the object); the appendices' are
+# anchored in the text (shown in full) — as NIEHS-07 … 10 have them.
+packaging: chunked
+object_position:
+  body: float
+  back: anchor
+
 charts: []
 
 

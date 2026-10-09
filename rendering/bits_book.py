@@ -41,7 +41,7 @@ from datetime import date
 from lxml import etree
 
 from document_model.document_node import DocNode
-from document_model.document_tree import render_nodes
+from document_model.document_tree import render_nodes, rendering_tree
 from rendering.jats_generator import E, _XLINK, _append_node, _p, _p_inline
 from rendering.render_common import (
     front_matter_plan,
@@ -401,9 +401,26 @@ def _part(node: DocNode, data: dict) -> list:
 # Public API
 # ---------------------------------------------------------------------------
 
-def build_book(data: dict) -> etree._Element:
-    """The BITS <book> element for a report (see the module docstring)."""
-    nodes = render_nodes(data)                      # this study's tree, numbered
+def _object_position(data: dict) -> dict:
+    """Where the definition places tables and figures, per region (ADR-0029):
+    `data["object_position"]` when the caller supplies the study's, else the
+    active template's."""
+    if isinstance(data.get("object_position"), dict):
+        return data["object_position"]
+    from document_model.document_template import load_object_position
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return load_object_position(ACTIVE_TEMPLATE)
+
+
+def build_book(data: dict, tree=None) -> etree._Element:
+    """The BITS <book> element for a report (see the module docstring).  `tree`
+    is the study's document tree (its definition or view), else DOCUMENT_TREE."""
+    nodes = render_nodes(data, tree)                # this study's tree, numbered
+    with rendering_tree(nodes):                     # cross-references number from it
+        return _build_book(data, nodes)
+
+
+def _build_book(data: dict, nodes: list) -> etree._Element:
     decl = book_meta_declaration(data)
     # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
     # with the literal "xlink" prefix the BITS/JATS DTD fixes (an auto-assigned
@@ -413,6 +430,7 @@ def build_book(data: dict) -> etree._Element:
         book.append(cm)
     book.append(_build_book_meta(data, nodes, decl))
     containers: dict[str, etree._Element] = {}
+    positions = _object_position(data)
     for node in nodes:
         parts = _part(node, data)
         if not parts:
@@ -420,13 +438,13 @@ def build_book(data: dict) -> etree._Element:
         region = _REGION_CONTAINER.get(node.region or "body", "book-body")
         if region not in containers:
             containers[region] = E(region)
-        # The published books float the body's tables and figures (Bookshelf
-        # shows a card that opens the object) and anchor the appendices' in the
-        # text (shown in full).
-        position = "anchor" if node.element == "book-app" else "float"
+        # Floating objects show on Bookshelf as a card that opens the object,
+        # anchored ones in full in the text; the definition says which, per
+        # region.
+        position = positions.get(node.region or "body")
         for part in parts:
             for obj in part.iter("table-wrap", "fig"):
-                if obj.get("position") is None:
+                if position and obj.get("position") is None:
                     obj.set("position", position)
             containers[region].append(part)
     for region in ("front-matter", "book-body", "book-back"):
@@ -435,10 +453,10 @@ def build_book(data: dict) -> etree._Element:
     return book
 
 
-def generate_bits(data: dict) -> str:
+def generate_bits(data: dict, tree=None) -> str:
     """Project the report to a BITS <book> XML string (the Bookshelf submission
     form): XML declaration + BITS 2.0 DOCTYPE + the book."""
     return etree.tostring(
-        build_book(data), xml_declaration=True, encoding="UTF-8", pretty_print=True,
+        build_book(data, tree), xml_declaration=True, encoding="UTF-8", pretty_print=True,
         doctype=_BITS_DOCTYPE,
     ).decode("utf-8")

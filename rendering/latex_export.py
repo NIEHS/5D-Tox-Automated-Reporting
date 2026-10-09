@@ -917,7 +917,11 @@ def load_session_data(
     # This study's own authored content for study-bound freeform nodes.
     from styling_export.freeform_content import load_study_authored
     data["authored"] = load_study_authored(dtxsid)
-    render_tree = study_tree(DOCUMENT_TREE, _collected, data["authored"])
+    # The study's tree: its view's or document definition's (ADR-0029), else the
+    # shared template's.
+    from document_model.view_config import DEFAULT_VIEW, build_view_tree
+    _base_tree = build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE
+    render_tree = study_tree(_base_tree, _collected, data["authored"])
     assign_genomics_table_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
@@ -1025,9 +1029,8 @@ def load_session_data(
     # `data` (approved / user-edited sections), keyed by the SAME node ids the
     # generator emits. render_common.resolve_protection reads it under
     # data["protection"]; an all-OPEN result is omitted → {} → byte-identical.
-    from document_model.document_tree import DOCUMENT_TREE as _DOC_TREE
     from workflow.ownership import protection_map
-    _protection = protection_map(_DOC_TREE, data)
+    _protection = protection_map(_base_tree, data)
     if _protection:
         data["protection"] = _protection
 

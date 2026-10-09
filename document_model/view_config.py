@@ -226,17 +226,48 @@ def resolve_view_filters(dtxsid: str, name: str) -> dict:
 def build_view_tree(dtxsid: str, name: str):
     """
     The DocNode tree for a view: its own ``document`` structure if present,
-    else the session's legacy document.yaml (document_config), else None so the
-    caller uses the global DOCUMENT_TREE.
+    else the session's legacy document.yaml (document_config), else the study's
+    document definition (ADR-0029), else None so the caller uses the global
+    DOCUMENT_TREE.
     """
     view = load_view(dtxsid, name) if name else {}
     document = view.get("document")
     if document is not None:
         from document_model.document_config import _tree_from_document_list
         return _tree_from_document_list(document)
-    # Fall back to the legacy per-session single-structure override.
+    # Fall back to the legacy per-session single-structure override, then the
+    # study's document definition (ADR-0029: its era base plus alterations).
     from document_model.document_config import build_session_tree
-    return build_session_tree(dtxsid)
+    tree = build_session_tree(dtxsid)
+    if tree is not None:
+        return tree
+    name = study_definition_name(dtxsid)
+    if name is None:
+        return None
+    from document_model.document_config import _tree_from_document_list
+    from document_model.document_template import load_template
+    return _tree_from_document_list(load_template(name))
+
+
+def study_definition_name(dtxsid: str) -> str | None:
+    """The study's document definition (``templates/studies/<DTXSID>/document``),
+    None when it has none."""
+    from document_model.document_definition import study_definition_name as name_of
+    return name_of(dtxsid)
+
+
+def study_document_facts(dtxsid: str) -> dict:
+    """The study-level facts of the definition a study renders from (ADR-0029):
+    ``book_meta`` (the series, publisher, permissions), ``packaging`` and
+    ``object_position``, from the
+    study's definition, else the shared template."""
+    from document_model.document_template import (
+        load_book_meta, load_object_position, load_packaging,
+    )
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    name = study_definition_name(dtxsid) or ACTIVE_TEMPLATE
+    return {"book_meta": load_book_meta(name), "packaging": load_packaging(name),
+            "object_position": load_object_position(name)}
 
 
 # ---------------------------------------------------------------------------
