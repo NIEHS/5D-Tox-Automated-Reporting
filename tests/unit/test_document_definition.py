@@ -1,0 +1,114 @@
+"""
+A report's document definition is an era base plus alterations (ADR-0029):
+document_model.document_definition composes `extends` + `changes` on the raw
+template entries, and the template loaders read the composed result.
+"""
+
+import textwrap
+
+import pytest
+
+from document_model import document_template as dt
+from document_model.document_definition import load_definition
+
+
+BASE = """
+document:
+- region: front
+  children:
+  - {id: foreword, type: front-matter, title: Foreword, data_key: foreword}
+- region: body
+  children:
+  - id: methods
+    type: heading-only
+    title: Methods
+    children:
+    - {id: m-a, type: narrative, title: A, data_key: a, narrative_key: a}
+    - {id: m-b, type: narrative, title: B, data_key: b}
+book_meta:
+  series: {title: Old Series, issn: 1111-1111}
+  publisher: {name: Pub}
+"""
+
+
+@pytest.fixture()
+def templates(tmp_path, monkeypatch):
+    monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
+
+    def write(name: str, text: str) -> None:
+        path = tmp_path / f"{name}.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(text), encoding="utf-8")
+    write("base", BASE)
+    return write
+
+
+def _ids(entries) -> list[str]:
+    out = []
+    for e in entries:
+        if "id" in e:
+            out.append(e["id"])
+        out += _ids(e.get("children") or [])
+    return out
+
+
+def test_a_full_template_is_its_own_definition(templates):
+    assert _ids(load_definition("base")["document"]) == ["foreword", "methods", "m-a", "m-b"]
+    assert dt.load_packaging("base") == "chunked"
+
+
+def test_changes_alter_the_base_in_order(templates):
+    templates("eras/e1", """
+        extends: base
+        packaging: single-file
+        book_meta: {series: {title: New Series}}
+        changes:
+          - set: m-a
+            title: A prime
+            narrative_key: null
+          - remove: foreword
+          - insert: [{id: m-c, type: narrative, title: C, data_key: c}]
+            after: m-a
+          - move: m-b
+            into: methods
+            at: first
+          - insert: [{id: disc, type: narrative, title: Discussion, data_key: d}]
+            into: body
+    """)
+    doc = dt.load_template("eras/e1")
+    assert _ids(doc) == ["methods", "m-b", "m-a", "m-c", "disc"]
+    m_a = doc[1]["children"][0]["children"][1]
+    assert m_a["title"] == "A prime" and "narrative_key" not in m_a
+    assert dt.load_book_meta("eras/e1") == {"series": {"title": "New Series", "issn": "1111-1111"},
+                                            "publisher": {"name": "Pub"}}
+    assert dt.load_packaging("eras/e1") == "single-file"
+    dt.instantiate(doc)                       # the composed document validates
+
+
+def test_a_study_extends_an_era_that_extends_a_base(templates):
+    templates("eras/e1", "extends: base\nchanges:\n  - remove: m-b\n")
+    templates("studies/DTXSID0000001/document", "extends: eras/e1\nchanges:\n  - remove: m-a\n")
+    assert _ids(dt.load_template("studies/DTXSID0000001/document")) == ["foreword", "methods"]
+    from document_model.document_definition import study_definition_name
+    assert study_definition_name("DTXSID0000001") == "studies/DTXSID0000001/document"
+    assert study_definition_name("DTXSID0000002") is None
+
+
+@pytest.mark.parametrize("text, message", [
+    ("extends: base\nchanges:\n  - remove: nope\n", "no node 'nope'"),
+    ("extends: base\nchanges:\n  - set: m-a\n    id: x\n", "not its id"),
+    ("extends: base\nchanges:\n  - insert: [{id: x}]\n", "exactly one of"),
+    ("extends: base\npackaging: zip\n", "packaging"),
+    ("extends: base\ndocument: []\n", "unknown key"),
+])
+def test_bad_changes_fail_loudly(templates, text, message):
+    templates("bad", text)
+    with pytest.raises(ValueError, match=message):
+        dt.load_template("bad")
+
+
+def test_an_extends_cycle_fails(templates):
+    templates("x", "extends: y\n")
+    templates("y", "extends: x\n")
+    with pytest.raises(ValueError, match="cycle"):
+        dt.load_template("x")

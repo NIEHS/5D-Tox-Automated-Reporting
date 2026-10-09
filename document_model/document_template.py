@@ -636,7 +636,11 @@ def _load_raw(name: str):
     path = TEMPLATES_DIR / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"no template named {name!r} at {path}")
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    # A definition that `extends` another (ADR-0029) is composed here, so every
+    # loader below reads the composed mapping.
+    from document_model.document_definition import is_extension, load_definition
+    return load_definition(name) if is_extension(raw) else raw
 
 
 def load_template(name: str) -> list[dict]:
@@ -734,6 +738,14 @@ def load_book_meta(name: str) -> dict:
                 f"got {type(value).__name__}"
             )
     return raw
+
+
+def load_packaging(name: str) -> str:
+    """How the report's BITS is packaged (ADR-0029): ``chunked`` (a TOC.nxml and
+    one file per part, NIEHS-07 on) unless the definition says ``single-file``
+    (the whole book in one book-part, RR-8 and NIEHS-02 … 06)."""
+    from document_model.document_definition import packaging_of
+    return packaging_of(_load_raw(name))
 
 
 def load_chart_types(name: str):

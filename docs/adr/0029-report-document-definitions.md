@@ -1,0 +1,75 @@
+# 0029: Each report has a document definition — an era base plus alterations
+
+- **Status:** Accepted (2026-10-09)
+- **Amends:**
+  - [ADR-0027](0027-pinned-method-profiles.md) §1. A study's version-controlled
+    overlay now also holds its document definition (`document.yaml`), next to its
+    view (`view.yaml`, filters and charts).
+  - [ADR-0028](0028-yaml-is-a-bits-profile-one-to-one.md). The one-to-one structure
+    is per report, not a single shared template.
+- **Deciders:** Dan Svoboda
+- **Related:**
+  - `document_model/document_definition.py`;
+  - `templates/eras/`;
+  - `templates/studies/<DTXSID>/document.yaml`;
+  - `tooling/bits_structure.py`.
+
+## Context
+
+The 12 published NIEHS/NTP 5-day reports are "the same, only different". Compared
+part by part (`rendering/bits_bundle.outline`), they fall into four generations:
+
+| Era | Reports | Differences within the era | How the era differs |
+|---|---|---|---|
+| 2018 | RR-8 | — | NTP Research Report series. Single file. Acknowledgments and Collaborators come first; there is no Foreword or Authors. The body ends with Discussion. Appendices A–E. |
+| 2022 | NIEHS-02 … 06 | study facts only | Single file: one whole-book `book-part` whose chapters are `sec`, whose appendices are `app`, plus `ack` and a back `ref-list`. Appendices A–F. |
+| 2023 | NIEHS-07 … 10 | study facts only | Chunked (TOC.nxml plus one file per part). Appendix A is Internal Dose. |
+| 2026 | NIEHS-12, 13 | NIEHS-13 orders A.2/A.3 differently and places some tables differently | Inhalation. Appendices A–G. |
+
+The user decided that these differences must come from a **document definition for
+each report**, never from a renderer adjusted until its output matches. They also
+decided the form: **an era base, plus alterations to it and additions to it.**
+
+## Decision
+
+1. **A definition is a template file that may `extend` another.** It states only how
+   it differs:
+   - `packaging` is `chunked` or `single-file`;
+   - `book_meta` is deep-merged over the base's;
+   - `changes` is an ordered list. Each change is one of:
+     - `set` a node's fields (null removes a field);
+     - `remove` a node with its subtree;
+     - `insert` nodes after or before a node, or into a node or region (first or last);
+     - `move` a node.
+
+   Composition works on the raw entries before instantiation, so the template
+   validator checks the composed document as it would an authored one. An unknown
+   id, an unknown key or an `extends` cycle is an error.
+2. **Three levels, one mechanism:**
+   - `niehs-5day-report` is the definition of a new (unpublished) study, unchanged;
+   - `eras/<era>` reproduce the published generations;
+   - `studies/<DTXSID>/document` extends its era for a published study.
+3. **Resolution.** A study's tree comes from the first of these that exists:
+   1. the session view's `document`;
+   2. the legacy session `document.yaml`;
+   3. the study's definition;
+   4. the shared template.
+
+   The same layer gives the study's `book_meta` and `packaging`.
+4. **Renderers stay generic.** Emitters and the Bookshelf facsimile handle BITS
+   shapes (part elements, single-file versus chunked packaging), never reports or
+   eras. Whatever differs between reports is in the definitions.
+5. **The published books are the check.** Each published report's outline is a
+   committed fixture. A test builds each report from its definition and compares the
+   two outlines, apart from a commented list of known *content* gaps.
+
+## Consequences
+
+- Making a published report structurally right is an edit to YAML, reviewed as a
+  diff against its era.
+- A new study is unaffected: it has no study definition, so it uses the shared
+  template.
+- The single-file packaging (2018, 2022) needs the emitter, the bundle writer and
+  the facsimile to handle the whole-book `book-part` shape.
+- The template's other blocks (filters, charts, chart and layout styles) still come
+  from the shared template and the study view; a definition may carry them later.
