@@ -227,9 +227,21 @@ def check_design(qc: ReportQC, text: str, design: dict, unit: str) -> None:
     else:
         rules += [(r"\bppm\b", "ppm in an mg/kg study", "error")]
     for pat, what, sev in rules:
-        hits = [_context(text, m) for m in re.finditer(pat, text, re.I)]
+        hits = [_context(text, m) for m in re.finditer(pat, text, re.I)
+                if not _HUMAN_EXPOSURE.search(_sentence(text, m))]
         if hits:
             qc.add("design", sev, f"{what}: {len(hits)} occurrence(s)", hits)
+
+
+# A sentence about how PEOPLE meet the chemical ("humans are exposed through
+# inhalation …") or a regulatory value (inhalation RfC) is not this study's design.
+_HUMAN_EXPOSURE = re.compile(r"\b(humans?|people|occupational\w*|workers?|population|consumers?|reference concentration|RfC|unit risk)\b", re.I)
+
+
+def _sentence(text: str, m: re.Match) -> str:
+    start = max(text.rfind(". ", 0, m.start()), 0)
+    end = text.find(". ", m.end())
+    return text[start:end if end >= 0 else len(text)]
 
 
 def check_sexes(qc: ReportQC, text: str, sexes: set[str]) -> None:

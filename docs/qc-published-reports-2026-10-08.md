@@ -73,6 +73,10 @@ Apical BMDs differ from G0–G2 as expected: those reports used modified BMDS 2.
 5. **Presentation differences:**
    - published G2 prints BMDs to 3 decimals and we print 1 (`report_bmd_decimals` keys on gene-level analyses, which the CEBS NIEHS-10 project has);
    - published G1 prints doses as integers.
-6. **Background** is pending in every report except NIEHS-10 (it needs the host). **About This Report** authors are pending in all reports.
+6. **Background: done for the 12 published studies (2026-10-09).** EPA IRIS (`cfpub.epa.gov`) became reachable. The CompTox hazard API (`api-ccte.epa.gov`) is still blocked, and the Background is written without it.
+   - Each Background is 7 paragraphs, 1,000–1,600 words, with 2–5 references.
+   - NIEHS-10's old Background (2026-09-24) said "CASRN: not available" and was replaced. A copy is in `output/_session_backups/background-pre-2026-10-09/`.
+   - BPAF and Triclosan still need theirs, through the NIEHS gateway on the host, because they are unpublished.
+   - **About This Report** authors are pending in all reports.
 7. **The genomics narrative coins its own abbreviation** ("EHDPP") instead of the stated short name (EHDP).
 8. **A pre-existing test failure:** `tests/unit/test_docx_generator.py::test_yaml_page_breaks_land_as_page_break_before` fails at HEAD too.
