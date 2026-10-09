@@ -72,7 +72,11 @@ def test_landing_shows_the_series_facts_the_book_declares(page):
     assert "<h3>About the Series</h3>" in contents
     assert "ISSN (Electronic): 2768-5632" in contents
     assert 'data-obj="obj-copyright"' in contents
-    assert 'data-obj="obj-cite"' in page and "[Internet]." in page
+    assert 'id="bk-cite" data-obj="obj-cite-contents"' in page
+    assert re.search(r'id="obj-cite-contents">.*?\[Internet\]\.', contents)
+    foreword = _article(page, "fm-foreword")
+    assert '<div class="iconblock bk-book-banner">' in foreword
+    assert re.search(r'id="obj-cite-fm-foreword">.*?\[Internet\]\..*? Foreword\.</p>', foreword)
     assert "Other titles in this collection" in page and "NIEHS Report Series" in page
 
 
@@ -95,7 +99,7 @@ def test_published_bundle_renders():
     slugs = re.findall(r'<article class="bk-page" data-slug="([^"]+)"', html)
     assert len(slugs) == 1 + 17
     authors = _article(html, "fm-authors")
-    assert 'class="li-p author"' in authors and "Scott S. Auerbach" in authors
+    assert '<div class="author">Scott S. Auerbach' in authors
     assert '<div class="bk-formula" id="e-2-01"><math' in html
     assert 'class="bk-media"' in _article(html, "a-2-F")
     assert "data:image/jpeg;base64," in _article(html, "a-2-C")
@@ -142,4 +146,42 @@ def test_published_book_landing_matches_the_real_bookshelf_page():
     page = lhtml.fromstring(render_book_file(BOOKSHELF / "NIEHS-10"))
     ours = page.xpath("//article[@data-slug='contents']")[0]
     assert _landing_facts(ours) == _landing_facts(real)
-    assert _txt(page.xpath("//p[@class='bk-cite']")[0]) == _txt(real.xpath("//div[@class='bk_tt']")[0])
+    assert (_txt(page.xpath("//div[@id='obj-cite-contents']/p")[0])
+            == _txt(real.xpath("//div[@class='bk_tt']")[0]))
+
+
+PAGES = LANDING.parent / "bookshelf-pages"
+
+
+def _part_page_facts(root) -> dict:
+    """What a reader sees on a part's page, from either the real page or the
+    facsimile's article for it: the book banner, the heading, the content (its
+    text and its simple lists' lines) and the page's citation."""
+    banner = root.xpath(".//div[contains(@class,'iconblock')]")[0]
+    body = root.xpath(".//div[contains(@class,'body-content')]")[0]
+    return {
+        "banner": _txt(banner.xpath(".//h2")[0]),
+        "details": [_txt(d) for d in banner.xpath(".//div[contains(@class,'ui-widget')]/div"
+                                                   " | .//details/div")],
+        "heading": _txt(root.xpath(".//div[contains(@class,'meta-content')]//h1")[0]),
+        "text": _txt(body),
+        "lists": [[_txt(d) for d in li.xpath("div")]
+                  for li in body.xpath(".//ul[contains(@class,'simple-list')]/li")],
+        "cite": _txt(root.xpath(".//div[@class='bk_tt'] | .//div[starts-with(@id,'obj-cite-')]/p")[0]),
+    }
+
+
+@pytest.mark.parametrize("real_page", sorted(PAGES.glob("*.html")), ids=lambda p: p.stem)
+def test_published_part_page_matches_the_real_bookshelf_page(real_page):
+    """Each saved Bookshelf page of NIEHS-10 (named by its Bookshelf location,
+    which is the part's id in the bundle) and the facsimile's page for that
+    part show the same banner, heading, content and citation."""
+    from lxml import html as lhtml
+
+    if not (BOOKSHELF / "NIEHS-10" / "TOC.nxml").exists():
+        pytest.skip("published NIEHS-10 bundle not downloaded (assets/cebs/_bookshelf)")
+    real = lhtml.fromstring(real_page.read_text(encoding="utf-8"))
+    page = lhtml.fromstring(render_book_file(BOOKSHELF / "NIEHS-10"))
+    ours = page.xpath(f"//article[@data-slug='{real_page.stem}']")
+    assert ours, f"no facsimile page for {real_page.stem}"
+    assert _part_page_facts(ours[0]) == _part_page_facts(real)

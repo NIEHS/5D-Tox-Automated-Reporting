@@ -18,6 +18,10 @@ here:
   - for the rail, "Cite this Page" and "Other titles in this collection"; for
     the foot, the copyright notice and the DOI.
 
+Every part's page (tests/fixtures/reference/NIEHS-10/bookshelf-pages/) opens
+with the book banner (book_banner) and cites the book and the part
+(cite_object).
+
 Bookshelf ID and PMID, which the real page also shows, are assigned by NCBI at
 ingest and are in no BITS file, so they are not shown.
 
@@ -126,16 +130,29 @@ def _pub_line(m: dict) -> str:
     return "; ".join(x for x in (where, when) if x)
 
 
-def citation(m: dict) -> str:
-    """The "Cite this Page" text: "Auerbach SS, Ballin JD, Blake JC, et al.
-    Title: Subtitle [Internet]. Loc: Publisher; 2023 Mar. doi: 10.22427/…"."""
+def _cite_authors(m: dict) -> str:
+    """"Auerbach SS, Ballin JD, Blake JC, et al." ("" with no authors)."""
     cites = [a["cite"] for a in m["authors"]]
     who = ", ".join(cites[:_CITE_AUTHORS]) + (", et al" if len(cites) > _CITE_AUTHORS else "")
-    title = ": ".join(x for x in (m["title"], m["subtitle"]) if x)
-    out = [f"{who}." if who else "", f"{title} [Internet]."]
+    return f"{who}." if who else ""
+
+
+def _internet_title(m: dict) -> str:
+    """"Title: Subtitle [Internet]" — the book as a citation names it."""
+    return ": ".join(x for x in (m["title"], m["subtitle"]) if x) + " [Internet]"
+
+
+def citation(m: dict, part: str = "") -> str:
+    """The "Cite this Page" text.  The landing page cites the book with its DOI
+    ("Auerbach SS, … et al. Title: Subtitle [Internet]. Loc: Publisher;
+    2023 Mar. doi: 10.22427/…"); a part's page cites the book without it,
+    followed by the part's title ("…; 2023 Mar. Foreword.")."""
+    out = [_cite_authors(m), f"{_internet_title(m)}."]
     if _pub_line(m):
         out.append(f"{_pub_line(m)}.")
-    if m["doi"]:
+    if part:
+        out.append(f"{part}.")
+    elif m["doi"]:
         out.append(f"doi: {m['doi']}")
     return " ".join(x for x in out if x)
 
@@ -168,8 +185,7 @@ def _title_block(m: dict) -> str:
     if m["license"]:
         links.append('<a href="#" data-obj="obj-copyright">Copyright and Permissions</a>')
     if m["doi"]:
-        links.append(f'<a href="https://doi.org/{_esc(m["doi"])}" target="_blank" rel="noopener">'
-                     "View this report on the publisher&#8217;s website</a>")
+        links.append(_publisher_link(m))
     links_html = ('<ul class="inline_list bk-meta-links">'
                   + "".join(f"<li>{x}</li>" for x in links) + "</ul>") if links else ""
     copyright_obj = (f'<div class="bk-object" id="obj-copyright"><h3>Copyright and Permissions</h3>'
@@ -224,14 +240,38 @@ def contents_article(pages: list[_Page], m: dict) -> str:
     return (f'<article class="bk-page" data-slug="contents" hidden>{_title_block(m)}'
             f'<div class="body-content whole_rhythm" itemprop="text">{abstract}'
             f'<h2>Contents</h2><ul class="bk-contents">{"".join(lis)}</ul>'
-            f"{_series_box(m)}</div></article>")
+            f'{_series_box(m)}</div>{cite_object(m, "contents")}</article>')
 
 
-def cite_item(m: dict) -> str:
-    """The rail's "Cite this Page" entry and the dialog it opens."""
-    return ('<li><a href="#" data-obj="obj-cite">Cite this Page</a>'
-            '<div class="bk-object" id="obj-cite"><h3>Cite this Page</h3>'
-            f'<p class="bk-cite">{_esc(citation(m))}</p></div></li>')
+# The rail's "Cite this Page" entry; the facsimile's script points it at the
+# current page's citation (obj-cite-<slug>, see cite_object).
+CITE_ITEM = '<li><a href="#" id="bk-cite" data-obj="obj-cite-contents">Cite this Page</a></li>'
+
+
+def cite_object(m: dict, slug: str, part: str = "") -> str:
+    """A page's "Cite this Page" dialog content (hidden until opened)."""
+    return (f'<div class="bk-object" id="obj-cite-{_esc(slug)}"><h3>Cite this Page</h3>'
+            f'<p class="bk-cite">{_esc(citation(m, part))}</p></div>')
+
+
+def _publisher_link(m: dict) -> str:
+    return (f'<a href="https://doi.org/{_esc(m["doi"])}" target="_blank" rel="noopener">'
+            "View this report on the publisher&#8217;s website</a>") if m["doi"] else ""
+
+
+def book_banner(m: dict) -> str:
+    """The banner heading every part's page: the book as cited ("Title:
+    Subtitle [Internet]."), a "Show details" toggle (authors as cited, the
+    publication line), and links to the Contents and the publisher."""
+    details = "".join(f"<div>{_esc(x)}</div>" for x in
+                      (_cite_authors(m), f"{_pub_line(m)}." if _pub_line(m) else "") if x)
+    toggle = (f"<details><summary>Show details</summary>{details}</details>"
+              if details else "")
+    links = ['<a class="bk_cntns" href="#contents">Contents</a>', _publisher_link(m)]
+    sub = f": {_esc(m['subtitle'])}" if m["subtitle"] else ""
+    return (f'<div class="iconblock bk-book-banner"><h2>{m["title_html"]}{sub} [Internet].</h2>'
+            f'{toggle}<ul class="inline_list">'
+            + "".join(f"<li>{x}</li>" for x in links if x) + "</ul></div>")
 
 
 def collection_panel(m: dict) -> str:
