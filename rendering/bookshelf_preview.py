@@ -3,8 +3,11 @@ NCBI-Bookshelf-style HTML preview, page by page.
 
 This transforms the EXACT artifact we submit (the BITS book emitted by
 `jats_generator.generate_bits`) into an HTML page styled and *navigated* like the
-reader view of a book on NCBI Bookshelf: a **Contents landing** plus **one page
-per top-level section**, with ``< Prev`` / ``Next >`` pagination, a "Contents"
+reader view of a book on NCBI Bookshelf: a **Contents landing** (title block,
+the book-meta abstract, the parts with their sections nested, as the published
+<toc>) plus **one page per part** — rendered as the book has it, labels and
+headings included (ADR-0028), nothing unwrapped or invented — with
+``< Prev`` / ``Next >`` pagination, a "Contents"
 link, and a right-hand rail of "Views" (downloads) + a section navigator.  The
 whole book is emitted into ONE self-contained HTML document; navigation between
 "pages" is client-side (hash-routed, ``#<section-id>``), so the module's public
@@ -32,10 +35,14 @@ XSLT, and reproducing it would be impersonation.  A prominent banner marks every
 page as a preview, not an NCBI/NIEHS page.  It is a preview of the ultimate
 deliverable, never a substitute for NCBI's own QA render.
 
+It renders a chunked Bookshelf bundle (TOC.nxml + one file per part) the same
+way — our `bits` surface, or a PUBLISHED book from assets/cebs/_bookshelf — so
+ours and the published report of a study can be read side by side.
+
 Public API:
     render_book_xml(xml, base_dir=None, images=None, downloads=None) -> str
-    render_book_file(xml_path) -> str
-    chart_images(data) -> {filename: base64_png}
+    render_book_file(path) -> str          a BITS file or a bundle directory
+    chart_images(data) -> {filename: base64 image}
 """
 
 from __future__ import annotations
@@ -43,7 +50,6 @@ from __future__ import annotations
 import html
 import itertools
 import json
-import string
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -57,7 +63,9 @@ _VENDORED_CSS = _REPO / "assets" / "bookshelf" / "bookshelf.css"
 
 # Block-level BITS elements we render inside a body/section (anything else at the
 # block level — book-part-meta, title — is handled by the caller or ignored).
-_BLOCK_TAGS = frozenset({"sec", "p", "table-wrap", "fig", "list", "boxed-text"})
+_BLOCK_TAGS = frozenset({"sec", "p", "table-wrap", "fig", "list", "boxed-text", "media",
+                         "supplementary-material", "disp-formula", "ref-list"})
+MATHML = "http://www.w3.org/1998/Math/MathML"
 
 # Per-render counter giving an id to a table/figure that carries none, so every
 # object has a stable lightbox target within one document.  Reset at the top of
@@ -118,6 +126,13 @@ def _inline_child(child) -> str:
     return inner
 
 
+def _ws_text(el) -> str:
+    """An element's text with whitespace (and no-break spaces) collapsed."""
+    if el is None:
+        return ""
+    return " ".join("".join(el.itertext()).replace("\u00a0", " ").split())
+
+
 def _title_text(el) -> str:
     """Plain-text title of a sec/part (for the TOC), from its <title> child."""
     t = el.find("title")
@@ -161,13 +176,25 @@ def _temp_labeled(inner_html: str) -> str:
             f'{inner_html}</div></dd></dl></div>')
 
 
+def _caption_html(obj) -> str:
+    """The caption heading of a table/figure/media object: its <caption><title>
+    (how the published books title a table), else its first <caption><p> (a
+    figure's), else the caption's text."""
+    cap = obj.find("caption")
+    if cap is None:
+        return ""
+    for tag in ("title", "p"):
+        el = cap.find(tag)
+        if el is not None:
+            return _inline(el)
+    return _inline(cap)
+
+
 def _render_table_wrap(el) -> str:
     tid = el.get("id") or _next_obj_id()
     obj_id = f"obj-{tid}"
-    label = el.findtext("label")
-    cap = el.find("caption")
-    caption_html = _inline(cap.find("p")) if (cap is not None and cap.find("p") is not None) else \
-        (_inline(cap) if cap is not None else "")
+    label = _ws_text(el.find("label"))
+    caption_html = _caption_html(el)
     table = el.find("table")
     table_html = _render_table(table) if table is not None else ""
     foot = ""
@@ -198,13 +225,28 @@ def _render_table_wrap(el) -> str:
     return card + obj
 
 
+_IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".svg": "image/svg+xml"}
+
+
+def _bundle_image(base_dir: Path, href: str) -> str:
+    """A graphic next to the BITS file, inlined as a data URI so the page is
+    self-contained wherever it is saved.  Published bundles name a graphic
+    without its extension (xlink:href="NIEHS_10-Image001" → …Image001.jpg)."""
+    import base64
+    for ext in ("", *_IMAGE_TYPES):
+        path = base_dir / f"{href}{ext}"
+        mime = _IMAGE_TYPES.get(path.suffix.lower())
+        if mime and path.is_file():
+            return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
+    return ""
+
+
 def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
     fid = el.get("id") or _next_obj_id()
     obj_id = f"obj-{fid}"
-    label = el.findtext("label")
-    cap = el.find("caption")
-    caption_html = _inline(cap.find("p")) if (cap is not None and cap.find("p") is not None) else \
-        (_inline(cap) if cap is not None else "")
+    label = _ws_text(el.find("label"))
+    caption_html = _caption_html(el)
     graphic = el.find("graphic")
     href = ""
     if graphic is not None:
@@ -219,8 +261,8 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
         src = b64 if b64.startswith("data:") else f"data:image/png;base64,{b64}"
         img = f'<img src="{src}" alt="{alt}">'
         have_img = True
-    elif href and base_dir is not None and (base_dir / href).exists():
-        img = f'<img src="{_esc(href)}" alt="{alt}">'
+    elif href and base_dir is not None and _bundle_image(base_dir, href):
+        img = f'<img src="{_bundle_image(base_dir, href)}" alt="{alt}">'
         have_img = True
     else:
         img = f'<div class="fig-missing">[figure: {_esc(href or "image not bundled")}]</div>'
@@ -261,9 +303,13 @@ def _render_blocks(children, level: int, out: list[str], base_dir: Path | None,
         elif tag == "fig":
             out.append(_render_fig(el, base_dir, images))
         elif tag == "list":
-            items = "".join(f"<li>{_inline(li)}</li>"
-                            for li in el.findall("list-item"))
-            out.append(f'<ul class="bk-list">{items}</ul>')
+            out.append(_render_list(el))
+        elif tag in ("media", "supplementary-material"):
+            out.append(_render_media(el))
+        elif tag == "disp-formula":
+            out.append(_render_formula(el))
+        elif tag == "ref-list":
+            out.append(_render_ref_list(el))
         elif tag == "boxed-text":
             inner: list[str] = []
             _render_blocks(list(el), level, inner, base_dir, images)
@@ -271,29 +317,84 @@ def _render_blocks(children, level: int, out: list[str], base_dir: Path | None,
         # book-part-meta, title, etc. handled by the caller / ignored here.
 
 
+def _render_list(el) -> str:
+    """<list>: one <li> per item.  An item of several paragraphs (the published
+    Authors / Contributors lists: affiliation, contributions, one name per
+    paragraph) keeps them as separate lines, classed by @content-type."""
+    tag = "ol" if el.get("list-type") == "order" else "ul"
+    cls = "bk-list bk-simple" if el.get("list-type") == "simple" else "bk-list"
+    items = []
+    for li in el.findall("list-item"):
+        paras = li.findall("p")
+        if paras:
+            inner = "".join(
+                f'<div class="li-p {_esc(p.get("content-type", ""))}">{_inline(p)}</div>'
+                for p in paras)
+        else:
+            inner = _inline(li)
+        items.append(f"<li>{inner}</li>")
+    return f'<{tag} class="{cls}">{"".join(items)}</{tag}>'
+
+
+def _render_media(el) -> str:
+    """A supplied file (<media> / <supplementary-material>): its caption title
+    linked to the file, as Bookshelf lists supplementary data."""
+    href = el.get(f"{{{XLINK}}}href") or el.get("href") or ""
+    label = el.find("label")
+    title = (_caption_html(el) or (_inline(label) if label is not None else "")
+             or _esc(href))
+    kind = el.get("mime-subtype") or (href.rsplit(".", 1)[-1] if "." in href else "")
+    kind_html = f' <span class="media-kind">({_esc(kind)})</span>' if kind else ""
+    link = f'<a href="{_esc(href)}">{title}</a>' if href else title
+    return f'<div class="bk-media" id="{_esc(el.get("id", ""))}">{link}{kind_html}</div>'
+
+
+def _render_formula(el) -> str:
+    """<disp-formula>: its MathML passed through as HTML <math> (browsers render
+    MathML Core), with its label when it has one."""
+    math = el.find(f"{{{MATHML}}}math")
+    body = ""
+    if math is not None:
+        math = etree.fromstring(etree.tostring(math))
+        for node in math.iter():
+            if isinstance(node.tag, str):
+                node.tag = etree.QName(node).localname
+        etree.cleanup_namespaces(math)
+        body = etree.tostring(math, encoding="unicode", method="xml")
+    label = _ws_text(el.find("label"))
+    lab = f'<span class="formula-label">{_esc(label)}</span>' if label else ""
+    return f'<div class="bk-formula" id="{_esc(el.get("id", ""))}">{body}{lab}</div>'
+
+
+def _render_ref_list(rl) -> str:
+    """<ref-list>: a numbered list of citations; a <ref>'s <label> is its number."""
+    items: list[str] = []
+    for ref in rl.findall("ref"):
+        anchor = f' id="{_esc(ref.get("id"))}"' if ref.get("id") else ""
+        label = _ws_text(ref.find("label"))
+        value = f' value="{_esc(label)}"' if label.isdigit() else ""
+        mc = ref.find("mixed-citation")
+        text = _inline(mc) if mc is not None else _esc(_ws_text(ref))
+        items.append(f"<li{anchor}{value}>{text}</li>")
+    rest = "".join(f"<p>{_inline(p)}</p>" for p in rl.findall("p"))
+    return (f'<ol class="ref-list">{"".join(items)}</ol>' if items else "") + rest
+
+
 def _render_sec(sec_el, level: int, out: list[str], base_dir: Path | None,
                 images: dict | None) -> None:
     hl = min(level, 6)
     sid = sec_el.get("id", "")
     title = sec_el.find("title")
+    label = _ws_text(sec_el.find("label"))
     anchor = f' id="{_esc(sid)}"' if sid else ""
-    if title is not None:
-        out.append(f'<h{hl}{anchor}>{_inline(title)}</h{hl}>')
+    if title is not None or label:
+        lab = f'<span class="label">{_esc(label)}</span> ' if label else ""
+        text = _inline(title) if title is not None else ""
+        out.append(f'<h{hl}{anchor}>{lab}{text}</h{hl}>')
     elif anchor:
         out.append(f'<span{anchor}></span>')
-    kids = [c for c in sec_el if _ln(c) != "title"]
+    kids = [c for c in sec_el if _ln(c) not in ("title", "label")]
     _render_blocks(kids, level + 1, out, base_dir, images)
-
-
-def _effective_children(body_el, part_title: str):
-    """The blocks to render for a chapter/part body.  A body that is a single
-    <sec> repeating the part title (Background → sec-background) is UNWRAPPED so
-    the title is not printed twice; its own children become the part's blocks."""
-    kids = [c for c in body_el if _ln(c) in _BLOCK_TAGS]
-    if (len(kids) == 1 and _ln(kids[0]) == "sec"
-            and _title_text(kids[0]).lower() == (part_title or "").lower()):
-        return [c for c in kids[0] if _ln(c) != "title"]
-    return kids
 
 
 # ---------------------------------------------------------------------------
@@ -302,120 +403,122 @@ def _effective_children(body_el, part_title: str):
 
 @dataclass
 class _Page:
-    """One reader "page": a top-level section rendered as its own view."""
+    """One reader "page": a top-level part rendered as its own view."""
     slug: str
-    kind: str                       # abstract|frontmatter|chapter|appendix|refs
+    kind: str                       # frontmatter|chapter|refs|appendix
     title: str
-    label: str = ""                 # "Appendix D" (appendices) else ""
+    label: str = ""                 # "Appendix D" — the part's own <label>
     body: str = ""                  # inner HTML of .body-content
-    subnav: list[tuple[str, str]] = field(default_factory=list)  # (id, title)
+    subnav: list[tuple[str, str]] = field(default_factory=list)  # (id, heading)
+
+
+_MONTH_ABBR = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+               "Nov", "Dec")
 
 
 def _meta(root) -> dict:
+    """The book-level facts the masthead and the Contents landing show."""
     bm = root.find("book-meta")
 
-    def get(p):
-        return bm.findtext(p) if bm is not None else None
+    def get(path):
+        return _ws_text(bm.find(path)) if bm is not None else ""
 
+    authors = []
+    if bm is not None:
+        for c in bm.findall("contrib-group/contrib"):
+            given, surname = _ws_text(c.find("name/given-names")), _ws_text(c.find("name/surname"))
+            name = " ".join(x for x in (given, surname) if x) or _ws_text(c.find("string-name"))
+            if name:
+                authors.append(name)
+    series = root.find("collection-meta[@collection-type='book-series']")
+    month = get("pub-date/month")
     return {
         "title": get("book-title-group/book-title") or "Untitled",
-        "publisher": get("publisher/publisher-name") or "",
-        "loc": get("publisher/publisher-loc") or "",
-        "issn": get("issn") or "",
-        "year": get("pub-date/year") or "",
+        "subtitle": get("book-title-group/subtitle"),
+        "authors": authors,
+        "publisher": get("publisher/publisher-name"),
+        "loc": get("publisher/publisher-loc"),
+        "issn": _ws_text(series.find("issn")) if series is not None else get("issn"),
+        "year": get("pub-date/year"),
+        "month": _MONTH_ABBR[int(month) - 1] if month.isdigit() and 1 <= int(month) <= 12 else "",
+        "doi": get("book-id[@book-id-type='doi']"),
         "abstract": bm.find("abstract") if bm is not None else None,
     }
 
 
-def _part_page(part_el, base_dir, images, *, kind: str, label: str = "") -> _Page:
-    """Render one front-matter part / body chapter / appendix into a _Page."""
-    pid = part_el.get("id", "") or f"sec-{kind}"
-    tg = part_el.find("book-part-meta/title-group/title")
-    direct = part_el.find("title")
-    title_el = tg if tg is not None else direct
-    title = "".join(title_el.itertext()).strip() if title_el is not None else ""
-    body = part_el.find("body")
-    if body is None:
-        body = part_el.find("named-book-part-body")
+def _part_slug(part_el, kind: str, n: int) -> str:
+    """A page's anchor: the part's @id (our book), else its <book-part-id> (a
+    chunked bundle, where the id moved onto the wrapper)."""
+    return (part_el.get("id") or _ws_text(part_el.find("book-part-meta/book-part-id"))
+            or f"part-{kind}-{n}")
+
+
+def _part_page(part_el, base_dir, images, *, kind: str, n: int = 0) -> _Page:
+    """Render one front-matter part / body part / appendix into a _Page.  The
+    heading is the part's title-group (label + title); the content is whatever
+    its body, named-book-part-body and back hold (the References part's back
+    holds its ref-list), rendered as it is — nothing is unwrapped or invented."""
+    tg = part_el.find("book-part-meta/title-group")
+    if tg is None:
+        tg = part_el
+    title, label = _ws_text(tg.find("title")), _ws_text(tg.find("label"))
+    containers = [c for c in part_el if _ln(c) in ("body", "named-book-part-body", "back")]
+    if _ln(part_el) == "ack" or not containers:
+        containers = [part_el]
     out: list[str] = []
     subnav: list[tuple[str, str]] = []
-    is_chapter = kind in ("chapter", "appendix")
-    if body is not None:
-        children = _effective_children(body, title) if is_chapter else \
-            [c for c in body if _ln(c) in _BLOCK_TAGS]
+    for container in containers:
+        children = [c for c in container if _ln(c) in _BLOCK_TAGS]
         for c in children:
             if _ln(c) == "sec" and c.get("id"):
-                subnav.append((c.get("id"), _title_text(c)))
+                heading = " ".join(x for x in (_ws_text(c.find("label")), _title_text(c)) if x)
+                subnav.append((c.get("id"), heading))
         _render_blocks(children, 2, out, base_dir, images)
-    else:
-        _render_blocks([c for c in part_el if _ln(c) in _BLOCK_TAGS], 2, out,
-                       base_dir, images)
-    return _Page(slug=pid, kind=kind, title=title, label=label,
+    return _Page(slug=_part_slug(part_el, kind, n), kind=kind, title=title, label=label,
                  body="".join(out), subnav=subnav)
 
 
-def _abstract_page(abs_el) -> _Page:
-    parts: list[str] = []
-    for sec in abs_el.findall("sec"):
-        label = _title_text(sec)
-        for p in sec.findall("p"):
-            run_in = f'<span class="abs-label">{_esc(label)}.</span> ' if label else ""
-            parts.append(f'<p class="abstract-p">{run_in}{_inline(p)}</p>')
-            label = ""  # only the first paragraph of a sec gets the run-in label
-    return _Page(slug="abstract", kind="abstract", title="Abstract",
-                 body="".join(parts))
-
-
 def _reflist_page(rl) -> _Page:
-    rid = rl.get("id", "ref-list1")
+    """A bare <ref-list> in the back matter (an older book shape) as a page."""
     title_el = rl.find("title")
-    title = "".join(title_el.itertext()).strip() if title_el is not None else "References"
-    items: list[str] = []
-    for ref in rl.findall("ref"):
-        anchor = f' id="{_esc(ref.get("id"))}"' if ref.get("id") else ""
-        mc = ref.find("mixed-citation")
-        text = _inline(mc) if mc is not None else _esc("".join(ref.itertext()).strip())
-        items.append(f"<li{anchor}>{text}</li>")
-    body = f'<ol class="ref-list">{"".join(items)}</ol>' if items else ""
-    return _Page(slug=rid, kind="refs", title=title, body=body)
+    title = _ws_text(title_el) if title_el is not None else "References"
+    return _Page(slug=rl.get("id", "ref-list1"), kind="refs", title=title,
+                 body=_render_ref_list(rl))
+
+
+_FRONT_PARTS = ("foreword", "front-matter-part", "ack", "dedication", "preface")
 
 
 def _collect_pages(root, base_dir, images) -> list[_Page]:
+    """The book's parts, in reading order, one page each.  Labels are the parts'
+    own (<label>Appendix A</label>); none is invented here."""
     pages: list[_Page] = []
-    m = _meta(root)
-
-    if m["abstract"] is not None:
-        pages.append(_abstract_page(m["abstract"]))
-
-    fm = root.find("front-matter")
-    if fm is not None:
-        for part in fm:
-            if _ln(part) in ("foreword", "front-matter-part", "ack", "dedication",
-                             "preface", "book-part"):
-                pages.append(_part_page(part, base_dir, images, kind="frontmatter"))
-
-    bb = root.find("book-body")
-    if bb is not None:
-        for part in bb.findall("book-part"):
-            pages.append(_part_page(part, base_dir, images, kind="chapter"))
-
-    back = root.find("book-back")
-    letters = iter(string.ascii_uppercase)
-    if back is not None:
-        for part in back:
+    n = 0
+    for region in ("front-matter", "book-body", "book-back"):
+        reg = root.find(region)
+        if reg is None:
+            continue
+        parts = []
+        for c in reg:
+            if _ln(c) in ("book-app-group", "app-group"):
+                parts.extend(a for a in c if _ln(a))
+            elif _ln(c):
+                parts.append(c)
+        for part in parts:
+            n += 1
             tag = _ln(part)
-            if tag in ("book-app-group", "app-group"):
-                for app in part:
-                    if _ln(app) in ("book-app", "app"):
-                        pages.append(_part_page(app, base_dir, images, kind="appendix",
-                                                label=f"Appendix {next(letters)}"))
-            elif tag in ("book-app", "app"):
-                pages.append(_part_page(part, base_dir, images, kind="appendix",
-                                        label=f"Appendix {next(letters)}"))
-            elif tag == "ref-list":
+            if tag == "ref-list":
                 pages.append(_reflist_page(part))
-            elif tag in ("ack", "glossary", "book-part"):
-                pages.append(_part_page(part, base_dir, images, kind="chapter"))
+            elif tag in _FRONT_PARTS:
+                pages.append(_part_page(part, base_dir, images, kind="frontmatter", n=n))
+            elif tag == "book-part":
+                refs = part.find("body") is None and part.find("back/ref-list") is not None
+                pages.append(_part_page(part, base_dir, images,
+                                        kind="refs" if refs else "chapter", n=n))
+            elif tag in ("book-app", "app"):
+                pages.append(_part_page(part, base_dir, images, kind="appendix", n=n))
+            elif tag in ("glossary", "notes"):
+                pages.append(_part_page(part, base_dir, images, kind="chapter", n=n))
     return pages
 
 
@@ -439,28 +542,48 @@ def _page_article(page: _Page) -> str:
             f'{page.body}</div></article>')
 
 
+def _abstract_html(abs_el) -> str:
+    """The structured abstract: each part's first paragraph led by its run-in
+    label (Background. / Methods. / …)."""
+    parts: list[str] = []
+    for sec in abs_el.findall("sec"):
+        label = _title_text(sec)
+        for p in sec.findall("p"):
+            run_in = f'<span class="abs-label">{_esc(label)}.</span> ' if label else ""
+            parts.append(f'<p class="abstract-p">{run_in}{_inline(p)}</p>')
+            label = ""  # only the first paragraph of a sec gets the run-in label
+    title = _ws_text(abs_el.find("title")) or "Abstract"
+    return f'<div class="bk-abstract"><h2>{_esc(title)}</h2>{"".join(parts)}</div>'
+
+
 def _contents_article(pages: list[_Page], m: dict) -> str:
-    groups: list[tuple[str, list[_Page]]] = []
-    order = [("Front matter", ("abstract", "frontmatter")),
-             ("Report", ("chapter", "refs")),
-             ("Appendices", ("appendix",))]
-    for heading, kinds in order:
-        members = [p for p in pages if p.kind in kinds]
-        if members:
-            groups.append((heading, members))
-    blocks: list[str] = []
-    for heading, members in groups:
-        lis = []
-        for p in members:
-            lab = f'<span class="c-label">{_esc(p.label)}</span> ' if p.label else ""
-            lis.append(f'<li class="c-{p.kind}"><a href="#{_esc(p.slug)}">'
-                       f'{lab}{_esc(p.title)}</a></li>')
-        blocks.append(f'<div class="c-group"><div class="c-group-h">{_esc(heading)}'
-                      f'</div><ul class="bk-contents">{"".join(lis)}</ul></div>')
+    """The book's landing page: the title block (title, subtitle, authors,
+    publication line), the abstract the book-meta carries, and the Contents —
+    every part in reading order, a body part's sections nested under it (the
+    published <toc> shape)."""
+    lis = []
+    for p in pages:
+        lab = f'<span class="c-label">{_esc(p.label)}</span> ' if p.label else ""
+        nested = ""
+        if p.kind == "chapter" and p.subnav:
+            nested = '<ul class="bk-contents c-nested">' + "".join(
+                f'<li><a href="#{_esc(sid)}">{_esc(stitle)}</a></li>'
+                for sid, stitle in p.subnav) + "</ul>"
+        lis.append(f'<li class="c-{p.kind}"><a href="#{_esc(p.slug)}">'
+                   f'{lab}{_esc(p.title)}</a>{nested}</li>')
+    sub = f'<div class="book-h1-sub">{_esc(m["subtitle"])}</div>' if m["subtitle"] else ""
+    authors = (f'<div class="bk-authors">{_esc(", ".join(m["authors"]))}</div>'
+               if m["authors"] else "")
+    when = " ".join(x for x in (m["year"], m["month"]) if x)
+    pubinfo = ": ".join(x for x in (m["loc"], m["publisher"]) if x)
+    pubinfo = "; ".join(x for x in (pubinfo, when) if x)
+    publine = f'<div class="bk-pubinfo">{_esc(pubinfo)}.</div>' if pubinfo else ""
+    abstract = _abstract_html(m["abstract"]) if m["abstract"] is not None else ""
     return (f'<article class="bk-page" data-slug="contents" hidden>'
             f'<div class="meta-content"><h1 class="book-h1">{_esc(m["title"])}</h1>'
-            f'<div class="book-h1-sub">Table of contents</div></div>'
-            f'<div class="body-content">{"".join(blocks)}</div></article>')
+            f'{sub}{authors}{publine}</div>'
+            f'<div class="body-content">{abstract}<h2>Contents</h2>'
+            f'<ul class="bk-contents">{"".join(lis)}</ul></div></article>')
 
 
 def _secnav(chain: list[dict]) -> str:
@@ -506,7 +629,7 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
 
     articles = _contents_article(pages, m) + "".join(_page_article(p) for p in pages)
 
-    bits = [x for x in (m["publisher"], m["loc"], m["year"]) if x]
+    bits = [x for x in (m["subtitle"], m["publisher"], m["loc"], m["year"]) if x]
     if m["issn"]:
         bits.append(f"ISSN {m['issn']}")
     subtitle = " &#183; ".join(_esc(b) for b in bits)
@@ -579,23 +702,44 @@ def render_book_xml(xml, base_dir: Path | None = None,
 
 
 def render_book_file(xml_path: Path) -> str:
-    """Render a BITS <book> XML file to a Bookshelf-style HTML page."""
-    xml_path = Path(xml_path)
-    return render_book_xml(xml_path.read_bytes(),
-                           base_dir=xml_path.resolve().parent)
+    """Render a BITS book to a Bookshelf-style HTML page: a single BITS file, or
+    a chunked Bookshelf bundle (a directory holding TOC.nxml + one file per
+    part — ours, or a published book's from assets/cebs/_bookshelf), read via
+    rendering.bits_bundle.read_bundle.  Figure files next to it are inlined."""
+    from rendering.bits_bundle import read_bundle
+
+    path = Path(xml_path).resolve()
+    base_dir = path if path.is_dir() else path.parent
+    return _build_html(read_bundle(path), base_dir, None, None)
 
 
 def chart_images(data: dict) -> dict[str, str]:
-    """Build the {filename → base64-PNG} map render_book_xml inlines, from a
-    marshalled report `data` dict: every genomics chart carries its own
-    `filename` + `png_b64` (genomics_charts.attach_genomics_charts).  Empty when
-    the report has no charts (e.g. the shipped template ships `charts: []`)."""
+    """Build the {filename → base64 image} map render_book_xml inlines (and the
+    `bits` bundle ships), from a marshalled report `data` dict: every genomics
+    chart carries its own `filename` + `png_b64`
+    (genomics_charts.attach_genomics_charts), and every tree `figure` node its
+    payload (render_common.figure_payload — an appendix PCA plot, a supplied
+    diagram).  A non-PNG payload is stored as a data URI carrying its mimetype."""
+    from document_model.document_tree import render_nodes, walk_tree
+    from rendering.render_common import figure_payload
+
     out: dict[str, str] = {}
     for entry in data.get("genomics_sections") or []:
         for chart in entry.get("charts") or []:
             fn, b64 = chart.get("filename"), chart.get("png_b64")
             if fn and b64:
                 out[fn] = b64
+
+    def visit(node) -> None:
+        if node.node_type != "figure":
+            return
+        payload = figure_payload(node, data) or {}
+        fn, b64 = payload.get("filename"), payload.get("png_b64")
+        if fn and b64:
+            mime = payload.get("mimetype") or "image/png"
+            out[fn] = b64 if mime == "image/png" else f"data:{mime};base64,{b64}"
+
+    walk_tree(render_nodes(data), visit)
     return out
 
 
@@ -734,6 +878,18 @@ ol.ref-list li{margin:0 0 8px;}
 ul.bk-contents{list-style:none; margin:0; padding:0;}
 ul.bk-contents li{margin:5px 0; font-size:.98rem;}
 ul.bk-contents .c-label{color:var(--muted); font-weight:600; margin-right:.4em;}
+ul.bk-contents.c-nested{margin:4px 0 6px 20px;}
+ul.bk-contents.c-nested li{font-size:.9rem; margin:3px 0;}
+.bk-authors{margin:4px 0 6px; line-height:1.5;}
+.bk-pubinfo{color:var(--muted); font-size:.92rem; margin-bottom:14px;}
+.bk-abstract{margin-bottom:22px;}
+ul.bk-simple{list-style:none; margin-left:0; padding-left:0;}
+ul.bk-simple>li{margin:0 0 12px;}
+.li-p{margin:2px 0;}
+.bk-media{margin:4px 0;}
+.bk-media .media-kind{color:var(--muted); font-size:.88rem;}
+.bk-formula{display:flex; align-items:center; justify-content:space-between; margin:10px 0;}
+.bk-formula .formula-label{color:var(--muted); margin-left:1em;}
 /* right rail */
 .bk-rail{flex:0 0 260px; align-self:flex-start; position:sticky; top:14px;
   max-height:calc(100vh - 28px); overflow:auto;}
