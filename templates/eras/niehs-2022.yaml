@@ -1,0 +1,129 @@
+# eras/niehs-2022 — the NIEHS Report as published in October 2022 (NIEHS-02 … 06,
+# the organophosphate flame retardants; microarray transcriptomics).  ADR-0029:
+# the 2023 generation (eras/niehs-2023) plus what these books do differently.
+# A published study of this generation extends this file.
+extends: eras/niehs-2023
+
+# One file: the whole book is one <book-part> whose chapters are top-level
+# <sec>s, whose acknowledgments are an <ack>, and whose back holds the
+# <ref-list> and the <app>s.
+packaging: single-file
+
+changes:
+  # ── Front matter ─────────────────────────────────────────────────────────
+  # The Foreword and Publication Details carry no part type; Acknowledgments
+  # is an <ack>.
+  - set: foreword
+    book_part_type: ""
+  - set: publication
+    book_part_type: ""
+  - set: acknowledgments
+    element: ack
+    book_part_type: null
+
+  # ── Body: four <sec> chapters ────────────────────────────────────────────
+  - set: background
+    element: sec
+    book_part_type: null
+  - set: methods
+    element: sec
+    book_part_type: null
+  - set: results
+    element: sec
+    book_part_type: null
+  - set: summary
+    element: sec
+    book_part_type: null
+
+  # Materials and Methods: no internal dose; microarray (GeneChip)
+  # transcriptomics in three steps; no empirical FDR.
+  - remove: mm-internal-dose
+  - set: mm-tx-rna
+    title: RNA Isolation and cDNA Synthesis
+  - remove: mm-tx-processing
+  - set: mm-tx-qc
+    title: Analysis of GeneChip Data Quality
+  - remove: table-sample-counts
+  - remove: mm-tx-norm
+  - remove: mm-fdr
+
+  # Results: clinical chemistry and the hormones (with enzymes) each have a
+  # section and a summary table; no hematology and no internal dose.
+  - set: table-body-weight
+    title: Body Weight Summary
+  - set: table-organ-weight
+    title: Organ Weights Summary
+  - set: clinical-path
+    title: Clinical Chemistry
+  - set: table-clin-chem
+    title: Clinical Chemistry Summary
+  - remove: table-hematology
+  - insert:
+    - id: hormones
+      type: narrative+tables
+      title: Hormones and Enzymes
+      narrative_key: hormones
+      ready_key: clinicalPath
+    after: clinical-path
+  - move: table-hormones
+    into: hormones
+  - set: table-hormones
+    title: Hormones and Enzymes Summary
+  - remove: internal-dose
+
+  # References are the back matter's <ref-list>, ahead of the appendices.
+  - set: references
+    element: ref-list
+    book_part_type: null
+  - move: references
+    into: back
+    at: first
+
+  # ── Appendices A–F, each an <app> ────────────────────────────────────────
+  # No internal dose appendix: Animal Identifiers is A (microarray files).
+  - remove: appendix-a
+  - set: appendix-b
+    element: app
+    book_part_type: null
+  - set: table-b-1
+    title: Animal Numbers and Microarray Data File Names
+  # B reproduces the study's four NTP summary reports (body weight, organ
+  # weights, clinical chemistry, hormones) — supplied per study.
+  - insert:
+    - id: appendix-tox-tables
+      type: appendix
+      element: app
+      title: Toxicology Data Tables
+      children:
+      - {id: appendix-tox-tables-body, type: freeform-block, title: "",
+         session_content: toxicology-data-tables,
+         missing_content_text: "The study's toxicology data tables are not supplied for this study."}
+    after: appendix-b
+  # C: the PCA (C.1) and an alternative view of it (C.2), no eFDR.
+  - set: appendix-c
+    element: app
+    book_part_type: null
+    title: Transcriptomic Quality Control and Additional Data Analysis
+  - set: figure-c-pca
+    title: A Principal Component Analysis of the Robust Multi-array Average-normalized Data
+  - remove: appendix-c-efdr
+  - insert:
+    - id: appendix-c-additional
+      type: heading-only
+      title: Additional Data Analysis
+      children:
+      - id: figure-c-pca-alt
+        type: figure
+        subtype: chart
+        title: An Alternative View of the Principal Component Analysis of the Robust Multi-array Average-normalized Data
+        data_key: appendix_pca_alt_figure
+    after: appendix-c-qc
+  - set: appendix-d
+    element: app
+    book_part_type: null
+  - set: appendix-e
+    element: app
+    book_part_type: null
+  - set: appendix-f
+    element: app
+    book_part_type: null

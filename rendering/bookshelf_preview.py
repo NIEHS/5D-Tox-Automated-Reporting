@@ -584,13 +584,14 @@ _FRONT_PARTS = ("foreword", "front-matter-part", "ack", "dedication", "preface")
 
 def _collect_pages(root, base_dir, images) -> list[_Page]:
     """The book's parts, in reading order, one page each.  Labels are the parts'
-    own (<label>Appendix A</label>); none is invented here."""
+    own (<label>Appendix A</label>); none is invented here.  A single-file book's
+    parts are those of its whole-book <book-part> (bits_bundle.book_regions):
+    its front matter, its top-level <sec> chapters, its ref-list and <app>s."""
+    from rendering.bits_bundle import book_regions
+
     pages: list[_Page] = []
     n = 0
-    for region in ("front-matter", "book-body", "book-back"):
-        reg = root.find(region)
-        if reg is None:
-            continue
+    for reg in book_regions(root):
         parts = []
         for c in reg:
             if _ln(c) in ("book-app-group", "app-group"):
@@ -610,7 +611,7 @@ def _collect_pages(root, base_dir, images) -> list[_Page]:
                                         kind="refs" if refs else "chapter", n=n))
             elif tag in ("book-app", "app"):
                 pages.append(_part_page(part, base_dir, images, kind="appendix", n=n))
-            elif tag in ("glossary", "notes"):
+            elif tag in ("sec", "glossary", "notes"):
                 pages.append(_part_page(part, base_dir, images, kind="chapter", n=n))
     return pages
 

@@ -189,8 +189,21 @@ def split_book(xml) -> dict[str, bytes]:
                       <book-part-meta> leads with its <book-part-id>.
 
     The part's own @id becomes the wrapper's id and the file name (our ids; NCBI
-    assigns its own at ingest)."""
+    assigns its own at ingest).
+
+    A single-file book (ADR-0029: RR-8, NIEHS-02 … 06) stays one file, as those
+    books are held: TOC.nxml is the <book-part-wrapper> with the collection-meta,
+    the book-meta and the whole-book <book-part>."""
     book = xml if isinstance(xml, etree._Element) else parse_book(xml)
+    whole = whole_book_part(book)
+    if whole is not None:
+        w = etree.Element("book-part-wrapper",
+                          {"id": "toc", "content-type": "toc", "dtd-version": "2.0"},
+                          nsmap=book.nsmap)
+        for el in book.findall("collection-meta") + book.findall("book-meta"):
+            w.append(copy.deepcopy(el))
+        w.append(copy.deepcopy(whole))
+        return {"TOC.nxml": _serialize(w)}
     collection = book.findall("collection-meta")
     book_meta = book.find("book-meta")
     lean_meta = copy.deepcopy(book_meta) if book_meta is not None else None
@@ -313,20 +326,31 @@ def _part_entry(part) -> tuple[OutlineEntry, list]:
     return entry, bodies
 
 
+def whole_book_part(book):
+    """A single-file book's one <book-part> (RR-8, NIEHS-02 … 06): the part that
+    holds the whole book's front-matter / body / back — directly under the
+    published <book-part-wrapper>, or as our <book>'s only body part, which
+    (unlike a chapter) holds the front matter.  None for a chunked book."""
+    for bp in book.findall("book-part"):
+        if any(bp.find(r) is not None for r in ("front-matter", "body", "back")):
+            return bp
+    parts = book.findall("book-body/*")
+    if len(parts) == 1 and parts[0].tag == "book-part" and parts[0].find("front-matter") is not None:
+        return parts[0]
+    return None
+
+
 def book_regions(book) -> list:
     """The book's front-matter, body and back, in order.  A chunked bundle or our
-    <book> holds them as front-matter / book-body / book-back; a single-file book
-    (RR-8, NIEHS-02 … 06) holds the whole book in one <book-part> whose
-    front-matter, body (one top-level <sec> per chapter) and back (ref-list,
-    <app>s) they are."""
-    regions = [book.find(r) for r in ("front-matter", "book-body", "book-back")]
-    if any(r is not None for r in regions):
-        return [r for r in regions if r is not None]
-    for bp in book.findall("book-part"):
-        inner = [bp.find(r) for r in ("front-matter", "body", "back")]
-        if any(r is not None for r in inner):
-            return [r for r in inner if r is not None]
-    return []
+    chunked <book> holds them as front-matter / book-body / book-back; a
+    single-file book holds the whole book in one <book-part> whose front-matter,
+    body (one top-level <sec> per chapter) and back (ref-list, <app>s) they
+    are."""
+    whole = whole_book_part(book)
+    names = ("front-matter", "body", "back") if whole is not None else (
+        "front-matter", "book-body", "book-back")
+    regions = [(whole if whole is not None else book).find(r) for r in names]
+    return [r for r in regions if r is not None]
 
 
 def outline(book) -> list[OutlineEntry]:

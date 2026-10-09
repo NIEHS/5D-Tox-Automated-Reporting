@@ -43,7 +43,7 @@ def test_authored_element_and_type_win():
 
 def test_element_is_a_part_level_bits_element():
     with pytest.raises(ValueError, match="not a part-level BITS element"):
-        instantiate([{"region": "body", "children": [_sec("m", "M", element="sec")]}])
+        instantiate([{"region": "body", "children": [_sec("m", "M", element="table-wrap")]}])
 
 
 def test_part_fields_are_refused_on_nested_nodes():

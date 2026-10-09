@@ -95,6 +95,28 @@ def test_reader_takes_a_single_book_file(tmp_path):
     assert structure_keys(outline(read_bundle(p))) == ["book-part [section] Background"]
 
 
+def test_a_single_file_book_stays_one_file(tmp_path):
+    """ADR-0029: a single-file book (one whole-book <book-part> holding front
+    matter, <sec> chapters and back) is written as one TOC.nxml and reads back
+    to the same outline."""
+    from rendering.bits_bundle import split_book
+    book = ("<book><book-meta><book-title-group><book-title>B</book-title>"
+            "</book-title-group></book-meta><book-body><book-part id=\"book\">"
+            "<book-part-meta><title-group><title>B</title></title-group></book-part-meta>"
+            "<front-matter><ack id=\"a1\"><title>Acknowledgments</title><p>t</p></ack>"
+            "</front-matter><body><sec id=\"s1\"><title>Background</title><p>x</p></sec>"
+            "</body><back><ref-list><title>References</title></ref-list><app id=\"x\">"
+            "<label>Appendix A</label><title>Animals</title><sec><label>A.1</label>"
+            "<title>Ids</title><p>y</p></sec></app></back></book-part></book-body></book>")
+    files = split_book(book)
+    assert list(files) == ["TOC.nxml"]
+    (tmp_path / "TOC.nxml").write_bytes(files["TOC.nxml"])
+    keys = structure_keys(outline(read_bundle(tmp_path)))
+    assert keys == structure_keys(outline(parse_book(book))) == [
+        "book-title B", "ack Acknowledgments", "sec Background", "ref-list References",
+        "app <Appendix A> Animals", "  sec <A.1> Ids"]
+
+
 # ---------------------------------------------------------------------------
 # The committed reference outline
 # ---------------------------------------------------------------------------

@@ -53,6 +53,7 @@ from document_model.render_capabilities import (
     CONTENT_KINDS,
     FIGURE_SUBTYPES,
     BITS_PART_ELEMENTS,
+    PACKAGING_PART_ELEMENTS,
     ROLE_PROFILE,
     bindings_for,
     capabilities_for,
@@ -606,8 +607,11 @@ def _instantiate_node(
     if parent_type is None:
         element = entry.get("element") or default_element(node_type, region)
         bindings["element"] = element
+        # An explicit empty book_part_type means the part has none (the 2022
+        # books' Publication Details); absent means the element's default.
         bindings["book_part_type"] = (
-            entry.get("book_part_type") or default_book_part_type(element)
+            (entry["book_part_type"] or None) if "book_part_type" in entry
+            else default_book_part_type(element)
         )
     node = DocNode(
         node_type=node_type, level=level, children=children,
@@ -669,11 +673,38 @@ def load_template(name: str) -> list[dict]:
                 f"template {name!r}: 'document' must be a list of node entries, "
                 f"got {type(doc).__name__}"
             )
+        _check_packaging(name, doc, data.get("packaging") or "chunked")
         return doc
     raise ValueError(
         f"template {name!r} must be a YAML list of node entries, or a mapping "
         f"with a 'document' key, got {type(data).__name__}"
     )
+
+
+def _check_packaging(name: str, document: list, packaging: str) -> None:
+    """ADR-0029: every top-level part's BITS element (declared, else its type's
+    default) is one the definition's packaging holds — a chunked book has no
+    top-level <sec>, a single-file one no <book-part> chapters."""
+    allowed = PACKAGING_PART_ELEMENTS.get(packaging)
+    if allowed is None:
+        raise ValueError(f"template {name!r}: packaging must be one of "
+                         f"{sorted(PACKAGING_PART_ELEMENTS)}, got {packaging!r}")
+    for container in document:
+        if not isinstance(container, dict):
+            continue
+        if "id" in container:                      # a region-less top-level node
+            region, entries = None, [container]
+        else:                                      # a region container
+            region, entries = container.get("region"), container.get("children") or []
+        for entry in entries:
+            if not isinstance(entry, dict) or "id" not in entry:
+                continue
+            element = entry.get("element") or default_element(_resolve_type(entry), region)
+            if element is not None and element not in allowed:
+                raise ValueError(
+                    f"template {name!r}: node {entry['id']!r} is a <{element}>, which a "
+                    f"{packaging} book does not hold (it holds {sorted(allowed)})"
+                )
 
 
 def load_chart_style(name: str) -> dict:

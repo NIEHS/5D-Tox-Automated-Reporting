@@ -23,8 +23,18 @@ template, not decided here.  Each top-level node names its BITS `element` and
                      content directly (no repeated <sec>); a reference list's
                      part holds <back><ref-list> of numbered <ref>s instead
   book-app           <book-app book-part-type="appendix"> in <book-back>
+  ack                <ack>: title + prose, in the front matter
+  sec                a chapter as a top-level <sec> (title, content, sections)
+  ref-list           the numbered <ref-list>, titled, in the back matter
+  app                <app>: <label>Appendix A</label> + <title> + content
   (none)             print-only nodes (toc, tables-list): Bookshelf builds its
                      own table of contents
+
+ADR-0029: the definition's `packaging` decides the shell.  A chunked book
+(NIEHS-07 on) holds its parts in <front-matter> / <book-body> / <book-back>; a
+single-file book (RR-8, NIEHS-02 … 06) is one whole-book <book-part>, titled
+with the book title, whose <front-matter> / <body> / <back> hold them.  Which
+elements each packaging takes is render_capabilities.PACKAGING_PART_ELEMENTS.
 
 The series facts (collection, series title + ISSN, publisher, permissions) come
 from the template's `book_meta:` block; the study's (report number, DOI, date,
@@ -35,12 +45,14 @@ gap in view instead of dropping the part.
 
 from __future__ import annotations
 
+import copy
 import re
 from datetime import date
 
 from lxml import etree
 
 from document_model.document_node import DocNode
+from document_model.render_capabilities import PACKAGING_PART_ELEMENTS
 from document_model.document_tree import render_nodes, rendering_tree
 from rendering.jats_generator import E, _XLINK, _append_node, _p, _p_inline
 from rendering.render_common import (
@@ -55,8 +67,12 @@ _BITS_DOCTYPE = (
     '"BITS-book2.dtd">'
 )
 
-# The region container each top-level node's part goes into.
-_REGION_CONTAINER = {"front": "front-matter", "body": "book-body", "back": "book-back"}
+# The container each top-level node's part goes into, by packaging: a chunked
+# book's own regions, or those of a single-file book's whole-book <book-part>.
+_REGION_CONTAINER = {
+    "chunked": {"front": "front-matter", "body": "book-body", "back": "book-back"},
+    "single-file": {"front": "front-matter", "body": "body", "back": "back"},
+}
 
 # The roster-listing front-matter parts (book_part_type → the front-matter
 # roster key and the content-type prefix the published books use on its <p>s).
@@ -383,6 +399,33 @@ def _book_part(node: DocNode, data: dict) -> etree._Element:
     return E("book-part", _part_attrs(node, "bp"), meta, _part_body(node, data))
 
 
+def _ack(node: DocNode, data: dict) -> etree._Element:
+    """<ack>: its title, then its prose."""
+    return E.ack({"id": f"ack-{node.id}"}, E.title(node.title or ""),
+                 *(_prose_blocks(node, data) or [_pending(node)]))
+
+
+def _titled_ref_list(node: DocNode, data: dict) -> etree._Element:
+    rl = _ref_list(node, data)
+    rl.insert(0, E.title(node.title or ""))
+    return rl
+
+
+def _as_app(book_app: etree._Element) -> etree._Element:
+    """The shared appendix emitter's <book-app> as an <app>: its label and title
+    directly on the element, its body's content after them."""
+    app = E.app({"id": book_app.get("id")})
+    tg = book_app.find("book-part-meta/title-group")
+    for tag in ("label", "title"):
+        el = tg.find(tag) if tg is not None else None
+        if el is not None:
+            app.append(copy.deepcopy(el))
+    body = book_app.find("body")
+    for child in (list(body) if body is not None else []):
+        app.append(child)
+    return app
+
+
 def _part(node: DocNode, data: dict) -> list:
     """The part(s) a top-level node contributes to its region container."""
     element = node.element
@@ -390,10 +433,17 @@ def _part(node: DocNode, data: dict) -> list:
         return [_front_part(node, data)]
     if element == "book-part":
         return [_book_part(node, data)]
-    if element == "book-app":
+    if element == "ack":
+        return [_ack(node, data)]
+    if element == "ref-list":
+        return [_titled_ref_list(node, data)]
+    if element in ("book-app", "app", "sec"):
         holder = E.x()
-        _append_node(holder, node, data)   # the shared appendix emitter (+ any
-        return list(holder)                # protection marker comment before it)
+        _append_node(holder, node, data)   # the shared emitter (+ any protection
+        parts = list(holder)               # marker comment before it)
+        if element == "app":
+            parts = [_as_app(p) if p.tag == "book-app" else p for p in parts]
+        return parts
     return []   # book-meta / abstract (in <book-meta>) and print-only nodes
 
 
@@ -412,6 +462,35 @@ def _object_position(data: dict) -> dict:
     return load_object_position(ACTIVE_TEMPLATE)
 
 
+def _packaging(data: dict) -> str:
+    """How the book is packaged (ADR-0029): `data["packaging"]` when the caller
+    supplies the study's, else the active template's."""
+    if data.get("packaging"):
+        return data["packaging"]
+    from document_model.document_template import load_packaging
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return load_packaging(ACTIVE_TEMPLATE)
+
+
+def _whole_book_part(book_meta: etree._Element, containers: dict) -> etree._Element:
+    """A single-file book's one <book-part>: titled with the book title (and
+    subtitle), holding the front matter, body and back."""
+    title_group = E("title-group")
+    btg = book_meta.find("book-title-group")
+    if btg is not None and btg.find("book-title") is not None:
+        title = copy.deepcopy(btg.find("book-title"))
+        title.tag = "title"
+        title_group.append(title)
+        for sub in btg.findall("subtitle"):
+            title_group.append(copy.deepcopy(sub))
+    part = E("book-part", {"id": "book", "book-part-type": "section"},
+             E("book-part-meta", title_group))
+    for region in ("front-matter", "body", "back"):
+        if region in containers:
+            part.append(containers[region])
+    return part
+
+
 def build_book(data: dict, tree=None) -> etree._Element:
     """The BITS <book> element for a report (see the module docstring).  `tree`
     is the study's document tree (its definition or view), else DOCUMENT_TREE."""
@@ -428,14 +507,21 @@ def _build_book(data: dict, nodes: list) -> etree._Element:
     book = etree.Element("book", {"dtd-version": "2.0"}, nsmap={"xlink": _XLINK})
     for cm in _collection_meta(decl):
         book.append(cm)
-    book.append(_build_book_meta(data, nodes, decl))
+    book_meta = _build_book_meta(data, nodes, decl)
+    book.append(book_meta)
+    packaging = _packaging(data)
+    allowed = PACKAGING_PART_ELEMENTS[packaging]
+    region_container = _REGION_CONTAINER[packaging]
     containers: dict[str, etree._Element] = {}
     positions = _object_position(data)
     for node in nodes:
+        if node.element is not None and node.element not in allowed:
+            raise ValueError(f"node {node.id!r} is a <{node.element}>, which a {packaging} "
+                             f"book does not hold (it holds {sorted(allowed)})")
         parts = _part(node, data)
         if not parts:
             continue
-        region = _REGION_CONTAINER.get(node.region or "body", "book-body")
+        region = region_container[node.region or "body"]
         if region not in containers:
             containers[region] = E(region)
         # Floating objects show on Bookshelf as a card that opens the object,
@@ -447,6 +533,9 @@ def _build_book(data: dict, nodes: list) -> etree._Element:
                 if position and obj.get("position") is None:
                     obj.set("position", position)
             containers[region].append(part)
+    if packaging == "single-file":
+        book.append(E("book-body", _whole_book_part(book_meta, containers)))
+        return book
     for region in ("front-matter", "book-body", "book-back"):
         if region in containers:
             book.append(containers[region])

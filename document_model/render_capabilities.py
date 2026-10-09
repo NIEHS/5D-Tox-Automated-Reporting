@@ -732,9 +732,19 @@ def figure_graphic_role(subtype: str | None) -> str:
 # ADR-0028 §1: the BITS element a TOP-LEVEL node projects to.  The closed set of
 # part-level elements a template may name in `element:`; nested nodes project by
 # role (sec / table-wrap / fig / …) and carry no element.
-BITS_PART_ELEMENTS: frozenset[str] = frozenset(
-    {"book-meta", "abstract", "foreword", "front-matter-part", "book-part", "book-app"}
-)
+#
+# ADR-0029: which of them a book may use depends on how it is packaged.  A
+# chunked book (NIEHS-07 on) is one file per part: foreword / front-matter-part,
+# body <book-part>s, <book-app>s.  A single-file book (RR-8, NIEHS-02 … 06) is
+# one whole-book <book-part> whose front matter adds <ack>, whose body is
+# top-level <sec> chapters, and whose back holds a <ref-list> and <app>s.
+PACKAGING_PART_ELEMENTS: dict[str, frozenset[str]] = {
+    "chunked": frozenset({"book-meta", "abstract", "foreword", "front-matter-part",
+                          "book-part", "book-app"}),
+    "single-file": frozenset({"book-meta", "abstract", "foreword", "front-matter-part",
+                              "ack", "sec", "ref-list", "app"}),
+}
+BITS_PART_ELEMENTS: frozenset[str] = frozenset().union(*PACKAGING_PART_ELEMENTS.values())
 
 # The @book-part-type a part gets when the template names none.  BITS leaves
 # the value open; these are the values the published NIEHS books use.

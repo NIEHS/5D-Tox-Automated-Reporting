@@ -64,6 +64,8 @@ def test_changes_alter_the_base_in_order(templates):
         packaging: single-file
         book_meta: {series: {title: New Series}}
         changes:
+          - set: methods
+            element: sec
           - set: m-a
             title: A prime
             narrative_key: null
@@ -73,7 +75,8 @@ def test_changes_alter_the_base_in_order(templates):
           - move: m-b
             into: methods
             at: first
-          - insert: [{id: disc, type: narrative, title: Discussion, data_key: d}]
+          - insert: [{id: disc, type: narrative, title: Discussion, data_key: d,
+                      element: sec}]
             into: body
     """)
     doc = dt.load_template("eras/e1")
@@ -101,6 +104,8 @@ def test_a_study_extends_an_era_that_extends_a_base(templates):
     ("extends: base\nchanges:\n  - insert: [{id: x}]\n", "exactly one of"),
     ("extends: base\npackaging: zip\n", "packaging"),
     ("extends: base\ndocument: []\n", "unknown key"),
+    # A single-file book's chapters are <sec>s, not <book-part>s.
+    ("extends: base\npackaging: single-file\n", "'methods' is a <book-part>"),
 ])
 def test_bad_changes_fail_loudly(templates, text, message):
     templates("bad", text)
@@ -126,6 +131,8 @@ def test_a_study_renders_from_its_own_definition(templates):
         object_position: {back: float}
         changes:
           - remove: foreword
+          - set: methods
+            element: sec
     """)
     tree = build_view_tree("DTXSID0000001", "default")
     assert [n.id for n in tree] == ["methods"]
@@ -144,3 +151,19 @@ def test_find_node_resolves_in_the_tree_being_rendered():
     with rendering_tree(mine):
         assert find_node("background").title == "Mine"
     assert find_node("background").title != "Mine"
+
+
+def test_an_empty_part_type_means_none(templates):
+    """`book_part_type: ""` gives a part no type; absent, the element's default."""
+    templates("e", """
+        extends: base
+        packaging: single-file
+        changes:
+          - set: foreword
+            book_part_type: ""
+          - set: methods
+            element: sec
+    """)
+    nodes = {n.id: n for n in dt.instantiate(dt.load_template("e"))}
+    assert nodes["foreword"].book_part_type is None
+    assert nodes["methods"].element == "sec" and nodes["methods"].book_part_type is None

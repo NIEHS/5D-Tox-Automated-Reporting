@@ -883,6 +883,22 @@ def _build_methods_sections_from_tree() -> list[dict]:
     return sections
 
 
+def _series_issn(dtxsid: str) -> str:
+    """The series ISSN the study's document definition states (its book_meta,
+    ADR-0029 — the NIEHS Report series has had two), else the shared
+    template's; empty when neither states one."""
+    from common.dtxsid import is_valid_dtxsid
+    from document_model.view_config import study_document_facts
+
+    if is_valid_dtxsid(dtxsid):
+        meta = study_document_facts(dtxsid)["book_meta"]
+    else:
+        from document_model.document_template import load_book_meta
+        from document_model.document_tree import ACTIVE_TEMPLATE
+        meta = load_book_meta(ACTIVE_TEMPLATE)
+    return str((meta.get("series") or {}).get("issn") or "")
+
+
 def scaffold_report_data(
     chemical_name: str = "Test Article",
     casrn: str = "000-00-0",
@@ -1025,6 +1041,7 @@ def scaffold_report_data(
     #   it replaces the empty entry.
     # ================================================================
 
+    issn = _series_issn(dtxsid)
     data = {
         # --- Metadata ---
         "title": full_title,
@@ -1035,7 +1052,7 @@ def scaffold_report_data(
         "dtxsid": dtxsid,
         "report_number": ph("NIEHS Report XX"),
         "report_date": ph("Month Year"),
-        "issn": "2768-5632",
+        "issn": issn,
         # Supplier strain designation for the cover, e.g. "(Hsd:Sprague
         # Dawley® SD®)": front matter only — never in the study data.
         "strain": "",
@@ -1108,7 +1125,7 @@ def scaffold_report_data(
         "publication_details": {"paragraphs": [
             "Publisher: National Institute of Environmental Health Sciences",
             "Publishing Location: Research Triangle Park, NC",
-            "ISSN: 2768-5632",
+            *([f"ISSN: {issn}"] if issn else []),
             "DOI: to be assigned upon publication",
             "Report Series: NIEHS Report Series",
             "Report Series Number: to be assigned upon publication",
