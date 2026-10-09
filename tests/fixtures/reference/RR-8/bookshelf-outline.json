@@ -1,0 +1,436 @@
+[
+ {
+  "depth": 0,
+  "kind": "book-title",
+  "part_type": "",
+  "label": "",
+  "title": "NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley Rats (Hsd: Sprague Dawley SD) (Gavage Studies)"
+ },
+ {
+  "depth": 0,
+  "kind": "subtitle",
+  "part_type": "",
+  "label": "",
+  "title": "Research Report 8"
+ },
+ {
+  "depth": 0,
+  "kind": "contrib-group",
+  "part_type": "authors",
+  "label": "",
+  "title": "1 contrib"
+ },
+ {
+  "depth": 0,
+  "kind": "abstract",
+  "part_type": "",
+  "label": "",
+  "title": "Abstract"
+ },
+ {
+  "depth": 0,
+  "kind": "ack",
+  "part_type": "",
+  "label": "",
+  "title": "Acknowledgments"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "collaborators",
+  "label": "",
+  "title": "Collaborators"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "contributors",
+  "label": "",
+  "title": "Contributors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "peer-review",
+  "label": "",
+  "title": "Peer Review"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Peer Reviewers"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "",
+  "label": "",
+  "title": "Publication Details"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Study Design"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Dose Selection Rationale"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Chemistry"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Procurement, Characterization, and Formulation"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Examinations and Sample Collection"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Observations"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sample Collection for Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "RNA Isolation and cDNA Synthesis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Analysis of GeneChip Data Quality"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Statistical Analysis of Body Weights, Organ Weights, Clinical Chemistry"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose (BMD) Analysis of Organ Weights and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "BMD Analysis of Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Accessibility"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Animal Condition, Body and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 1",
+  "title": "Mean Body Weight Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 2",
+  "title": "Organ Weights Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Chemistry"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 3",
+  "title": "Clinical Chemistry Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Hormones and Enzymes"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 4",
+  "title": "Hormone and Enzymes Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Apical Endpoint and Clinical Chemistry Benchmark Dose Summary Table"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 5",
+  "title": "BMD, NOEL, and LOEL Summary for Apical Endpoints, Sorted by LOEL or BMDL from Low to High"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Set BMD Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 6",
+  "title": "Top 20 GO Biological Process Gene Sets Ranked by Potency of Perturbation (Sorted by BMD Median)"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Differentially Expressed Gene Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 7",
+  "title": "Top Differentially Expressed Probe Sets Ranked by Fold Change"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Discussion"
+ },
+ {
+  "depth": 0,
+  "kind": "ref-list",
+  "part_type": "",
+  "label": "",
+  "title": "References"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix A",
+  "title": "Animal Identifiers and Endpoint Analyses"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table A-1",
+  "title": "Animal Numbers, Completed Endpoint Analyses, and Microarray Data File Names"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix B",
+  "title": "Analytical Chemistry"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-1",
+  "title": "Summary of Analytical Results for Triphenyl Phosphate (CAS No. 115-86-6)"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix C",
+  "title": "Toxicology Data Tables"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-1",
+  "title": "I04: Mean Body Weight Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-2",
+  "title": "PA06: Organ Weights Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-3",
+  "title": "PA41: Clinical Chemistry Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-4",
+  "title": "R07: Hormone Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix D",
+  "title": "Transcriptomic Quality Control and Additional Data Analysis"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.1",
+  "title": "Gene Expression Quality Control"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-1",
+  "title": "A Principal Component (PCA) of the RMA-Normalized Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.2",
+  "title": "Additional Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-2",
+  "title": "An Alternative View of the Principal Component (PCA) of the RMA-Normalized Data"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix E",
+  "title": "Apical Endpoint Quality Control and Additional Data Analysis"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure E-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose Execution of Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure E-2",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution of Gene Sets with Expression Changes Enacted by Chemical Exposure"
+ }
+]

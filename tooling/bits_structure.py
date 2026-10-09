@@ -9,8 +9,8 @@ titles, object placement), and the difference is printed as a unified diff
 (`-` published only, `+` ours only).
 
     python -m tooling.bits_structure [DTXSID ...]        diff (default: every published study)
-    python -m tooling.bits_structure --reference NIEHS-10 --write-fixture
-        write the published outline to tests/fixtures/reference/<REPORT>/bookshelf-outline.json
+    python -m tooling.bits_structure [--reference NIEHS-10] --write-fixture
+        write the published outline(s) to tests/fixtures/reference/<REPORT>/bookshelf-outline.json
 """
 
 from __future__ import annotations
@@ -67,17 +67,20 @@ def main() -> int:
     ap.add_argument("dtxsids", nargs="*", help="generated studies (default: all published)")
     ap.add_argument("--reference", help="published report name, e.g. NIEHS-10")
     ap.add_argument("--write-fixture", action="store_true",
-                    help="write the --reference outline to tests/fixtures/reference/")
+                    help="write the published outline (--reference, else every "
+                         "published report) to tests/fixtures/reference/")
     args = ap.parse_args()
 
     if args.write_fixture:
-        if not args.reference:
-            ap.error("--write-fixture needs --reference")
-        path = fixture_path(args.reference)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        rows = [e.to_dict() for e in published_outline(args.reference)]
-        path.write_text(json.dumps(rows, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"wrote {path.relative_to(REPO_ROOT)} ({len(rows)} entries)")
+        reports = [args.reference] if args.reference else [
+            r for r in PUBLISHED.values() if (BOOKSHELF / r / "TOC.nxml").exists()]
+        for report in reports:
+            path = fixture_path(report)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            rows = [e.to_dict() for e in published_outline(report)]
+            path.write_text(json.dumps(rows, indent=1, ensure_ascii=False) + "\n",
+                            encoding="utf-8")
+            print(f"wrote {path.relative_to(REPO_ROOT)} ({len(rows)} entries)")
         return 0
 
     status = 0
@@ -89,11 +92,6 @@ def main() -> int:
         xml = REPO_ROOT / "output" / dtxsid / f"{dtxsid}.xml"
         if not xml.exists():
             print(f"== {dtxsid} ({report}): no generated BITS ({xml.relative_to(REPO_ROOT)})")
-            continue
-        if read_bundle(BOOKSHELF / report).tag != "book":
-            # RR-8 and NIEHS-02 … 06 are one book-part with sections inside —
-            # the pre-NIEHS-07 layout, which ours (ADR-0028) does not follow.
-            print(f"== {dtxsid} ({report}): single-part book (pre-NIEHS-07 layout), not compared")
             continue
         diff = structure_diff(published_outline(report), generated_outline(dtxsid))
         print(f"== {dtxsid} ({report}): {len(diff)} differing line(s)")

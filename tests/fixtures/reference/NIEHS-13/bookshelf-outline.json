@@ -1,0 +1,2256 @@
+[
+ {
+  "depth": 0,
+  "kind": "book-title",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report on the In Vivo Repeat Dose Biological Potency Studies of 1,4-Dichlorobenzene (CASRN 106-46-7) in Female Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats and B6D2F1/Crl Mice (Whole-body Inhalation Studies)"
+ },
+ {
+  "depth": 0,
+  "kind": "subtitle",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report 13"
+ },
+ {
+  "depth": 0,
+  "kind": "contrib-group",
+  "part_type": "authors",
+  "label": "",
+  "title": "8 contrib"
+ },
+ {
+  "depth": 0,
+  "kind": "abstract",
+  "part_type": "",
+  "label": "",
+  "title": "Abstract"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "foreword",
+  "part_type": "foreword",
+  "label": "",
+  "title": "Foreword"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "authors",
+  "label": "",
+  "title": "Authors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "contributors",
+  "label": "",
+  "title": "Contributors"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "",
+  "title": "Author and Contributor Roles and Definitionsa"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "peer-review",
+  "label": "",
+  "title": "Peer Review"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Publication Details"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "acknowledgments",
+  "label": "",
+  "title": "Acknowledgments"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Chemistry"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Procurement and Characterization of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Vapor Generation and Exposure System"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Vapor Concentration Monitoring"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Chamber Atmosphere Characterization"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Study Design for Rats"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Study Design for Mice"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Exposure Concentration Selection Rationale"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Examinations and Sample Collection"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Observations"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Body and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Internal Concentration Assessment"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sample Collection for Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "RNA Isolation, Library Creation, and Sequencing"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sequence Data Processing"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sequencing Quality Checks and Outlier Removal"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 1",
+  "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Normalization"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Accessibility"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Apical Endpoint Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Animal Condition, Body Weights, and Organ Weights"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 4,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 2",
+  "title": "Summary of Body Weights and Body Weight Gain of Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 4,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 3",
+  "title": "Summary of Select Organ Weights of Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 4,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 4",
+  "title": "Summary of Select Hematology Data for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 4,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 5",
+  "title": "Summary of Select Clinical Chemistry Data for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Apical Endpoint Benchmark Dose Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 6",
+  "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Set Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 7",
+  "title": "Top 10 Heart Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 8",
+  "title": "Top 10 Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 9",
+  "title": "Top 10 Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 10",
+  "title": "Top 10 Lung Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 11",
+  "title": "Top 10 Ovary Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 12",
+  "title": "Most Potent Gene Ontology Biological Process Gene Set per Tissue, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Set Benchmark Dose Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 13",
+  "title": "Top 10 Heart Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 14",
+  "title": "Top 10 Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 15",
+  "title": "Top 10 Liver Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 16",
+  "title": "Top 10 Lung Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 17",
+  "title": "Top 10 Ovary Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Theoretical Inhaled Dose"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 18",
+  "title": "Theoretical Inhaled Daily Dose (mg/kg/day) of 1,4-Dichlorobenzene Following Six-hour Whole-Body Inhalation Exposure"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Internal Concentration Assessment"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Rats"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 19",
+  "title": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Mice"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 20",
+  "title": "Summary of Blood, Lung, and Liver Concentration Data for Female Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "References"
+ },
+ {
+  "depth": 1,
+  "kind": "ref-list",
+  "part_type": "",
+  "label": "",
+  "title": ""
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix A",
+  "title": "Chemical Characterization and Generation of Chamber Concentrations"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "A.1",
+  "title": "Procurement and Characterization of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "A.2",
+  "title": "Vapor Concentration Monitoring"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "A.3",
+  "title": "Vapor Generation and Exposure System"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "A.4",
+  "title": "Chamber Atmosphere Characterization"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table A-1",
+  "title": "Gas Chromatography Systems Used in the Five-day Inhalation Studies of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table A-2",
+  "title": "Summary of Chamber Concentrations in the Five-day Inhalation Study of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure A-1",
+  "title": "Mass Spectrum of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure A-2",
+  "title": "Library Reference Spectrum of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure A-3",
+  "title": "Schematic of the Vapor Generation and Delivery System in the Inhalation Studies of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix B",
+  "title": "Internal Concentration Assessment"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.1",
+  "title": "Validation of Analytical Method"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.2",
+  "title": "Study Sample Collection"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.2.1",
+  "title": "Blood"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.2.2",
+  "title": "Lung and Liver"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.2.3",
+  "title": "Study Sample Preparation"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "B.3",
+  "title": "Instrumentation and Quantitation"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-1",
+  "title": "Analytical System and Parameters Used in the Internal Concentration Assessment of 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-2",
+  "title": "Method Validation Data for 1,4-Dichlorobenzene in Rat Blood"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-3",
+  "title": "Method Dilution Verification Data for 1,4-Dichlorobenzene in Male Sprague Dawley Rat Blood"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-4",
+  "title": "Secondary Matrix Evaluation Data for 1,4-Dichlorobenzene"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-5",
+  "title": "Storage Stability of 1,4-Dichlorobenzene in Sample Matrices"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix C",
+  "title": "Animal Identifiers"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-1",
+  "title": "Animal Numbers and FASTQ Data File Names for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-2",
+  "title": "Animal Numbers and FASTQ Data File Names for Female Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix D",
+  "title": "Transcriptomic Quality Control and Empirical False Discovery Rate"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.1",
+  "title": "Gene Expression Quality Control"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-1",
+  "title": "A Principal Component Analysis of the Normalized Data from the Heart of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-2",
+  "title": "A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-3",
+  "title": "A Principal Component Analysis of the Normalized Data from the Liver of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-4",
+  "title": "A Principal Component Analysis of the Normalized Data from the Lung of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-5",
+  "title": "A Principal Component Analysis of the Normalized Data from the Ovary of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-6",
+  "title": "A Principal Component Analysis of the Normalized Data from the Heart of Female Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-7",
+  "title": "A Principal Component Analysis of the Normalized Data from the Kidney of Female Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-8",
+  "title": "A Principal Component Analysis of the Normalized Data from the Liver of Female Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-9",
+  "title": "A Principal Component Analysis of the Normalized Data from the Lung of Female Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-10",
+  "title": "A Principal Component Analysis of the Normalized Data from the Ovary of Female Mice"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.2",
+  "title": "Empirical False Discovery Rate"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.2.1",
+  "title": "Methods"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "D.2.2",
+  "title": "Results"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table D-1",
+  "title": "Empirical False Discovery Results"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix E",
+  "title": "Gene Set and Gene Definitions"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-1",
+  "title": "Active Genes and Definitions within Top 10 Heart Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-2",
+  "title": "Active Genes and Definitions within Top 10 Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-3",
+  "title": "Active Genes and Definitions within Top 10 Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-4",
+  "title": "Active Genes and Definitions within Top 10 Lung Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-5",
+  "title": "Active Genes and Definitions within Top 10 Ovary Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by 5th Percentile Benchmark Dose, for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-6",
+  "title": "Gene Identifiers and Definitions for Female Rats Exposed to 1,4-Dichlorobenzene for Five Daysa"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table E-7",
+  "title": "Gene Identifiers and Definitions for Female Mice Exposed to 1,4-Dichlorobenzene for Five Daysa"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix F",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.1",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix G",
+  "title": "Supplemental Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.1",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.2",
+  "title": "Theoretical Inhaled Dose"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Theoretical Inhaled Dose"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.3",
+  "title": "Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.3.1",
+  "title": "Apical Benchmark Dose Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD, NOEL and LOEL Summary for Apical Endpoints"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Rat Apical (bm2 Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Chemistry Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Hematology Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Mean Body Weights Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Organ Weights Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.3.2",
+  "title": "Genomic Benchmark Dose Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "All Organ Principal Components Analysis Files"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Animal and Fastaq Metadata"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Attenuation-adjusted Raw Read Counts Rat Study"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Rat Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Rat Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Rat Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Rat Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Rat Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Rat Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Rat Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Rat Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Rat Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Rat Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Rat Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Rat Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Rat Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Rat Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Rat Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Rat Genomic (bm2 Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Rat Genomic (JSON Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Rat Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Rat Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Rat Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Rat Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Rat Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Most Potent GO Biological Process in Each Tissue"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Rat Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Rat Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Rat Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Rat Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Rat Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Rat DCB eFDR Synthetic Null Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "TempO-Seq S1500v1.2 Full Manifest Rattus Norvegicus"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics Data QC Report"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.3.3",
+  "title": "Study Tables"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I01 – Animal Removal Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I02 – Animal Removals"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04 – Mean Body Weights and Survival"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04G – Mean Body Weight Gain"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I05 – Clinical Observations Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA06 – Organ Weights Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA41 – Clinical Chemistry Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA43 – Hematology Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA48 – Blood and Tissue Concentration"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.3.4",
+  "title": "Individual Animal Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Blood and Tissue Concentration Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Body Weight Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Chemistry Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Observations Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Hematology Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Organ Weight Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Removal Reasons Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.4",
+  "title": "Mice"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.4.1",
+  "title": "Apical Benchmark Dose Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD, NOEL and LOEL Summary for Apical Endpoints"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Mouse Apical (bm2 Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Chemistry Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Mean Body Weights Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Organ Weights Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.4.2",
+  "title": "Genomic Benchmark Dose Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "All Organ Principal Components Analysis Files"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Animal and Fastaq Metadata"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Attenuation-adjusted Raw Read Counts Mouse Study"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Mouse Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Mouse Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Mouse Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Mouse Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis Mouse Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Mouse Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Mouse Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Mouse Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Mouse Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process BMD Results Mouse Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Mouse Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Mouse Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Mouse Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Mouse Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results Mouse Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Mouse Genomic (bm2 Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File Mouse Genomic (JSON Format)"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Mouse Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Mouse Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Mouse Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Mouse Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Curve Fit Mouse Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Mouse DCB eFDR Synthetic Null Analysis"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Most Potent GO Biological Process in Each Tissue"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Mouse Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Mouse Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Mouse Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Mouse Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "One-way ANOVA Mouse Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "TempO-Seq S1500v1.2 Full Manifest Mus Musculus"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Heart"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Kidney"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Liver"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Lung"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets Ovary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics Data QC Report"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.4.3",
+  "title": "Study Tables"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I01 – Animal Removal Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I02 – Animal Removals"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04 – Mean Body Weights and Survival"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04G – Mean Body Weight Gain"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I05 – Clinical Observations Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA06 – Organ Weights Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA41 – Clinical Chemistry Summary"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA48 – Blood and Tissue Concentration"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.4.4",
+  "title": "Individual Animal Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Blood and Tissue Concentration Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Body Weight Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Chemistry Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Observations Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Organ Weight Data"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Removal Reasons Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.5",
+  "title": "Software"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.5.1",
+  "title": "Analysis Pipeline Evaluation"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Analysis Pipeline Evaluation"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "DTT tBMD Pipeline bm2"
+ },
+ {
+  "depth": 3,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "EPA tBMD Pipeline bm2"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "G.5.2",
+  "title": "BMDExpress Preview Software"
+ }
+]

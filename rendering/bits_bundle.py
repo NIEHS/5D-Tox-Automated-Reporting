@@ -308,9 +308,25 @@ def _part_entry(part) -> tuple[OutlineEntry, list]:
                          _text(tg.find("label")), _text(tg.find("title")))
     bodies = [c for c in part if isinstance(c.tag, str)
               and c.tag in ("body", "named-book-part-body", "back")]
-    if part.tag == "ack":
+    if part.tag in ("ack", "sec", "app"):
         bodies = [part]
     return entry, bodies
+
+
+def book_regions(book) -> list:
+    """The book's front-matter, body and back, in order.  A chunked bundle or our
+    <book> holds them as front-matter / book-body / book-back; a single-file book
+    (RR-8, NIEHS-02 … 06) holds the whole book in one <book-part> whose
+    front-matter, body (one top-level <sec> per chapter) and back (ref-list,
+    <app>s) they are."""
+    regions = [book.find(r) for r in ("front-matter", "book-body", "book-back")]
+    if any(r is not None for r in regions):
+        return [r for r in regions if r is not None]
+    for bp in book.findall("book-part"):
+        inner = [bp.find(r) for r in ("front-matter", "body", "back")]
+        if any(r is not None for r in inner):
+            return [r for r in inner if r is not None]
+    return []
 
 
 def outline(book) -> list[OutlineEntry]:
@@ -332,10 +348,7 @@ def outline(book) -> list[OutlineEntry]:
             for sec in ab.findall("sec"):
                 out.append(OutlineEntry(1, "sec", "", _text(sec.find("label")),
                                         _text(sec.find("title"))))
-    for region in ("front-matter", "book-body", "book-back"):
-        reg = book.find(region)
-        if reg is None:
-            continue
+    for reg in book_regions(book):
         parts = []
         for c in reg:
             if not isinstance(c.tag, str):
@@ -348,7 +361,7 @@ def outline(book) -> list[OutlineEntry]:
             if part.tag == "ref-list":
                 out.append(OutlineEntry(0, "ref-list", "", "", _text(part.find("title"))))
                 continue
-            if part.tag not in _PART_TAGS:
+            if part.tag not in _PART_TAGS and part.tag not in ("sec", "app"):
                 continue
             entry, bodies = _part_entry(part)
             out.append(entry)
