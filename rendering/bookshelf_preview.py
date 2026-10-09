@@ -368,7 +368,7 @@ def _render_blocks(children, level: int, out: list[str], base_dir: Path | None,
         elif tag == "list":
             out.append(_render_list(el))
         elif tag in ("media", "supplementary-material"):
-            out.append(_render_media(el))
+            out.append(_render_media(el, base_dir))
         elif tag == "disp-formula":
             _FORMULA_COUNTER["n"] += 1
             out.append(_render_formula(el, _FORMULA_COUNTER["n"]))
@@ -404,17 +404,38 @@ def _class_attr(cls: str | None) -> str:
     return f' class="{_esc(cls)}"' if cls else ""
 
 
-def _render_media(el) -> str:
+# Bookshelf's names for a supplied file's type; any other is its extension in
+# capitals ("BM2", "ZIP").
+_FILE_KINDS = {"doc": "MS Word", "docx": "MS Word", "xls": "MS Excel", "xlsx": "MS Excel",
+               "txt": "Text", "pdf": "PDF", "ppt": "MS PowerPoint", "pptx": "MS PowerPoint"}
+
+
+def _file_size(n: int) -> str:
+    """A file size as Bookshelf prints it: K under 1024K, else M; one decimal
+    (truncated) under 10, else a whole number ("7.9K", "15K", "1.2M", "26M")."""
+    import math
+    v, unit = n / 1024, "K"
+    if v >= 1024:
+        v, unit = v / 1024, "M"
+    return f"{math.floor(v * 10) / 10:.1f}{unit}" if v < 10 else f"{round(v)}{unit}"
+
+
+def _render_media(el, base_dir: Path | None = None) -> str:
     """A supplied file (<media> / <supplementary-material>): its caption title
-    linked to the file, as Bookshelf lists supplementary data."""
+    linked to the file, then its type and — when the file is in the bundle — its
+    size, as Bookshelf lists supplementary data ("Read Me (MS Word, 14K)")."""
     href = el.get(f"{{{XLINK}}}href") or el.get("href") or ""
     label = el.find("label")
     title = (_caption_html(el) or (_inline(label) if label is not None else "")
              or _esc(href))
-    kind = el.get("mime-subtype") or (href.rsplit(".", 1)[-1] if "." in href else "")
-    kind_html = f' <span class="media-kind">({_esc(kind)})</span>' if kind else ""
+    ext = (el.get("mime-subtype") or (href.rsplit(".", 1)[-1] if "." in href else "")).lower()
+    facts = [_FILE_KINDS.get(ext, ext.upper())] if ext else []
+    path = base_dir / href if (base_dir is not None and href) else None
+    if path is not None and path.is_file():
+        facts.append(_file_size(path.stat().st_size))
+    kind_html = f'<span class="small"> ({_esc(", ".join(facts))})</span>' if facts else ""
     link = f'<a href="{_esc(href)}">{title}</a>' if href else title
-    return f'<div class="bk-media" id="{_esc(el.get("id", ""))}">{link}{kind_html}</div>'
+    return f'<p class="bk-media"{_id_attr(el.get("id"))}>{link}{kind_html}</p>'
 
 
 def _render_formula(el, number: int = 0) -> str:
@@ -924,7 +945,7 @@ ul.simple-list>li>div{margin:2px 0;}
 .bk-book-banner ul.inline_list{list-style:none; margin:4px 0 0; padding:0; display:flex; gap:22px;
   font-size:.88rem;}
 .bk-media{margin:4px 0;}
-.bk-media .media-kind{color:var(--muted); font-size:.88rem;}
+.bk-media .small{color:var(--muted); font-size:.88rem;}
 .bk-formula{display:flex; align-items:center; justify-content:space-between; margin:10px 0;}
 .bk-formula .bk_equ_label{color:var(--muted); margin-left:1em;}
 /* right rail */
