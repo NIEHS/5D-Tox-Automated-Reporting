@@ -12,6 +12,9 @@ Public API:
     read_bundle(path) -> <book> element   a chunked bundle dir, a TOC.nxml, or a
                                            single BITS file, as one <book> tree
     parse_book(xml) -> element            the same for a document held in memory
+    split_book(xml) -> {filename: bytes}  a <book> as a chunked bundle (TOC.nxml
+                                           + one book-part-wrapper per part)
+    bundle_zip(xml, images) -> bytes      that bundle zipped, with the figure files
     outline(book) -> [OutlineEntry]       the structure, in document order
     structure_keys(entries) -> [str]      the comparable form of an outline
 
@@ -25,7 +28,11 @@ content (caption wording, paragraph text, reference counts).
 
 from __future__ import annotations
 
+import base64
+import copy
+import io
 import re
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -114,6 +121,139 @@ def read_bundle(path) -> etree._Element:
     if root.tag == "book-part-wrapper" and root.find("toc") is not None:
         return _assemble(root, toc_path.parent)
     return root
+
+
+# ---------------------------------------------------------------------------
+# Writing: one <book> → chunked bundle
+# ---------------------------------------------------------------------------
+
+_BITS_SYSTEM_ID = "BITS-book2.dtd"
+_BITS_PUBLIC_ID = "-//NLM//DTD BITS Book Interchange DTD v2.0 20151225//EN"
+_FROM_WHERE = {"front-matter": "front-matter", "book-body": "body", "book-back": "back"}
+
+
+def _serialize(root: etree._Element) -> bytes:
+    return etree.tostring(
+        root, xml_declaration=True, encoding="UTF-8", pretty_print=True,
+        doctype=f'<!DOCTYPE {root.tag} PUBLIC "{_BITS_PUBLIC_ID}" "{_BITS_SYSTEM_ID}">',
+    )
+
+
+def _book_parts(book) -> list[tuple[str, etree._Element]]:
+    """(from-where, part) for every part of the book, in reading order."""
+    out = []
+    for region, where in _FROM_WHERE.items():
+        reg = book.find(region)
+        if reg is None:
+            continue
+        for c in reg:
+            if not isinstance(c.tag, str):
+                continue
+            if c.tag in ("book-app-group", "app-group"):
+                out.extend((where, a) for a in c if isinstance(a.tag, str))
+            elif c.tag in _PART_TAGS:
+                out.append((where, c))
+    return out
+
+
+def _part_title(part) -> tuple[str, str]:
+    tg = part.find("book-part-meta/title-group")
+    if tg is None:
+        tg = part
+    return _text(tg.find("label")), _text(tg.find("title"))
+
+
+def _toc_entry(doc_id: str, doc_type: str, label: str, title: str,
+               object_id: str | None = None) -> etree._Element:
+    entry = etree.Element("toc-entry", {"id": f"toc_{object_id or doc_id}"})
+    if label:
+        etree.SubElement(entry, "label").text = label
+    etree.SubElement(entry, "title").text = title
+    nav = etree.SubElement(entry, "nav-pointer", {"nav-pointer-type": "point"})
+    attrs = {"link-type": "booklink", "document-id": doc_id, "document-type": doc_type}
+    if object_id:
+        attrs.update({"object-id": object_id, "object-type": "section"})
+    etree.SubElement(nav, "related-object", attrs)
+    return entry
+
+
+def split_book(xml) -> dict[str, bytes]:
+    """A BITS <book> as the chunked bundle Bookshelf holds (ADR-0028 §7):
+
+      TOC.nxml        <book-part-wrapper id="toc" content-type="toc"> with the
+                      collection-meta, the full book-meta (with the abstract) and
+                      a <toc>: one entry per part in reading order, the body
+                      parts' top-level sections nested under theirs;
+      <part-id>.nxml  one <book-part-wrapper> per part — collection-meta, the
+                      book-meta without the abstract, then the part, whose
+                      <book-part-meta> leads with its <book-part-id>.
+
+    The part's own @id becomes the wrapper's id and the file name (our ids; NCBI
+    assigns its own at ingest)."""
+    book = xml if isinstance(xml, etree._Element) else parse_book(xml)
+    collection = book.findall("collection-meta")
+    book_meta = book.find("book-meta")
+    lean_meta = copy.deepcopy(book_meta) if book_meta is not None else None
+    if lean_meta is not None:
+        for ab in lean_meta.findall("abstract"):
+            lean_meta.remove(ab)
+
+    def wrapper(attrs: dict, meta) -> etree._Element:
+        w = etree.Element("book-part-wrapper", {**attrs, "dtd-version": "2.0"},
+                          nsmap=book.nsmap)
+        for cm in collection:
+            w.append(copy.deepcopy(cm))
+        if meta is not None:
+            w.append(copy.deepcopy(meta))
+        return w
+
+    files: dict[str, bytes] = {}
+    toc = etree.Element("toc")
+    for n, (where, part) in enumerate(_book_parts(book), start=1):
+        part = copy.deepcopy(part)
+        doc_id = part.attrib.pop("id", None) or f"part{n}"
+        doc_type = part.get("book-part-type") or "section"
+        meta = part.find("book-part-meta")
+        if meta is None:
+            meta = etree.Element("book-part-meta")
+            part.insert(0, meta)
+        part_id = etree.Element("book-part-id", {"book-part-id-type": "publisher-id"})
+        part_id.text = doc_id
+        meta.insert(0, part_id)
+        content_type = "appendix" if part.tag == "book-app" else "section"
+        w = wrapper({"id": doc_id, "content-type": content_type, "from-where": where},
+                    lean_meta)
+        w.append(part)
+        files[f"{doc_id}.nxml"] = _serialize(w)
+
+        label, title = _part_title(part)
+        entry = _toc_entry(doc_id, doc_type, label, title)
+        if part.tag == "book-part":
+            for sec in part.findall("body/sec"):
+                if sec.get("id"):
+                    entry.append(_toc_entry(doc_id, doc_type, _text(sec.find("label")),
+                                            _text(sec.find("title")), sec.get("id")))
+        toc.append(entry)
+
+    toc_wrapper = wrapper({"id": "toc", "content-type": "toc"}, book_meta)
+    if len(toc):
+        toc_wrapper.append(toc)
+    files = {"TOC.nxml": _serialize(toc_wrapper), **files}
+    return files
+
+
+def bundle_zip(xml, images: dict[str, str] | None = None) -> bytes:
+    """The chunked bundle of a BITS <book>, zipped: TOC.nxml, one file per part,
+    and the figure files its <graphic>s name (`images`: filename → base64 PNG,
+    as rendering.bookshelf_preview.chart_images builds it)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in split_book(xml).items():
+            zf.writestr(name, content)
+        for name, b64 in (images or {}).items():
+            raw = b64.split(",", 1)[1] if b64.startswith("data:") else b64
+            zf.writestr(name, base64.b64decode(raw))
+    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------

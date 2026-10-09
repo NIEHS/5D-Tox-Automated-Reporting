@@ -153,3 +153,37 @@ def test_scaffold_book_is_valid(scaffold):
     xml = generate_bits(scaffold)
     assert not dtd_validate(xml, "book")
     assert not stylecheck(xml, "book").errors
+
+
+# ---------------------------------------------------------------------------
+# The chunked bundle (ADR-0028 §7)
+# ---------------------------------------------------------------------------
+
+def test_bundle_has_a_toc_and_one_valid_file_per_part(scaffold, tmp_path):
+    import zipfile
+    from rendering.bits_bundle import bundle_zip, read_bundle, split_book
+
+    xml = generate_bits(scaffold)
+    files = split_book(xml)
+    assert list(files)[0] == "TOC.nxml"
+    assert len(files) == 1 + len(_parts(parse_book(xml)))
+    for name, content in files.items():
+        assert not dtd_validate(content, "book"), name
+        assert not stylecheck(content, "book").errors, name
+    toc = parse_book(files["TOC.nxml"])
+    assert toc.find("book-meta/abstract") is not None
+    entries = toc.findall("toc/toc-entry")
+    assert [e.findtext("title") for e in entries][:3] == ["Foreword", "Authors", "Contributors"]
+    methods = next(e for e in entries if e.findtext("title") == "Materials and Methods")
+    assert [s.findtext("title") for s in methods.findall("toc-entry")][:2] == [
+        "Study Design", "Dose Selection Rationale"]
+    part = parse_book(files["bp-methods.nxml"])
+    assert part.find("book-meta/abstract") is None
+    assert part.findtext("book-part/book-part-meta/book-part-id") == "bp-methods"
+    # Reading the bundle back gives the same structure as the single book.
+    for name, content in files.items():
+        (tmp_path / name).write_bytes(content)
+    assert structure_keys(outline(read_bundle(tmp_path))) == structure_keys(outline(parse_book(xml)))
+    with zipfile.ZipFile(__import__("io").BytesIO(bundle_zip(xml, {"f.png": "aGk="}))) as zf:
+        assert set(zf.namelist()) == set(files) | {"f.png"}
+        assert zf.read("f.png") == b"hi"

@@ -166,7 +166,7 @@ def build(report: str) -> tuple[str, int, str]:
                   "--dose-unit", unit, "--design", str(work / "design.json"),
                   "--front-matter", str(work / "front_matter.json"),
                   "--method-profile", profile, *stated, "--reintegrate",
-                  "--surfaces", "docx,html,jats,pdf", "--out", str(out)])
+                  "--surfaces", "docx,html,jats,bits,pdf", "--out", str(out)])
     return report, rc, str(log)
 
 

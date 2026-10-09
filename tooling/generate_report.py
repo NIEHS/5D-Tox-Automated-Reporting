@@ -45,7 +45,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Render surfaces this script can write, mapped to their output filename suffix.
-#   docx/html/jats/bookshelf — rendering.preview_surface (the Preview step's emitters)
+#   docx/html/jats/bookshelf/bits — rendering.preview_surface (the Preview step's emitters;
+#                                   bits = the chunked Bookshelf bundle, zipped)
 #   latex — the Overleaf bundle zip (same as POST /api/export-overleaf-bundle)
 #   pdf   — that bundle compiled locally with `tect` (same as POST /api/compile-pdf)
 SURFACE_SUFFIX = {
@@ -53,6 +54,7 @@ SURFACE_SUFFIX = {
     "html": ".html",
     "jats": ".xml",
     "bookshelf": ".bookshelf.html",
+    "bits": "-bits.zip",
     "latex": "-overleaf.zip",
     "pdf": ".pdf",
 }

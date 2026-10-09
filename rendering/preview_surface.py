@@ -42,8 +42,10 @@ from rendering.latex_export import load_session_data
 #   bookshelf — that same BITS, rendered to a Bookshelf reader-view lookalike
 #               HTML (rendering.bookshelf_preview): a faithful preview of the
 #               ultimate deliverable's on-Bookshelf appearance.
-IMPLEMENTED_SURFACES: frozenset[str] = frozenset({"docx", "html", "jats", "bookshelf"})
-KNOWN_SURFACES: frozenset[str] = frozenset({"docx", "html", "latex", "jats", "bookshelf"})
+#   bits      — that same BITS as the chunked Bookshelf bundle (ADR-0028 §7):
+#               a zip of TOC.nxml + one file per part + the figure files.
+IMPLEMENTED_SURFACES: frozenset[str] = frozenset({"docx", "html", "jats", "bookshelf", "bits"})
+KNOWN_SURFACES: frozenset[str] = frozenset({"docx", "html", "latex", "jats", "bookshelf", "bits"})
 
 DEFAULT_SURFACE = "docx"
 
@@ -55,6 +57,7 @@ _SURFACE_FILENAME: dict[str, str] = {
     "latex": "preview.tex",
     "jats": "preview.xml",
     "bookshelf": "preview.bookshelf.html",
+    "bits": "preview-bits.zip",
 }
 
 
@@ -67,7 +70,8 @@ def render_surface(
 ) -> bytes | str:
     """Render `data` to one output surface.
 
-    docx → bytes (generate_docx); html/bookshelf → str; jats → str (BITS XML).
+    docx → bytes (generate_docx); html/bookshelf → str; jats → str (BITS XML);
+    bits → bytes (the chunked BITS bundle, zipped).
     `latex` is a known surface name but NOT implemented — it raises
     NotImplementedError so the caller (and the UI) can offer it as a disabled
     option without a silent wrong render.  An unknown surface raises ValueError.
@@ -93,6 +97,11 @@ def render_surface(
         return render_book_xml(
             generate_bits(data), images=chart_images(data), downloads=downloads
         )
+    if surface == "bits":
+        from rendering.jats_generator import generate_bits
+        from rendering.bits_bundle import bundle_zip
+        from rendering.bookshelf_preview import chart_images
+        return bundle_zip(generate_bits(data), images=chart_images(data))
     if surface == "latex":
         raise NotImplementedError(
             f"Preview surface {surface!r} is provisioned but not implemented yet"
