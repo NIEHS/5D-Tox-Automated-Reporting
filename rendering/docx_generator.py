@@ -64,6 +64,8 @@ from document_model.cover_layouts import get_cover_layout
 from document_model.document_tree import DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from rendering.render_common import (
+    supplied_files,
+    supplied_files_pending,
     BMD_SUMMARY_HEADERS,
     gene_set_table_headers,
     gene_table_headers,
@@ -1665,17 +1667,16 @@ def _render_supplementary_material(doc: Document, node: DocNode, data: dict) -> 
     4-09c_Supplementary_Material_Filename — the two roles the reference's
     Appendix F uses — resolved through the vocabulary (plain paragraphs when no
     vocabulary/style base is active)."""
+    pending = supplied_files_pending(node, data)
+    if pending:
+        _add_pending(doc, pending.strip("[]"))
+        return
     title_style = _pstyle_or_default(doc, data, "supplementary_material_title")
-    if title_style:
-        doc.add_paragraph(_clean(node.title), style=title_style)
-    else:
-        doc.add_paragraph(_clean(node.title))
-    if node.content_file:
-        file_style = _pstyle_or_default(doc, data, "supplementary_material_filename")
-        if file_style:
-            doc.add_paragraph(_clean(node.content_file), style=file_style)
-        else:
-            doc.add_paragraph(_clean(node.content_file))
+    file_style = _pstyle_or_default(doc, data, "supplementary_material_filename")
+    for f in supplied_files(node, data):
+        doc.add_paragraph(_clean(f.caption), style=title_style or None)
+        if f.file:
+            doc.add_paragraph(_clean(f.file), style=file_style or None)
 
 
 def _render_unimplemented(doc: Document, node: DocNode, data: dict) -> None:

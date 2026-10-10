@@ -116,21 +116,32 @@ changes:
          data_key: appendix_gene_definitions_matrix}
     after: appendix-c
   # G: Supplemental Data opens with the materials and methods and the
-  # theoretical inhaled dose, and closes with the software.
+  # theoretical inhaled dose, lists each species' files in its own section
+  # ("G.3 Rats", "G.4 Mice": one per species of the deposit), and closes with
+  # the software.  The lists are derived from the study's data deposit.
   - insert:
     - id: appendix-f-methods
       type: heading-only
       title: Materials and Methods
       children:
-      - {id: appendix-f-methods-files, type: freeform-block, title: "", session_content: supplemental-methods,
-         missing_content_text: "The supplemental materials and methods are not listed for this study."}
+      - {id: appendix-f-methods-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: methods}
     - id: appendix-f-inhaled-dose
       type: heading-only
       title: Theoretical Inhaled Dose
       children:
-      - {id: appendix-f-inhaled-dose-files, type: freeform-block, title: "", session_content: supplemental-inhaled-dose,
-         missing_content_text: "The theoretical inhaled dose files are not listed for this study."}
+      - {id: appendix-f-inhaled-dose-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: inhaled-dose}
+    - {id: appendix-f-species, type: heading-only, title: Species, repeat: deposit_species}
     after: appendix-f-body
+  - move: appendix-f-apical
+    into: appendix-f-species
+  - move: appendix-f-genomic
+    into: appendix-f-species
+  - move: appendix-f-tables
+    into: appendix-f-species
+  - move: appendix-f-animals
+    into: appendix-f-species
   - insert:
     - id: appendix-f-software
       type: heading-only
@@ -140,9 +151,8 @@ changes:
         type: heading-only
         title: Analysis Pipeline Evaluation
         children:
-        - {id: appendix-f-pipeline-evaluation-text, type: freeform-block, title: "",
-           session_content: supplemental-pipeline-evaluation,
-           missing_content_text: "The analysis pipeline evaluation is not supplied for this study."}
+        - {id: appendix-f-pipeline-evaluation-files, type: supplementary-material,
+           binding: derived, title: "", deposit_group: software}
       - id: appendix-f-bmdexpress-preview
         type: heading-only
         title: BMDExpress Preview Software

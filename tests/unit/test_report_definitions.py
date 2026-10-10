@@ -5,9 +5,12 @@ book's structure: its parts, part types, labels and section headings, compared
 with the committed outline of the published Bookshelf book
 (tests/fixtures/reference/<REPORT>/bookshelf-outline.json).
 
-The book is built from scaffold data plus the study's own authored content, so
-what depends on the study's data (which tables and figures, how many) is left
-out here: objects, the title and the author count.  `tooling.bits_structure`
+The book is built from scaffold data plus the study's own authored content and
+its data deposit (the files deposited with the published book,
+tests/fixtures/reference/<REPORT>/deposit-files.json), so the Supplemental Data
+lists are compared file for file, section by section, with the species sections
+of the 2026 books.  What depends on the study's other data (which tables and
+figures, how many) is left out here: objects, the title and the author count.  `tooling.bits_structure`
 compares a generated report in full.  What the definition cannot supply —
 content the study has not been given yet — is listed in KNOWN_CONTENT_GAPS.
 
@@ -23,6 +26,7 @@ import pytest
 
 from document_model.document_config import _tree_from_document_list
 from document_model.document_definition import study_definition_name
+from pipeline.deposit import build_manifest
 from document_model.document_template import (
     load_book_meta, load_object_position, load_packaging, load_template,
 )
@@ -41,7 +45,7 @@ _IDENTITY = {r: (v[1], v[2]) for r, v in STUDIES.items()}
 _IDENTITY["NIEHS-13"] = ("1,4-Dichlorobenzene", "106-46-7")
 
 # What depends on the study's data, not on its structure.
-_DATA_KINDS = {"table-wrap", "fig", "media", "supplementary-material", "disp-formula",
+_DATA_KINDS = {"table-wrap", "fig", "supplementary-material", "disp-formula",
                "contrib-group", "book-title", "subtitle"}
 
 # The series ISSN each published book carries (its <collection-meta
@@ -78,23 +82,6 @@ _G3_GAPS = [
     "-    sec <B.2.2> Lung and Liver",
     "-    sec <B.2.3> Study Sample Preparation",
     "-  sec <B.3> Instrumentation and Quantitation",
-    # Supplemental Data groups its file lists per species (G.3 Rats, G.4 Mice);
-    # ours lists them once, so Software follows as G.7.
-    *[f"-  sec <G.{n}> {sp}" if i == 0 else f"-    sec <G.{n}.{i}> {t}"
-      for n, sp in ((3, "Rats"), (4, "Mice"))
-      for i, t in enumerate(("", "Apical Benchmark Dose Analysis",
-                             "Genomic Benchmark Dose Analysis", "Study Tables",
-                             "Individual Animal Data"))],
-    "-  sec <G.5> Software",
-    "-    sec <G.5.1> Analysis Pipeline Evaluation",
-    "-    sec <G.5.2> BMDExpress Preview Software",
-    "+  sec <G.3> Apical Benchmark Dose Analysis",
-    "+  sec <G.4> Genomic Benchmark Dose Analysis",
-    "+  sec <G.5> Study Tables",
-    "+  sec <G.6> Individual Animal Data",
-    "+  sec <G.7> Software",
-    "+    sec <G.7.1> Analysis Pipeline Evaluation",
-    "+    sec <G.7.2> BMDExpress Preview Software",
 ]
 KNOWN_CONTENT_GAPS = {"NIEHS-12": _G3_GAPS, "NIEHS-13": _G3_GAPS}
 
@@ -107,6 +94,8 @@ def _built_bits(dtxsid: str, report: str, name: str) -> str:
     chemical, casrn = _IDENTITY[report]
     data = scaffold_report_data(chemical_name=chemical, casrn=casrn, dtxsid=dtxsid)
     data["authored"] = load_study_authored(dtxsid)
+    listing = json.loads((FIXTURES / report / "deposit-files.json").read_text(encoding="utf-8"))
+    data["deposit"] = build_manifest([tuple(f) for f in listing]) if listing else None
     data.update(book_meta=load_book_meta(name), packaging=load_packaging(name),
                 object_position=load_object_position(name))
     return generate_bits(data, _tree_from_document_list(load_template(name)))

@@ -56,6 +56,8 @@ def _render_nodes(data: dict):
     from document_model.document_tree import render_nodes
     return render_nodes(data, None)
 from rendering.render_common import (
+    supplied_files,
+    supplied_files_pending,
     authored_table_matrix,
     table_caption,
     figure_payload,
@@ -1023,12 +1025,33 @@ def _emit_authored_table(parent: etree._Element, node: DocNode, data: dict) -> N
 def _emit_supplementary_material(parent: etree._Element, node: DocNode, data: dict) -> None:
     """supplementary-material (ADR-0025) → BITS <supplementary-material
     xlink:href="<file>"><label>title</label></supplementary-material>: the one
-    node type whose BITS element is a near-identity projection."""
+    node type whose BITS element is a near-identity projection.  A DERIVED list
+    (ADR-0029) is the study's deposited files, each a <media> as the published
+    books carry them: xlink:href, mime-subtype, and the caption title."""
+    if node.binding == "derived":
+        _emit_deposit_media(parent, node, data)
+        return
     sm = E("supplementary-material", {"id": f"supp-{node.id}"})
     if node.content_file:
         sm.set(f"{{{_XLINK}}}href", node.content_file)
     sm.append(E.label(node.title))
     parent.append(sm)
+
+
+_MEDIA_ID_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def _emit_deposit_media(parent: etree._Element, node: DocNode, data: dict) -> None:
+    pending = supplied_files_pending(node, data)
+    if pending:
+        parent.append(E.p(pending))
+        return
+    for f in supplied_files(node, data):
+        media = E.media({"id": "media-" + _MEDIA_ID_RE.sub("_", f.file),
+                         "mimetype": "application", "mime-subtype": f.mime_subtype or "octet-stream"})
+        media.set(f"{{{_XLINK}}}href", f.file)
+        media.append(E.caption(E.title(f.caption)))
+        parent.append(media)
 
 
 _DISPATCH: dict[str, object] = {

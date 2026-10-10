@@ -501,6 +501,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "data does not record (e.g. the tissue of a genomic experiment named "
                          "\"EDHP mg_kg\"); laid over each named experiment and kept as the "
                          "metadata approval, re-applied at every integration")
+    ap.add_argument("--deposit", type=Path,
+                    help="directory of the study's data deposit (the supplemental files "
+                         "deposited with the report); recorded as the session's "
+                         "deposit.json, which the Supplemental Data appendix lists")
+    ap.add_argument("--deposit-exclude", nargs="+", default=[], metavar="GLOB",
+                    help="names in --deposit that are not deposited files (e.g. a "
+                         "Bookshelf package's own '*.nxml' '*.jpg' TOC.pdf license.txt "
+                         "SOURCE.txt)")
     ap.add_argument("--front-matter", type=Path,
                     help="JSON of front matter, as the Configure screen saves it: authors, "
                          "contributors, publication {report_number, doi, report_date}, "
@@ -552,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
     metadata = args.metadata.resolve() if args.metadata else None
     design = args.design.resolve() if args.design else None
     front_matter = args.front_matter.resolve() if args.front_matter else None
+    deposit = args.deposit.resolve() if args.deposit else None
     out_dir = (args.out.resolve() if args.out else REPO_ROOT / "output" / args.dtxsid)
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -575,6 +584,11 @@ def main(argv: list[str] | None = None) -> int:
     _log(f"session: {store.session_dir(dtxsid)}")
     if front_matter:
         apply_front_matter(dtxsid, front_matter, store)
+    if deposit:
+        from pipeline.deposit import record_deposit
+        manifest = record_deposit(dtxsid, deposit, tuple(args.deposit_exclude))
+        _log(f"deposit: {len(manifest['files'])} file(s) from {deposit}"
+             + (f", species {[s['key'] for s in manifest['species']]}" if manifest["species"] else ""))
 
     try:
         if not args.render_only:

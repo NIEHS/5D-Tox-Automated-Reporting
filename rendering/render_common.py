@@ -2012,3 +2012,39 @@ def _coerce_guard_level(raw) -> GuardLevel:
 def is_protected(level: GuardLevel) -> bool:
     """Does this level warrant a visual protection mark? (>= GUARDED)."""
     return level >= GuardLevel.GUARDED
+
+
+# ---------------------------------------------------------------------------
+# Supplied files (supplementary-material) — ADR-0025 / ADR-0029
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SuppliedFile:
+    """One entry of a Supplemental Data list: its caption and the file it names
+    (size and MIME subtype when the deposit records them)."""
+    caption: str
+    file: str
+    mime_subtype: str = ""
+    size: int | None = None
+
+
+def supplied_files(node: DocNode, data: dict) -> list[SuppliedFile]:
+    """The entries a supplementary-material node lists.  Authored: the one file
+    it names.  Derived: the study's deposited files of its `deposit_group`
+    (pipeline.deposit), kept to its species inside a per-species section."""
+    if node.binding != "derived":
+        return [SuppliedFile(node.title or "", node.content_file or "")]
+    from pipeline.deposit import deposit_files
+    return [SuppliedFile(f.get("caption") or f["file"], f["file"], f.get("mime_subtype") or "",
+                         f.get("size"))
+            for f in deposit_files(data.get("deposit"), node.deposit_group, node.scope_species)]
+
+
+def supplied_files_pending(node: DocNode, data: dict) -> str | None:
+    """The visible note a derived list shows instead of entries: no deposit has
+    been recorded for the study, or it holds no file of this kind."""
+    if node.binding != "derived" or supplied_files(node, data):
+        return None
+    if not data.get("deposit"):
+        return "[Supplemental files pending: no data deposit has been recorded for this study.]"
+    return "No files of this kind were deposited for this study."

@@ -78,6 +78,8 @@ from document_model.render_capabilities import (
     content_item_break_requested,
 )
 from rendering.render_common import (
+    supplied_files,
+    supplied_files_pending,
     NarrativeContent,
     resolve_narrative_content,
     has_paragraph_content,
@@ -1451,12 +1453,18 @@ def _render_supplementary_material(node: DocNode, data: dict) -> str:
     One supplied data file (ADR-0025; BITS <supplementary-material>): a bold
     entry title, then the file name in monospace on its own line when given.
     """
-    lines = [f"\\noindent\\textbf{{{_escape_latex(node.title)}}}"]
-    if node.content_file:
-        lines[0] += "\\\\"
-        lines.append(f"\\texttt{{{_escape_latex(node.content_file)}}}")
-    lines.append("\\par\\medskip")
-    return "\n".join(lines)
+    pending = supplied_files_pending(node, data)
+    if pending:
+        return f"\\noindent {_escape_latex(pending)}\\par\\medskip"
+    out = []
+    for f in supplied_files(node, data):
+        lines = [f"\\noindent\\textbf{{{_escape_latex(f.caption)}}}"]
+        if f.file:
+            lines[0] += "\\\\"
+            lines.append(f"\\texttt{{{_escape_latex(f.file)}}}")
+        lines.append("\\par\\medskip")
+        out.append("\n".join(lines))
+    return "\n".join(out)
 
 
 def _render_unimplemented(node: DocNode, data: dict) -> str:

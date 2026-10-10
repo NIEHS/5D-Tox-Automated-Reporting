@@ -60,6 +60,8 @@ from document_model.render_capabilities import (
     content_item_break_requested,
 )
 from rendering.render_common import (
+    supplied_files,
+    supplied_files_pending,
     NarrativeContent,
     resolve_narrative_content,
     has_paragraph_content,
@@ -1292,10 +1294,15 @@ def _render_supplementary_material(node: DocNode, data: dict) -> str:
     title and, when given, the file name it refers to.  The reference lists 55
     of these under Appendix F's four headings.
     """
-    title = f'<span class="supp-title">{_esc(node.title)}</span>'
-    file = node.content_file or ""
-    file_html = f' <code class="supp-file">{_esc(file)}</code>' if file else ""
-    return f'<p class="supplementary-material">{title}{file_html}</p>'
+    pending = supplied_files_pending(node, data)
+    if pending:
+        return f'<p class="supplementary-material">{_esc(pending)}</p>'
+    out = []
+    for f in supplied_files(node, data):
+        title = f'<span class="supp-title">{_esc(f.caption)}</span>'
+        file_html = f' <code class="supp-file">{_esc(f.file)}</code>' if f.file else ""
+        out.append(f'<p class="supplementary-material">{title}{file_html}</p>')
+    return "".join(out)
 
 
 def _render_unimplemented(node: DocNode, data: dict) -> str:

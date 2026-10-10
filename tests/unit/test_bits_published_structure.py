@@ -168,9 +168,6 @@ KNOWN_CONTENT_GAPS: list[str] = [
     "-      fig <Figure C-6>",
     "-      table-wrap <Table C-1>",
     "+      fig <Figure C-2>",
-    # Appendix F: the book lists the 55 supplied data files as <media> under
-    # F.1-F.4; ours has the sections and no file lists.
-    *["-    media"] * 55,
 ]
 
 

@@ -165,6 +165,17 @@ class DocNode:
                         a titled section inside an appendix ("C.1", "C.2.1"); None
                         elsewhere.  Titles never carry it; print surfaces compose
                         "C.1. Title" through render_common.section_heading_text.
+        deposit_group:  On a DERIVED supplementary-material node: which kind of the
+                        study's deposited files it lists (pipeline.deposit.KINDS:
+                        apical, genomic, study-tables, animal-data, …), one entry
+                        per file of the session's deposit.json.
+        repeat:         `deposit_species` on a section: one copy of it per species
+                        the deposit holds (the 2026 books' "G.3 Rats" / "G.4
+                        Mice"), titled with the species; with no deposit species
+                        the section's children stand in its place.  Expanded per
+                        study by document_tree.study_tree.
+        scope_species:  COMPUTED by that expansion: the species a copy (and every
+                        node in it) is about; derived file lists keep to it.
     """
     id: str
     title: str
@@ -201,3 +212,6 @@ class DocNode:
     book_part_type: str | None = None
     parts: list | None = None
     sec_label: str | None = None
+    deposit_group: str | None = None
+    repeat: str | None = None
+    scope_species: str | None = None

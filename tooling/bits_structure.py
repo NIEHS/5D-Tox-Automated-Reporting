@@ -10,7 +10,8 @@ titles, object placement), and the difference is printed as a unified diff
 
     python -m tooling.bits_structure [DTXSID ...]        diff (default: every published study)
     python -m tooling.bits_structure [--reference NIEHS-10] --write-fixture
-        write the published outline(s) to tests/fixtures/reference/<REPORT>/bookshelf-outline.json
+        write the published outline(s) to tests/fixtures/reference/<REPORT>/bookshelf-outline.json,
+        and the files deposited with each book (name, size) to .../deposit-files.json
 """
 
 from __future__ import annotations
@@ -81,6 +82,13 @@ def main() -> int:
             path.write_text(json.dumps(rows, indent=1, ensure_ascii=False) + "\n",
                             encoding="utf-8")
             print(f"wrote {path.relative_to(REPO_ROOT)} ({len(rows)} entries)")
+            from pipeline.deposit import deposit_listing
+            from tooling.build_published_reports import BOOK_OWN_FILES
+            listing = deposit_listing(BOOKSHELF / report, BOOK_OWN_FILES)
+            dep = path.parent / "deposit-files.json"
+            dep.write_text(json.dumps(listing, indent=0, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+            print(f"wrote {dep.relative_to(REPO_ROOT)} ({len(listing)} files)")
         return 0
 
     status = 0

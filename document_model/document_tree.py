@@ -255,6 +255,41 @@ def _fill_titles(nodes, values: dict) -> None:
         _fill_titles(n.children or [], values)
 
 
+def _has_repeats(nodes) -> bool:
+    return any(n.repeat or _has_repeats(n.children or []) for n in nodes)
+
+
+def _scope(node, species: str, suffix: str) -> None:
+    node.id = f"{node.id}--{suffix}"
+    node.scope_species = species
+    for child in node.children or []:
+        _scope(child, species, suffix)
+
+
+def _expand_repeats(nodes: list, species: list[dict]) -> list:
+    """A `repeat: deposit_species` section becomes one copy per deposited species,
+    titled with it ("Rats", "Mice"), every node in it scoped to that species
+    (ids suffixed so they stay unique); with no species, its children stand in
+    its place.  Mutates the (already copied) nodes; returns the new list."""
+    import copy
+    out = []
+    for node in nodes:
+        node.children = _expand_repeats(node.children or [], species)
+        if node.repeat != "deposit_species":
+            out.append(node)
+            continue
+        if not species:
+            out.extend(node.children)
+            continue
+        for sp in species:
+            clone = copy.deepcopy(node)
+            clone.repeat = None
+            clone.title = sp["title"]
+            _scope(clone, sp["key"], sp["key"])
+            out.append(clone)
+    return out
+
+
 def study_tree(base, collected, authored=None, facts=None):
     """THIS study's view of the document tree — the single builder every data
     layer and emitter uses, so the body, the table numbers and the List of Tables
@@ -270,6 +305,8 @@ def study_tree(base, collected, authored=None, facts=None):
        study's text (`authored`), else `missing_content_text`, else pending.
     4. Study facts in titles: `${chemical_name}` (TITLE_FIELDS) from `facts`
        (the report data); a field the facts lack stays as written.
+    5. Repeated sections (`repeat: deposit_species`): one copy per species of
+       the study's deposit (`facts["deposit"]`), see _expand_repeats.
 
     The result is always (re)numbered — numbering is positional and idempotent,
     and the emitters read its products (labels, appendix scopes) — so a render
@@ -283,6 +320,11 @@ def study_tree(base, collected, authored=None, facts=None):
             nodes = copy.deepcopy(base)
         _resolve_study_bound(nodes, authored or {},
                              set(collected) if collected is not None else None)
+    if _has_repeats(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        nodes = _expand_repeats(nodes, ((facts or {}).get("deposit") or {}).get("species") or [])
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     if values and _has_title_fields(nodes):
         if nodes is base:

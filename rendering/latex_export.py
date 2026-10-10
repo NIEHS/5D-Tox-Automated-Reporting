@@ -917,6 +917,8 @@ def load_session_data(
     # This study's own authored content for study-bound freeform nodes.
     from styling_export.freeform_content import load_study_authored
     data["authored"] = load_study_authored(dtxsid)
+    from pipeline.deposit import load_deposit
+    data["deposit"] = load_deposit(dtxsid)          # the study's supplemental files
     # The study's tree: its view's or document definition's (ADR-0029), else the
     # shared template's.
     from document_model.view_config import DEFAULT_VIEW, build_view_tree

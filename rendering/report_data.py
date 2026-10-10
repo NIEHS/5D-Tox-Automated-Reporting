@@ -561,6 +561,10 @@ def marshal_export_data(
     # document_tree.study_tree.  Never shared across chemicals.
     from styling_export.freeform_content import load_study_authored
     data["authored"] = load_study_authored(body.get("dtxsid"))
+    # The study's data deposit (its supplemental files), listed by the derived
+    # Supplemental Data sections and repeated per species (ADR-0029).
+    from pipeline.deposit import load_deposit
+    data["deposit"] = load_deposit(body.get("dtxsid"))
 
     from document_model.document_tree import compute_table_numbers, study_tree
     _collected = None

@@ -1,0 +1,17 @@
+# NIEHS Report 10's own wording for some of its deposited files (ADR-0029,
+# pipeline.deposit): the caption each one is listed under in Appendix F.
+# Files not named here are listed by their file name.
+captions:
+  C20022-01_Mean_Body_Weight_Summary.docx: Mean Body Weight Summary
+  C20022-01_Organ_Weights_Summary.docx: Organ Weights Summary
+  C20022-01_Clinical_Chemistry_Summary.docx: Clinical Chemistry Summary
+  C20022-01_Hematology_Data_Summary.docx: Hematology Summary
+  C20022-01_Hormone_Summary.docx: Hormone and Enzymes Summary
+  C20022-01_BMD_BMDL_LOEL_and_NOEL_Summary_for_Apical_Endpoints_Sorted_by_BMD_LOEL_from_Low_to_High.docx: 'BMD, NOEL and LOEL Summary for Apical Endpoints'
+  C20022-01_Appendix_Male_07282021.docx: Male BMD Apical Endpoints Model Fits
+  C20022-01_Appendix_Female_07282021.docx: Female BMD Apical Endpoints Model Fits
+  C20022-01_Benchmark_Dose_Model_Recommendation_Selection_Rules_for_Apical_Endpoints.docx: BMD Model Recommendation Selection Rules
+  C20022-01_ReadME.docx: Read Me
+  C20022-01_Parameter_Male_07282021.xlsx: Male Model Parameters
+  C20022-01_Parameter_Female_07282021.xlsx: Female Model Parameters
+  C20022-01_bmds.zip: BMDs code package

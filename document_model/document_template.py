@@ -97,8 +97,13 @@ _COMPUTED_OR_SPECIAL = frozenset(
      "figure_number", "region", "resolved_content",
      # ADR-0025 §5 / ADR-0028 §3: numbering products, never authored.
      "appendix_letter", "appendix_scope", "table_label", "figure_label",
-     "sec_label"}
+     "sec_label",
+     # ADR-0029: set when a `repeat` section is expanded per study.
+     "scope_species"}
 )
+
+# ADR-0029: what a section may repeat over (document_tree.study_tree).
+_REPEATS = ("deposit_species",)
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file
@@ -279,9 +284,13 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             f"{node_type!r} is not captionable"
         )
 
+    _validate_deposit_fields(entry, node_id, node_type)
+
     # Authored-content bindings (freeform-page / freeform-block / authored-table).
     if node_type in _FREEFORM_TYPES:
         _validate_freeform_entry(entry, node_id)
+    elif node_type in _FILE_ONLY_TYPES and entry.get("binding") == "derived":
+        _validate_derived_file_list(entry, node_id)
     elif node_type in _FILE_ONLY_TYPES or (
         node_type == "figure" and entry.get("subtype") in AUTHORED_FIGURE_SUBTYPES
     ):
@@ -423,6 +432,38 @@ def _validate_content_items(items, node_id: str) -> None:
                 f"{node_id!r} (item ids must be unique within a component)"
             )
         seen.add(item_id)
+
+
+def _validate_derived_file_list(entry: dict, node_id: str) -> None:
+    """A DERIVED supplementary-material node lists the study's deposited files of
+    one kind (`deposit_group`, pipeline.deposit.KINDS); it names no file itself."""
+    from pipeline.deposit import KINDS
+    if entry.get("deposit_group") not in KINDS:
+        raise ValueError(
+            f"template node {node_id!r}: a derived supplementary-material lists one "
+            f"deposit_group of {list(KINDS)}, got {entry.get('deposit_group')!r}"
+        )
+    if entry.get("content_file") or entry.get("content") is not None:
+        raise ValueError(
+            f"template node {node_id!r}: a derived supplementary-material lists the "
+            f"deposit; it names no content_file / content of its own"
+        )
+
+
+def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
+    """`deposit_group` belongs to a derived supplementary-material; `repeat`
+    names one of _REPEATS on a section."""
+    if entry.get("deposit_group") is not None and not (
+            node_type in _FILE_ONLY_TYPES and entry.get("binding") == "derived"):
+        raise ValueError(f"template node {node_id!r}: deposit_group is only valid on a "
+                         f"derived supplementary-material")
+    repeat = entry.get("repeat")
+    if repeat is not None:
+        if repeat not in _REPEATS:
+            raise ValueError(f"template node {node_id!r}: repeat must be one of "
+                             f"{list(_REPEATS)}, got {repeat!r}")
+        if role_for(node_type) != "sec":
+            raise ValueError(f"template node {node_id!r}: only a section may repeat")
 
 
 def _validate_file_only_entry(entry: dict, node_id: str, node_type: str) -> None:

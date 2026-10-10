@@ -51,6 +51,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CEBS = REPO_ROOT / "assets" / "cebs"
 BACKUPS = REPO_ROOT / "output" / "_session_backups"
+# The published book's Bookshelf package: the book (its XML and figures) and the
+# files deposited with it.  The deposit is the package less the book's own files.
+BOOKSHELF = CEBS / "_bookshelf"
+BOOK_OWN_FILES = ("*.nxml", "*.jpg", "*.png", "*.gif", "*.tif", "TOC.pdf", "license.txt",
+                  "SOURCE.txt")
 
 ORAL = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
         "administrationMeans": "gavage", "articleVehicle": "corn oil", "studyDuration": "5d"}
@@ -166,6 +171,10 @@ def build(report: str) -> tuple[str, int, str]:
                   "--dose-unit", unit, "--design", str(work / "design.json"),
                   "--front-matter", str(work / "front_matter.json"),
                   "--method-profile", profile, *stated, "--reintegrate",
+                  # The data deposit: the Bookshelf package's files, less the
+                  # book's own (its XML, figures, TOC.pdf, NCBI's license/source).
+                  "--deposit", str(BOOKSHELF / report),
+                  "--deposit-exclude", *BOOK_OWN_FILES,
                   "--surfaces", "docx,html,jats,bits,pdf", "--out", str(out)])
     return report, rc, str(log)
 
