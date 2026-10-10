@@ -723,13 +723,17 @@ def load_template(name: str) -> list[dict]:
 
 
 def _check_packaging(name: str, document: list, packaging: str) -> None:
-    """ADR-0029: every top-level part's BITS element (declared, else its type's
-    default) is one the definition's packaging holds — a chunked book has no
-    top-level <sec>, a single-file one no <book-part> chapters."""
+    """ADR-0029: every top-level part — its BITS element (declared, else its
+    type's default) and book-part-type — is one the NTP report grammar produces
+    for the definition's packaging (vocab/ntp-bits-grammar.yaml): a chunked book
+    has no top-level <sec>, a single-file one no <book-part> chapters, and no
+    book has a part type its template has no heading style for."""
+    from document_model.ntp_grammar import part_constructs
     allowed = PACKAGING_PART_ELEMENTS.get(packaging)
     if allowed is None:
         raise ValueError(f"template {name!r}: packaging must be one of "
                          f"{sorted(PACKAGING_PART_ELEMENTS)}, got {packaging!r}")
+    constructs = part_constructs(packaging)
     for container in document:
         if not isinstance(container, dict):
             continue
@@ -741,10 +745,21 @@ def _check_packaging(name: str, document: list, packaging: str) -> None:
             if not isinstance(entry, dict) or "id" not in entry:
                 continue
             element = entry.get("element") or default_element(_resolve_type(entry), region)
-            if element is not None and element not in allowed:
+            if element is None:
+                continue                            # print-only (toc, tables-list)
+            if element not in allowed:
                 raise ValueError(
                     f"template {name!r}: node {entry['id']!r} is a <{element}>, which a "
                     f"{packaging} book does not hold (it holds {sorted(allowed)})"
+                )
+            bpt = ((entry["book_part_type"] or None) if "book_part_type" in entry
+                   else default_book_part_type(element))
+            if (element, bpt) not in constructs:
+                known = sorted(t or "(none)" for e, t in constructs if e == element)
+                raise ValueError(
+                    f"template {name!r}: node {entry['id']!r} is a <{element}> of type "
+                    f"{bpt or '(none)'}, which no NTP template heading makes in a "
+                    f"{packaging} book (types: {known})"
                 )
 
 

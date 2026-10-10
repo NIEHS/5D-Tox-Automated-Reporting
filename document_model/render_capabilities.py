@@ -733,16 +733,17 @@ def figure_graphic_role(subtype: str | None) -> str:
 # part-level elements a template may name in `element:`; nested nodes project by
 # role (sec / table-wrap / fig / …) and carry no element.
 #
-# ADR-0029: which of them a book may use depends on how it is packaged.  A
-# chunked book (NIEHS-07 on) is one file per part: foreword / front-matter-part,
-# body <book-part>s, <book-app>s.  A single-file book (RR-8, NIEHS-02 … 06) is
-# one whole-book <book-part> whose front matter adds <ack>, whose body is
-# top-level <sec> chapters, and whose back holds a <ref-list> and <app>s.
+# ADR-0029: which of them a book may use depends on how it is packaged, and
+# both come from the NTP report grammar (vocab/ntp-bits-grammar.yaml: the NTP
+# Word template's part-heading styles and what each becomes).  A chunked book
+# (NIEHS-07 on) is one file per part: foreword / front-matter-part, body
+# <book-part>s, <book-app>s.  A single-file book (RR-8, NIEHS-02 … 06) is one
+# whole-book <book-part> whose front matter adds <ack>, whose body is top-level
+# <sec> chapters, and whose back holds a <ref-list> and <app>s.
+from document_model import ntp_grammar as _ntp_grammar
+
 PACKAGING_PART_ELEMENTS: dict[str, frozenset[str]] = {
-    "chunked": frozenset({"book-meta", "abstract", "foreword", "front-matter-part",
-                          "book-part", "book-app"}),
-    "single-file": frozenset({"book-meta", "abstract", "foreword", "front-matter-part",
-                              "ack", "sec", "ref-list", "app"}),
+    packaging: _ntp_grammar.part_elements(packaging) for packaging in _ntp_grammar.PACKAGINGS
 }
 BITS_PART_ELEMENTS: frozenset[str] = frozenset().union(*PACKAGING_PART_ELEMENTS.values())
 

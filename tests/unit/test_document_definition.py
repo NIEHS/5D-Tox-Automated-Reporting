@@ -105,7 +105,10 @@ def test_a_study_extends_an_era_that_extends_a_base(templates):
     ("extends: base\npackaging: zip\n", "packaging"),
     ("extends: base\ndocument: []\n", "unknown key"),
     # A single-file book's chapters are <sec>s, not <book-part>s.
-    ("extends: base\npackaging: single-file\n", "'methods' is a <book-part>"),
+    ("extends: base\npackaging: single-file\nchanges:\n  - set: foreword\n"
+     "    book_part_type: ''\n", "'methods' is a <book-part>"),
+    # …and no part type its template has no heading style for.
+    ("extends: base\npackaging: single-file\n", "no NTP template heading makes"),
 ])
 def test_bad_changes_fail_loudly(templates, text, message):
     templates("bad", text)

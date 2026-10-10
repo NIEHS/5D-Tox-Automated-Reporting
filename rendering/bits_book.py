@@ -74,13 +74,11 @@ _REGION_CONTAINER = {
     "single-file": {"front": "front-matter", "body": "body", "back": "back"},
 }
 
-# The roster-listing front-matter parts (book_part_type → the front-matter
-# roster key and the content-type prefix the published books use on its <p>s).
-_ROSTER_PARTS = {
-    "authors": ("authors", "author", "author-affiliation"),
-    "collaborators": ("collaborators", "collaborator", "collab-affiliation"),
-    "contributors": ("contributors", "contributor", "contrib-affiliation"),
-}
+# The roster-listing front-matter parts: the front matter's roster of the same
+# name (authors, contributors, collaborators), listed with the paragraph
+# content-types the NTP report grammar gives its person and affiliation styles
+# (document_model.ntp_grammar).
+_ROSTER_PARTS = ("authors", "contributors", "collaborators")
 
 _MONTHS = {m: i for i, m in enumerate(
     ("january", "february", "march", "april", "may", "june", "july", "august",
@@ -338,8 +336,10 @@ def _roster_blocks(node: DocNode, data: dict) -> list:
     """An authors / contributors part, as the published books list it: one
     <list list-type="simple"> item per affiliation (the affiliation in bold,
     then one line per person).  Only what the roster states — name and role."""
-    roster_key, person_type, aff_type = _ROSTER_PARTS[node.book_part_type]
-    roster = [p for p in _front_matter(data).get(roster_key) or []
+    from document_model.ntp_grammar import roster_content_types
+    types = roster_content_types(node.book_part_type)
+    person_type, aff_type = types["person"], types["affiliation"]
+    roster = [p for p in _front_matter(data).get(node.book_part_type) or []
               if isinstance(p, dict) and (p.get("name") or "").strip()]
     if not roster:
         return []
