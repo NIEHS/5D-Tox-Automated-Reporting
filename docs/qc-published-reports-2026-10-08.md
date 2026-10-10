@@ -119,8 +119,17 @@ DTD-valid and StyleChecker-clean.
     data must supply (G3 gap 5: one species is modelled);
   - Appendix B's method sections, which are the study's own content.
 
-`tests/unit/test_report_definitions.py` checks the outlines, the DTD and each
-book's series ISSN. The ISSN is per book: NIEHS-02 … 04, 07, 08 and RR-8 carry
+**Supplemental Data (2026-10-10).** The F/G file lists now come from each
+study's data deposit (`pipeline/deposit.py`). After a re-render, every
+published file entry (33, 55, 143 or 144 per book; 672 in all) is in our book,
+in the same section. NIEHS-12/13's per-species G.3 Rats / G.4 Mice come from
+the deposit. Their remaining differences fall from 65 section lines to 45:
+the Methods/Results species and tissue sections, and Appendix B. Captions
+default to the file name. Where the 2023 books edited a caption by hand,
+it's study content (NIEHS-10's 13 are in `templates/studies/DTXSID50469320/deposit.yaml`).
+
+`tests/unit/test_report_definitions.py` checks the outlines (file entries
+included), the DTD and each book's series ISSN. The ISSN is per book: NIEHS-02 … 04, 07, 08 and RR-8 carry
 2473-4756.
 
 ## Still open (ranked)

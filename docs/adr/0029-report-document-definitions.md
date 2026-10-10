@@ -70,6 +70,22 @@ decided the form: **an era base, plus alterations to it and additions to it.**
    decides: which species or tissues a study has, or how many tables there
    are.
 
+7. **The parts come from one grammar, the NTP template's.** The NTP Word
+   template (`NTP Template 11-04-21.dot`) is built for Inera's eXtyles, the
+   Word-to-BITS converter. The books' `content-type`s are its style names.
+   `vocab/ntp-bits-grammar.yaml` records which BITS construct each structural
+   style becomes, per packaging. A definition may declare only parts the
+   grammar makes in its packaging. Every part and roster paragraph of the 12
+   published books is one it makes.
+8. **A study's supplied files are its data deposit, not authored text.** The
+   Supplemental Data lists come from the files deposited with the report,
+   recorded as a session sidecar (`deposit.json`, `pipeline/deposit.py`):
+   - each file's kind (apical, genomic, study tables, animal data, …) and
+     species are read from the depositors' naming convention;
+   - a derived `supplementary-material` node lists one kind;
+   - a `repeat: deposit_species` section repeats per species.
+   A study may state a file's kind or caption (`templates/studies/<id>/deposit.yaml`).
+
 ## Consequences
 
 - Making a published report structurally right is an edit to YAML, reviewed as a
@@ -96,10 +112,14 @@ decided the form: **an era base, plus alterations to it and additions to it.**
 - **Section structure:** RR-8 and NIEHS-02 … 10 match their published books
   exactly.
 - **NIEHS-12 and 13** differ only where the difference is data or content:
-  - the per-species and per-tissue sections (the pipeline models one species,
-    G3 conformance gap 5);
+  - the per-species and per-tissue sections of the Methods and Results (the
+    pipeline models one species, G3 conformance gap 5);
   - the study's analytical-method sections.
   `tests/unit/test_report_definitions.py` lists these.
+- **Supplemental Data** (2026-10-10, §8): every report lists its deposited
+  files in the published sections, file for file. The 2026 G.3 Rats / G.4 Mice
+  split comes from the deposit. The file-name rules reproduce the grouping of
+  all 672 published entries.
 - **The series ISSN** is a per-book fact. NIEHS-02 … 04, 07, 08 and RR-8
   carry 2473-4756; the others carry 2768-5632.
 - **Section labels and headings that had been written into content are now
