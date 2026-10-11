@@ -311,6 +311,23 @@ def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled
             "sex_filled": filled, "units": len(units), "dose_unit": dose_unit}
 
 
+def _by_ref(node, out: dict | None = None) -> dict:
+    """Every object of a BMDExpress project JSON by its Jackson '@ref' id.
+
+    The project writes a shared object (e.g. one ChipInfo for several
+    experiments) in full once and as its bare '@ref' id everywhere after."""
+    out = {} if out is None else out
+    if isinstance(node, dict):
+        if "@ref" in node:
+            out[node["@ref"]] = node
+        for v in node.values():
+            _by_ref(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _by_ref(v, out)
+    return out
+
+
 def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> dict:
     """{experiment name: ExperimentDescription-shaped dict} for a genomic project.
 
@@ -328,6 +345,7 @@ def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> d
                     tissue_samples[f] = (m.group(1), set(line.rstrip("\n").split("\t")[1:]))
                     break
 
+    refs = _by_ref(project)
     out = {}
     for exp in project.get("doseResponseExperiments", []):
         samples = {t.get("name") for t in exp.get("treatments") or []}
@@ -335,7 +353,8 @@ def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> d
         hits.sort(key=lambda x: -x[1])
         if not hits or hits[0][1] != len(samples):
             raise ValueError(f"{exp.get('name')}: no expression file holds all of its samples")
-        chip = exp.get("chip") if isinstance(exp.get("chip"), dict) else {}
+        chip = exp.get("chip")
+        chip = refs.get(chip, {}) if not isinstance(chip, dict) else chip
         species = _CHIP_SPECIES.get((chip.get("species") or "").lower())
         # S1500_Plus_Rat → "S1500+_rat" (the vocabulary's platform spelling)
         m = re.fullmatch(r"S1500_Plus_(\w+)", chip.get("name") or "")
