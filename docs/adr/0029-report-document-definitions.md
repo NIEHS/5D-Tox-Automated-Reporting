@@ -84,7 +84,7 @@ decided the form: **an era base, plus alterations to it and additions to it.**
      species are read from the depositors' naming convention;
    - a derived `supplementary-material` node lists one kind;
    - a `repeat: deposit_species` section repeats per species.
-   A study may state a file's kind or caption (`templates/studies/<id>/deposit.yaml`).
+   A study may state a file's kind or caption, and the deposit's DOI (`templates/studies/<id>/deposit.yaml`); the appendix opens with that DOI (a node's `deposit_text`).
 9. **A report may cover several studies, each one a session (2026-10-11).**
    NIEHS-12 and 13 report a rat study and a mouse study of one chemical. Each
    study has its own animals, dose levels, workbooks and genomic project.

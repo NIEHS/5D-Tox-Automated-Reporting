@@ -355,7 +355,8 @@ def study_tree(base, collected, authored=None, facts=None):
        keeps its heading but its subtree is dropped and it states the fact
        (`not_collected_text`).
     3. Study-bound authored content (`session_content`): freeform nodes take THIS
-       study's text (`authored`), else `missing_content_text`, else pending.
+       study's text (`authored`), else their `deposit_text` when the study's
+       deposit has a DOI and files, else `missing_content_text`, else pending.
     4. Study facts in titles: `${chemical_name}` (TITLE_FIELDS) from `facts`
        (the report data); a field the facts lack stays as written.
     5. Repeated sections (`repeat:`): one copy per species of the study's
@@ -373,7 +374,8 @@ def study_tree(base, collected, authored=None, facts=None):
             import copy
             nodes = copy.deepcopy(base)
         _resolve_study_bound(nodes, authored or {},
-                             set(collected) if collected is not None else None)
+                             set(collected) if collected is not None else None,
+                             _deposit_doi((facts or {}).get("deposit")))
     if _has_repeats(nodes):
         if nodes is base:
             import copy
@@ -434,7 +436,25 @@ def _statement_markup(text: str) -> dict:
     return {"html": f"<p>{_html.escape(text)}</p>", "latex": tex}
 
 
-def _resolve_study_bound(nodes, authored: dict, collected: "set | None") -> None:
+def _deposit_doi(deposit: dict | None) -> str | None:
+    """The data deposit's DOI, when it has one and files to list."""
+    deposit = deposit or {}
+    return deposit.get("doi") if deposit.get("doi") and deposit.get("files") else None
+
+
+def _deposit_markup(text: str, doi: str) -> dict:
+    """{html, latex} for a `deposit_text`, its "{doi}" the DOI's link."""
+    import html as _html
+    url = f"https://doi.org/{doi}"
+    before, _, after = text.partition("{doi}")
+    tex = [_statement_markup(x)["latex"] for x in (before, after)]
+    return {"html": f'<p>{_html.escape(before)}<a href="{_html.escape(url)}">'
+                    f"{_html.escape(url)}</a>{_html.escape(after)}</p>",
+            "latex": f"{tex[0]}\\url{{{url}}}{tex[1]}"}
+
+
+def _resolve_study_bound(nodes, authored: dict, collected: "set | None",
+                         doi: str | None = None) -> None:
     for n in nodes:
         if platform_gate_closed(n, collected):
             # One statement stands for the whole gated section: drop its subtree
@@ -453,12 +473,14 @@ def _resolve_study_bound(nodes, authored: dict, collected: "set | None") -> None
             content = authored.get(n.session_content)
             if content:
                 n.resolved_content = dict(content)
+            elif n.deposit_text and doi:
+                n.resolved_content = _deposit_markup(n.deposit_text, doi)
             elif n.missing_content_text:
                 n.resolved_content = _statement_markup(n.missing_content_text)
             else:
                 n.resolved_content = None  # required, not yet authored → pending
         if n.children:
-            _resolve_study_bound(n.children, authored, collected)
+            _resolve_study_bound(n.children, authored, collected, doi)
 
 
 def _genomics_role(node: DocNode) -> str | None:

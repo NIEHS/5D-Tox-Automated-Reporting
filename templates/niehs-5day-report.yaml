@@ -472,9 +472,12 @@ document:
     - id: appendix-f-body
       type: freeform-block
       title: ""
-      # The supplemental file list is study-specific (a per-study appendix-f.json
-      # list, or authored appendix-f.html/.tex), never shared across chemicals.
+      # The appendix's opening: the study's own authored text (appendix-f.html/
+      # .tex), else, when its data deposit has a DOI (pipeline.deposit), where
+      # the files listed below are, as every NIEHS book opens it; else that there
+      # are none.
       session_content: appendix-f
+      deposit_text: "The following supplemental files are available at {doi}."
       missing_content_text: "Supplemental data files are not available for this study."
   # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
   # freeform-page / freeform-block carry content authored HERE (or in an

@@ -115,6 +115,11 @@ class DocNode:
         missing_content_text: Shippable statement rendered when the study supplies
                         no `session_content`.  Unset ⇒ a pending placeholder (the
                         content is required and still has to be authored).
+        deposit_text:   Statement rendered, when the study supplies no
+                        `session_content`, if its data deposit has a DOI and files
+                        (pipeline.deposit): "{doi}" in it becomes the DOI's link
+                        ("The following supplemental files are available at
+                        {doi}.").  Before `missing_content_text`.
         resolved_content: COMPUTED at load by the instantiator — the per-surface
                         markup {latex: str|None, html: str|None} produced from the
                         authored source (docx is parsed once here).  Not authored;
@@ -212,6 +217,7 @@ class DocNode:
     requires_platform: str | list | None = None
     not_collected_text: str | None = None
     missing_content_text: str | None = None
+    deposit_text: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

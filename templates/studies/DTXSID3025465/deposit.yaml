@@ -2,6 +2,9 @@
 # the caption each is listed under in its Supplemental Data appendix, as the
 # published book has it (tooling.deposit_captions).  Files not named here are
 # listed by their file name.
+
+# The deposit's DOI, as the published book's Supplemental Data cites it.
+doi: 10.22427/NIEHS-DATA-NIEHS-04
 captions:
   BMDs_code_package.zip: BMDs Code Package
   Array_platform_gene_and_GO_term_annotation_file.zip: Array Platform Gene and GO Term Annotation File

@@ -516,6 +516,10 @@ def _validate_freeform_entry(entry: dict, node_id: str) -> None:
             f"`content_file`, not both"
         )
     has_session = bool(entry.get("session_content"))
+    if entry.get("deposit_text") is not None and not (
+            has_session and "{doi}" in str(entry["deposit_text"])):
+        raise ValueError(f"freeform node {node_id!r}: `deposit_text` needs `session_content` "
+                         "and a {doi} placeholder")
     if not has_inline and not has_file:
         if has_session:
             return  # content is per-study, resolved per request (render_nodes)

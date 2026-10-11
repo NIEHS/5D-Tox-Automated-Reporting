@@ -160,15 +160,18 @@ def build_manifest(files: list[tuple[str, int]], kinds: dict | None = None,
 # ---------------------------------------------------------------------------
 
 def _study_statements(dtxsid: str) -> dict:
-    """The study's stated kinds and captions (templates/studies/<id>/deposit.yaml)."""
+    """The study's stated kinds, captions and data DOI
+    (templates/studies/<id>/deposit.yaml)."""
     from document_model.document_template import TEMPLATES_DIR
     path = TEMPLATES_DIR / "studies" / validate_dtxsid(dtxsid) / "deposit.yaml"
     if not path.exists():
         return {}
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    unknown = set(raw) - {"kinds", "captions"}
+    unknown = set(raw) - {"kinds", "captions", "doi"}
     if unknown:
-        raise ValueError(f"{path}: unknown key(s) {sorted(unknown)} (kinds, captions)")
+        raise ValueError(f"{path}: unknown key(s) {sorted(unknown)} (kinds, captions, doi)")
+    if raw.get("doi") is not None and not str(raw["doi"]).startswith("10."):
+        raise ValueError(f"{path}: doi must be a bare DOI (10.…), got {raw['doi']!r}")
     bad = {f: k for f, k in (raw.get("kinds") or {}).items() if k not in KINDS}
     if bad:
         raise ValueError(f"{path}: unknown kind(s) {bad}; known {list(KINDS)}")
@@ -198,8 +201,9 @@ def record_deposit(dtxsid: str, directory: Path, exclude: tuple[str, ...] = ()) 
 
 
 def load_deposit(dtxsid: str | None) -> dict | None:
-    """The session's deposit manifest, with the study's caption wording applied
-    (so a caption edit needs no re-recording); None when none was recorded."""
+    """The session's deposit manifest, with the study's caption wording and its
+    data DOI (``doi``, the deposit's citable address) applied, so an edit needs
+    no re-recording; None when none was recorded."""
     if not dtxsid:
         return None
     from pipeline.session_store import session_path
@@ -210,7 +214,10 @@ def load_deposit(dtxsid: str | None) -> dict | None:
     if not path.exists():
         return None
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    captions = _study_statements(dtxsid).get("captions") or {}
+    stated = _study_statements(dtxsid)
+    if stated.get("doi"):
+        manifest["doi"] = str(stated["doi"])
+    captions = stated.get("captions") or {}
     for f in manifest.get("files") or []:
         if f["file"] in captions:
             f["caption"] = captions[f["file"]]

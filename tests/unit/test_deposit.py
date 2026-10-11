@@ -196,3 +196,31 @@ def test_every_caption_is_the_published_wording(report):
     captions = dep._study_statements(dtxsid).get("captions")
     manifest = build_manifest([tuple(f) for f in listing], captions=captions)
     assert {f["file"]: f["caption"] for f in manifest["files"]} == published_captions(report)
+
+
+def test_supplemental_data_opens_with_the_deposit_doi():
+    """Every NIEHS book opens Supplemental Data with "The following supplemental
+    files are available at https://doi.org/<deposit DOI>.": a node's
+    `deposit_text` gives it when the study's deposit has a DOI and files; the
+    study's own authored text comes first, `missing_content_text` without one."""
+    from document_model.document_node import DocNode
+    from document_model.document_tree import study_tree
+
+    def node():
+        return DocNode(id="f-body", node_type="freeform-block", title="",
+                       session_content="appendix-f",
+                       deposit_text="The following supplemental files are available at {doi}.",
+                       missing_content_text="Supplemental data files are not available.")
+
+    deposit = {"doi": "10.22427/NIEHS-DATA-NIEHS-02", "files": [{"file": "a.pdf"}]}
+    got = study_tree([node()], None, {}, {"deposit": deposit})[0].resolved_content
+    assert got["html"] == ('<p>The following supplemental files are available at <a href='
+                           '"https://doi.org/10.22427/NIEHS-DATA-NIEHS-02">https://doi.org/'
+                           '10.22427/NIEHS-DATA-NIEHS-02</a>.</p>')
+    assert got["latex"] == ("The following supplemental files are available at "
+                            "\\url{https://doi.org/10.22427/NIEHS-DATA-NIEHS-02}.")
+    authored = {"appendix-f": {"html": "<p>Own.</p>", "latex": "Own."}}
+    assert study_tree([node()], None, authored, {"deposit": deposit})[0].resolved_content[
+        "html"] == "<p>Own.</p>"
+    for facts in ({"deposit": {**deposit, "files": []}}, {"deposit": None}, None):
+        assert "not available" in study_tree([node()], None, {}, facts)[0].resolved_content["html"]
