@@ -3,8 +3,7 @@ llm_helpers.py — Shared LLM generation utilities for Claude API calls.
 
 Provides a synchronous JSON-generating wrapper around AnthropicEndpoint and
 an async version that offloads the blocking call to a thread-pool executor.
-Used by background_server.py, pool_orchestrator.py, and style_learning.py
-whenever the app needs to call Claude and parse the result as JSON.
+Used wherever the app needs to call Claude and parse the result as JSON.
 
 Also includes a markdown-fence stripper, since Claude sometimes wraps JSON
 output in ```json ... ``` blocks even when instructed not to.

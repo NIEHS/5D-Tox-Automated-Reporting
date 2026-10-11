@@ -313,7 +313,18 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
         const { identity } = await api.getIdentity(dtxsid);
         const res = await api.generateSummary(dtxsid, identity);
         if (res.paragraphs?.length) {
-          await api.saveSection(dtxsid, "summary", { paragraphs: res.paragraphs, model_used: res.model_used ?? "" });
+          await api.saveSection(dtxsid, "summary", {
+            paragraphs: res.paragraphs,
+            model_used: res.model_used ?? "",
+            source: "model",
+            run_id: res.run_id ?? null,
+            template_version: res.template_version ?? null,
+          });
+          if (res.unmatched_numbers?.length)
+            setError(
+              `The generated Summary states numbers the model was not given: ${res.unmatched_numbers.join(", ")}. ` +
+                "Check them before approving (the Prompts step shows the run)."
+            );
           await afterMutation();
         }
       }

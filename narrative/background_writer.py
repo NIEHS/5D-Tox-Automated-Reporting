@@ -101,8 +101,7 @@ follow this same formal, citation-heavy, regulatory-focused prose style.
 # Prompt assembly — builds the complete LLM prompt from gathered data
 # ---------------------------------------------------------------------------
 
-def build_prompt(data: BackgroundData,
-                 style_rules: list[str] | None = None) -> str:
+def build_prompt(data: BackgroundData) -> str:
     """
     Assemble the complete LLM prompt from gathered toxicological data.
 
@@ -112,14 +111,9 @@ def build_prompt(data: BackgroundData,
       3. Raw ATSDR/IRIS text for the LLM to mine for ADME/mechanism facts
       4. Scott's example as a style reference
       5. Instructions for inline [N] references and reference list
-      6. (Optional) Learned writing style preferences from prior user edits
 
     Args:
         data: BackgroundData containing all gathered toxicological info
-        style_rules: Optional list of learned style rule strings to inject
-            into the prompt.  These come from the global style profile and
-            represent writing preferences the user has demonstrated through
-            previous edits (e.g., "Use 'test article' instead of 'compound'").
 
     Returns the complete prompt string ready to send to the LLM.
     """
@@ -247,7 +241,7 @@ PARAGRAPH 7 — Study Purpose
   [characterize gene expression changes / identify molecular targets /
   fill specific knowledge gaps / etc.]."
 
-{_format_style_rules(style_rules)}=== FORMAT REQUIREMENTS ===
+=== FORMAT REQUIREMENTS ===
 
 - Use inline numbered references: [1], [2], [3], etc. The numbers MUST be the
   [N] numbers of the REFERENCE SOURCES / PEER-REVIEWED PAPERS listed above.
@@ -463,47 +457,12 @@ def _format_mechanism_papers(data: BackgroundData, start: int = 1) -> str:
     return "\n".join(lines)
 
 
-def _format_style_rules(style_rules: list[str] | None) -> str:
-    """
-    Format learned writing style rules into a prompt section.
-
-    If style_rules is None or empty, returns an empty string (so no extra
-    section appears in the prompt).  Otherwise, builds a clearly-delimited
-    block that the LLM should apply throughout its writing — placed before
-    FORMAT REQUIREMENTS so the LLM sees it in time to influence generation.
-
-    Args:
-        style_rules: List of human-readable style rule strings extracted from
-            prior user edits (e.g., "Use 'test article' instead of 'compound'")
-
-    Returns:
-        Formatted prompt section string, or empty string if no rules.
-    """
-    if not style_rules:
-        return ""
-
-    lines = [
-        "=== WRITING STYLE PREFERENCES ===",
-        "(Learned from previous editing sessions. Apply these preferences",
-        "throughout your writing when they don't conflict with the core",
-        "requirements above.)",
-        "",
-    ]
-    for rule in style_rules:
-        lines.append(f"- {rule}")
-    lines.append("")
-    lines.append("")
-
-    return "\n".join(lines)
-
-
 # ---------------------------------------------------------------------------
 # LLM generation — Claude primary, Ollama fallback
 # ---------------------------------------------------------------------------
 
 def generate_background(data: BackgroundData,
-                        model: str = "",
-                        style_rules: list[str] | None = None) -> dict:
+                        model: str = "") -> dict:
     """
     Generate the 6-paragraph background section using an LLM.
 
@@ -511,9 +470,6 @@ def generate_background(data: BackgroundData,
         data: BackgroundData from data_gatherer.py
         model: Model id to generate with (routed through the proxy via
             AnthropicEndpoint).  Falls back to DEFAULT_CLAUDE_MODEL when empty.
-        style_rules: Optional list of learned style rule strings to inject
-            into the prompt.  When present, a WRITING STYLE PREFERENCES
-            section is appended to the prompt before FORMAT REQUIREMENTS.
 
     Returns:
         Dict with keys:
@@ -528,7 +484,7 @@ def generate_background(data: BackgroundData,
           - "model_used": Which LLM model was used
           - "prompt_tokens_approx": Approximate input token count
     """
-    prompt = build_prompt(data, style_rules=style_rules)
+    prompt = build_prompt(data)
     system = (
         "You are a senior toxicologist and technical writer. "
         "Write precise, citation-heavy regulatory prose. "

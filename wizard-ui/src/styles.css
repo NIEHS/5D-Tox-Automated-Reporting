@@ -738,3 +738,44 @@ button.danger { color: var(--err); }
 .se-req { color: var(--warn); font-style: normal; font-size: 0.75rem; }
 .se-caps { font-size: 0.75rem; margin-top: 0.6rem; }
 .badge.err { background: rgba(248,113,113,0.15); color: var(--err); }
+
+/* Prompt workshop (steps/PromptWorkshop.tsx) — wider than the other steps. */
+.wizard:has(.workshop) { max-width: 1480px; }
+.workshop-panel { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 0.7rem; margin-top: 0.8rem; min-width: 0; }
+.workshop-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+.workshop-toolbar select, .workshop-save input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 0.4rem; font: inherit; }
+.workshop-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+.workshop-columns.three { grid-template-columns: 1fr 1fr 1fr; }
+.workshop-columns h4 { margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.workshop-text { line-height: 1.55; white-space: pre-wrap; max-height: 42vh; overflow-y: auto; padding-right: 0.3rem; }
+.workshop-text p { margin: 0 0 0.7rem; white-space: normal; }
+.workshop ins { background: rgba(74,222,128,0.18); color: inherit; text-decoration: none; }
+.workshop del { background: rgba(248,113,113,0.18); color: var(--muted); }
+.workshop mark { background: rgba(251,191,36,0.35); color: inherit; border-radius: 2px; }
+.workshop-lower { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0.9rem; align-items: start; }
+.workshop-tabs { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.workshop-tabs button { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 0.2rem 0.6rem; cursor: pointer; }
+.workshop-tabs button.active { color: var(--text); border-color: var(--accent); }
+.workshop-base { margin-left: auto; font-size: 0.8rem; }
+.workshop-editor { width: 100%; min-height: 46vh; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; font: 12.5px/1.5 ui-monospace, Menlo, monospace; resize: vertical; }
+.workshop-pre { max-height: 46vh; overflow: auto; font: 12.5px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; margin: 0; }
+.workshop-pre pre { white-space: pre-wrap; margin: 0 0 0.6rem; font: inherit; }
+.workshop-pre h4 { margin: 0.5rem 0 0.2rem; font-family: system-ui, sans-serif; font-size: 0.8rem; color: var(--muted); }
+.workshop-vars { margin: 0; max-height: 46vh; overflow: auto; }
+.workshop-vars div { margin-bottom: 0.6rem; }
+.workshop-vars dd { margin: 0.15rem 0 0 1rem; color: var(--muted); }
+.workshop-save { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.workshop-save input { flex: 1; }
+.workshop-versions { margin-top: 0.7rem; }
+.workshop-versions ol { margin: 0.4rem 0 0 1.2rem; padding: 0; max-height: 28vh; overflow-y: auto; }
+.workshop-versions li { margin-bottom: 0.6rem; }
+.workshop-current { color: var(--ok); font-size: 0.8rem; }
+.workshop-chat { display: flex; flex-direction: column; }
+.workshop-chat .chat-messages { max-height: 56vh; min-height: 30vh; padding: 0.2rem; }
+.workshop-chat .chat-input { padding: 0.5rem 0 0; }
+.workshop-proposal { margin-top: 0.5rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; background: var(--panel-2); }
+.workshop-proposal .workshop-pre { max-height: 32vh; }
+.workshop-notice { margin-top: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 6px; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.4); cursor: pointer; }
+@media (max-width: 1100px) {
+  .workshop-lower, .workshop-columns, .workshop-columns.three { grid-template-columns: 1fr; }
+}

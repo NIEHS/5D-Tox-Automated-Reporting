@@ -29,7 +29,6 @@ from bmdx_pipe import bm2_cache
 from pipeline.session_store import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid
 from styling_export.llm_helpers import llm_generate_json_async
-from narrative.style_learning import load_style_profile
 from narrative.chem_resolver import ChemicalIdentity
 from narrative.data_gatherer import gather_all
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
@@ -214,26 +213,13 @@ async def api_generate(request: Request):
             for msg in progress_messages:
                 yield _sse_event("progress", {"message": msg})
 
-            # Step 2: Load learned style preferences (if any) and generate
-            # background with LLM.  Style rules are injected into the prompt
-            # so the LLM writes in the user's preferred style from the start.
-            style_rules = []
-            profile = load_style_profile()
-            if profile.get("rules"):
-                style_rules = [r["rule"] for r in profile["rules"]]
-
-            if style_rules:
-                yield _sse_event("progress", {
-                    "message": f"Applying {len(style_rules)} learned style preference{'s' if len(style_rules) != 1 else ''}..."
-                })
-
+            # Step 2: generate the background with the LLM.
             yield _sse_event("progress", {
                 "message": f"Generating background with {model}..."
             })
 
             result = await loop.run_in_executor(
                 None, generate_background, bg_data, model,
-                style_rules or None,
             )
 
             # Step 3: Return the complete result
@@ -555,167 +541,47 @@ async def api_methods_context(dtxsid: Dtxsid):
 @router.post("/api/generate-summary")
 async def api_generate_summary(request: Request):
     """
-    Generate a Summary section that synthesizes all approved report sections.
+    Generate the Summary section: the facts narrative.report_summary picks from
+    the study's results, worded by a model under the Summary's prompt template
+    (narrative.summary_llm; the template is edited in the prompt workshop,
+    web_routes.prompt_routes). The run — with the exact prompt sent — is saved.
 
-    Reads all approved sections from the session, builds a context block
-    describing the key findings, and sends it to Claude to produce a
-    NIEHS-style summary.
-
-    Input JSON:
-      {
-        "dtxsid": "DTXSID...",
-        "identity": {ChemicalIdentity dict}
-      }
+    Input JSON:  {"dtxsid": "DTXSID..."}
 
     Returns JSON:
       {
         "paragraphs": ["Summary paragraph 1...", ...],
         "section_key": "summary",
-        "model_used": "claude-..."
+        "model_used": "claude-...",
+        "run_id": "r…", "template_version": 3,
+        "unmatched_numbers": ["12.5"]   # numbers the model was not given
       }
     """
+    from narrative.prompt_templates import TemplateError
+    from narrative.summary_llm import generate_summary
+
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
-    identity = body.get("identity", {})
-    model = body.get("model", "") or DEFAULT_CLAUDE_MODEL
-
     if not dtxsid:
-        return JSONResponse(
-            {"error": "dtxsid is required"},
-            status_code=400,
-        )
-
-    compound_name = identity.get("name", "the test chemical")
-
-    # Gather context from all approved sections in the session
-    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
-    context_parts = []
-
-    # Background — extract a brief summary
-    bg_path = d / "background.json"
-    if bg_path.exists():
-        try:
-            bg = json.loads(bg_path.read_text(encoding="utf-8"))
-            bg_paras = bg.get("paragraphs", [])
-            if bg_paras:
-                context_parts.append(
-                    "=== BACKGROUND (first paragraph) ===\n"
-                    + bg_paras[0][:500]
-                )
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # Apical endpoint findings — summarize from bm2 sections
-    for f in sorted(d.glob("bm2_*.json")):
-        try:
-            section = json.loads(f.read_text(encoding="utf-8"))
-            narrative = section.get("narrative", "")
-            if isinstance(narrative, list):
-                narrative = " ".join(narrative)
-            if narrative:
-                section_name = f.stem.removeprefix("bm2_").replace("-", " ").title()
-                context_parts.append(
-                    f"=== APICAL RESULTS: {section_name} ===\n"
-                    + narrative[:800]
-                )
-        except (json.JSONDecodeError, OSError):
-            continue
-
-    # BMD summary — if available
-    bmd_path = d / "bmd_summary.json"
-    if bmd_path.exists():
-        try:
-            bmd_data = json.loads(bmd_path.read_text(encoding="utf-8"))
-            eps = bmd_data.get("endpoints", [])
-            if eps:
-                lines = ["=== BMD SUMMARY (sorted by BMD) ==="]
-                for ep in eps[:10]:
-                    lines.append(
-                        f"  {ep.get('endpoint', '')}: BMD={ep.get('bmd', 'ND')}, "
-                        f"BMDL={ep.get('bmdl', 'ND')}, {ep.get('sex', '')}, "
-                        f"{ep.get('direction', '')}"
-                    )
-                context_parts.append("\n".join(lines))
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # Genomics findings — summarize from genomics_*.json files
-    for f in sorted(d.glob("genomics_*.json")):
-        try:
-            genomics = json.loads(f.read_text(encoding="utf-8"))
-            organ = genomics.get("organ", "")
-            sex = genomics.get("sex", "")
-            gene_sets = genomics.get("gene_sets", [])
-            top_genes = genomics.get("top_genes", [])
-
-            lines = [f"=== GENOMICS: {organ.title()} {sex.title()} ==="]
-            if gene_sets:
-                lines.append("Top gene sets by BMD:")
-                for gs in gene_sets[:5]:
-                    lines.append(
-                        f"  {gs.get('go_term', '')}: median BMD={gs.get('bmd_median', '')}, "
-                        f"{gs.get('n_genes', 0)} genes, {gs.get('direction', '')}"
-                    )
-            if top_genes:
-                lines.append("Top genes by BMD:")
-                for g in top_genes[:5]:
-                    lines.append(
-                        f"  {g.get('gene_symbol', '')}: BMD={g.get('bmd', '')}, "
-                        f"{g.get('direction', '')}"
-                    )
-            context_parts.append("\n".join(lines))
-        except (json.JSONDecodeError, OSError):
-            continue
-
-    if not context_parts:
-        return JSONResponse(
-            {"error": "No approved sections found to summarize"},
-            status_code=400,
-        )
-
-    context_block = "\n\n".join(context_parts)
-
-    prompt = f"""Based on the following approved report sections for {compound_name},
-generate a Summary section in the style of an NIEHS/NTP 5-day study technical report.
-
-{context_block}
-
----
-
-Generate 3-4 summary paragraphs covering:
-1. Overview — briefly restate the study design and the chemical tested
-2. Key Apical Findings — which endpoints were most sensitive (lowest BMD), in which sex, and in what direction
-3. Key Genomic Findings (if available) — which gene sets and genes were most sensitive, what biological processes they represent
-4. Concordance — compare sensitivity across biological levels (gene < gene set < apical endpoint). Note whether transcriptomic changes occurred at lower doses than apical effects (as expected).
-
-Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]"""
-
-    system = (
-        "You are a toxicology report writer specializing in NTP/NIEHS-style "
-        "technical reports. Synthesize findings across biological levels "
-        "(molecular, pathway, organism) into a coherent summary. Return ONLY "
-        "valid JSON with no markdown formatting."
-    )
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
 
     try:
-        paragraphs = await llm_generate_json_async(
-            "summary-generator", prompt, system,
-            max_tokens=4096, model=model,
-        )
-        if not isinstance(paragraphs, list):
-            paragraphs = [str(paragraphs)]
-
-        return JSONResponse({
-            "paragraphs": paragraphs,
-            "section_key": "summary",
-            "model_used": model,
-        })
-
+        run = await generate_summary(validate_dtxsid(dtxsid))
+    except TemplateError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
     except Exception as e:
         return JSONResponse(
             {"error": f"Summary generation failed: {e}"},
             status_code=500,
         )
+    return JSONResponse({
+        "paragraphs": run["paragraphs"],
+        "section_key": "summary",
+        "model_used": run["prompt"]["model"],
+        "run_id": run["run_id"],
+        "template_version": run["template_version"],
+        "unmatched_numbers": run["unmatched_numbers"],
+    })
 
 
 # ---------------------------------------------------------------------------

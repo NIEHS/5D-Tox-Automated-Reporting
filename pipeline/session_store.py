@@ -19,7 +19,6 @@ Layout:
             history/
                 {section_key}/
                     {iso_timestamp}.json       — previous versions
-        _style_profile.json                    — global writing style rules
 
 Note: the LMDB bm2 cache lives at /tmp/_bm2_cache (not under sessions/)
 because LMDB's mmap()/flock() are incompatible with GCS FUSE mounts.

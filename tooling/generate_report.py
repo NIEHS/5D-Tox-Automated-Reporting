@@ -386,7 +386,6 @@ def background(dtxsid: str, identity: dict, model: str, store) -> None:
     from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
     from narrative.chem_resolver import ChemicalIdentity
     from narrative.data_gatherer import gather_all
-    from narrative.style_learning import load_style_profile
 
     if not identity.get("pubchem_cid"):
         # The gatherer keys PubChem (the main source) on the CID; identity.json
@@ -407,8 +406,7 @@ def background(dtxsid: str, identity: dict, model: str, store) -> None:
         _log(f"  WARNING: {', '.join(blocked)} could not be reached — background not "
              "generated (run where these sources are reachable, e.g. the NIEHS network)")
         return
-    rules = [r["rule"] for r in load_style_profile().get("rules", [])] or None
-    result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL, rules)
+    result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
     paragraphs = result.get("paragraphs") or []
     if not paragraphs:
         _log("  WARNING: background generation returned no paragraphs — not saved")

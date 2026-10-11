@@ -40,9 +40,6 @@ from bmdx_pipe import bm2_cache  # noqa: F401
 from pipeline.session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, save_section, delete_section, _VERSION_EVENT_KEY,
 )
-from narrative.style_learning import (
-    extract_and_merge_style_rules,
-)
 from pipeline.pool_orchestrator import (
     fingerprint_and_store, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
@@ -830,10 +827,8 @@ async def api_session_approve(request: Request):
     For bm2 sections, the .bm2 file is copied from /tmp to
     sessions/{dtxsid}/files/ so it survives server restarts.
 
-    Style learning: if the user edited the generated text before approving,
-    the original and edited versions are compared to extract writing style
-    rules.  Extraction runs asynchronously in a background thread so the
-    approve response is immediate.
+    The response says whether the approved text differs from the generated
+    original the client sent (`user_edited`).
     """
     _bm2_uploads = get_bm2_uploads()
     _csv_uploads = get_csv_uploads()
@@ -977,53 +972,20 @@ async def api_session_approve(request: Request):
         # Summary section — saved as summary.json
         save_section(dtxsid, "summary", data)
 
-    # --- Style learning: detect edits and extract rules ---
-    # The client sends the original LLM-generated text alongside the
-    # (possibly edited) approved text.  If they differ, the user made
-    # deliberate style changes — we extract rules from those changes
-    # in a background thread to avoid blocking the approve response.
+    # --- Did the user edit the generated text before approving? ---
+    # The client sends the original generated text alongside the (possibly
+    # edited) approved text; the answer goes back as `user_edited`.
     user_edited = False
-    original_text = ""
-    edited_text = ""
-
-    if section_type == "background":
-        original_paragraphs = data.get("original_paragraphs")
-        edited_paragraphs = data.get("paragraphs")
-        if original_paragraphs and edited_paragraphs:
-            user_edited = original_paragraphs != edited_paragraphs
-            if user_edited:
-                original_text = "\n\n".join(original_paragraphs)
-                edited_text = "\n\n".join(edited_paragraphs)
-
-    elif section_type == "bm2":
+    if section_type == "bm2":
         original_narrative = data.get("original_narrative", "")
         edited_narrative = data.get("narrative", "")
         if original_narrative and edited_narrative:
             user_edited = original_narrative != edited_narrative
-            if user_edited:
-                original_text = original_narrative
-                edited_text = edited_narrative
-
-    elif section_type in ("methods", "summary"):
-        # Methods and summary sections use the same paragraph-based
-        # style learning as background — compare original vs. edited paragraphs
+    elif section_type in ("background", "methods", "summary"):
         original_paragraphs = data.get("original_paragraphs")
         edited_paragraphs = data.get("paragraphs")
         if original_paragraphs and edited_paragraphs:
             user_edited = original_paragraphs != edited_paragraphs
-            if user_edited:
-                original_text = "\n\n".join(original_paragraphs)
-                edited_text = "\n\n".join(edited_paragraphs)
-
-    if user_edited:
-        # Fire-and-forget: extract style rules in a background thread.
-        # We don't await the result — the user gets their approve response
-        # immediately, and the rules are saved asynchronously.
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(
-            None, extract_and_merge_style_rules, original_text, edited_text,
-        )
-        logger.info("Style learning triggered for %s/%s", dtxsid, section_type)
 
     # Read back the saved version number so the UI can display "v1", "v2", etc.
     # The version was stamped onto `data` by save_section() before writing.
@@ -1115,7 +1077,7 @@ async def api_session_save_section(request: Request):
     Used to auto-save freshly-generated content (e.g., when the LLM
     finishes producing the body Background) so it survives a page reload
     without requiring the user to click Approve.  Approval is a separate
-    concern — it locks the editor and applies style learning.
+    concern — it locks the editor.
 
     Input JSON:
       {

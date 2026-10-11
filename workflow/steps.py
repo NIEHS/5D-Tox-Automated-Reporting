@@ -63,10 +63,8 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
     import json
 
     from narrative.report_summary import build_report_summary
-    from pipeline.study_design import study_design_facts
-    from pipeline.session_db import _latest_cache
+    from narrative.summary_llm import summary_inputs
     from pipeline.session_store import save_section
-    from rendering.render_common import derive_study_sexes
 
     sdir = store.session_dir(dtxsid)
     prior_path = sdir / "summary.json"
@@ -78,33 +76,7 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
         if prior.get("approved") or prior.get("source") != "generated":
             return {"ok": True, "written": False, "paragraphs": 0}
 
-    def _read(name: str) -> dict:
-        try:
-            return json.loads((sdir / name).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
-
-    bmd = _latest_cache(sdir, "bmd_summary") or {}
-    genomics = _latest_cache(sdir, "genomics") or {}
-    methods = (_latest_cache(sdir, "methods") or {}).get("context") or {}
-    sections = (_latest_cache(sdir, "sections") or {}).get("sections") or []
-    integrated = _read("integrated.json")
-    identity = _read("identity.json")
-    stat_order = next((v.get("stat_order") for v in genomics.values()
-                       if isinstance(v, dict) and v.get("stat_order")), None)
-
-    paragraphs = build_report_summary(
-        bmd.get("apical") or [],
-        {k: v for k, v in genomics.items() if isinstance(v, dict)},
-        chemical_name=methods.get("chemical_name") or identity.get("name") or dtxsid,
-        dose_groups=methods.get("dose_groups") or [],
-        dose_unit=methods.get("dose_unit") or "mg/kg",
-        bmd_stat=(stat_order or [None])[0],
-        sexes=derive_study_sexes(integrated),
-        abstract_background=_read("background.json").get("abstract_background", "") or "",
-        apical_evaluated=bool(sections),
-        design=study_design_facts(integrated, methods.get("dose_unit")),
-    )
+    paragraphs = build_report_summary(**summary_inputs(sdir))
     if not paragraphs:
         return {"ok": True, "written": False, "paragraphs": 0}
     save_section(dtxsid, "summary", {
@@ -692,11 +664,9 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     reverse flip; the approve route's own archiving happens when the CONTENT is
     saved, not on this pure lock transition.
 
-    Style-learning SEAM: /api/session/approve also compares original-vs-edited
-    paragraphs and fires extract_and_merge_style_rules in a background thread.
-    That needs the request payload (original_* + edited text) and an event loop,
-    neither of which belongs in a headless step — it stays in the route. This
-    step lifts ONLY the state change.
+    /api/session/approve also reports whether the approved text differs from
+    the generated original (`user_edited`); that needs the request payload, so
+    it stays in the route. This step lifts ONLY the state change.
 
     Raises StepError(400) with no dtxsid/section_key, StepError(404) if the
     section file does not exist (nothing to approve — content is written by the

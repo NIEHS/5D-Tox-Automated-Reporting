@@ -9,10 +9,11 @@ the web UI.  All actual endpoint logic lives in dedicated router modules:
   session_routes.py     — session load, approve, unapprove, history, restore, BMD summary
   upload_routes.py      — upload-bm2, upload-csv, upload-zip, process-bm2, process-genomics, preview
   llm_routes.py         — generate (SSE), generate-methods, methods-context, generate-summary, generate-genomics-narrative
-  export_routes.py      — export-overleaf-bundle, preview-latex-html, sync/commit/push/pull-document, export-bm2, style-profile
+  export_routes.py      — export-overleaf-bundle, preview-latex-html, sync/commit/push/pull-document, export-bm2
+  prompt_routes.py      — prompt workshop: section prompt templates, versions, runs, chat
 
 Shared mutable state (upload dicts, pool fingerprints) lives in server_state.py.
-Pure-function modules: session_store.py, llm_helpers.py, style_learning.py.
+Pure-function modules: session_store.py, llm_helpers.py.
 
 Usage:
     python background_server.py                   # start on port 9000
@@ -238,7 +239,7 @@ import web_routes.llm_routes as llm_routes
 app.include_router(llm_routes.router)
 
 # Export and style: export-overleaf-bundle, preview-latex-html,
-# sync/commit/push/pull-document, export-bm2, style-profile GET/DELETE
+# sync/commit/push/pull-document, export-bm2
 import web_routes.export_routes as export_routes
 app.include_router(export_routes.router)
 
@@ -256,6 +257,11 @@ app.include_router(structure_routes.router)
 # Q&A over one session's data and generated report; exploratory only.
 import web_routes.chat_routes as chat_routes
 app.include_router(chat_routes.router)
+
+# Prompt workshop: a model-written section's prompt template, its versions and
+# runs, and the chat that improves it (Summary first).
+import web_routes.prompt_routes as prompt_routes
+app.include_router(prompt_routes.router)
 
 # Wizard UI convenience routes: /api/wizard/{dtxsid}/files, /fingerprints
 import web_routes.wizard_routes as wizard_routes

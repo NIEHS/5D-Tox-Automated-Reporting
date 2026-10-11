@@ -64,7 +64,6 @@ _SESSIONS_DIR_MODULES = [
     "web_routes.session_routes",
     "web_routes.llm_routes",
     "web_routes.background_server",
-    "narrative.style_learning",
     "document_model.document_config",
     "document_model.view_config",
 ]

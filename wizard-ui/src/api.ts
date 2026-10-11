@@ -160,6 +160,57 @@ export interface ChatEvent { event: string; data: Record<string, any> }
 // --- Document structure (visual editor) ---
 // A node entry exactly as it appears in the document YAML. `children` nests;
 // a top-level entry with `region` (and no type) is a region container.
+// --- Prompt workshop: a model-written section's prompt template ---
+export interface PromptVersion { version: number; parent: number | null; at: string; rationale: string; thread_id: string | null }
+export interface PromptTemplateInfo {
+  section: string;
+  label: string;
+  current_version: number;
+  template: string;
+  versions: PromptVersion[];
+  variables: Record<string, string>;
+}
+export interface RenderedPrompt { system: string; user: string; model: string; temperature: number; max_tokens: number }
+export interface PromptRun {
+  run_id: string;
+  at: string;
+  dtxsid: string;
+  template_version: number | null; // null = an unsaved edit
+  template: string;
+  prompt: RenderedPrompt;
+  draft_paragraphs: string[];
+  paragraphs: string[];
+  unmatched_numbers: string[];
+}
+export interface WorkshopMessage {
+  role: "user" | "assistant";
+  content: string;
+  at?: string;
+  dtxsid?: string;
+  run_id?: string | null;
+  template_version?: number | null;
+  proposed_template?: string | null;
+  rationale?: string;
+  render_error?: string | null;
+}
+// POST /api/generate-summary: the Summary worded under its prompt template.
+export interface SummaryGeneration {
+  paragraphs: string[];
+  model_used?: string;
+  run_id?: string;
+  template_version?: number | null;
+  unmatched_numbers?: string[];
+}
+export interface WorkshopThreadSummary { id: string; title: string; updated_at: string; message_count: number }
+export interface WorkshopThread extends WorkshopThreadSummary { messages: WorkshopMessage[] }
+export interface WorkshopTurn {
+  reply: string;
+  proposed_template: string | null;
+  rationale: string;
+  render_error: string | null;
+  thread: WorkshopThread;
+}
+
 export interface DocEntry {
   id?: string;
   type?: string;
@@ -465,6 +516,72 @@ export const api = {
     ),
 
   // --- Session interpretation chat (ADR-0022) ---
+  // --- Prompt workshop (web_routes/prompt_routes.py) ---
+  getPrompt: (section: string) =>
+    fetch(`/api/prompts/${section}`).then((r) => jsonOrThrow<PromptTemplateInfo>(r)),
+  getPromptVersion: (section: string, version: number) =>
+    fetch(`/api/prompts/${section}/versions/${version}`).then((r) =>
+      jsonOrThrow<{ version: number; template: string }>(r)
+    ),
+  savePromptVersion: (section: string, template: string, rationale: string, dtxsid: string, threadId: string | null) =>
+    fetch(`/api/prompts/${section}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template, rationale, dtxsid, thread_id: threadId }),
+    }).then((r) => jsonOrThrow<{ version: number; versions: PromptVersion[] }>(r)),
+  makePromptCurrent: (section: string, version: number) =>
+    fetch(`/api/prompts/${section}/current`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version }),
+    }).then((r) => jsonOrThrow<{ current_version: number }>(r)),
+  renderPrompt: (section: string, dtxsid: string, template: string) =>
+    fetch(`/api/prompts/${section}/render`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, template }),
+    }).then((r) => jsonOrThrow<{ ok: boolean; prompt?: RenderedPrompt; error?: string }>(r)),
+  // `template` runs an unsaved edit; omit it to run the current version.
+  runPrompt: (section: string, dtxsid: string, template?: string) =>
+    fetch(`/api/prompts/${section}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(template === undefined ? { dtxsid } : { dtxsid, template }),
+    }).then((r) => jsonOrThrow<PromptRun>(r)),
+  listPromptRuns: (section: string, dtxsid: string) =>
+    fetch(`/api/prompts/${section}/runs/${encodeURIComponent(dtxsid)}`).then((r) =>
+      jsonOrThrow<{ runs: PromptRun[] }>(r)
+    ),
+  usePromptRun: (section: string, dtxsid: string, runId: string) =>
+    fetch(`/api/prompts/${section}/runs/${encodeURIComponent(dtxsid)}/${encodeURIComponent(runId)}/use`, {
+      method: "POST",
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
+  // The published text for a published study; null when there is none.
+  getPublishedSection: async (section: string, dtxsid: string) => {
+    const r = await fetch(`/api/prompts/${section}/published/${encodeURIComponent(dtxsid)}`);
+    if (r.status === 404) return null;
+    return jsonOrThrow<{ report: string; paragraphs: string[] }>(r);
+  },
+  listWorkshopThreads: (section: string) =>
+    fetch(`/api/prompts/${section}/threads`).then((r) =>
+      jsonOrThrow<{ threads: WorkshopThreadSummary[] }>(r)
+    ),
+  createWorkshopThread: (section: string) =>
+    fetch(`/api/prompts/${section}/threads`, { method: "POST" }).then((r) =>
+      jsonOrThrow<WorkshopThread>(r)
+    ),
+  getWorkshopThread: (section: string, threadId: string) =>
+    fetch(`/api/prompts/${section}/threads/${encodeURIComponent(threadId)}`).then((r) =>
+      jsonOrThrow<WorkshopThread>(r)
+    ),
+  sendWorkshopMessage: (section: string, threadId: string, body: {
+    dtxsid: string; message: string; template: string; run_id: string | null;
+  }) =>
+    fetch(`/api/prompts/${section}/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => jsonOrThrow<WorkshopTurn>(r)),
   listChatThreads: (dtxsid: string) =>
     fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads`).then((r) =>
       jsonOrThrow<{ threads: ChatThreadSummary[] }>(r)
@@ -676,13 +793,13 @@ export const api = {
   generateSummary: async (
     dtxsid: string,
     identity: Record<string, unknown>
-  ): Promise<{ paragraphs: string[]; model_used?: string }> => {
+  ): Promise<SummaryGeneration> => {
     const resp = await fetch(`/api/generate-summary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dtxsid, identity }),
     });
-    return jsonOrThrow<{ paragraphs: string[]; model_used?: string }>(resp);
+    return jsonOrThrow<SummaryGeneration>(resp);
   },
 
   // The Apical Endpoint BMD Summary, DERIVED on demand from the session's

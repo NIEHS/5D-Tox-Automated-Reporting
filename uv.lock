@@ -202,6 +202,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "javaobj-py3" },
+    { name = "jinja2" },
     { name = "kaleido" },
     { name = "lmdb" },
     { name = "networkx" },
@@ -248,6 +249,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },
     { name = "javaobj-py3", specifier = ">=0.4.4" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "kaleido", specifier = ">=1.2.0" },
     { name = "lmdb", specifier = ">=1.7.5" },
     { name = "networkx", specifier = ">=3.6.1" },
@@ -1909,7 +1911,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "ptyprocess" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [

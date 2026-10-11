@@ -120,7 +120,6 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 |--------|---------|
 | `session_store.py` | On-disk session persistence with per-section version history |
 | `server_state.py` | Shared mutable state (upload registries, pool fingerprints) |
-| `style_learning.py` | Global writing style profile learned from user edits |
 | `java/` | Pre-compiled BMDExpress 3 helper classes (`.bm2` parsing, Williams/Dunnett tests) |
 
 ---

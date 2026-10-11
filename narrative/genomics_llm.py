@@ -33,7 +33,6 @@ from common.paths import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL
 from narrative.interpret import build_genomics_interpretation
-from narrative.style_learning import load_style_profile
 from styling_export.llm_helpers import llm_generate_json_async
 
 logger = logging.getLogger(__name__)
@@ -293,18 +292,6 @@ async def generate_genomics_narrative_async(
                     exc_info=True,
                 )
 
-    # --- Load style rules for consistent voice ---
-    style_rules = ""
-    try:
-        profile = load_style_profile()
-        rules = profile.get("rules", [])
-        if rules:
-            style_rules = "\n\nApply these writing style preferences:\n" + "\n".join(
-                f"- {r['rule']}" for r in rules[:10]
-            )
-    except Exception:
-        pass  # Style learning is optional
-
     # --- Build the LLM prompt ---
     # When enrichment is available, the prompt includes pathway enrichment,
     # GO enrichment, BMD-ordered pathways, organ signatures, and per-gene
@@ -353,7 +340,7 @@ support (consensus vs single-study genes), and confidence assessment.
 
 Use passive voice, formal scientific register matching NIEHS report style.
 Do NOT include table data in the narrative — the tables are presented separately.{citation_rules}
-{style_rules}
+
 
 Return ONLY valid JSON, no markdown formatting."""
     else:
@@ -415,7 +402,7 @@ Return a JSON object with two keys:
 
 Use the passive voice and formal scientific register matching NIEHS report style.
 Do NOT include table data in the narrative — the tables are presented separately.
-{style_rules}
+
 
 Return ONLY valid JSON, no markdown formatting."""
 

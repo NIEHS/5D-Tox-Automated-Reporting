@@ -1,10 +1,9 @@
 """
-Export and style-profile routes for 5dToxReport.
+Export routes for 5dToxReport.
 
 Provides endpoints for exporting the complete NIEHS Report 10-structured
 document as an Overleaf-ready LaTeX bundle (.zip with report.tex +
-niehs.cls + figures/), plus managing the global writing style profile
-that the LLM uses to match user preferences.
+niehs.cls + figures/).
 
 The export pipeline runs:
 
@@ -13,8 +12,6 @@ The export pipeline runs:
         → build_overleaf_bundle(data, …) ← latex_export.py: zip writer
 
 Endpoints:
-  GET    /api/style-profile             — Retrieve the global style profile
-  DELETE /api/style-profile/{idx}       — Delete a style rule by index
   POST   /api/export-overleaf-bundle    — Download full report as Overleaf .zip
   POST   /api/compile-pdf               — Compile report to a preview PDF (tect)
   POST   /api/preview-latex-html        — Render a TOC subtree to preview HTML
@@ -32,9 +29,6 @@ from web_routes.dtxsid_param import Dtxsid
 from common.dtxsid import validate_dtxsid
 
 from pipeline.session_store import safe_filename
-from narrative.style_learning import (
-    load_style_profile, save_style_profile,
-)
 from web_routes.server_state import get_bm2_uploads
 from pipeline.pool_orchestrator import load_integrated
 
@@ -44,53 +38,6 @@ logger = logging.getLogger(__name__)
 # Router — mounted by background_server.py as app.include_router(...)
 # ---------------------------------------------------------------------------
 router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# GET /api/style-profile — retrieve the global style profile
-# ---------------------------------------------------------------------------
-
-@router.get("/api/style-profile")
-async def api_style_profile():
-    """
-    Return the global style profile (learned writing preferences).
-
-    Returns the full profile JSON including version, updated_at, and rules
-    array.  If no profile exists yet, returns an empty structure with zero
-    rules so the client can always expect the same shape.
-    """
-    profile = load_style_profile()
-    return JSONResponse(profile)
-
-
-# ---------------------------------------------------------------------------
-# DELETE /api/style-profile/{idx} — delete a specific style rule by index
-# ---------------------------------------------------------------------------
-
-@router.delete("/api/style-profile/{idx}")
-async def api_delete_style_rule(idx: int):
-    """
-    Delete a style rule at the given index from the global profile.
-
-    The index is 0-based and corresponds to the rule's position in the
-    rules array.  After deletion, the profile is rewritten to disk.
-
-    Returns the updated profile so the client can re-render immediately.
-    """
-    profile = load_style_profile()
-    rules = profile.get("rules", [])
-
-    if idx < 0 or idx >= len(rules):
-        return JSONResponse(
-            {"error": f"Rule index {idx} out of range (0..{len(rules) - 1})"},
-            status_code=404,
-        )
-
-    removed = rules.pop(idx)
-    save_style_profile(profile)
-    logger.info("Deleted style rule #%d: %s", idx, removed.get("rule", ""))
-
-    return JSONResponse(profile)
 
 
 # ---------------------------------------------------------------------------
