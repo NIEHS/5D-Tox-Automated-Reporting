@@ -46,15 +46,37 @@ the Bookshelf. The QC then compared the rendered reports with the published ones
 
 ## Matches with the published report (after the fixes)
 
-| report | BMD summary rows matched | LOEL/NOEL differences | GO top-10 matched | top genes matched |
-|---|---|---|---|---|
-| NIEHS-13 | 9/9 | 0 | 50/50 (0 BMD differences) | 50/50 (0 BMD or fold-change differences) |
-| NIEHS-12 | 8/11 | 0 | 50/50 | 50/50 |
-| NIEHS-10 | 10/10 | 0 | 36/40 | 40/40 |
-| NIEHS-07/08/09 | 26/27, 18/19, 16/17 | 2, 4, 2 | 32/40, 34/40, 31/39 | 40/40 each |
-| RR-8, NIEHS-02 … 06 | most | rounding only, except the items below | 2–7/10 | 0–4/10 |
+| report | BMD summary endpoints in both | **apical BMDs that agree (within 2%)** | LOEL/NOEL differences | GO top-10 matched | top genes matched |
+|---|---|---|---|---|---|
+| NIEHS-13 | 13 | **13** | 0 | 50/50 (0 BMD differences) | 50/50 (0 BMD or fold-change differences) |
+| NIEHS-12 | 16 | **15** | 0 | 50/50 | 50/50 |
+| NIEHS-10 | 10 | **4** | 0 | 36/40 | 40/40 |
+| NIEHS-09 | 16 | **3** | 2 | 31/39 | 40/40 |
+| NIEHS-08 | 18 | **3** | 4 | 34/40 | 40/40 |
+| NIEHS-07 | 26 | **3** | 2 | 32/40 | 40/40 |
+| NIEHS-06 | 8 | **1** | 0 | 2–7/10 | 0–4/10 |
+| NIEHS-05 | 7 | **2** | 0 | 2–7/10 | 0–4/10 |
+| NIEHS-04 | 7 | **1** | 0 | 2–7/10 | 0–4/10 |
+| NIEHS-03 | 4 | **0** | 0 | 2–7/10 | 0–4/10 |
+| NIEHS-02 | 6 | **2** | 0 | 2–7/10 | 0–4/10 |
+| RR-8 | 8 | **1** | 0 | 2–7/10 | 0–4/10 |
 
-Apical BMDs differ from G0–G2 as expected: those reports used modified BMDS 2.7 and we run ToxicR model averaging. That deviation is stated in each run log.
+*Corrected 2026-10-11.* This table first gave a single "BMD summary rows matched"
+column. It counted the endpoints present in both tables, not equal values, so
+"NIEHS-10: 10/10" read as a match when only 4 of those 10 BMDs agree. The QC also
+filed BMD differences for RR-8 … NIEHS-10 as information rather than errors.
+
+**Apical BMDs of RR-8 and NIEHS-02 … 10 do not reproduce the published ones: 20 of
+110 agree.** Those reports used NTP's modified EPA BMDS 2.7 with high-dose dropping
+(the `ntp-5day-2021` method profile); this tool does not implement that engine, so
+the method profile substitutes BMDExpress 3 / ToxicR model averaging (ADR-0027). The
+gaps are large — NIEHS-09 female TSH published 1.078, ours 147.4; RR-8 LDL
+cholesterol published 213, ours 638 — and several endpoints the books flag NVM or
+UREP get a BMD from us, or the reverse. The QC now reports this as two errors per
+report: `method` (the profile asks for an engine this tool lacks) and `bmd_summary`
+(every BMD more than 2% from the published). Implementing the BMDS 2.7 engine is
+planned; each of these packages carries NTP's BMDS code and a fit-by-fit parameter
+workbook to validate it against.
 
 ## Book structure against the published Bookshelf books (2026-10-09)
 

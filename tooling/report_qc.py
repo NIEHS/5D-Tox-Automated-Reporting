@@ -21,8 +21,13 @@ Checks:
                names against the project's chip and analysis records
   tables       empty tables; captions without the test article
   duplicates   paragraphs repeated verbatim
+  method       the study's pinned method profile asks for an analysis this
+               tool does not implement (e.g. the 2021 profile's modified BMDS
+               2.7 apical engine): the report cannot follow its published method
   bmd_summary  BMDL <= BMD, NOEL < LOEL; and, where the published report is
-               downloaded, its BMD/LOEL/NOEL summary compared row by row
+               downloaded, its BMD/LOEL/NOEL summary compared row by row.  A BMD
+               more than 2% from the published one is an error whatever the
+               reason — a known engine difference is stated, not excused
   bits         the BITS book against the BITS 2.0 DTD and the PMC StyleChecker,
                the book and every file of its chunked Bookshelf bundle
   structure    the BITS book's outline (parts, part types, labels, section
@@ -57,10 +62,6 @@ PUBLISHED = {
     "DTXSID00190950": "NIEHS-07", "DTXSID2029905": "NIEHS-08", "DTXSID1022477": "NIEHS-09",
     "DTXSID50469320": "NIEHS-10", "DTXSID6020430": "NIEHS-12", "DTXSID1020431": "NIEHS-13",
 }
-# Published reports whose apical BMDs came from the engine we run (BMDExpress 3
-# / ToxicR model averaging); the others used modified BMDS 2.7, so their BMD
-# values are compared for information only.
-SAME_BMD_ENGINE = {"NIEHS-12", "NIEHS-13"}
 
 
 @dataclass
@@ -409,6 +410,33 @@ def _published_bmd_summary(report: str, study_sexes: set[str],
     return []
 
 
+def _engine_deviations(dtxsid: str) -> list[str]:
+    """The apical BMD settings the study's pinned method profile asks for and
+    this tool does not implement (pipeline.method_profile substitutes the
+    default and records it), for the study or, for a report over several
+    studies, each of its members."""
+    from pipeline.method_profile import session_method
+    out: list[str] = []
+    for d in _members(dtxsid) or [dtxsid]:
+        try:
+            method = session_method(d)
+        except Exception as e:  # noqa: BLE001 — a broken pin is itself reported
+            out.append(f"{d}: method profile could not be resolved ({e})")
+            continue
+        out += [x for x in method.deviations if x.startswith("apical.bmd.") and x not in out]
+    return out
+
+
+def check_method(qc: ReportQC) -> None:
+    """The pinned method profile asks for an analysis this tool cannot run."""
+    deviations = _engine_deviations(qc.dtxsid)
+    if deviations:
+        qc.add("method", "error",
+               "the study's method profile asks for analyses this tool does not implement; the "
+               "report states results from the substitute, not from the published method",
+               deviations)
+
+
 def check_bmd_summary(qc: ReportQC, soup, sexes: set[str], by_study: bool = False) -> None:
     ours = _our_bmd_summary(soup)
     qc.stats["bmd_summary_rows"] = len(ours)
@@ -428,11 +456,12 @@ def check_bmd_summary(qc: ReportQC, soup, sexes: set[str], by_study: bool = Fals
     ours_by, pub_by = {key(r): r for r in ours}, {key(r): r for r in pub}
     missing = [f"{r['sex']} {r['endpoint']}" for k, r in pub_by.items() if k not in ours_by]
     extra = [f"{r['sex']} {r['endpoint']}" for k, r in ours_by.items() if k not in pub_by]
-    loel_diff, bmd_diff = [], []
+    loel_diff, bmd_diff, compared = [], [], []
     for k, p in pub_by.items():
         o = ours_by.get(k)
         if not o:
             continue
+        compared.append(k)
         for f in ("loel", "noel"):
             # Published G0/G1 tables print dose levels as integers (61 for 61.2)
             # and may carry a footnote letter ("441a").
@@ -445,8 +474,9 @@ def check_bmd_summary(qc: ReportQC, soup, sexes: set[str], by_study: bool = Fals
         elif (pb is None) != (ob is None):
             bmd_diff.append(f"{p['sex']} {p['endpoint']} BMD: published {p['bmd']}, ours {o['bmd']}")
     qc.stats["bmd_summary_vs_published"] = {
-        "published_rows": len(pub), "our_rows": len(ours), "matched": len(pub_by.keys() & ours_by.keys()),
-        "loel_noel_differences": len(loel_diff), "bmd_differences": len(bmd_diff)}
+        "published_rows": len(pub), "our_rows": len(ours), "rows_in_both": len(compared),
+        "bmds_agree": len(compared) - len(bmd_diff), "bmd_differences": len(bmd_diff),
+        "loel_noel_differences": len(loel_diff)}
     if missing:
         qc.add("bmd_summary", "warn", f"{len(missing)} published summary endpoint(s) not in ours", missing)
     if extra:
@@ -456,10 +486,12 @@ def check_bmd_summary(qc: ReportQC, soup, sexes: set[str], by_study: bool = Fals
         qc.add("bmd_summary", "error", f"{len(loel_diff)} LOEL/NOEL value(s) differ from the published",
                loel_diff)
     if bmd_diff:
-        same = qc.published in SAME_BMD_ENGINE
-        qc.add("bmd_summary", "error" if same else "info",
-               f"{len(bmd_diff)} BMD(s) differ from the published"
-               + ("" if same else " (published with modified BMDS 2.7; we run ToxicR model averaging)"),
+        engine = _engine_deviations(qc.dtxsid)
+        qc.add("bmd_summary", "error",
+               f"{len(bmd_diff)} of {len(compared)} published BMD(s) differ from ours by more than 2%"
+               + (" — the published report used an apical BMD engine this tool does not implement "
+                  "(see the `method` finding), so these are not the published method's BMDs"
+                  if engine else ""),
                bmd_diff)
 
 
@@ -796,6 +828,7 @@ def qc_report(dtxsid: str) -> ReportQC:
     check_platform(qc, text, integrated)
     check_tables(qc, soup, qc.name, _short_name(dtxsid))
     check_duplicates(qc, soup)
+    check_method(qc)
     check_bmd_summary(qc, soup, sexes, by_study=bool(members))
     check_go(qc, soup, sexes)
     check_top_genes(qc, soup, sexes)
@@ -835,12 +868,18 @@ def _markdown(results: list[ReportQC]) -> str:
         s = r.stats
         lines.append(f"- Title: {s.get('title', '')}")
         lines.append(f"- Design: {s.get('design')}; unit {s.get('unit')}; sexes {s.get('sexes')}")
-        if s.get("bmd_summary_vs_published"):
-            lines.append(f"- BMD summary vs published: {s['bmd_summary_vs_published']}")
-        if s.get("go_vs_published"):
-            lines.append(f"- GO top-10 vs published: {s['go_vs_published']}")
-        if s.get("top_genes_vs_published"):
-            lines.append(f"- Top genes vs published: {s['top_genes_vs_published']}")
+        if b := s.get("bmd_summary_vs_published"):
+            lines.append(
+                f"- BMD summary vs published: {b['published_rows']} published rows, {b['our_rows']} in "
+                f"ours, {b['rows_in_both']} in both; **BMDs agree (within 2%): {b['bmds_agree']} of "
+                f"{b['rows_in_both']}**; LOEL/NOEL differences: {b['loel_noel_differences']}")
+        if g := s.get("go_vs_published"):
+            lines.append(f"- GO top-10 vs published: {g['matched']} of {g['published_rows']} published "
+                         f"gene sets in ours; BMD differences among them: {g['bmd_differences']}")
+        if t := s.get("top_genes_vs_published"):
+            lines.append(f"- Top genes vs published: {t['matched']} of {t['published_rows']} published "
+                         f"genes in ours; BMD differences {t['bmd_differences']}, fold-change "
+                         f"differences {t['fold_change_differences']}")
         if s.get("chips"):
             lines.append(f"- Chip: {s['chips']}; BMDExpress {s.get('bmdexpress_versions')}")
         for f in sorted(r.findings, key=lambda f: (sev_order[f.severity], f.check)):
