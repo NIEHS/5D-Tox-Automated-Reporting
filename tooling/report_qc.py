@@ -132,6 +132,12 @@ def _design(integrated: dict, unit: str | None) -> dict:
     return study_design_facts(integrated, unit)
 
 
+def _members(dtxsid: str) -> list[str]:
+    """A report over several studies' member sessions (studies.json), else []."""
+    p = REPO_ROOT / "sessions" / dtxsid / "studies.json"
+    return list(json.loads(p.read_text()).values()) if p.exists() else []
+
+
 def _sexes(dtxsid: str) -> set[str]:
     sexes = set()
     for p in glob.glob(str(REPO_ROOT / "sessions" / dtxsid / "files" / "*.sidecar.json")):
@@ -341,6 +347,9 @@ def _norm_endpoint(s: str) -> str:
     return " ".join(sorted(words))
 
 
+_GROUPS = ("Male", "Female", "Rats", "Mice")      # sexes; a composed report's studies
+
+
 def _our_bmd_summary(soup) -> list[dict]:
     for t in soup.find_all("table"):
         cap = t.find("caption")
@@ -348,17 +357,19 @@ def _our_bmd_summary(soup) -> list[dict]:
             rows = []
             for tr in t.find_all("tr"):
                 cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
-                if len(cells) >= 7 and cells[0] in ("Male", "Female"):
+                if len(cells) >= 7 and cells[0].split()[-1:] and cells[0].split()[-1] in _GROUPS:
                     rows.append(dict(zip(("sex", "endpoint", "bmd", "bmdl", "loel", "noel",
                                           "direction"), cells[:7])))
             return rows
     return []
 
 
-def _published_bmd_summary(report: str, study_sexes: set[str]) -> list[dict]:
-    """The published report's BMD/LOEL/NOEL summary rows for its RAT study,
-    columns mapped by header (layouts differ by era: RR-8 leads with a table
-    number and puts NOEL first)."""
+def _published_bmd_summary(report: str, study_sexes: set[str],
+                           by_study: bool = False) -> list[dict]:
+    """The published report's BMD/LOEL/NOEL summary rows for its RAT study —
+    or, ``by_study`` (a report over several studies), every study's, under the
+    study's title ("Rats" / "Mice") — columns mapped by header (layouts differ
+    by era: RR-8 leads with a table number and puts NOEL first)."""
     one_sex = next(iter(study_sexes)).title() if len(study_sexes) == 1 else None
     for p in sorted(glob.glob(str(BOOKSHELF / report / "breakdown" / "tables" / "*.json"))):
         t = json.load(open(p))
@@ -390,14 +401,15 @@ def _published_bmd_summary(report: str, study_sexes: set[str]) -> list[dict]:
                 elif head in ("rat", "mice", "mouse"):
                     species = "rats" if head == "rat" else "mice"
                 continue
-            if species != "rats" or "endpoint" not in col:
+            if (species != "rats" and not by_study) or "endpoint" not in col:
                 continue
-            rows.append({"sex": sex, **{k: (cells[i] if i < len(cells) else "") for k, i in col.items()}})
+            group = species.title() if by_study else sex
+            rows.append({"sex": group, **{k: (cells[i] if i < len(cells) else "") for k, i in col.items()}})
         return rows
     return []
 
 
-def check_bmd_summary(qc: ReportQC, soup, sexes: set[str]) -> None:
+def check_bmd_summary(qc: ReportQC, soup, sexes: set[str], by_study: bool = False) -> None:
     ours = _our_bmd_summary(soup)
     qc.stats["bmd_summary_rows"] = len(ours)
     for r in ours:
@@ -408,7 +420,7 @@ def check_bmd_summary(qc: ReportQC, soup, sexes: set[str]) -> None:
             qc.add("bmd_summary", "error", f"NOEL >= LOEL: {r['sex']} {r['endpoint']} ({noel} >= {loel})")
     if not qc.published:
         return
-    pub = _published_bmd_summary(qc.published, sexes)
+    pub = _published_bmd_summary(qc.published, sexes, by_study)
     if not pub:
         qc.add("bmd_summary", "info", f"no published BMD summary table found for {qc.published}")
         return
@@ -766,6 +778,12 @@ def qc_report(dtxsid: str) -> ReportQC:
     unit = "ppm" if "Inhalation" in title or "Respiratory" in title else unit
     design = _design(integrated, unit)
     sexes = _sexes(dtxsid)
+    members = _members(dtxsid)
+    if members:
+        # A report over several studies: their design together, their sexes.
+        from rendering.report_compose import composed_design
+        design = composed_design([_design(_integrated(m), unit) for m in members])
+        sexes = set().union(*(_sexes(m) for m in members))
     qc.stats.update({"title": title, "unit": unit, "sexes": sorted(sexes),
                      "design": {k: design.get(k) for k in ("species", "strain", "route", "vehicle",
                                                            "duration_days", "fallback")},
@@ -778,7 +796,7 @@ def qc_report(dtxsid: str) -> ReportQC:
     check_platform(qc, text, integrated)
     check_tables(qc, soup, qc.name, _short_name(dtxsid))
     check_duplicates(qc, soup)
-    check_bmd_summary(qc, soup, sexes)
+    check_bmd_summary(qc, soup, sexes, by_study=bool(members))
     check_go(qc, soup, sexes)
     check_top_genes(qc, soup, sexes)
     check_bits(qc, out / f"{dtxsid}.xml")

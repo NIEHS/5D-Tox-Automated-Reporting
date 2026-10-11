@@ -110,8 +110,9 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
     if counts:
         data["sample_counts"] = counts
     if not (data.get("summary") or {}).get("paragraphs"):
-        data["summary"] = {"paragraphs": [p for s in studies
-                                          for p in (s["data"].get("summary") or {}).get("paragraphs") or []]}
+        # Each study's, a paragraph the studies share stated once.
+        paragraphs = [p for s in studies for p in (s["data"].get("summary") or {}).get("paragraphs") or []]
+        data["summary"] = {"paragraphs": list(dict.fromkeys(paragraphs))}
     _merge_abstract(data, studies)
     return True
 

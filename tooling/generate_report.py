@@ -293,6 +293,28 @@ def apply_front_matter(dtxsid: str, path: Path, store) -> None:
     _log(f"  front matter recorded: {sorted(given)}")
 
 
+def record_studies(dtxsid: str, studies: list[str], args, store) -> None:
+    """Record a report's member studies (studies.json, rendering.report_compose)
+    and the test article it names (identity.json, from --name / --casrn)."""
+    from common.dtxsid import validate_dtxsid
+    from rendering.report_compose import STUDIES_FILE
+
+    members = {}
+    for item in studies:
+        key, sep, member = item.partition("=")
+        if not sep or not key or not member:
+            raise SystemExit(f"--studies: expected KEY=SESSION, got {item!r}")
+        member = validate_dtxsid(member)
+        if not store.artifact_exists(member, "integrated.json"):
+            raise SystemExit(f"--studies: {member} has no integrated study — build it first")
+        members[key] = member
+    store.write_json(dtxsid, STUDIES_FILE, members)
+    identity = {k: v for k, v in (("name", args.name), ("casrn", args.casrn)) if v}
+    if identity:
+        store.write_json(dtxsid, "identity.json", identity)
+    _log(f"  studies: {', '.join(f'{k}={v}' for k, v in members.items())}")
+
+
 def integrate(dtxsid: str, identity: dict, store) -> None:
     from workflow.steps import integrate_step
 
@@ -536,6 +558,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                     help="stop after this pipeline step (no render)")
     ap.add_argument("--render-only", action="store_true",
                     help="skip the pipeline; just render the session as it is on disk")
+    ap.add_argument("--studies", nargs="+", metavar="KEY=SESSION",
+                    help="a report over several studies (ADR-0029 §9): its member study "
+                         "sessions in the report's order, e.g. rat=DTXSID1020431_rat "
+                         "mouse=DTXSID1020431_mouse, each built on its own first.  Recorded "
+                         "as the session's studies.json; the report renders from them "
+                         "(implies --render-only)")
     ap.add_argument("--surfaces", default="docx,html",
                     help=f"comma list from {','.join(SURFACE_SUFFIX)} (default: docx,html)")
     ap.add_argument("--view", help="report view to render (default: the default view)")
@@ -584,6 +612,9 @@ def main(argv: list[str] | None = None) -> int:
     _log(f"session: {store.session_dir(dtxsid)}")
     if front_matter:
         apply_front_matter(dtxsid, front_matter, store)
+    if args.studies:
+        record_studies(dtxsid, args.studies, args, store)
+        args.render_only = True
     if deposit:
         from pipeline.deposit import record_deposit
         manifest = record_deposit(dtxsid, deposit, tuple(args.deposit_exclude))
