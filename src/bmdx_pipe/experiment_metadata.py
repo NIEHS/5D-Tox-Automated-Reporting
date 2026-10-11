@@ -76,7 +76,8 @@ VOCABULARIES = {
     ],
     "strain": {
         "rat": ["Sprague-Dawley", "Wistar", "Long-Evans", "Fischer 344", "Brown Norway"],
-        "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID"],
+        "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID",
+                  "B6C3F1", "B6D2F1"],
     },
     "platform": [
         # Apical platforms — in vivo tox study endpoint classes
@@ -86,7 +87,7 @@ VOCABULARIES = {
         "Clinical",
         "IVIVE", "Generic",
         # Genomics platforms
-        "S1500+_rat", "S1500+_human",
+        "S1500+_rat", "S1500+_mouse", "S1500+_human",
         "Affymetrix Drosophila Genome Array", "Drosophila Genome 2.0 Array",
         "Human HG-Focus Target Array", "Human Genome U133A Array",
         "Human Genome U133 Plus 2.0 Array", "Human Genome U133A 2.0 Array",

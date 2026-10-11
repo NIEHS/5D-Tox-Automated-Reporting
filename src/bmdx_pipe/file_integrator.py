@@ -248,7 +248,8 @@ _VOCAB = {
     ],
     "strains": {
         "rat": ["Sprague-Dawley", "Wistar", "Long-Evans", "Fischer 344", "Brown Norway"],
-        "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID"],
+        "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID",
+                  "B6C3F1", "B6D2F1"],
     },
     "sexes": ["male", "female", "both", "mixed", "NA"],
     "organs": [
