@@ -809,3 +809,34 @@ button.danger { color: var(--err); }
 .workshop-batch-tab.flagged .mark { color: var(--warn); }
 .workshop-batch-tab.error .mark { color: var(--err); }
 .workshop-batch-tab.active { border-color: var(--accent); background: rgba(56,189,248,0.12); }
+
+/* Model comparison (steps/ModelComparison.tsx) */
+.compare-config { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; }
+.compare-models input[type="text"], .compare-models .workshop-toolbar input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.2rem 0.4rem; font: inherit; }
+.compare-list { max-height: 15rem; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; background: var(--bg); display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.4rem 1rem; align-items: start; font-size: 0.85rem; }
+.compare-list label { display: block; cursor: pointer; }
+.compare-list label.disabled { color: var(--muted); opacity: 0.55; cursor: not-allowed; }
+.compare-cat { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0.2rem 0; }
+.compare-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+.compare-too-many, .compare-err { color: var(--err); }
+.compare-side { display: flex; flex-direction: column; gap: 0.6rem; }
+.compare-side input, .compare-side select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 0.4rem; font: inherit; }
+.compare-side input[type="number"] { width: 4rem; }
+.compare-side p { margin: 0; font-size: 0.8rem; }
+.compare-progress { font-size: 0.85rem; max-height: 10rem; overflow-y: auto; }
+.compare-history { margin-top: 0.9rem; border-top: 1px solid var(--border); padding-top: 0.7rem; }
+.compare-history select { max-width: 100%; }
+.compare-view { margin-top: 0.4rem; }
+.compare-review { margin: 0.6rem 0; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-2); }
+.compare-review h4 { margin: 0 0 0.4rem; }
+.compare-review h5 { margin: 0.7rem 0 0.2rem; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.compare-review ul { margin: 0.2rem 0 0 1.1rem; padding: 0; }
+.compare-rec { border-left: 3px solid var(--ok); padding: 0.3rem 0.6rem; margin: 0.4rem 0; }
+.compare-rec button { margin-top: 0.4rem; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.compare-table th, .compare-table td { border-top: 1px solid var(--border); padding: 0.3rem 0.4rem; text-align: left; vertical-align: top; }
+.compare-tabs { margin: 0.6rem 0; }
+.workshop-batch-tab.recommended { border-color: var(--ok); }
+.compare-recommended { outline: 2px solid var(--ok); outline-offset: 4px; border-radius: 4px; }
+.compare-prompt { margin-top: 0.6rem; }
+@media (max-width: 1100px) { .compare-config { grid-template-columns: 1fr; } }

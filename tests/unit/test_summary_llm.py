@@ -76,11 +76,22 @@ def test_unsaved_template_and_object_reply(session, monkeypatch):
     seen = []
     monkeypatch.setattr(summary_llm, "llm_generate_json_async",
                         _fake_model({"paragraphs": ["A."]}, seen))
-    text = "---\nsystem: S\nmodel: m-1\ntemperature: 0\n---\nFacts: {{ draft_paragraphs|length }}"
+    text = ("---\nsystem: S\nmodel: claude-haiku-4.5\ntemperature: 0\n---\n"
+            "Facts: {{ draft_paragraphs|length }}")
     run = asyncio.run(summary_llm.generate_summary(session, text=text))
     assert run["template_version"] is None and run["paragraphs"] == ["A."]
-    assert seen[0]["model"] == "m-1" and seen[0]["temperature"] == 0.0
+    assert seen[0]["model"] == "claude-haiku-4.5" and seen[0]["temperature"] == 0.0
+    assert seen[0]["no_cache"] is True
     assert run["prompt"]["user"].startswith("Facts: ")
+
+
+def test_unpublished_data_never_reaches_a_model_off_the_list(session, monkeypatch):
+    from narrative.model_policy import ModelNotAllowed
+    seen = []
+    monkeypatch.setattr(summary_llm, "llm_generate_json_async", _fake_model(["A."], seen))
+    with pytest.raises(ModelNotAllowed):
+        asyncio.run(summary_llm.generate_summary(session, model="gemini-2.5-pro"))
+    assert seen == []
 
 
 def test_no_results_is_a_template_error(sessions_dir, monkeypatch):

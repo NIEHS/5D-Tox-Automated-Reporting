@@ -182,9 +182,14 @@ def _check(proposed: str | None, variables: dict) -> str | None:
 async def workshop_turn(section: str, *, message: str, template: str, variables: dict,
                         run: dict | None = None, previous_run: dict | None = None,
                         published: dict | None = None, history: list[dict] | None = None,
-                        model: str = WORKSHOP_MODEL) -> dict:
-    """One workshop turn: {reply, proposed_template, rationale, render_error}."""
+                        model: str = WORKSHOP_MODEL, dtxsid: str | None = None) -> dict:
+    """One workshop turn: {reply, proposed_template, rationale, render_error}.
+    `dtxsid` is the study whose output is discussed: the model must be one
+    narrative.model_policy allows for its data."""
     prompt_templates.validate_section(section)
+    if dtxsid:
+        from narrative import model_policy
+        model_policy.check(dtxsid, [model])
     user = build_prompt(section, template=template, run=run, previous_run=previous_run,
                         published=published, history=history or [], message=message)
     result = await llm_generate_json_async("prompt-workshop", user, _SYSTEM,

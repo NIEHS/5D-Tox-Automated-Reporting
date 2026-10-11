@@ -117,26 +117,32 @@ async def api_models():
     Never raises — on any proxy failure it returns a small static fallback with
     degraded=True so the UI modal always opens.
     """
+    loop = asyncio.get_running_loop()
+    return JSONResponse(await loop.run_in_executor(None, model_catalog))
+
+
+def model_catalog() -> dict:
+    """The proxy's chat-capable models by provider: {categories, degraded}
+    (blocking; the static fallback with degraded=True on any failure)."""
     base_url = os.environ.get("ANTHROPIC_BASE_URL", "").rstrip("/")
     api_key = resolve_anthropic_api_key()
     ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE")
 
     if not base_url or not api_key:
-        return JSONResponse({"categories": _FALLBACK_CATEGORIES, "degraded": True})
+        return {"categories": _FALLBACK_CATEGORIES, "degraded": True}
 
     try:
-        loop = asyncio.get_running_loop()
-        resp = await loop.run_in_executor(None, lambda: requests.get(
+        resp = requests.get(
             f"{base_url}/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=15,
             verify=ca_bundle or True,
-        ))
+        )
         resp.raise_for_status()
         ids = [m["id"] for m in resp.json().get("data", []) if m.get("id")]
     except (requests.RequestException, ValueError, KeyError) as e:
         logger.warning("Failed to fetch proxy /v1/models: %s", e)
-        return JSONResponse({"categories": _FALLBACK_CATEGORIES, "degraded": True})
+        return {"categories": _FALLBACK_CATEGORIES, "degraded": True}
 
     grouped: dict[str, list[str]] = {}
     for mid in sorted(ids):
@@ -153,7 +159,7 @@ async def api_models():
         {"name": name, "models": grouped[name]}
         for name in order if name in grouped
     ]
-    return JSONResponse({"categories": categories, "degraded": False})
+    return {"categories": categories, "degraded": False}
 
 
 # ---------------------------------------------------------------------------

@@ -215,7 +215,10 @@ class AnthropicEndpoint:
         return resolve_model_name(self.model)
 
     def generate(self, prompt: str, system: str = "",
-                 temperature: float | None = None) -> str:
+                 temperature: float | None = None, no_cache: bool = False) -> str:
+        """`no_cache` asks the LiteLLM proxy for a fresh completion: it caches
+        responses, so an identical request otherwise returns the same text —
+        which defeats running one prompt several times to see how it varies."""
         temp = temperature if temperature is not None else self.temperature
         client = build_anthropic_client()
         messages = [{"role": "user", "content": prompt}]
@@ -227,6 +230,8 @@ class AnthropicEndpoint:
         }
         if system:
             kwargs["system"] = system
+        if no_cache and using_proxy():
+            kwargs["extra_body"] = {"cache": {"no-cache": True}}
         try:
             response = client.messages.create(**kwargs)
         except Exception as e:

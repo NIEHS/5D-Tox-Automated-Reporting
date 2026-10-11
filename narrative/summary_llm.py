@@ -169,22 +169,34 @@ def render_for_session(dtxsid: str, text: str | None = None) -> tuple[RenderedPr
 
 
 async def generate_summary(dtxsid: str, *, text: str | None = None,
-                           version: int | None = None, batch_id: str | None = None) -> dict:
+                           version: int | None = None, batch_id: str | None = None,
+                           model: str | None = None, comparison_id: str | None = None,
+                           repetition: int | None = None) -> dict:
     """Generate the Summary for a session and save the run; return the run
     record. `text` runs an unsaved edit; `version` a saved version; neither,
-    the current version. `batch_id` marks one run of a template tried on
-    several studies at once. Raises TemplateError (template) or the model
-    call's exception."""
+    the current version. `model` overrides the template's model (a model
+    comparison); `batch_id` / `comparison_id` + `repetition` mark the run as
+    part of a run on all studies or of a model comparison. Every generation
+    is a fresh sample — the gateway's response cache is bypassed — so running
+    the same prompt again shows how much it varies.
+
+    Raises TemplateError (template), model_policy.ModelNotAllowed (the model
+    may not receive this study's data), or the model call's exception."""
+    from narrative import model_policy
+
     if text is None:
         text, version = prompt_templates.template_text(SECTION, version)
         label = version
     else:
         label = None  # an unsaved edit
     rendered, variables = render_for_session(dtxsid, text)
+    if model:
+        rendered.model = model
+    model_policy.check(dtxsid, [rendered.model])
     result = await llm_generate_json_async(
         "summary-generator", rendered.user, rendered.system,
         model=rendered.model, temperature=rendered.temperature,
-        max_tokens=rendered.max_tokens,
+        max_tokens=rendered.max_tokens, no_cache=True,
     )
     if isinstance(result, dict):  # {"paragraphs": [...]} is accepted too
         result = result.get("paragraphs", [])
@@ -200,6 +212,8 @@ async def generate_summary(dtxsid: str, *, text: str | None = None,
         "paragraphs": paragraphs,
         "unmatched_numbers": unmatched_numbers(paragraphs, variables),
         "batch_id": batch_id,
+        "comparison_id": comparison_id,
+        "repetition": repetition,
     }
     return prompt_store.save_run(dtxsid, SECTION, record)
 

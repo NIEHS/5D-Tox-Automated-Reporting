@@ -12,6 +12,11 @@ unpublished study's output must never reach git):
   <DTXSID>/narrative_runs/<section>/<run_id>.json
                                          one generation: the exact prompt sent,
                                          the template version, the output
+  <DTXSID>/narrative_comparisons/<section>/c001.json …
+                                         a model comparison: which models ran
+                                         how many times, their runs, and the
+                                         arbiter's review; numbered per study,
+                                         never rewritten once complete
 
 Version 1 of every section is the shipped default (narrative/prompts/<section>.md);
 it is never copied here. The current version is the `current` of the LAST index
@@ -39,6 +44,7 @@ __all__ = [
     "UnknownVersion", "section_dir", "versions", "current_version",
     "read_version_file", "save_version", "make_current",
     "save_run", "load_run", "list_runs",
+    "new_comparison", "save_comparison", "load_comparison", "list_comparisons",
     "new_thread", "load_thread", "save_thread", "list_threads",
 ]
 
@@ -183,6 +189,68 @@ def list_runs(dtxsid: str, section: str, limit: int = 50) -> list[dict]:
             out.append(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             continue
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Model comparisons — per session, numbered c001, c002, …
+# ---------------------------------------------------------------------------
+
+COMPARISON_ID_RE = re.compile(r"^c\d{3,6}$")
+
+
+def _comparisons_dir(dtxsid: str, section: str) -> Path:
+    d = session_dir(dtxsid) / "narrative_comparisons" / section
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def new_comparison(dtxsid: str, section: str, record: dict) -> dict:
+    """Start a comparison: the next number for this study; status "running"."""
+    d = _comparisons_dir(dtxsid, section)
+    taken = [int(p.stem[1:]) for p in d.glob("c*.json") if COMPARISON_ID_RE.match(p.stem)]
+    n = max(taken, default=0) + 1
+    record = {**record, "comparison_id": f"c{n:03d}", "number": n, "at": now_iso(),
+              "status": "running"}
+    _atomic_write_json(d / f"c{n:03d}.json", record)
+    return record
+
+
+def save_comparison(dtxsid: str, section: str, record: dict) -> None:
+    """Update a comparison while it runs. A complete or failed one is final."""
+    path = _comparisons_dir(dtxsid, section) / f"{record['comparison_id']}.json"
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        stored = {}
+    if stored.get("status") in ("complete", "failed"):
+        raise ValueError(f"comparison {record['comparison_id']} is final")
+    _atomic_write_json(path, record)
+
+
+def load_comparison(dtxsid: str, section: str, comparison_id: str) -> dict | None:
+    if not COMPARISON_ID_RE.match(comparison_id or ""):
+        return None
+    p = _comparisons_dir(dtxsid, section) / f"{comparison_id}.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+    except (OSError, ValueError):
+        return None
+
+
+def list_comparisons(dtxsid: str, section: str) -> list[dict]:
+    """Summaries of the study's comparisons, newest first."""
+    out = []
+    for p in _comparisons_dir(dtxsid, section).glob("c*.json"):
+        try:
+            c = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append({k: c.get(k) for k in ("comparison_id", "number", "at", "status",
+                                          "template_version", "generators", "repetitions",
+                                          "arbiter_model")})
+        out[-1]["recommended_model"] = ((c.get("review") or {}).get("recommendation") or {}).get("model")
+    out.sort(key=lambda c: c["number"] or 0, reverse=True)
     return out
 
 

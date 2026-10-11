@@ -221,6 +221,58 @@ export interface WorkshopTurn {
   thread: WorkshopThread;
 }
 
+// --- Model comparison (narrative/narrative_compare.py) ---
+export interface CompareModelChoice { id: string; allowed: boolean }
+export interface CompareModels {
+  categories: { name: string; models: CompareModelChoice[] }[];
+  degraded: boolean;
+  published: boolean;
+  unpublished_allowed: string[];
+  max_generators: number;
+  max_repetitions: number;
+  template_model: string;
+}
+export interface ComparisonOutput {
+  model: string;
+  repetition: number;
+  run_id: string | null;
+  paragraphs: string[];
+  unmatched_numbers: string[];
+  error: string | null;
+}
+export interface ComparisonReview {
+  overview?: string;
+  agreements?: string[];
+  differences?: { topic?: string; detail?: string; drafts?: string[] }[];
+  fact_problems?: { draft?: string; problem?: string }[];
+  generators?: { generator?: string; consistency?: string; strengths?: string; weaknesses?: string }[];
+  recommendation?: { draft?: string; reasons?: string; model?: string; repetition?: number;
+                     run_id?: string; unknown_draft?: boolean };
+}
+export interface ComparisonSummary {
+  comparison_id: string;
+  number: number;
+  at: string;
+  status: "running" | "complete" | "failed";
+  template_version: number | null;
+  generators: string[];
+  repetitions: number;
+  arbiter_model: string;
+  recommended_model?: string | null;
+}
+export interface Comparison extends ComparisonSummary {
+  dtxsid: string;
+  template: string;
+  outputs: ComparisonOutput[];
+  review: ComparisonReview | null;
+  review_error?: string;
+  completed_at?: string;
+  blinding?: { generators: Record<string, string>;
+               drafts: Record<string, { model: string; repetition: number; run_id: string }> };
+  arbiter_prompt?: { system: string; user: string; model: string };
+}
+export interface ComparisonEvent { event: string; data: Record<string, any> }
+
 export interface DocEntry {
   id?: string;
   type?: string;
@@ -597,6 +649,74 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then((r) => jsonOrThrow<WorkshopTurn>(r)),
+  // --- Model comparison ---
+  getCompareModels: (section: string, dtxsid: string) =>
+    fetch(`/api/prompts/${section}/models/${encodeURIComponent(dtxsid)}`).then((r) =>
+      jsonOrThrow<CompareModels>(r)
+    ),
+  listComparisons: (section: string, dtxsid: string) =>
+    fetch(`/api/prompts/${section}/comparisons/${encodeURIComponent(dtxsid)}`).then((r) =>
+      jsonOrThrow<{ comparisons: ComparisonSummary[] }>(r)
+    ),
+  getComparison: (section: string, dtxsid: string, id: string) =>
+    fetch(`/api/prompts/${section}/comparisons/${encodeURIComponent(dtxsid)}/${encodeURIComponent(id)}`).then(
+      (r) => jsonOrThrow<Comparison>(r)
+    ),
+  // Runs the comparison; progress events (started / output / arbiter) go to
+  // onEvent, and the promise resolves with the archived record (`complete`).
+  runComparison: async (
+    section: string,
+    body: { dtxsid: string; generators: string[]; repetitions: number; arbiter: string; template?: string },
+    onEvent?: (ev: ComparisonEvent) => void
+  ): Promise<Comparison> => {
+    const resp = await fetch(`/api/prompts/${section}/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok || !resp.body) {
+      let detail = `comparison request failed (${resp.status})`;
+      try {
+        const j = await resp.json();
+        detail = j.error ?? j.detail ?? detail;
+      } catch {
+        /* keep default */
+      }
+      throw new Error(detail);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result: Comparison | null = null;
+    let errored: string | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        let ev = "message";
+        let data = "";
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        let parsed: Record<string, any> = {};
+        try {
+          parsed = data ? JSON.parse(data) : {};
+        } catch {
+          parsed = {};
+        }
+        if (ev === "complete") result = parsed as Comparison;
+        else if (ev === "error") errored = parsed.error ?? data;
+        else onEvent?.({ event: ev, data: parsed });
+      }
+    }
+    if (errored) throw new Error(errored);
+    if (!result) throw new Error("the comparison ended without a result");
+    return result;
+  },
   listChatThreads: (dtxsid: string) =>
     fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads`).then((r) =>
       jsonOrThrow<{ threads: ChatThreadSummary[] }>(r)

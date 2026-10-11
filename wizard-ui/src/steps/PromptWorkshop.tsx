@@ -9,6 +9,7 @@ import {
   WorkshopMessage,
   WorkshopThreadSummary,
 } from "../api";
+import { ModelComparison } from "./ModelComparison";
 import { ErrorBox, Spinner, StepProps, WarningBox } from "./shared";
 
 // Prompt workshop: tune how a model-written section is generated. The section's
@@ -242,6 +243,20 @@ export function PromptWorkshop({ dtxsid }: StepProps) {
         onRun={doRun}
         onUse={useRun}
       />
+
+      {study && (
+        <ModelComparison
+          section={SECTION}
+          study={study}
+          template={dirty ? editor : undefined}
+          templateLabel={dirty ? "the edited template" : `version ${base?.version ?? 1}`}
+          onUse={async (runId) => {
+            await api.usePromptRun(SECTION, study, runId);
+            setNotice("Saved as the report's Summary (unapproved). Review and approve it in Sections.");
+            await loadRuns();
+          }}
+        />
+      )}
 
       <div className="workshop-lower">
         <section className="workshop-panel">

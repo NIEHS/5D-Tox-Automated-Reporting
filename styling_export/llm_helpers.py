@@ -59,6 +59,7 @@ def llm_generate_json(
     model: str = "claude-sonnet-4-6",
     max_tokens: int = 8192,
     temperature: float = 0.2,
+    no_cache: bool = False,
 ) -> Any:
     """
     Synchronous helper: call Claude → strip markdown fences → parse JSON.
@@ -75,6 +76,7 @@ def llm_generate_json(
         model:       Claude model ID (default: claude-sonnet-4-6).
         max_tokens:  Max tokens for the response.
         temperature: Sampling temperature.
+        no_cache:    Ask the proxy for a fresh completion, not a cached one.
 
     Returns:
         Parsed JSON (dict or list) from the LLM response.
@@ -94,7 +96,7 @@ def llm_generate_json(
         max_tokens=max_tokens,
         temperature=temperature,
     )
-    response = endpoint.generate(prompt, system=system)
+    response = endpoint.generate(prompt, system=system, no_cache=no_cache)
     if not response:
         raise ValueError(f"LLM '{name}' returned empty response")
     try:
@@ -103,7 +105,7 @@ def llm_generate_json(
         logger.warning("LLM '%s' returned invalid JSON (%s) — retrying once", name, e)
         retry = (f"{prompt}\n\nYour previous reply was not valid JSON ({e}). Reply again "
                  "with ONLY the JSON object — escape every double quote inside strings.")
-        response = endpoint.generate(retry, system=system)
+        response = endpoint.generate(retry, system=system, no_cache=no_cache)
         if not response:
             raise ValueError(f"LLM '{name}' returned empty response") from e
         return json.loads(strip_markdown_fences(response))

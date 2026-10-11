@@ -19,7 +19,7 @@ class _Endpoint:
     def __call__(self, **kwargs):
         return self
 
-    def generate(self, prompt, system=None):
+    def generate(self, prompt, system=None, no_cache=False):
         self.prompts.append(prompt)
         return self.replies.pop(0)
 

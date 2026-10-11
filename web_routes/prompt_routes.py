@@ -14,6 +14,11 @@ Routes (`{section}` is a registered template section — "summary" for now):
   POST /api/prompts/{section}/runs/{dtxsid}/{run_id}/use   save that run's text as the section
   GET  /api/prompts/{section}/studies                 the studies a prompt can be tested on
   GET  /api/prompts/{section}/published/{dtxsid}      the published text, or 404
+  GET  /api/prompts/{section}/models/{dtxsid}         the models, each marked allowed or not for the study's data
+  POST /api/prompts/{section}/compare                 {dtxsid, generators, repetitions, arbiter, template? | version?};
+                                                      streams SSE: started, output…, arbiter, complete
+  GET  /api/prompts/{section}/comparisons/{dtxsid}    the study's comparisons, newest first
+  GET  /api/prompts/{section}/comparisons/{dtxsid}/{id}  one archived comparison
   GET  /api/prompts/{section}/threads                 workshop threads
   POST /api/prompts/{section}/threads                 new thread
   GET  /api/prompts/{section}/threads/{id}            one thread
@@ -26,14 +31,18 @@ persistence in pipeline.prompt_store.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import re
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from common.dtxsid import validate_dtxsid
-from narrative import prompt_templates, prompt_workshop, summary_llm
+from narrative import model_policy, narrative_compare, prompt_templates, prompt_workshop, summary_llm
+from narrative.model_policy import ModelNotAllowed
+from narrative.narrative_compare import ComparisonError
 from narrative.prompt_templates import TemplateError, UnknownSection
 from pipeline import prompt_store
 from pipeline.prompt_store import InvalidThreadId, UnknownVersion
@@ -95,6 +104,10 @@ def _guard(fn):
             return _err(str(e), 400)
         except TemplateError as e:
             return _err(str(e), 422)
+        except ModelNotAllowed as e:
+            return _err(str(e), 403)
+        except ComparisonError as e:
+            return _err(str(e), 400)
     return wrapper
 
 
@@ -182,7 +195,7 @@ async def api_prompt_run(section: str, request: Request):
         record = await _GENERATORS[section].generate(
             dtxsid, text=text, version=int(version) if version is not None else None,
             batch_id=batch_id)
-    except (TemplateError, UnknownVersion):
+    except (TemplateError, UnknownVersion, ModelNotAllowed):
         raise
     except Exception as e:
         logger.exception("prompt run failed for %s/%s", section, dtxsid)
@@ -232,6 +245,115 @@ async def api_prompt_published(section: str, dtxsid: Dtxsid):
     if published is None:
         return _err("no published text for this study", 404)
     return JSONResponse(published)
+
+
+# Ids the gateway serves that cannot write prose (speech, images, embeddings…).
+_NOT_PROSE = re.compile(r"tts|transcribe|whisper|realtime|audio|image|embed|ocr|deep-research", re.I)
+
+
+@router.get("/api/prompts/{section}/models/{dtxsid}")
+@_guard
+async def api_prompt_models(section: str, dtxsid: Dtxsid):
+    """The gateway's prose models grouped by provider, each marked whether the
+    model policy allows it this study's data."""
+    from web_routes.llm_routes import model_catalog
+    _section(section)
+    catalog = await asyncio.get_running_loop().run_in_executor(None, model_catalog)
+    published = model_policy.is_published(dtxsid)
+    categories = [
+        {"name": c["name"], "models": [
+            {"id": m, "allowed": model_policy.allowed(dtxsid, m, published=published)}
+            for m in c["models"] if not _NOT_PROSE.search(m)]}
+        for c in catalog["categories"]]
+    return JSONResponse({"categories": [c for c in categories if c["models"]],
+                         "degraded": catalog["degraded"], "published": published,
+                         "unpublished_allowed": model_policy.patterns(),
+                         "max_generators": narrative_compare.MAX_GENERATORS,
+                         "max_repetitions": narrative_compare.MAX_REPETITIONS,
+                         "template_model": prompt_templates.parse(
+                             prompt_templates.template_text(section)[0])[0].get("model")
+                         or prompt_templates.DEFAULT_MODEL})
+
+
+_RUNNING: set[asyncio.Task] = set()
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/api/prompts/{section}/compare")
+@_guard
+async def api_prompt_compare(section: str, request: Request):
+    """Run a model comparison, streaming progress. Everything is checked
+    before the stream starts (models, policy, counts, the template), so a
+    refusal is an ordinary 4xx; once it streams, the comparison is archived."""
+    _section(section)
+    body = await _body(request)
+    dtxsid = validate_dtxsid(str(body.get("dtxsid") or ""))
+    generators = body.get("generators") or []
+    if not isinstance(generators, list):
+        return _err("generators must be a list of model ids", 400)
+    try:
+        repetitions = int(body.get("repetitions") or 1)
+    except (TypeError, ValueError):
+        return _err("repetitions must be a number", 400)
+    arbiter = str(body.get("arbiter") or "")
+    text = _template_arg(body)
+    version = body.get("version")
+    version = int(version) if version is not None else None
+    # Validate up front: the same checks run_comparison makes first.
+    narrative_compare._validate(dtxsid, [str(g) for g in generators], repetitions, arbiter)
+    summary_llm.render_for_session(dtxsid, text if text is not None
+                                   else prompt_templates.template_text(section, version)[0])
+
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def emit(event: str, data: dict) -> None:
+        await queue.put((event, data))
+
+    async def work() -> None:
+        try:
+            await narrative_compare.run_comparison(
+                dtxsid, generators=[str(g) for g in generators], repetitions=repetitions,
+                arbiter=arbiter, text=text, version=version, emit=emit)
+        except Exception as e:
+            logger.exception("comparison failed for %s", dtxsid)
+            await queue.put(("error", {"error": f"comparison failed: {e}"}))
+        finally:
+            await queue.put((None, {}))
+
+    async def stream():
+        # The comparison runs to completion even if the page goes away: it is
+        # archived either way.
+        task = asyncio.create_task(work())
+        _RUNNING.add(task)  # held, so a closed page cannot let it be collected
+        task.add_done_callback(_RUNNING.discard)
+        while True:
+            event, data = await queue.get()
+            if event is None:
+                break
+            yield _sse(event, data)
+        await task
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@router.get("/api/prompts/{section}/comparisons/{dtxsid}")
+@_guard
+async def api_prompt_comparisons(section: str, dtxsid: Dtxsid):
+    _section(section)
+    return JSONResponse({"comparisons": prompt_store.list_comparisons(dtxsid, section)})
+
+
+@router.get("/api/prompts/{section}/comparisons/{dtxsid}/{comparison_id}")
+@_guard
+async def api_prompt_comparison(section: str, dtxsid: Dtxsid, comparison_id: str):
+    _section(section)
+    record = prompt_store.load_comparison(dtxsid, section, comparison_id)
+    if record is None:
+        return _err("no such comparison", 404)
+    return JSONResponse(record)
 
 
 @router.get("/api/prompts/{section}/threads")
@@ -291,8 +413,10 @@ async def api_prompt_message(section: str, thread_id: str, request: Request):
             section, message=message, template=template, variables=variables,
             run=run, previous_run=previous,
             published=prompt_workshop.published_section(dtxsid, section),
-            history=thread.get("messages") or [],
+            history=thread.get("messages") or [], dtxsid=dtxsid,
         )
+    except ModelNotAllowed:
+        raise
     except Exception as e:
         logger.exception("workshop turn failed for %s/%s", section, thread_id)
         return _err(f"chat failed: {e}", 502)
