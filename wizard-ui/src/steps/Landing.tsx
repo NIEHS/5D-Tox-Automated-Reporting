@@ -124,6 +124,12 @@ export function Landing({
             <p className="muted">No test articles yet.</p>
           ) : (
             <ul className="session-list">
+              <li className="session-list-head muted" aria-hidden="true">
+                <span>Test article</span>
+                <span>Report</span>
+                <span>Published</span>
+                <span>Sections</span>
+              </li>
               {sessions.map((s) => {
                 const isHi = s.dtxsid === highlighted;
                 return (
@@ -134,28 +140,26 @@ export function Landing({
                     role="button"
                   >
                     <div className="session-item-row">
-                      <code>{s.dtxsid}</code>
-                      {s.dtxsid === chosen && (
-                        <span className="badge ok" style={{ marginLeft: 8 }}>
-                          selected
-                        </span>
-                      )}
-                      {s.report ? (
-                        <span className="muted" style={{ marginLeft: 8 }}>
-                          {s.report}
-                          {s.study && ` (${s.study})`}
-                          {s.published && (
-                            <span style={{ whiteSpace: "nowrap" }}> · published {s.published}</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="badge warn" style={{ marginLeft: 8 }}>
-                          in progress
-                        </span>
-                      )}
-                      <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
-                        {s.sections} section{s.sections === 1 ? "" : "s"}
+                      <span>
+                        <code>{s.dtxsid}</code>
+                        {s.dtxsid === chosen && (
+                          <span className="badge ok" style={{ marginLeft: 8 }}>
+                            selected
+                          </span>
+                        )}
                       </span>
+                      <span className="muted">
+                        {s.report}
+                        {s.study && ` (${s.study})`}
+                      </span>
+                      <span>
+                        {s.report ? (
+                          <span className="muted">{s.published ?? "—"}</span>
+                        ) : (
+                          <span className="badge warn">in progress</span>
+                        )}
+                      </span>
+                      <span className="muted">{s.sections}</span>
                     </div>
                     {isHi && (
                       <div className="session-item-detail">

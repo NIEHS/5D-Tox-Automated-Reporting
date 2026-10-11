@@ -158,18 +158,39 @@ body {
 }
 .landing h2 { margin-top: 0; font-size: 1.05rem; }
 
-.session-list { list-style: none; margin: 0; padding: 0; }
-.session-item {
+/* The session cards read as one table: the list is the grid, and each card (and
+   the heading row) is a subgrid of it, so a column is as wide as its widest cell
+   in any card and every cell is left-aligned. */
+.session-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+}
+.session-item, .session-list-head {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
-  margin-bottom: 0.5rem;
-  cursor: pointer;
-  background: var(--panel-2);
+}
+.session-item { cursor: pointer; background: var(--panel-2); }
+.session-list-head {
+  border-color: transparent;
+  padding-top: 0; padding-bottom: 0;
+  font-size: 0.8rem;
 }
 .session-item.hi { border-color: var(--accent); }
-.session-item-row { display: flex; align-items: center; gap: 0.5rem; }
-.session-item-detail { margin-top: 0.6rem; }
+.session-item-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+.session-item-row > * { white-space: nowrap; }
+.session-item-detail { grid-column: 1 / -1; margin-top: 0.6rem; }
 
 .pillars { display: flex; flex-direction: column; gap: 0.75rem; }
 .pillar {
