@@ -20,7 +20,7 @@ the Bookshelf. The QC then compared the rendered reports with the published ones
 | NIEHS-08 | DTXSID2029905 | 1,1,2,2-Tetrahydroperfluoro-1-dodecanol | G2 |
 | NIEHS-09 | DTXSID1022477 | 2,3-Benzofluorene | G2 |
 | NIEHS-10 | DTXSID50469320 | Perfluorohexanesulfonamide | G2 |
-| NIEHS-12 | DTXSID6020430 | 1,2-Dichlorobenzene (rat) | G3, TempO-Seq, BMDExpress 3.20 |
+| NIEHS-12 | DTXSID6020430 | 1,2-Dichlorobenzene (rat + mouse, 2026-10-11) | G3, TempO-Seq, BMDExpress 3.20 |
 | NIEHS-13 | DTXSID1020431 | 1,4-Dichlorobenzene | G3 |
 | — | DTXSID7037717 | Bisphenol AF | unpublished |
 | — | DTXSID5032498 | Triclosan | unpublished |
@@ -127,6 +127,36 @@ the deposit. Their remaining differences fall from 65 section lines to 45:
 the Methods/Results species and tissue sections, and Appendix B. Captions
 default to the file name. Where the 2023 books edited a caption by hand,
 it's study content (NIEHS-10's 13 are in `templates/studies/DTXSID50469320/deposit.yaml`).
+
+**Rats and mice (2026-10-11, ADR-0029 §9).** NIEHS-12 and 13 are now built
+over both of their studies. Each study is its own session (`<DTXSID>_rat`,
+`<DTXSID>_mouse`), and the report session lists them in `studies.json`.
+- The combined tables group rows by study, with NA for a dose a study did not
+  test.
+- The per-study and per-tissue sections are repeats in `eras/niehs-2026`. The
+  tissues follow the definition's `tissue_order`: alphabetical in 2026,
+  Liver then Kidney in 2023.
+- Genomic tables are numbered where their section stands, so the internal
+  concentration tables follow them.
+
+What remains different from the published books:
+- **Content and data gaps:**
+  - the title's "Female" and "Whole-body";
+  - Table 12 (most potent GO per tissue) and Table 18 (theoretical inhaled
+    dose), which we don't produce, so the internal concentration tables are
+    17/18 rather than 19/20;
+  - Appendix A–B content, the D PCA figures, and the E tables.
+- **Placement:** the published books put the combined Tables 2–5 inside the
+  Rats sub-section, where the tables are first cited. Ours put them at the
+  head of the section.
+- **Abstract length:** each study's abstract states its individual genes per
+  tissue, which the 2026 books leave out. Together the abstract exceeds
+  Bookshelf's 9,900-character limit (StyleChecker error).
+
+The BMD summary matches the published table for NIEHS-13: 13/13 rows across
+rats and mice, with no BMD or LOEL/NOEL differences. NIEHS-12 matches 16/22
+rows: A/G ratio, terminal body weight and the study-day body weights are
+missing, and one BMD differs (mouse relative right kidney weight).
 
 `tests/unit/test_report_definitions.py` checks the outlines (file entries
 included), the DTD and each book's series ISSN. The ISSN is per book: NIEHS-02 … 04, 07, 08 and RR-8 carry

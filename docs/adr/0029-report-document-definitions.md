@@ -85,6 +85,35 @@ decided the form: **an era base, plus alterations to it and additions to it.**
    - a derived `supplementary-material` node lists one kind;
    - a `repeat: deposit_species` section repeats per species.
    A study may state a file's kind or caption (`templates/studies/<id>/deposit.yaml`).
+9. **A report may cover several studies, each one a session (2026-10-11).**
+   NIEHS-12 and 13 report a rat study and a mouse study of one chemical. Each
+   study has its own animals, dose levels, workbooks and genomic project.
+   - Each study runs through the pipeline unchanged, in its own session
+     (`<DTXSID>_rat`, `<DTXSID>_mouse`).
+   - The report session lists them in `studies.json` (species → session, in
+     the book's order). It keeps what belongs to the report: front matter,
+     Background, deposit, views and overrides.
+   - `rendering/report_compose.py` merges the studies' data into the report's
+     at the one data entry point (`latex_export.load_session_data`):
+     - Each combined table groups its rows by study ("Rats" / "Mice"; "Female
+       Rats" … when a study has both sexes). Studies tested at different dose
+       levels share the union of the levels, with NA for a level a study did
+       not test (`render_common.table_groups`).
+     - The studies' References are numbered on from the Background's.
+     - The design names their animals together ("Rats and Mice"), and so do
+       the title and the captions.
+   - The definition repeats sections over the data (§6):
+     - `repeat: study_species` gives one copy per study ("Study Design for
+       ${species}"); a single study is one unscoped copy.
+     - `repeat: genomic_organs` gives one copy per tissue of the genomic
+       analyses (`${organ}`).
+   - A copy scoped to one study renders from that study's data
+     (`render_common.node_data`, applied where each of the four surfaces
+     dispatches a node).
+   - A definition states the order of the genomic tissues (`tissue_order`).
+     The tissues it names come first and the rest follow alphabetically:
+     Liver then Kidney in 2023, all alphabetical in 2026. Genomic tables are
+     numbered where their section stands, and the tables after them follow.
 
 ## Consequences
 
@@ -111,11 +140,10 @@ decided the form: **an era base, plus alterations to it and additions to it.**
 
 - **Section structure:** RR-8 and NIEHS-02 … 10 match their published books
   exactly.
-- **NIEHS-12 and 13** differ only where the difference is data or content:
-  - the per-species and per-tissue sections of the Methods and Results (the
-    pipeline models one species, G3 conformance gap 5);
-  - the study's analytical-method sections.
-  `tests/unit/test_report_definitions.py` lists these.
+- **NIEHS-12 and 13** are built over their rat and mouse studies (§9,
+  2026-10-11). Their per-species and per-tissue sections are repeats. The
+  only remaining difference is content: the study's analytical-method
+  sections (Appendix B). `tests/unit/test_report_definitions.py` lists these.
 - **Supplemental Data** (2026-10-10, §8): every report lists its deposited
   files in the published sections, file for file. The 2026 G.3 Rats / G.4 Mice
   split comes from the deposit. The file-name rules reproduce the grouping of
