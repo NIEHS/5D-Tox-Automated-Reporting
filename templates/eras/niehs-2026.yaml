@@ -3,12 +3,13 @@
 # generation (eras/niehs-2023, chunked) plus what these books do differently.
 # A published study of this generation extends this file.
 #
-# What this file cannot state is the books' per-SPECIES and per-TISSUE
-# sections (Study Design for Rats / for Mice; Rats and Mice under each apical
-# result; Heart … Ovary under the gene set and gene analyses; Supplemental Data
-# G.3 Rats / G.4 Mice): which species and tissues a study has are its data, not
-# its document, and the pipeline does not model more than one species yet
-# (G3 conformance gap 5).  tests/unit/test_report_definitions.py lists them.
+# These books report a rat study and a mouse study together (ADR-0029 §9,
+# rendering.report_compose).  Their per-study and per-tissue sections are
+# repeats (document_tree.repeat_items): one Study Design per study; the
+# combined tables of each apical result with the result for each study under
+# it; each study's internal concentrations; and Heart … Ovary under the gene
+# set and gene analyses, each with its studies.  Which studies and tissues
+# there are is the report's data; that they are written this way is this file.
 extends: eras/niehs-2023
 
 changes:
@@ -27,6 +28,9 @@ changes:
     - {id: mm-chem-chamber, type: narrative, data_key: methods,
        title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere}
     into: mm-chemistry
+  - set: mm-study-design
+    title: "Study Design for ${species}"
+    repeat: study_species
   - set: mm-dose-rationale
     title: Exposure Concentration Selection Rationale
   - set: mm-internal-dose
@@ -56,6 +60,51 @@ changes:
     after: theoretical-inhaled-dose
   - set: internal-dose
     title: Internal Concentration Assessment
+
+  # ── Each study's results under the tables the studies share; each study's
+  # internal concentrations (its own table); each tissue's gene set and gene
+  # results per study.
+  - set: animal-condition
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: animal-condition-study, type: narrative+tables, title: "${species}",
+       narrative_key: animal_condition, repeat: study_species}
+    into: animal-condition
+  - set: clinical-path
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: clinical-path-study, type: narrative+tables, title: "${species}",
+       narrative_key: clinical_pathology, repeat: study_species}
+    into: clinical-path
+  - set: internal-dose
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: internal-dose-study, type: narrative+tables, title: "${species}",
+       narrative_key: internal_dose, repeat: study_species}
+    into: internal-dose
+  - move: table-tissue-conc
+    into: internal-dose-study
+  - insert:
+    - id: gene-set-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-set-tissue-study, type: narrative, title: "${species}",
+         data_key: gene_set_narrative, repeat: study_species}
+    before: gene-set-summary
+  - insert:
+    - id: gene-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-tissue-study, type: narrative, title: "${species}",
+         data_key: gene_narrative, repeat: study_species}
+    into: gene-bmd
 
   # ── Appendices A–G ───────────────────────────────────────────────────────
   # A: how the chamber concentrations were generated (the study's own text).

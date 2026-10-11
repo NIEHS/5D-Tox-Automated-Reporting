@@ -58,22 +58,21 @@ PUBLISHED_ISSN = {
     "NIEHS-10": "2768-5632", "NIEHS-12": "2768-5632", "NIEHS-13": "2768-5632",
 }
 
+# The 2026 books report a rat study and a mouse study (ADR-0029 §9): the
+# report's data names its studies and the tissues of their genomic analyses,
+# which the definition repeats sections over.
+_STUDIES = [{"key": "rat", "title": "Rats", "data": {}},
+            {"key": "mouse", "title": "Mice", "data": {}}]
+_TISSUES = ("heart", "kidney", "liver", "lung", "ovary")
+STUDY_DATA = {r: {"studies": _STUDIES,
+                  "genomics_sections": [{"type": t, "organ": o} for o in _TISSUES
+                                        for t in ("gene_set", "gene")]}
+              for r in ("NIEHS-12", "NIEHS-13")}
+
 # Published lines our build lacks (`-`) or has instead (`+`), for want of
 # CONTENT or DATA the pipeline does not supply — never structure a definition
 # could state.
-_SPECIES = ["      sec Rats", "      sec Mice"]
-_TISSUES = [ln for t in ("Heart", "Kidney", "Liver", "Lung", "Ovary")
-            for ln in (f"    sec {t}", *_SPECIES)]
 _G3_GAPS = [
-    # Per-species and per-tissue sections are the study's data, and the
-    # pipeline does not model a second species yet (G3 conformance gap 5): one
-    # Study Design, and no Rats / Mice / tissue sections in the Results.
-    "-  sec Study Design for Rats",
-    "-  sec Study Design for Mice",
-    "+  sec Study Design",
-    *[f"-{ln}" for ln in _SPECIES * 2],          # animal condition, clinical pathology
-    *[f"-{ln}" for ln in _TISSUES * 2],          # gene set, gene analyses
-    *[f"-{ln[2:]}" for ln in _SPECIES],          # internal concentration
     # Appendix B's sections are the study's analytical method (its appendix-a
     # content), not supplied for NIEHS-12/13.
     "-  sec <B.1> Validation of Analytical Method",
@@ -97,7 +96,7 @@ def _built_bits(dtxsid: str, report: str, name: str) -> str:
     listing = json.loads((FIXTURES / report / "deposit-files.json").read_text(encoding="utf-8"))
     data["deposit"] = build_manifest([tuple(f) for f in listing]) if listing else None
     data.update(book_meta=load_book_meta(name), packaging=load_packaging(name),
-                object_position=load_object_position(name))
+                object_position=load_object_position(name), **STUDY_DATA.get(report, {}))
     return generate_bits(data, _tree_from_document_list(load_template(name)))
 
 
