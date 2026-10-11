@@ -1906,14 +1906,20 @@ def node_data(node: DocNode, data: dict) -> dict:
     report's own (front matter, Background, deposit …); one scoped to a tissue
     (``scope_organ``) has that tissue's gene set and gene prose as its
     ``gene_set_narrative`` / ``gene_narrative``.  Every other node: ``data``.
-    The four surfaces apply it where they dispatch a node."""
+    The four surfaces apply it where they dispatch a node.
+
+    Scoped data keeps the report's (``_REPORT_DATA``), so an unscoped node
+    inside a scoped one — a `first_copy` table the studies share, under the
+    first study's heading — renders the whole report's data, whatever data
+    its parent was handed."""
+    root = data.get(_REPORT_DATA, data)
     species, organ = node.scope_species, node.scope_organ
     if not species and not organ:
-        return data
-    out = data
-    study = next((s for s in data.get("studies") or [] if s.get("key") == species), None)
+        return root
+    out = root
+    study = next((s for s in root.get("studies") or [] if s.get("key") == species), None)
     if study is not None:
-        out = {**data, **study["data"]}
+        out = {**root, **study["data"]}
     if organ:
         prose = {}
         for entry in out.get("genomics_sections") or []:
@@ -1922,7 +1928,11 @@ def node_data(node: DocNode, data: dict) -> dict:
                 prose[key] = {"paragraphs": _paragraph_list(entry.get("narrative"))}
         out = {**out, "gene_set_narrative": {"paragraphs": []},
                "gene_narrative": {"paragraphs": []}, **prose}
-    return out
+    return {**out, _REPORT_DATA: root}
+
+
+# The key under which a scoped node's data keeps the whole report's (node_data).
+_REPORT_DATA = "_report_data"
 
 
 def _paragraph_list(value) -> list[str]:

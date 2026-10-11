@@ -115,6 +115,11 @@ class DocNode:
         missing_content_text: Shippable statement rendered when the study supplies
                         no `session_content`.  Unset ⇒ a pending placeholder (the
                         content is required and still has to be authored).
+        first_copy:     Inside a repeated section: kept in its first copy only,
+                        and not scoped — it renders from the whole report's
+                        data.  The 2026 books' tables shared by the studies,
+                        placed under the first study's heading (NIEHS-13 Tables
+                        2–5 under "Rats").
         caption_suffix: On a genomics-section: words its per-tissue tables'
                         captions end with, ", for ${subject} ${treatment}" (the
                         2026 books), filled per table from the animals it has
@@ -223,6 +228,7 @@ class DocNode:
     missing_content_text: str | None = None
     deposit_text: str | None = None
     caption_suffix: str | None = None
+    first_copy: bool = False
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

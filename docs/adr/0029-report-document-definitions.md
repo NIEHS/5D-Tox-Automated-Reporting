@@ -108,6 +108,9 @@ decided the form: **an era base, plus alterations to it and additions to it.**
        ${species}"); a single study is one unscoped copy.
      - `repeat: genomic_organs` gives one copy per tissue of the genomic
        analyses (`${organ}`).
+     - A `first_copy` node in a repeated section stays in its first copy
+       only, unscoped: the tables the studies share stand under the first
+       study's heading, after its prose (NIEHS-13 Tables 2–5 under "Rats").
    - A copy scoped to one study renders from that study's data
      (`render_common.node_data`, applied where each of the four surfaces
      dispatches a node).

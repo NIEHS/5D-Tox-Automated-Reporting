@@ -148,3 +148,20 @@ def test_captions_name_the_animals_each_table_has():
         "Sorted by Benchmark Dose Median, for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days")
     assert genomics_table_caption(genomics[1]).endswith(
         ", for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days")
+
+
+def test_a_shared_table_stands_in_the_first_copy_only():
+    """A `first_copy` table inside a section repeated per study stays in the
+    first copy, unscoped (it renders the whole report's data): NIEHS-13's Tables
+    2 and 3 under "Rats", none under "Mice"."""
+    tree = instantiate([{"region": "body", "children": [
+        {"id": "ac", "type": "heading-only", "title": "Animal Condition", "children": [
+            {"id": "ac-study", "type": "narrative+tables", "title": "${species}",
+             "narrative_key": "animal_condition", "repeat": "study_species", "children": [
+                 {"id": "bw", "type": "table", "title": "Body Weights",
+                  "platform": "Body Weight", "first_copy": True}]}]}]}])
+    (ac,) = study_tree(tree, None, None, DATA)
+    rats, mice = ac.children
+    assert [(c.id, c.scope_species) for c in rats.children] == [("bw", None)]
+    assert mice.children == []
+    assert node_data(rats.children[0], DATA) is DATA

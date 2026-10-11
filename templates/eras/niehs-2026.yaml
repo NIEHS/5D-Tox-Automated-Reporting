@@ -82,6 +82,16 @@ changes:
     - {id: animal-condition-study, type: narrative+tables, title: "${species}",
        narrative_key: animal_condition, repeat: study_species}
     into: animal-condition
+  # The tables the studies share stand under the first study's heading, after
+  # its prose (NIEHS-13 Tables 2 and 3 under "Rats").
+  - move: table-body-weight
+    into: animal-condition-study
+  - move: table-organ-weight
+    into: animal-condition-study
+  - set: table-body-weight
+    first_copy: true
+  - set: table-organ-weight
+    first_copy: true
   - move: table-hematology          # hematology before clinical chemistry (NIEHS-13)
     before: table-clin-chem
   - set: clinical-path
@@ -91,6 +101,14 @@ changes:
     - {id: clinical-path-study, type: narrative+tables, title: "${species}",
        narrative_key: clinical_pathology, repeat: study_species}
     into: clinical-path
+  - move: table-hematology
+    into: clinical-path-study
+  - move: table-clin-chem
+    into: clinical-path-study
+  - set: table-hematology
+    first_copy: true
+  - set: table-clin-chem
+    first_copy: true
   - set: internal-dose
     type: heading-only
     narrative_key: null

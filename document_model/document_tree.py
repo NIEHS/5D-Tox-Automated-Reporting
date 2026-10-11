@@ -325,6 +325,8 @@ def _scope(node, field: str, key: str | None, variable: str, title: str,
     """Scope a copy and every node in it to ``key`` (ids suffixed with it, so
     they stay unique), filling ``${variable}`` and the item's ``fields`` (a
     study's ``${subject}`` / ``${treatment}``) in their titles and captions."""
+    if node.first_copy:
+        return                     # shared by the copies: the report's, unscoped
     if key is not None:
         node.id = f"{node.id}--{key}"
         setattr(node, field, key)
@@ -333,11 +335,20 @@ def _scope(node, field: str, key: str | None, variable: str, title: str,
         _scope(child, field, key, variable, title, fields)
 
 
+def _drop_first_copy(node) -> None:
+    """A later copy of a repeated section leaves out its `first_copy` nodes."""
+    node.children = [c for c in node.children or [] if not c.first_copy]
+    for child in node.children:
+        _drop_first_copy(child)
+
+
 def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
     """A repeated section (`repeat:`, see repeat_items) becomes one copy per
     item, every node in it scoped to the item.  The copy's title fills
     `${species}` / `${organ}` ("Study Design for ${species}"), or, without one,
-    is the item's title ("Rats", "Heart").  With no deposit species, a
+    is the item's title ("Rats", "Heart").  A `first_copy` node stays in the
+    first copy only, unscoped (a table the studies share, under the first
+    study's heading).  With no deposit species, a
     `deposit_species` section's children stand in its place; with no tissues,
     a `genomic_organs` section is left out.  Repeats nest — a tissue
     repeated per study.  Mutates the (already copied) nodes; returns the new
@@ -358,8 +369,10 @@ def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
                 out.extend(node.children)
             continue
         variable = _REPEAT_VARIABLE[repeat]
-        for item in found:
+        for i, item in enumerate(found):
             clone = copy.deepcopy(node)
+            if i:
+                _drop_first_copy(clone)
             if "${" not in (clone.title or ""):
                 clone.title = item["title"]
             _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"],
