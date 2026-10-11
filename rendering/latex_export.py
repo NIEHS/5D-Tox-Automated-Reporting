@@ -1052,7 +1052,7 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     # the tree sequence (Table 8 → 9, 10, ...); then the attached charts'
     # figure numbers, continuing the tree's figures (ADR-0021 D1).  Same
     # helpers the web/marshal path calls, so both surfaces number identically.
-    assign_genomics_table_numbers(render_tree, data.get("genomics_sections"))
+    assign_genomics_table_numbers(render_tree, data.get("genomics_sections"), data)
     assign_genomics_figure_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─

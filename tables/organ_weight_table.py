@@ -3,7 +3,7 @@ organ_weight_table.py — Build NIEHS Table 3 (Organ Weights) from sidecar data.
 
 Produces the exact structure of NIEHS Report 10 Table 3:
 
-    Table 3. Summary of Select Organ Weight Data for Male and Female Rats
+    Table 3. Summary of Select Organ Weights of Male and Female Rats
     Administered {compound} for Five Days
 
 Structure:
@@ -71,8 +71,11 @@ from tables.table_builder_common import (
 # (a broad organ-weight panel).  When the report is narrowed to a single organ
 # and a single sex (the reference's Table 3), _organ_weight_caption swaps in the
 # specific "Summary of {Organ} Weights of {Sex} Rats …" form instead.
+# The published wording (NIEHS-07: "Summary of Select Organ Weights of Male and
+# Female Rats Administered …"; NIEHS-12, 13: "… of Female Rats and Mice
+# Exposed to …").
 CAPTION_TEMPLATE = (
-    "Summary of Select Organ Weight Data for {subject} {treatment}"
+    "Summary of Select Organ Weights of {subject} {treatment}"
 )
 
 

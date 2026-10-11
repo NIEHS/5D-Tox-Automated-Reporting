@@ -247,15 +247,35 @@ def prune_uncollected_tables(tree, collected):
 TITLE_FIELDS = ("chemical_name",)
 
 
+def caption_values(facts: dict | None, design: dict | None = None) -> dict:
+    """The caption fields ``${subject}`` / ``${treatment}`` for ``design`` (by
+    default the report's study design): "Female Rats and Mice", "Exposed to
+    1,4-Dichlorobenzene for Five Days" (pipeline.study_design.caption_fields)."""
+    from pipeline.study_design import caption_fields
+    facts = facts or {}
+    if not facts.get("chemical_name"):
+        return {}
+    return caption_fields(design if design is not None else facts.get("study_design") or {},
+                          str(facts["chemical_name"]))
+
+
 def _has_title_fields(nodes) -> bool:
-    return any("${" in (n.title or "") or _has_title_fields(n.children or []) for n in nodes)
+    return any("${" in (n.title or "") or "${" in (n.caption or "")
+               or _has_title_fields(n.children or []) for n in nodes)
+
+
+def _fill(node, values: dict) -> None:
+    """Fill ``${…}`` fields in a node's title and caption."""
+    from string import Template
+    for attr in ("title", "caption"):
+        text = getattr(node, attr, None)
+        if text and "${" in text:
+            setattr(node, attr, Template(text).safe_substitute(values))
 
 
 def _fill_titles(nodes, values: dict) -> None:
-    from string import Template
     for n in nodes:
-        if "${" in (n.title or ""):
-            n.title = Template(n.title).safe_substitute(values)
+        _fill(n, values)
         _fill_titles(n.children or [], values)
 
 
@@ -271,19 +291,23 @@ _REPEAT_VARIABLE = {"deposit_species": "species", "study_species": "species",
 
 
 def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
-    """{repeat: [{key, title}]} — what each repeat makes one copy for:
+    """{repeat: [{key, title, fields}]} — what each repeat makes one copy for:
 
     - deposit_species: the species of the study's data deposit;
     - study_species: the studies of a report over several (facts["studies"],
       rendering.report_compose); a single study is one, unscoped (``key`` None),
       titled with its animals ("Rats"; "Animals" before any are recorded);
+      ``fields`` are the study's caption fields (caption_values);
     - genomic_organs: the tissues of the genomic analyses, in their order."""
     facts = facts or {}
-    studies = [{"key": s["key"], "title": s["title"]} for s in facts.get("studies") or []]
+    studies = [{"key": s["key"], "title": s["title"],
+                "fields": caption_values(facts, (s.get("data") or {}).get("study_design") or {})}
+               for s in facts.get("studies") or []]
     if not studies:
         from pipeline.study_design import species_plural
         design = facts.get("study_design") or {}
-        studies = [{"key": None, "title": species_plural(design, capitalize=True)}]
+        studies = [{"key": None, "title": species_plural(design, capitalize=True),
+                    "fields": caption_values(facts)}]
     organs: list[str] = []
     for entry in facts.get("genomics_sections") or []:
         organ = (entry.get("organ") or "").strip()
@@ -296,17 +320,17 @@ def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
     }
 
 
-def _scope(node, field: str, key: str | None, variable: str, title: str) -> None:
+def _scope(node, field: str, key: str | None, variable: str, title: str,
+           fields: dict | None = None) -> None:
     """Scope a copy and every node in it to ``key`` (ids suffixed with it, so
-    they stay unique), filling ``${variable}`` in their titles."""
-    from string import Template
+    they stay unique), filling ``${variable}`` and the item's ``fields`` (a
+    study's ``${subject}`` / ``${treatment}``) in their titles and captions."""
     if key is not None:
         node.id = f"{node.id}--{key}"
         setattr(node, field, key)
-    if "${" in (node.title or ""):
-        node.title = Template(node.title).safe_substitute({variable: title})
+    _fill(node, {**(fields or {}), variable: title})
     for child in node.children or []:
-        _scope(child, field, key, variable, title)
+        _scope(child, field, key, variable, title, fields)
 
 
 def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
@@ -338,7 +362,8 @@ def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
             clone = copy.deepcopy(node)
             if "${" not in (clone.title or ""):
                 clone.title = item["title"]
-            _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"])
+            _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"],
+                   item.get("fields"))
             out.append(clone)
     return out
 
@@ -357,8 +382,10 @@ def study_tree(base, collected, authored=None, facts=None):
     3. Study-bound authored content (`session_content`): freeform nodes take THIS
        study's text (`authored`), else their `deposit_text` when the study's
        deposit has a DOI and files, else `missing_content_text`, else pending.
-    4. Study facts in titles: `${chemical_name}` (TITLE_FIELDS) from `facts`
-       (the report data); a field the facts lack stays as written.
+    4. Study facts in titles and captions: `${chemical_name}` (TITLE_FIELDS)
+       from `facts` (the report data), and the animals and treatment
+       `${subject}` / `${treatment}` (caption_values; in a per-study copy, that
+       study's); a field the facts lack stays as written.
     5. Repeated sections (`repeat:`): one copy per species of the study's
        deposit, per study of a report over several, or per genomic tissue
        (repeat_items, _expand_repeats).
@@ -382,6 +409,7 @@ def study_tree(base, collected, authored=None, facts=None):
             nodes = copy.deepcopy(base)
         nodes = _expand_repeats(nodes, repeat_items(facts))
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
+    values.update(caption_values(facts))
     if values and _has_title_fields(nodes):
         if nodes is base:
             import copy
@@ -574,9 +602,29 @@ _GENOMICS_NARRATIVE_TO_TYPE = {
 }
 
 
+def _entry_design(facts: dict, entry: dict) -> dict:
+    """The design of the animals one genomic table has rows for: the studies
+    (or, in one study, the sexes) whose blocks are not empty — NIEHS-13's ovary
+    gene sets are rats' only."""
+    groups = {str(b.get("sex") or "").strip() for b in entry.get("sexes") or []
+              if b.get("gene_sets") or b.get("top_genes")}
+    design = facts.get("study_design") or {}
+    studies = facts.get("studies")
+    if studies:
+        present = [(s.get("data") or {}).get("study_design") or {} for s in studies
+                   if groups & ({s.get("title")} | set((s.get("labels") or {}).values()))]
+        if len(present) == 1:
+            return present[0]
+        shared = {k: design.get(k) for k in ("route", "vehicle", "duration_days")}
+        return {**shared, "studies": present} if present else design
+    sexes = sorted(g.lower() for g in groups if g in ("Male", "Female"))
+    return {**design, "sexes": sexes} if sexes else design
+
+
 def assign_genomics_table_numbers(
     tree: list[DocNode] | None,
     genomics_sections: list[dict] | None,
+    facts: dict | None = None,
 ) -> None:
     """
     Assign positional ``table_number`` to each genomics-section entry: the
@@ -602,6 +650,10 @@ def assign_genomics_table_numbers(
 
     Mutates each entry dict in place (sets ``entry["table_number"]``); entries
     whose role has no genomics-section node are left unnumbered.  Idempotent.
+
+    With the report data (``facts``), a genomics-section's ``caption_suffix``
+    (", for ${subject} ${treatment}") is filled for each table from the
+    animals it has rows for (``entry["caption_suffix"]``, genomics_table_caption).
     """
     if tree is None:
         tree = DOCUMENT_TREE
@@ -630,6 +682,10 @@ def assign_genomics_table_numbers(
                         if entry.get("type") == role:
                             counter += 1
                             entry["table_number"] = counter
+                            if node.caption_suffix and facts is not None:
+                                from string import Template
+                                entry["caption_suffix"] = Template(node.caption_suffix).safe_substitute(
+                                    caption_values(facts, _entry_design(facts, entry)))
             _visit(node.children or [])
 
     _visit(tree)

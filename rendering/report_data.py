@@ -624,7 +624,7 @@ def marshal_export_data(
         assign_genomics_table_numbers,
         assign_genomics_figure_numbers,
     )
-    assign_genomics_table_numbers(active_tree, data.get("genomics_sections"))
+    assign_genomics_table_numbers(active_tree, data.get("genomics_sections"), data)
     # Positional figure numbers for the charts attached in _overlay_genomics —
     # continues the tree's figure sequence (ADR-0021 D1).  Same helper the LaTeX
     # session path calls, so both surfaces number identically.

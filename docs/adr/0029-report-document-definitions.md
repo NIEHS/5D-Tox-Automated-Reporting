@@ -64,9 +64,10 @@ decided the form: **an era base, plus alterations to it and additions to it.**
    committed fixture. A test builds each report from its definition and compares the
    two outlines, apart from a commented list of known *content* gaps.
 
-6. **A definition states structure, never data.** A title may name a study
-   fact the data holds (`${chemical_name}`, filled per study by
-   `document_tree.study_tree`). A definition never lists what the data
+6. **A definition states structure, never data.** A title or caption may
+   name a study fact the data holds (`${chemical_name}`; the animals and
+   treatment, `${subject} ${treatment}`, as the 2026 captions end), filled per
+   study by `document_tree.study_tree`. A definition never lists what the data
    decides: which species or tissues a study has, or how many tables there
    are.
 

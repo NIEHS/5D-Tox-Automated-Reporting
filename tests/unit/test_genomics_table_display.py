@@ -26,7 +26,8 @@ def test_2025_entry_is_labelled_by_stat_bmr_and_unit():
     assert h[4] == "BMDrd25 5th Percentile of Gene Set Transcripts (ppm)"
     assert h[5] == "5th Percentile BMDLrd25–BMDUrd25 (ppm)"
     assert gene_table_headers(e)[3] == "BMDrd25 (BMDLrd25–BMDUrd25) in ppm"
-    assert genomics_table_caption(e).endswith("Sorted by Benchmark Dose 5th Percentile")
+    # As NIEHS-12 and 13 print it (a median reads "Benchmark Dose Median").
+    assert genomics_table_caption(e).endswith("Sorted by 5th Percentile Benchmark Dose")
 
 
 def test_2025_rows_use_entrez_ids_one_decimal_and_nc():

@@ -1777,9 +1777,13 @@ def genomics_table_caption(entry: dict) -> str:
     # Genes are always ranked by their median over probes; gene sets by the
     # entry's ranking statistic.
     stat = d.get("stat", "median") if role == "gene_set" else "median"
+    phrase = _STAT_PHRASE.get(stat, stat)
+    # "Benchmark Dose Median", but "5th Percentile Benchmark Dose" (NIEHS-12, 13).
+    sorted_by = (f"{phrase} Benchmark Dose" if phrase.endswith("Percentile")
+                 else f"Benchmark Dose {phrase}")
     descriptive = (
         f"{lead}{organ} {kind} Ranked by Potency of Perturbation, "
-        f"Sorted by Benchmark Dose {_STAT_PHRASE.get(stat, stat)}"
+        f"Sorted by {sorted_by}{entry.get('caption_suffix') or ''}"
     ).replace("  ", " ").strip()
 
     num = entry.get("table_number")

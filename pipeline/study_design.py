@@ -312,6 +312,29 @@ def title_subjects(facts: dict, animals) -> str:
     return " ".join(x for x in (shared, " and ".join(each)) if x)
 
 
+def caption_subject(facts: dict) -> str:
+    """The animals a table caption names, with their sexes: "Female Rats",
+    "Male and Female Rats", "Rats" (sexes unrecorded); over several studies
+    "Female Rats and Mice" when they share their sexes, else each study's
+    ("Male Rats and Female Mice")."""
+    def sexes(f):
+        return " and ".join(s.title() for s in _SEXES[::-1] if s in (f.get("sexes") or []))
+
+    studies = facts.get("studies") or [facts]
+    each = [sexes(f) for f in studies]
+    if len(set(each)) == 1:
+        return " ".join(x for x in (each[0], species_plural(facts, capitalize=True)) if x)
+    return " and ".join(" ".join(x for x in (sx, species_plural(f, capitalize=True)) if x)
+                        for sx, f in zip(each, studies))
+
+
+def caption_fields(facts: dict, compound: str) -> dict:
+    """A document's caption fields for these animals: ``subject`` ("Female Rats
+    and Mice") and ``treatment`` ("Exposed to 1,4-Dichlorobenzene for Five
+    Days"), as a definition writes them (``${subject} ${treatment}``)."""
+    return {"subject": caption_subject(facts), "treatment": caption_treatment(facts, compound)}
+
+
 def administration_phrase(facts: dict) -> str:
     """"by gavage" / "by inhalation" / "in feed" — or "" when unrecorded."""
     return _ADMINISTRATION.get(facts.get("route") or "", ("", ""))[0]

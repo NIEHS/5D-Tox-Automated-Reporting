@@ -61,12 +61,12 @@ def test_a_report_over_studies_repeats_per_study_and_tissue():
 
 def test_a_single_study_is_one_unscoped_copy_titled_with_its_animals():
     data = {"study_design": {"species": "rat"}}
-    assert repeat_items(data)["study_species"] == [{"key": None, "title": "Rats"}]
+    assert [(i["key"], i["title"]) for i in repeat_items(data)["study_species"]] == [(None, "Rats")]
     (mm, gs) = study_tree(_tree(), None, None, data)
     assert [(n.id, n.title, n.scope_species) for n in mm.children] == [
         ("mm-design", "Study Design for Rats", None)]
     assert gs.children == []                       # no tissues: nothing per tissue
-    assert repeat_items({})["study_species"] == [{"key": None, "title": "Animals"}]
+    assert [(i["key"], i["title"]) for i in repeat_items({})["study_species"]] == [(None, "Animals")]
 
 
 def test_a_scoped_copy_renders_from_its_study():
@@ -106,3 +106,45 @@ def test_the_definition_orders_the_tissues():
     alphabetical = order_tissues(entries, [])
     assert [e["organ"] for e in alphabetical][::2] == ["Heart", "Kidney", "Liver", "Ovary"]
     assert [e["type"] for e in alphabetical][:2] == ["gene_set", "gene"]
+
+
+def test_captions_name_the_animals_each_table_has():
+    """The 2026 captions end ", for Female Rats and Mice Exposed to … for Five
+    Days": a per-study copy names its study's animals, a genomic table those it
+    has rows for (NIEHS-13's ovary gene sets: rats only)."""
+    from document_model.document_tree import assign_genomics_table_numbers
+    from rendering.render_common import genomics_table_caption
+
+    rat = {"species": "rat", "route": "inhaled", "duration_days": 5, "sexes": ["female"]}
+    mouse = {**rat, "species": "mouse"}
+    studies = [{**STUDIES[0], "data": {**STUDIES[0]["data"], "study_design": rat}},
+               {**STUDIES[1], "data": {**STUDIES[1]["data"], "study_design": mouse}}]
+    genomics = [{"type": "gene_set", "organ": "ovary",
+                 "sexes": [{"sex": "Rats", "gene_sets": [{"go_id": "GO:1"}]},
+                           {"sex": "Mice", "gene_sets": []}]},
+                {"type": "gene_set", "organ": "heart",
+                 "sexes": [{"sex": "Rats", "gene_sets": [{"go_id": "GO:1"}]},
+                           {"sex": "Mice", "gene_sets": [{"go_id": "GO:2"}]}]}]
+    data = {"studies": studies, "chemical_name": "1,4-Dichlorobenzene",
+            "study_design": {"route": "inhaled", "duration_days": 5,
+                             "studies": [rat, mouse]},
+            "genomics_sections": genomics}
+    tree = instantiate([{"region": "body", "children": [
+        {"id": "bmd", "type": "bmd-summary", "title": "BMD Summary", "data_key": "bmd_summary",
+         "caption": "BMD Summary, for ${subject} ${treatment}"},
+        {"id": "gs", "type": "genomics-section", "title": "Gene Sets",
+         "data_key": "genomics_sections", "narrative_key": "gene_set_narrative", "caption_suffix": ", for ${subject} ${treatment}"},
+        {"id": "ids", "type": "data-table", "title": "File Names for ${subject} ${treatment}",
+         "data_key": "appendix_animals_matrix",
+         "repeat": "study_species"}]}])
+    nodes = study_tree(tree, None, None, data)
+    assert nodes[0].caption == ("BMD Summary, for Female Rats and Mice "
+                                "Exposed to 1,4-Dichlorobenzene for Five Days")
+    assert [n.title for n in nodes[2:]] == [
+        "File Names for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days",
+        "File Names for Female Mice Exposed to 1,4-Dichlorobenzene for Five Days"]
+    assign_genomics_table_numbers(nodes, genomics, data)
+    assert genomics_table_caption(genomics[0]).endswith(
+        "Sorted by Benchmark Dose Median, for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days")
+    assert genomics_table_caption(genomics[1]).endswith(
+        ", for Female Rats and Mice Exposed to 1,4-Dichlorobenzene for Five Days")

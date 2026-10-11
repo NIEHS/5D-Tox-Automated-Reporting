@@ -464,6 +464,9 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
                              f"{list(_REPEATS)}, got {repeat!r}")
         if role_for(node_type) not in ("sec", "table-wrap"):
             raise ValueError(f"template node {node_id!r}: only a section or a table may repeat")
+    if entry.get("caption_suffix") is not None and node_type != "genomics-section":
+        raise ValueError(f"template node {node_id!r}: caption_suffix is only valid on a "
+                         f"genomics-section")
 
 
 def _validate_file_only_entry(entry: dict, node_id: str, node_type: str) -> None:

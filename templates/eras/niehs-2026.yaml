@@ -50,6 +50,15 @@ changes:
     into: apical-analysis
   - move: bmd-summary
     into: apical-analysis
+  # The 2026 captions name the animals and their treatment (", for Female Rats
+  # and Mice Exposed to 1,4-Dichlorobenzene for Five Days"), each table those
+  # it has data for.
+  - set: bmd-summary
+    caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High, for ${subject} ${treatment}"
+  - set: gene-sets
+    caption_suffix: ", for ${subject} ${treatment}"
+  - set: gene-bmd
+    caption_suffix: ", for ${subject} ${treatment}"
   - insert:
     - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
        data_key: gene_set_summary}
@@ -157,7 +166,8 @@ changes:
   - remove: appendix-a-quantitation
   # C: each study's animals and their sequencing files, one table per study.
   - set: table-b-1
-    title: "Animal Numbers and FASTQ Data File Names for ${species}"
+    title: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
+    caption: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
     repeat: study_species
   # No BMDS model-selection appendix; E defines the top gene sets' genes.
   - remove: appendix-d

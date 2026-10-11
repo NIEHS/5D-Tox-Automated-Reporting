@@ -115,6 +115,10 @@ class DocNode:
         missing_content_text: Shippable statement rendered when the study supplies
                         no `session_content`.  Unset ⇒ a pending placeholder (the
                         content is required and still has to be authored).
+        caption_suffix: On a genomics-section: words its per-tissue tables'
+                        captions end with, ", for ${subject} ${treatment}" (the
+                        2026 books), filled per table from the animals it has
+                        rows for (document_tree.assign_genomics_table_numbers).
         deposit_text:   Statement rendered, when the study supplies no
                         `session_content`, if its data deposit has a DOI and files
                         (pipeline.deposit): "{doi}" in it becomes the DOI's link
@@ -218,6 +222,7 @@ class DocNode:
     not_collected_text: str | None = None
     missing_content_text: str | None = None
     deposit_text: str | None = None
+    caption_suffix: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None
