@@ -42,10 +42,16 @@ export interface Fingerprint {
   sexes: string[];
 }
 
+// One session of the landing list. `report` is its published report ("NIEHS-10"),
+// `study` the member study of a report over several ("rat" / "mouse"), and
+// `published` when the report came out ("2023-03"); all null while in progress.
 export interface SessionSummary {
   dtxsid: string;
   sections: number;
   section_keys: string[];
+  report: string | null;
+  study: string | null;
+  published: string | null;
 }
 
 // --- Section authoring (Phase 6) ---

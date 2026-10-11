@@ -89,6 +89,18 @@ def report_of(dtxsid: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def published_date(report: str | None) -> str | None:
+    """When a published report came out ("2023-03"), from its Bookshelf bundle
+    breakdown; None for no report, or a bundle that is absent or undated."""
+    if not report:
+        return None
+    try:
+        meta = json.loads((BOOKSHELF / report / "breakdown" / "report.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return meta.get("published") or None
+
+
 def published_section(dtxsid: str, section: str) -> dict | None:
     """The published text of a section for a published study:
     {report, study, paragraphs}, or None (unpublished study, or the book has

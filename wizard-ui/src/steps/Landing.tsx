@@ -2,6 +2,21 @@ import { useEffect, useState } from "react";
 import { api, SessionSummary } from "../api";
 import { ErrorBox, IdentityBox, Spinner, StepProps } from "./shared";
 
+// Studies still in progress first, then published reports newest first. Within
+// one month, the later-numbered report first; within one report, the report's
+// own session before its member studies.
+function landingOrder(a: SessionSummary, b: SessionSummary): number {
+  const inProgress = (s: SessionSummary) => (s.report ? 1 : 0);
+  const num = (s: SessionSummary) => Number(s.report?.split("-").pop()) || 0;
+  return (
+    inProgress(a) - inProgress(b) ||
+    (b.published ?? "").localeCompare(a.published ?? "") ||
+    num(b) - num(a) ||
+    (a.study ?? "").localeCompare(b.study ?? "") ||
+    a.dtxsid.localeCompare(b.dtxsid)
+  );
+}
+
 // The landing / dispatch surface at `/`. NOT part of a workflow — it is where you
 // pick a test article (session) and then choose a workstream. Highlighting a
 // session reveals its identifiers + a Choose button; once a session is chosen the
@@ -31,7 +46,7 @@ export function Landing({
     setError(null);
     try {
       const r = await api.listSessions();
-      setSessions(r.sessions);
+      setSessions([...r.sessions].sort(landingOrder));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,7 +140,20 @@ export function Landing({
                           selected
                         </span>
                       )}
-                      <span className="muted" style={{ marginLeft: "auto" }}>
+                      {s.report ? (
+                        <span className="muted" style={{ marginLeft: 8 }}>
+                          {s.report}
+                          {s.study && ` (${s.study})`}
+                          {s.published && (
+                            <span style={{ whiteSpace: "nowrap" }}> · published {s.published}</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="badge warn" style={{ marginLeft: 8 }}>
+                          in progress
+                        </span>
+                      )}
+                      <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
                         {s.sections} section{s.sections === 1 ? "" : "s"}
                       </span>
                     </div>

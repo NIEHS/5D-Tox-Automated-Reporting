@@ -480,7 +480,13 @@ async def sessions_summary():
 
     Lists each DTXSID session with its section count and last-modified time.
     Useful for verifying that a sync push/pull moved the expected data.
+
+    A session of a published study also names its report, the member study of
+    a report over several ("rat" / "mouse"), and when the report was published
+    ("2023-03"); all three are null for a study still in progress.
     """
+    from narrative.prompt_workshop import published_date, report_of
+
     summary = []
     try:
         if SESSIONS_DIR.exists():
@@ -496,10 +502,14 @@ async def sessions_summary():
                 section_files = list(d.glob("*.json"))
                 # Exclude meta.json from the section count
                 sections = [f.stem for f in section_files if f.stem != "meta"]
+                report, study = report_of(d.name)
                 summary.append({
                     "dtxsid": d.name,
                     "sections": len(sections),
                     "section_keys": sections,
+                    "report": report,
+                    "study": study,
+                    "published": published_date(report),
                 })
     except OSError:
         # GCS FUSE mount may not be ready or bucket may be empty —
