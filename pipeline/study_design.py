@@ -239,7 +239,10 @@ def species_singular(facts: dict) -> str:
 
 
 def species_plural(facts: dict, capitalize: bool = False) -> str:
-    """"rats" / "mice" / "animals" (species unrecorded)."""
+    """"rats" / "mice" / "animals" (species unrecorded); "rats and mice" for a
+    report over several studies (facts["studies"], rendering.report_compose)."""
+    if facts.get("studies"):
+        return " and ".join(species_plural(f, capitalize) for f in facts["studies"])
     species = facts.get("species")
     noun = _SPECIES_PLURAL.get(species, f"{species}s") if species else "animals"
     return noun.title() if capitalize else noun
@@ -265,7 +268,10 @@ def caption_treatment(facts: dict, compound: str) -> str:
 
 
 def subject_phrase(facts: dict, capitalize: bool = False) -> str:
-    """"Sprague Dawley rats" / "rats" / "animals" — the study animals, plural."""
+    """"Sprague Dawley rats" / "rats" / "animals" — the study animals, plural;
+    "Sprague Dawley rats and B6D2F1 mice" over several studies."""
+    if facts.get("studies"):
+        return " and ".join(subject_phrase(f, capitalize) for f in facts["studies"])
     noun = species_plural(facts, capitalize)
     strain = strain_display(facts)
     return f"{strain} {noun}" if strain else noun

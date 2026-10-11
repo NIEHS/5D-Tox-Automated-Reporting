@@ -123,25 +123,40 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     present.  Emitted as ONE paragraph with soft breaks by the renderer (matching
     the reference), so the wrapped lines have zero inter-line gap.
     """
-    from pipeline.study_design import strain_display, study_type_label, subject_phrase
+    from pipeline.study_design import study_type_label
 
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
     design = data.get("study_design") or {}
-    designation = data.get("strain") or ""
     title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
-    species_only = subject_phrase({"species": design.get("species")}, capitalize=True)
     study_type = study_type_label(design)
+    # A report over several studies (rendering.report_compose) names each
+    # study's animals: "… Rats and B6D2F1/Crl Mice".
+    studies = design.get("studies")
+    animals = (" and ".join(_title_animals(f, f.get("designation") or "") for f in studies)
+               if studies else _title_animals(design, data.get("strain") or ""))
     body = " ".join(seg for seg in (
-        "In Vivo Repeat Dose Biological Potency Study of",
+        f"In Vivo Repeat Dose Biological Potency {'Studies' if studies else 'Study'} of",
         title_name,
         "in",
-        strain_display(design),
-        designation,
-        species_only,
+        animals,
         f"({study_type})" if study_type else "",
     ) if seg.strip())
     return [_TITLE_HEADER, *_wrap_words(body, max_chars)]
+
+
+def _title_animals(design: dict, designation: str) -> str:
+    """One study's animals as the title names them: strain, designation and
+    species — "Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats".  A designation
+    that is a vendor suffix of the strain ("/Crl") is written onto it
+    ("B6D2F1/Crl Mice")."""
+    from pipeline.study_design import strain_display, subject_phrase
+
+    strain = strain_display(design)
+    if designation.startswith("/"):
+        strain, designation = strain + designation, ""
+    species = subject_phrase({"species": design.get("species")}, capitalize=True)
+    return " ".join(seg for seg in (strain, designation, species) if seg.strip())
 
 
 def _niehs_publisher_lines(data: dict) -> list:

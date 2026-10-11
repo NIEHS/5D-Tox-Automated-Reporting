@@ -235,8 +235,10 @@ def _build_full_title(ta: dict, design: dict | None = None) -> str:
     from pipeline.study_design import subject_phrase
 
     running_header_name = ta["forms"]["running_header"]["text"]
+    # A report over several studies (rendering.report_compose) is of "Studies".
+    study = "Studies" if (design or {}).get("studies") else "Study"
     return (
-        f"In Vivo Repeat Dose Biological Potency Study of "
+        f"In Vivo Repeat Dose Biological Potency {study} of "
         f"{running_header_name} in {subject_phrase(design or {}, capitalize=True)}"
     )
 
@@ -248,7 +250,13 @@ def apply_study_design(data: dict, integrated: dict | None,
     with the standard-design fallback for ``dose_unit`` (pipeline.study_design)."""
     from pipeline.study_design import study_design_facts
 
-    design = study_design_facts(integrated, dose_unit)
+    apply_design(data, study_design_facts(integrated, dose_unit))
+
+
+def apply_design(data: dict, design: dict) -> None:
+    """State ``design`` (pipeline.study_design facts) as the report's: the
+    apical captions, the title and running header, and the peer-review
+    boilerplate that names the report by its title."""
     data["study_design"] = design
     # Apical table captions already built (the LaTeX path builds them before
     # this runs) state the study's species, verb and duration.
