@@ -97,18 +97,19 @@ export interface PublishReadiness {
 
 // A section's editable content as loaded from GET /api/session/{dtxsid}.
 // Configurator: human-set report front-matter.
-export interface FrontMatterAuthor {
+// One person of a roster (authors, contributors, collaborators).  `contribution`
+// is what a group of people did, shared by everyone listed under it; `role` is
+// one person's.
+export interface FrontMatterPerson {
   name: string;
   affiliation?: string;
-  role?: string;
-}
-export interface FrontMatterContributor {
-  name: string;
+  contribution?: string;
   role?: string;
 }
 export interface FrontMatter {
-  authors?: FrontMatterAuthor[];
-  contributors?: FrontMatterContributor[];
+  authors?: FrontMatterPerson[];
+  contributors?: FrontMatterPerson[];
+  collaborators?: FrontMatterPerson[];
   publication?: {
     report_number?: string;
     doi?: string;

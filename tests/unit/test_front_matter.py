@@ -74,7 +74,8 @@ def test_overlay_sets_authors_and_publication():
     assert data["contributors"] == {"paragraphs": []}      # none supplied: untouched
     assert "DOI: 10.1/x" in data["publication_details"]["paragraphs"]
     # The structured roster rides along for the BITS projection.
-    assert data["front_matter"]["authors"] == [{"name": "A", "affiliation": "", "role": "Scientist"}]
+    assert data["front_matter"]["authors"] == [
+        {"name": "A", "affiliation": "", "contribution": "", "role": "Scientist"}]
 
 
 def test_overlay_noop_when_empty():
@@ -117,3 +118,15 @@ def test_strain_designation_reaches_the_title_data():
     data = {"strain": ""}
     overlay_front_matter(data, fm)
     assert data["strain"] == "(Hsd:Sprague Dawley® SD®)"
+
+
+def test_a_roster_keeps_contribution_affiliation_and_collaborators():
+    from rendering.front_matter import clean_front_matter
+    fm = clean_front_matter({
+        "contributors": [{"name": "B", "affiliation": "NIEHS", "contribution": "Reviewed"}],
+        "collaborators": [{"name": "C", "affiliation": "Alion", "junk": 1}]})
+    assert fm["contributors"] == [
+        {"name": "B", "affiliation": "NIEHS", "contribution": "Reviewed", "role": ""}]
+    assert fm["collaborators"] == [
+        {"name": "C", "affiliation": "Alion", "contribution": "", "role": ""}]
+    assert "collaborators" not in clean_front_matter({})

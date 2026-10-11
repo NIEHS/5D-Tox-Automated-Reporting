@@ -94,7 +94,7 @@ async def api_get_front_matter(dtxsid: Dtxsid):
     """Read the session's human-set front-matter (authors, contributors, publication
     overrides) for the Configure surface. Returns {} when none is saved yet.
 
-    Shape: {authors:[{name,affiliation,role}], contributors:[{name,role}],
+    Shape: {authors|contributors|collaborators: [{name,affiliation,contribution,role}],
     publication:{report_number,doi,report_date}, strain_designation}.
     """
     store = DiskPoolStore()

@@ -333,29 +333,38 @@ def _prose_blocks(node: DocNode, data: dict) -> list:
 
 
 def _roster_blocks(node: DocNode, data: dict) -> list:
-    """An authors / contributors part, as the published books list it: one
-    <list list-type="simple"> item per affiliation (the affiliation in bold,
-    then one line per person).  Only what the roster states — name and role."""
+    """An authors / contributors / collaborators part, as the published books
+    list it: a <list list-type="simple"> whose items go affiliation by
+    affiliation, and within one by contribution.  An affiliation's first item
+    opens with the affiliation (bold); an item for a contribution opens with it
+    (italic); then one line per person, "Name, Role".  Paragraph content-types
+    are the NTP report grammar's for the part (author / author-affiliation /
+    author-contributions, …).  Only what the roster states."""
     from document_model.ntp_grammar import roster_content_types
     types = roster_content_types(node.book_part_type)
-    person_type, aff_type = types["person"], types["affiliation"]
     roster = [p for p in _front_matter(data).get(node.book_part_type) or []
               if isinstance(p, dict) and (p.get("name") or "").strip()]
     if not roster:
         return []
-    groups: dict[str, list[dict]] = {}
+    groups: dict[str, dict[str, list[dict]]] = {}
     for person in roster:
-        groups.setdefault((person.get("affiliation") or "").strip(), []).append(person)
+        aff = (person.get("affiliation") or "").strip()
+        contribution = (person.get("contribution") or "").strip()
+        groups.setdefault(aff, {}).setdefault(contribution, []).append(person)
     lst = E("list", {"list-type": "simple", "list-content": "contributors"})
-    for aff, people in groups.items():
-        item = E("list-item")
-        if aff:
-            item.append(E.p({"content-type": aff_type}, E.bold(aff)))
-        for person in people:
-            line = ", ".join(x for x in ((person.get("name") or "").strip(),
-                                         (person.get("role") or "").strip()) if x)
-            item.append(E.p({"content-type": person_type}, line))
-        lst.append(item)
+    for aff, by_contribution in groups.items():
+        for i, (contribution, people) in enumerate(by_contribution.items()):
+            item = E("list-item")
+            if aff and i == 0:
+                item.append(E.p({"content-type": types["affiliation"]}, E.bold(aff)))
+            if contribution and types.get("contributions"):
+                item.append(E.p({"content-type": types["contributions"]},
+                                E.italic({"toggle": "yes"}, contribution)))
+            for person in people:
+                line = ", ".join(x for x in ((person.get("name") or "").strip(),
+                                             (person.get("role") or "").strip()) if x)
+                item.append(E.p({"content-type": types["person"]}, line))
+            lst.append(item)
     return [lst]
 
 

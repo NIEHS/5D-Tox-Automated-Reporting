@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   FrontMatter,
-  FrontMatterAuthor,
-  FrontMatterContributor,
+  FrontMatterPerson,
   ReportView,
 } from "../api";
 import { invalidate } from "../useServerResource";
 import { ErrorBox, Spinner, StepProps } from "./shared";
+import { RosterSection } from "./RosterSection";
 import { StructureEditor } from "./StructureEditor";
 
 // The document configurator: edits per-report human-set FRONT-MATTER METADATA
@@ -72,7 +72,7 @@ export function Configure({ dtxsid, back }: StepProps) {
   );
 }
 
-// ── Front-matter: authors roster + contributors + publication overrides ──────
+// ── Front-matter: the rosters (authors, contributors, collaborators) + publication overrides
 function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
   const [fm, setFm] = useState<FrontMatter>({
     authors: [],
@@ -95,6 +95,7 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
         setFm({
           authors: f.authors ?? [],
           contributors: f.contributors ?? [],
+          collaborators: f.collaborators ?? [],
           publication: f.publication ?? {},
           strain_designation: f.strain_designation ?? "",
         });
@@ -126,54 +127,10 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
     }
   }, [dtxsid, fm]);
 
-  // -- authors (ordered roster) --
-  const authors = fm.authors ?? [];
-  function setAuthor(i: number, patch: Partial<FrontMatterAuthor>) {
-    setFm((f) => {
-      const next = [...(f.authors ?? [])];
-      next[i] = { ...next[i], ...patch };
-      return { ...f, authors: next };
-    });
-  }
-  function moveAuthor(i: number, dir: -1 | 1) {
-    setFm((f) => {
-      const next = [...(f.authors ?? [])];
-      const j = i + dir;
-      if (j < 0 || j >= next.length) return f;
-      [next[i], next[j]] = [next[j], next[i]];
-      return { ...f, authors: next };
-    });
-  }
-  function addAuthor() {
-    setFm((f) => ({
-      ...f,
-      authors: [...(f.authors ?? []), { name: "", role: "", affiliation: "" }],
-    }));
-  }
-  function removeAuthor(i: number) {
-    setFm((f) => ({ ...f, authors: (f.authors ?? []).filter((_, k) => k !== i) }));
-  }
-
-  // -- contributors --
-  const contributors = fm.contributors ?? [];
-  function setContributor(i: number, patch: Partial<FrontMatterContributor>) {
-    setFm((f) => {
-      const next = [...(f.contributors ?? [])];
-      next[i] = { ...next[i], ...patch };
-      return { ...f, contributors: next };
-    });
-  }
-  function addContributor() {
-    setFm((f) => ({
-      ...f,
-      contributors: [...(f.contributors ?? []), { name: "", role: "" }],
-    }));
-  }
-  function removeContributor(i: number) {
-    setFm((f) => ({
-      ...f,
-      contributors: (f.contributors ?? []).filter((_, k) => k !== i),
-    }));
+  // -- rosters (each ordered: the order is the order printed) --
+  type RosterKey = "authors" | "contributors" | "collaborators";
+  function setRoster(key: RosterKey, people: FrontMatterPerson[]) {
+    setFm((f) => ({ ...f, [key]: people }));
   }
 
   const pub = fm.publication ?? {};
@@ -187,79 +144,29 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
     <div className="configure-form">
       <ErrorBox error={error} />
 
-      <section className="config-group">
-        <div className="group-heading-row">
-          <h3 className="group-heading">Authors</h3>
-          <button onClick={addAuthor}>+ Add author</button>
-        </div>
-        <p className="help" style={{ marginTop: 0 }}>
-          Listed in order. Use ↑ ↓ to reorder — the order is the author order on the
-          report.
-        </p>
-        {authors.length === 0 && <p className="muted">No authors yet.</p>}
-        {authors.map((a, i) => (
-          <div key={i} className="roster-row">
-            <span className="roster-pos">{i + 1}</span>
-            <input
-              placeholder="Full name"
-              value={a.name ?? ""}
-              onChange={(e) => setAuthor(i, { name: e.target.value })}
-            />
-            <input
-              placeholder="Role (e.g. Study Scientist)"
-              value={a.role ?? ""}
-              onChange={(e) => setAuthor(i, { role: e.target.value })}
-            />
-            <input
-              placeholder="Affiliation"
-              value={a.affiliation ?? ""}
-              onChange={(e) => setAuthor(i, { affiliation: e.target.value })}
-            />
-            <div className="roster-actions">
-              <button onClick={() => moveAuthor(i, -1)} disabled={i === 0} title="Move up">
-                ↑
-              </button>
-              <button
-                onClick={() => moveAuthor(i, 1)}
-                disabled={i === authors.length - 1}
-                title="Move down"
-              >
-                ↓
-              </button>
-              <button onClick={() => removeAuthor(i)} title="Remove">
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="config-group">
-        <div className="group-heading-row">
-          <h3 className="group-heading">Contributors</h3>
-          <button onClick={addContributor}>+ Add contributor</button>
-        </div>
-        {contributors.length === 0 && <p className="muted">No contributors yet.</p>}
-        {contributors.map((c, i) => (
-          <div key={i} className="roster-row">
-            <input
-              placeholder="Full name"
-              value={c.name ?? ""}
-              onChange={(e) => setContributor(i, { name: e.target.value })}
-            />
-            <input
-              placeholder="Role (e.g. Peer Reviewer)"
-              value={c.role ?? ""}
-              onChange={(e) => setContributor(i, { role: e.target.value })}
-            />
-            <div className="roster-actions">
-              <button onClick={() => removeContributor(i)} title="Remove">
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
-      </section>
+      <RosterSection
+        title="Authors"
+        addLabel="+ Add author"
+        help="Listed in order. Use ↑ ↓ to reorder — the order is the author order on the report."
+        people={fm.authors ?? []}
+        onChange={(people) => setRoster("authors", people)}
+        numbered
+      />
+      <RosterSection
+        title="Contributors"
+        addLabel="+ Add contributor"
+        people={fm.contributors ?? []}
+        onChange={(people) => setRoster("contributors", people)}
+        rolePlaceholder="Role (optional)"
+      />
+      <RosterSection
+        title="Collaborators"
+        addLabel="+ Add collaborator"
+        help="Only reports whose document has a Collaborators part list them (the NTP Research Report)."
+        people={fm.collaborators ?? []}
+        onChange={(people) => setRoster("collaborators", people)}
+        rolePlaceholder="Role (optional)"
+      />
 
       <section className="config-group">
         <h3 className="group-heading">Publication details</h3>

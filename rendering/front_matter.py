@@ -14,8 +14,9 @@ This module owns:
 
 Persisted shape (front_matter.json):
     {
-      "authors":      [ {"name","affiliation","role"} , ... ],   # ordered = author order
-      "contributors": [ {"name","role"} , ... ],
+      "authors":      [ {"name","affiliation","contribution","role"} , ... ],  # ordered = author order
+      "contributors": [ {"name","affiliation","contribution","role"} , ... ],
+      "collaborators": [ {"name","affiliation","contribution","role"} , ... ],  # NTP RR
       "publication":  { "report_number", "doi", "report_date" },  # any subset
       "strain_designation": "(Hsd:Sprague Dawley® SD®)"   # the title's supplier
     }                                                        # designation, optional
@@ -26,8 +27,11 @@ plain paragraph lists, one roster line per paragraph, which every surface's
 front-matter resolver already renders:
     {"paragraphs": ["Name, Role, Affiliation", ...]}
 The structured roster itself is kept on `data["front_matter"]` (cleaned) for the
-BITS projection, which groups names by affiliation and role and builds the
-book-meta <contrib-group>.
+BITS projection, which lists it as the published books do (an affiliation, then
+each contribution made there with the people who made it) and builds the
+book-meta <contrib-group>.  `contribution` is what a group of people did
+("Critically reviewed report and results"), shared by everyone listed under it;
+`role` is one person's ("Study Scientist").
 """
 
 from __future__ import annotations
@@ -118,15 +122,19 @@ def clean_front_matter(fm: dict) -> dict:
                 out.append({k: str(r.get(k, "")).strip() for k in keys})
         return out
 
+    person = ("name", "affiliation", "contribution", "role")
     clean = {
-        "authors": _people(fm.get("authors"), ("name", "affiliation", "role")),
-        "contributors": _people(fm.get("contributors"), ("name", "role")),
+        "authors": _people(fm.get("authors"), person),
+        "contributors": _people(fm.get("contributors"), person),
         "publication": {
             k: str(v).strip()
             for k, v in (fm.get("publication") or {}).items()
             if k in _PUBLICATION_OVERRIDES and str(v).strip()
         },
     }
+    collaborators = _people(fm.get("collaborators"), person)
+    if collaborators:
+        clean["collaborators"] = collaborators
     designation = str(fm.get("strain_designation") or "").strip()
     if designation:
         clean["strain_designation"] = designation
