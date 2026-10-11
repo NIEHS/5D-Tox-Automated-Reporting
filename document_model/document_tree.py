@@ -259,33 +259,82 @@ def _has_repeats(nodes) -> bool:
     return any(n.repeat or _has_repeats(n.children or []) for n in nodes)
 
 
-def _scope(node, species: str, suffix: str) -> None:
-    node.id = f"{node.id}--{suffix}"
-    node.scope_species = species
+# What each repeat is over, and the node field a copy is scoped by (ADR-0029).
+_REPEAT_SCOPE = {"deposit_species": "scope_species", "study_species": "scope_species",
+                 "genomic_organs": "scope_organ"}
+_REPEAT_VARIABLE = {"deposit_species": "species", "study_species": "species",
+                    "genomic_organs": "organ"}
+
+
+def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
+    """{repeat: [{key, title}]} — what each repeat makes one copy for:
+
+    - deposit_species: the species of the study's data deposit;
+    - study_species: the studies of a report over several (facts["studies"],
+      rendering.report_compose); a single study is one, unscoped (``key`` None),
+      titled with its animals ("Rats"; "Animals" before any are recorded);
+    - genomic_organs: the tissues of the genomic analyses, in their order."""
+    facts = facts or {}
+    studies = [{"key": s["key"], "title": s["title"]} for s in facts.get("studies") or []]
+    if not studies:
+        from pipeline.study_design import species_plural
+        design = facts.get("study_design") or {}
+        studies = [{"key": None, "title": species_plural(design, capitalize=True)}]
+    organs: list[str] = []
+    for entry in facts.get("genomics_sections") or []:
+        organ = (entry.get("organ") or "").strip()
+        if organ and organ.lower() not in [o.lower() for o in organs]:
+            organs.append(organ)
+    return {
+        "deposit_species": list((facts.get("deposit") or {}).get("species") or []),
+        "study_species": studies,
+        "genomic_organs": [{"key": o.lower(), "title": o[:1].upper() + o[1:]} for o in organs],
+    }
+
+
+def _scope(node, field: str, key: str | None, variable: str, title: str) -> None:
+    """Scope a copy and every node in it to ``key`` (ids suffixed with it, so
+    they stay unique), filling ``${variable}`` in their titles."""
+    from string import Template
+    if key is not None:
+        node.id = f"{node.id}--{key}"
+        setattr(node, field, key)
+    if "${" in (node.title or ""):
+        node.title = Template(node.title).safe_substitute({variable: title})
     for child in node.children or []:
-        _scope(child, species, suffix)
+        _scope(child, field, key, variable, title)
 
 
-def _expand_repeats(nodes: list, species: list[dict]) -> list:
-    """A `repeat: deposit_species` section becomes one copy per deposited species,
-    titled with it ("Rats", "Mice"), every node in it scoped to that species
-    (ids suffixed so they stay unique); with no species, its children stand in
-    its place.  Mutates the (already copied) nodes; returns the new list."""
+def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
+    """A repeated section (`repeat:`, see repeat_items) becomes one copy per
+    item, every node in it scoped to the item.  The copy's title fills
+    `${species}` / `${organ}` ("Study Design for ${species}"), or, without one,
+    is the item's title ("Rats", "Heart").  With no deposit species, a
+    `deposit_species` section's children stand in its place; with no tissues,
+    a `genomic_organs` section is left out.  Repeats nest — a tissue
+    repeated per study.  Mutates the (already copied) nodes; returns the new
+    list."""
     import copy
     out = []
     for node in nodes:
-        node.children = _expand_repeats(node.children or [], species)
-        if node.repeat != "deposit_species":
+        node.children = _expand_repeats(node.children or [], items)
+        if not node.repeat:
             out.append(node)
             continue
-        if not species:
-            out.extend(node.children)
+        repeat, node.repeat = node.repeat, None
+        found = items.get(repeat) or []
+        if not found:
+            # No deposit species: the files are listed without them.  No tissues:
+            # there is nothing to say per tissue.
+            if repeat == "deposit_species":
+                out.extend(node.children)
             continue
-        for sp in species:
+        variable = _REPEAT_VARIABLE[repeat]
+        for item in found:
             clone = copy.deepcopy(node)
-            clone.repeat = None
-            clone.title = sp["title"]
-            _scope(clone, sp["key"], sp["key"])
+            if "${" not in (clone.title or ""):
+                clone.title = item["title"]
+            _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"])
             out.append(clone)
     return out
 
@@ -305,8 +354,9 @@ def study_tree(base, collected, authored=None, facts=None):
        study's text (`authored`), else `missing_content_text`, else pending.
     4. Study facts in titles: `${chemical_name}` (TITLE_FIELDS) from `facts`
        (the report data); a field the facts lack stays as written.
-    5. Repeated sections (`repeat: deposit_species`): one copy per species of
-       the study's deposit (`facts["deposit"]`), see _expand_repeats.
+    5. Repeated sections (`repeat:`): one copy per species of the study's
+       deposit, per study of a report over several, or per genomic tissue
+       (repeat_items, _expand_repeats).
 
     The result is always (re)numbered — numbering is positional and idempotent,
     and the emitters read its products (labels, appendix scopes) — so a render
@@ -324,7 +374,7 @@ def study_tree(base, collected, authored=None, facts=None):
         if nodes is base:
             import copy
             nodes = copy.deepcopy(base)
-        nodes = _expand_repeats(nodes, ((facts or {}).get("deposit") or {}).get("species") or [])
+        nodes = _expand_repeats(nodes, repeat_items(facts))
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     if values and _has_title_fields(nodes):
         if nodes is base:

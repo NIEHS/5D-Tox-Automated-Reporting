@@ -99,11 +99,11 @@ _COMPUTED_OR_SPECIAL = frozenset(
      "appendix_letter", "appendix_scope", "table_label", "figure_label",
      "sec_label",
      # ADR-0029: set when a `repeat` section is expanded per study.
-     "scope_species"}
+     "scope_species", "scope_organ"}
 )
 
 # ADR-0029: what a section may repeat over (document_tree.study_tree).
-_REPEATS = ("deposit_species",)
+_REPEATS = ("deposit_species", "study_species", "genomic_organs")
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file

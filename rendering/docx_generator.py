@@ -64,6 +64,7 @@ from document_model.cover_layouts import get_cover_layout
 from document_model.document_tree import DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from rendering.render_common import (
+    node_data,
     supplied_files,
     supplied_files_pending,
     BMD_SUMMARY_HEADERS,
@@ -2037,7 +2038,7 @@ def _walk_docx_tree(
                 flow["landscape"] = want
         before = len(doc.paragraphs)
         handler = _DISPATCH.get(n.node_type, _render_unimplemented)
-        handler(doc, n, data)
+        handler(doc, n, node_data(n, data))
         # The title-page handler applies its own PER-ROLE styling (it folds in the
         # node-level types/instances layers itself); skip the generic uniform
         # overlay so it doesn't clobber the per-role fonts/sizes with one style.

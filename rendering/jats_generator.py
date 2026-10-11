@@ -56,6 +56,7 @@ def _render_nodes(data: dict):
     from document_model.document_tree import render_nodes
     return render_nodes(data, None)
 from rendering.render_common import (
+    node_data,
     supplied_files,
     supplied_files_pending,
     authored_table_matrix,
@@ -424,9 +425,15 @@ def _dose_label(dose, unit: str) -> str:
     return f"{dose} {unit}"
 
 
+def _comment(text: str) -> etree._Element:
+    """An XML comment of ``text``; a node id may hold "--" (a repeated
+    section's copy, "table-tissue-conc--rat"), which a comment may not."""
+    return etree.Comment(text.replace("--", "-\u2010"))
+
+
 def _todo(node: DocNode, why: str = "not yet projected") -> etree._Element:
     """A visible gap marker — never a silent drop."""
-    return etree.Comment(f" TODO tracer: {why} (id={node.id}, type={node.node_type}) ")
+    return _comment(f" TODO tracer: {why} (id={node.id}, type={node.node_type}) ")
 
 
 def _emit_apical_table(node: DocNode, data: dict) -> list:
@@ -652,7 +659,7 @@ def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
                 continue
             sec.append(_p_inline(para))
         if rc.kind == "methods" and rc.inline_table is not None:
-            sec.append(etree.Comment(
+            sec.append(_comment(
                 f" TODO tracer: inline methods table for '{node.id}' "
                 f"deferred to data-tables phase "))
     elif rc.kind == "labeled":
@@ -680,7 +687,7 @@ def _append_node(parent: etree._Element, node: DocNode, data: dict) -> None:
     _append_node_content(parent, node, data)
     level = resolve_protection(node.id, data)
     if is_protected(level) and len(parent) > before:
-        marker = etree.Comment(
+        marker = _comment(
             f" protected id={node.id} level={level.name.lower()} "
         )
         parent[before].addprevious(marker)
@@ -1103,7 +1110,7 @@ def _append_node_content(parent: etree._Element, node: DocNode, data: dict) -> N
             f"BITS/JATS renderer has no emitter for node type "
             f"{node.node_type!r} (node id={node.id!r})"
         )
-    handler(parent, node, data)
+    handler(parent, node, node_data(node, data))
 
 
 def _build_body(data: dict) -> etree._Element:

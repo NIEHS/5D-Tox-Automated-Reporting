@@ -226,6 +226,8 @@ def _build_toc_entries(
     # must not contribute entries.  walk_tree always recurses, so it can't
     # express that pruning; the manual recursion below keeps the intent explicit
     # rather than relying on those node types happening to be childless today.
+    from rendering.render_common import node_data
+
     def _walk_toc(nodes: list, scope: str | None = None):
         """
         Recursively walk tree nodes, emitting toc_entries for headings
@@ -291,7 +293,7 @@ def _build_toc_entries(
             if node.table_number is not None:
                 ready = _is_ready(node)
                 table_entries.append({
-                    "title": _table_list_title(node, data),
+                    "title": _table_list_title(node, node_data(node, data)),
                     "table_number": node.table_number,
                     # Scope-aware display label ("B-1" for appendix tables —
                     # ADR-0025 §5); the lists show this, not the bare number.
@@ -309,7 +311,7 @@ def _build_toc_entries(
                     "title": _strip_figure_prefix(node.caption or node.title),
                     "figure_number": node.figure_number,
                     "label": node.figure_label or str(node.figure_number),
-                    "ready": figure_payload(node, data) is not None,
+                    "ready": figure_payload(node, node_data(node, data)) is not None,
                     "scope": scope,
                 })
 

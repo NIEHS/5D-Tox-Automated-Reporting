@@ -1895,6 +1895,38 @@ def assert_dispatch_covers(
 # Tree walk + per-node emit (ADR-0006)
 # ---------------------------------------------------------------------------
 
+def node_data(node: DocNode, data: dict) -> dict:
+    """The data a node renders from.  A node a repeat scoped to one study of a
+    report over several (``scope_species``, data["studies"] —
+    rendering.report_compose) renders from that study's data, under the
+    report's own (front matter, Background, deposit …); one scoped to a tissue
+    (``scope_organ``) has that tissue's gene set and gene prose as its
+    ``gene_set_narrative`` / ``gene_narrative``.  Every other node: ``data``.
+    The four surfaces apply it where they dispatch a node."""
+    species, organ = node.scope_species, node.scope_organ
+    if not species and not organ:
+        return data
+    out = data
+    study = next((s for s in data.get("studies") or [] if s.get("key") == species), None)
+    if study is not None:
+        out = {**data, **study["data"]}
+    if organ:
+        prose = {}
+        for entry in out.get("genomics_sections") or []:
+            if (entry.get("organ") or "").strip().lower() == organ:
+                key = "gene_set_narrative" if entry.get("type") == "gene_set" else "gene_narrative"
+                prose[key] = {"paragraphs": _paragraph_list(entry.get("narrative"))}
+        out = {**out, "gene_set_narrative": {"paragraphs": []},
+               "gene_narrative": {"paragraphs": []}, **prose}
+    return out
+
+
+def _paragraph_list(value) -> list[str]:
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    return [p for p in value or [] if isinstance(p, str) and p.strip()]
+
+
 def walk_emit(
     node: DocNode,
     data: dict,
@@ -1962,7 +1994,7 @@ def walk_emit(
 
     def _visit(n: DocNode) -> None:
         handler = dispatch.get(n.node_type, fallback)
-        chunk = handler(n, data)
+        chunk = handler(n, node_data(n, data))
         if not chunk:
             return
         if emit_pre is not None:
