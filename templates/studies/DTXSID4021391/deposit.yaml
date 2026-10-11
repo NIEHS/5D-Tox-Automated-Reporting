@@ -1,0 +1,15 @@
+# NIEHS-06's own wording for its deposited files (ADR-0029, pipeline.deposit):
+# the caption each is listed under in its Supplemental Data appendix, as the
+# published book has it (tooling.deposit_captions).  Files not named here are
+# listed by their file name.
+captions:
+  BMDs_code_package.zip: BMDs Code Package
+  BMDExpress_Indiviual_Gene_BMD_Results.txt: BMDExpress Individual Gene BMD Results
+  Array_platform_gene_and_GO_term_annotation_file.zip: Array Platform Gene and GO Term Annotation File
+  Principle_Components_Analysis_Files.zip: Principal Components Analysis Files
+  Raw_data_CEL_files.zip: Raw data CEL Files
+  C10277_I04_Mean_Body_Weight_Summary.pdf: I04 - Mean Body Weight Summary
+  C10277_I05_Clinical_Observations_Summary.pdf: I05 - Clinical Observations Summary
+  C10277_PA06_Organ_Weights_Summary.pdf: PA06 - Organ Weights Summary
+  C10277_PA41_Clinical_Chemistry_Summary.pdf: PA41 - Clinical Chemistry Summary
+  C10277_R07_Hormone_Summary.pdf: R07 - Hormone Summary

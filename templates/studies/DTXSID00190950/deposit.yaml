@@ -1,0 +1,58 @@
+# NIEHS-07's own wording for its deposited files (ADR-0029, pipeline.deposit):
+# the caption each is listed under in its Supplemental Data appendix, as the
+# published book has it (tooling.deposit_captions).  Files not named here are
+# listed by their file name.
+captions:
+  C20027-01_Hematology_Data_Summary.docx: Hematology Summary
+  C20027-01_Hormone_Summary.docx: Hormone and Enzymes Summary
+  C20027-01_BMD_BMDL_LOEL_and_NOEL_Summary_for_Apical_Endpoints_Sorted_by_BMD_LOEL_from_Low_to_High.docx: BMD, NOEL and LOEL Summary for Apical Endpoints
+  C20027-01_Appendix_Male_07282021.docx: Male BMD Apical Endpoints Model Fits
+  C20027-01_Appendix_Female_07282021.docx: Female BMD Apical Endpoints Model Fits
+  C20027-01_Benchmark_Dose_Model_Recommendation_Selection_Rules_for_Apical_Endpoints.docx: BMD Model Recommendation Selection Rules
+  C20027-01_ReadME.docx: Read Me
+  C20027-01_Parameter_Male_07282021.xlsx: Male Model Parameters
+  C20027-01_Parameter_Female_07282021.xlsx: Female Model Parameters
+  C20027-01_bmds.zip: BMDs code package
+  C20027-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2: BMDExpress Project File (bm2 format)
+  C20027-01_Kidney_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx: Top 10 Genes Ranked by Potency of Perturbation_Kidney
+  C20027-01_Kidney_Top_10_GO_Biological_Process_Gene_Sets_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx: Top 10 GO Biological Process Gene Sets_Kidney
+  C20027-01_Liver_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx: Top 10 Genes Ranked by Potency of Perturbation_Liver
+  C20027-01_Liver_Top_10_GO_Biological_Process_Gene_Sets_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx: Top 10 GO Biological Process Gene Sets_Liver
+  C20027-01_Kidney_6-1_FTOH_Female.txt: BMDExpress Expression Data_Kidney_Female
+  C20027-01_Kidney_6-1_FTOH_Male.txt: BMDExpress Expression Data_Kidney_Male
+  C20027-01_Liver_6-1_FTOH_Female.txt: BMDExpress Expression Data_Liver_Female
+  C20027-01_Liver_6-1_FTOH_Male.txt: BMDExpress Expression Data_Liver_Male
+  ? C20027-01_Kidney_6-1_FTOH_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+  : BMDExpress Individual Gene BMD Results_Kidney_Male
+  ? C20027-01_Kidney_6-1_FTOH_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+  : BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Male
+  ? C20027-01_Kidney_6-1_FTOH_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+  : BMDExpress Individual Gene BMD Results_Kidney_Female
+  ? C20027-01_Kidney_6-1_FTOH_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+  : BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Female
+  ? C20027-01_Liver_6-1_FTOH_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+  : BMDExpress Individual Gene BMD Results_Liver_Male
+  ? C20027-01_Liver_6-1_FTOH_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+  : BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Male
+  ? C20027-01_Liver_6-1_FTOH_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+  : BMDExpress Individual Gene BMD Results_Liver_Female
+  ? C20027-01_Liver_6-1_FTOH_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+  : BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Female
+  C20027-01_BMDExpress_Prefilter_Results_Kidney_Female.txt: BMDExpress Prefilter Results_ Kidney _Female
+  C20027-01_BMDExpress_Prefilter_Results_Kidney_Male.txt: BMDExpress Prefilter Results_ Kidney _Male
+  C20027-01_BMDExpress_Prefilter_Results_Liver_Female.txt: BMDExpress Prefilter Results_ Liver _Female
+  C20027-01_BMDExpress_Prefilter_Results_Liver_Male.txt: BMDExpress Prefilter Results_ Liver _Male
+  C20027-01_Animal_and_FASTQ_Metadata.zip: Animal and Fastaq Metadata
+  C20027-01_Kidney_PCA.zip: Kidney Principal Components Analysis Files
+  C20027-01_Liver_PCA.zip: Liver Principal Components Analysis Files
+  C20027-01_Individual_Gene_Defined_Category_Files_for_Gene_Level_BMD_Analysis_of_Array_Platform_GPL1355.zip: Individual Gene BMD Analysis Results File
+  C20027-01_Software.zip: BMDExpress Software
+  C20027-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional_JSON.zip: BMDExpress Project File (JSON format)
+  C20027-01_Functional_Classification_Annotation_Files_for_GO_Biological_Process_Analysis_of_Array_Platform_GPL1355.zip: GO Biological Process BMD Analysis Results
+  C20027-01_I04_-_Mean_Body_Weight_Summary.pdf: I04 – Mean_Body_Weight_Summary
+  C20027-01_I05_-_Clinical_Observations_Summary.pdf: I05 – Clinical_Observations_Summary
+  C20027-01_PA06_-_Organ_Weights_Summary.pdf: PA06 – Organ_Weights_Summary
+  C20027-01_PA41_-_Clinical_Chemistry_Summary.pdf: PA41 – Clinical_Chemistry_Summary
+  C20027-01_-_PA43_-_Hematology_Summary.pdf: PA43 – Hematology Summary
+  C20027-01_-_PA48_-_Summary_of_Tissue_Concentration.pdf: PA48 – Summary of Tissue Concentration
+  C20027-01_R07_-_Hormone_Summary.pdf: R07 – Hormone_Summary

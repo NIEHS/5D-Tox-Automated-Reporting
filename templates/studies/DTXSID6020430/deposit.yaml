@@ -1,0 +1,50 @@
+# NIEHS-12's own wording for its deposited files (ADR-0029, pipeline.deposit):
+# the caption each is listed under in its Supplemental Data appendix, as the
+# published book has it (tooling.deposit_captions).  Files not named here are
+# listed by their file name.
+captions:
+  108020006_BMD_NOEL_and_LOEL_Summary_for_Apical_Endpoints.pdf: BMD, NOEL and LOEL Summary for Apical Endpoints
+  108020006_2D_Rat_NonGenomic.bm2: BMDExpress Project File_Rat_Apical (bm2 format)
+  108020006_OrganWeights_Summary.pdf: Organ Weights Summary
+  108020006_Attenuation-adjustedRawReadCountsRatStudy.zip: Attenuation-adjusted Raw Read Counts Rat Study
+  108020006_2D_Rat_Genomic.bm2: BMDExpress Project File Rat Genomic (bm2 format)
+  108020006_2D_Rat_Genomic.json: BMDExpress Project File Rat Genomic (JSON format)
+  108020006_One-way_ANOVA_Rat_Heart.txt: One-way ANOVA_Rat_Heart
+  108020006_One-way_ANOVA_Rat_Kidney.txt: One-way ANOVA_Rat_Kidney
+  108020006_One-way_ANOVA_Rat_Liver.txt: One-way ANOVA_Rat_Liver
+  108020006_One-way_ANOVA_Rat_Lung.txt: One-way ANOVA_Rat_Lung
+  108020006_One-way_ANOVA_Rat_Ovary.txt: One-way ANOVA_Rat_Ovary
+  108020006_TempO-SeqS1500v1.2FullManifestRattusNorvegicus.csv: TempO-Seq S1500v1.2 Full Manifest Rattus Norvegicus
+  108020006_TranscriptomicsDataQCReport.zip: Transcriptomics Data QC Report
+  108020006_I01_Animal_Removal_Summary.pdf: I01 - Animal Removal Summary
+  108020006_I02_Animal_Removals.pdf: I02 - Animal Removals
+  108020006_I04_Mean_Body_Weights_and_Survival.pdf: I04 - Mean Body Weights and Survival
+  108020006_I04G_Mean_Body_Weight_Gain.pdf: I04G - Mean Body Weight Gain
+  108020006_I05_Clinical_Observations_Summary.pdf: I05 - Clinical Observations Summary
+  108020006_PA06_Organ_Weights_Summary.pdf: PA06 - Organ Weights Summary
+  108020006_PA41_Clinical_Chemistry_Summary.pdf: PA41 - Clinical Chemistry Summary
+  108020006_PA43_Hematology_Summary.pdf: PA43 - Hematology Summary
+  108020006_Blood_and_Tissue_Concentration.pdf: PA48 - Blood and Tissue Concentration
+  108020007_BMD_NOEL_and_LOEL_Summary_for_Apical_Endpoints_Mouse.pdf: BMD, NOEL and LOEL Summary for Apical Endpoints
+  108020007_2D_NonGenomic_Mouse.bm2: BMDExpress Project File Mouse Apical (bm2 format)
+  108020007_Attenuation-adjustedRawReadCountsMouseStudy.zip: Attenuation-adjusted Raw Read Counts Mouse Study
+  108020007_2D_Mouse_Genomic.bm2: BMDExpress Project File Mouse Genomic (bm2 format)
+  108020007_2D_Mouse_Genomic.json: BMDExpress Project File Mouse Genomic (JSON format)
+  108020007_One-way_ANOVA_Mouse_Heart.txt: One-way ANOVA_Mouse_Heart
+  108020007_One-way_ANOVA_Mouse_Kidney.txt: One-way ANOVA_Mouse_Kidney
+  108020007_One-way_ANOVA_Mouse_Liver.txt: One-way ANOVA_Mouse_Liver
+  108020007_One-way_ANOVA_Mouse_Lung.txt: One-way ANOVA_Mouse_Lung
+  108020007_One-way_ANOVA_Mouse_Ovary.txt: One-way ANOVA_Mouse_Ovary
+  108020007_TempO-SeqS1500v1.2FullManifestMus_Musculus.csv: TempO-Seq S1500v1.2 Full Manifest Mus Musculus
+  108020007_TranscriptomicsDataQCReport.zip: Transcriptomics Data QC Report
+  108020007_I01_Animal_Removal_Summary.pdf: I01 - Animal Removal Summary
+  108020007_I02_Animal_Removals.pdf: I02 - Animal Removals
+  108020007_I04_Mean_Body_Weights_and_Survival.pdf: I04 - Mean Body Weights and Survival
+  108020007_I04G_Mean_Body_Weight_Gain.pdf: I04G - Mean Body Weight Gain
+  108020007_I05_Clinical_Observations_Summary.pdf: I05 - Clinical Observations Summary
+  108020007_PA06_Organ_Weights_Summary.pdf: PA06 - Organ Weights Summary
+  108020007_PA41_Clinical_Chemistry_Summary.pdf: PA41 - Clinical Chemistry Summary
+  108020007_Blood_and_Tissue_Concentration.pdf: PA48 - Blood and Tissue Concentration
+  AnalysisPipelineEvaluation.zip: Analysis Pipeline Evaluation
+  DTT_tBMD_Pipelinebm2.zip: DTT tBMD Pipeline bm2
+  EPA_tBMD_Pipelinebm2.zip: EPA tBMD Pipeline bm2

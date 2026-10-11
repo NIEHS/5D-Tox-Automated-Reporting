@@ -180,3 +180,19 @@ def test_deposit_fields_are_checked(entry, message):
     with pytest.raises(ValueError, match=message):
         instantiate([{"region": "back", "children": [
             {"id": "app", "type": "appendix", "title": "A", "children": [entry]}]}])
+
+
+@pytest.mark.parametrize("report", ["NIEHS-02", "NIEHS-03", "NIEHS-04", "NIEHS-05", "NIEHS-06",
+                                    "NIEHS-07", "NIEHS-08", "NIEHS-09", "NIEHS-10",
+                                    "NIEHS-12", "NIEHS-13"])
+def test_every_caption_is_the_published_wording(report):
+    """The file-name default, else the study's own wording (deposit.yaml)."""
+    if not (BOOKSHELF / report / "TOC.nxml").exists():
+        pytest.skip(f"published {report} bundle not downloaded (assets/cebs/_bookshelf)")
+    from tooling.bits_structure import PUBLISHED
+    from tooling.deposit_captions import published_captions
+    dtxsid = {r: d for d, r in PUBLISHED.items()}[report]
+    listing = json.loads((FIXTURES / report / "deposit-files.json").read_text(encoding="utf-8"))
+    captions = dep._study_statements(dtxsid).get("captions")
+    manifest = build_manifest([tuple(f) for f in listing], captions=captions)
+    assert {f["file"]: f["caption"] for f in manifest["files"]} == published_captions(report)
