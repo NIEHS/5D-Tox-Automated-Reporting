@@ -6,6 +6,7 @@ sections; and it renders a chunked Bookshelf bundle — ours or a published
 book's — the same way.
 """
 
+import functools
 import re
 from pathlib import Path
 
@@ -202,17 +203,30 @@ def _part_page_facts(root) -> dict:
     }
 
 
-@pytest.mark.parametrize("real_page", sorted(PAGES.glob("*.html")), ids=lambda p: p.stem)
+# Every saved part page of a chunked book (the PubReader pages, *-reader, are
+# checked below), as (report, page).
+PART_PAGES = sorted(p for p in LANDING.parents[1].glob("*/bookshelf-pages/*.html")
+                    if not p.stem.endswith("-reader"))
+
+
+@functools.lru_cache(maxsize=None)
+def _facsimile(report: str) -> str:
+    return render_book_file(BOOKSHELF / report)
+
+
+@pytest.mark.parametrize("real_page", PART_PAGES,
+                         ids=lambda p: f"{p.parents[1].name}-{p.stem}")
 def test_published_part_page_matches_the_real_bookshelf_page(real_page):
-    """Each saved Bookshelf page of NIEHS-10 (named by its Bookshelf location,
-    which is the part's id in the bundle) and the facsimile's page for that
-    part show the same banner, heading, content and citation."""
+    """Each saved Bookshelf page of a chunked book (named by its Bookshelf
+    location, which is the part's id in the bundle) and the facsimile's page
+    for that part show the same banner, heading, content and citation."""
     from lxml import html as lhtml
 
-    if not (BOOKSHELF / "NIEHS-10" / "TOC.nxml").exists():
-        pytest.skip("published NIEHS-10 bundle not downloaded (assets/cebs/_bookshelf)")
+    report = real_page.parents[1].name
+    if not (BOOKSHELF / report / "TOC.nxml").exists():
+        pytest.skip(f"published {report} bundle not downloaded (assets/cebs/_bookshelf)")
     real = lhtml.fromstring(real_page.read_text(encoding="utf-8"))
-    page = lhtml.fromstring(render_book_file(BOOKSHELF / "NIEHS-10"))
+    page = lhtml.fromstring(_facsimile(report))
     ours = page.xpath(f"//article[@data-slug='{real_page.stem}']")
     assert ours, f"no facsimile page for {real_page.stem}"
     assert _part_page_facts(ours[0]) == _part_page_facts(real)

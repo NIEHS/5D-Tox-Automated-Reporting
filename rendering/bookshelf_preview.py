@@ -357,9 +357,37 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
 # Section / body walk
 # ---------------------------------------------------------------------------
 
+def _cites(block, rid: str) -> bool:
+    return any(_ln(x) == "xref" and rid in (x.get("rid") or "").split() for x in block.iter())
+
+
+def _at_first_citation(children: list) -> list:
+    """Bookshelf shows a floating table straight after the paragraph (or list)
+    that first cites it, when that block comes earlier in the same section: the
+    published NIEHS-13 Results has Table 18 after the formula lists in the XML
+    and its card after "…shown in Table 18." on the page
+    (tests/fixtures/reference/NIEHS-13/bookshelf-pages/bp3.html).  Tables
+    already following their citation, or following another table that does,
+    stay where they are."""
+    out = list(children)
+    for tw in [c for c in out if _ln(c) == "table-wrap" and c.get("id")
+               and c.get("position") != "anchor"]:
+        i = out.index(tw)
+        cite = next((k for k, b in enumerate(out[:i])
+                     if _ln(b) in ("p", "list") and _cites(b, tw.get("id"))), None)
+        if cite is None:
+            continue
+        j = cite + 1
+        while j < i and _ln(out[j]) == "table-wrap":
+            j += 1
+        if j < i:
+            out.insert(j, out.pop(i))
+    return out
+
+
 def _render_blocks(children, level: int, out: list[str], base_dir: Path | None,
                    images: dict | None) -> None:
-    for el in children:
+    for el in _at_first_citation(children):
         tag = _ln(el)
         if tag == "sec":
             _render_sec(el, level, out, base_dir, images)
