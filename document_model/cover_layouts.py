@@ -123,7 +123,7 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     present.  Emitted as ONE paragraph with soft breaks by the renderer (matching
     the reference), so the wrapped lines have zero inter-line gap.
     """
-    from pipeline.study_design import study_type_label
+    from pipeline.study_design import study_type_label, title_subjects
 
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
@@ -131,10 +131,11 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
     study_type = study_type_label(design)
     # A report over several studies (rendering.report_compose) names each
-    # study's animals: "… Rats and B6D2F1/Crl Mice".
+    # study's animals: "… Rats and B6D2F1/Crl Mice"; a single-sex study's
+    # sex leads ("Female Sprague Dawley …").
     studies = design.get("studies")
-    animals = (" and ".join(_title_animals(f, f.get("designation") or "") for f in studies)
-               if studies else _title_animals(design, data.get("strain") or ""))
+    animals = title_subjects(design, lambda f: _title_animals(
+        f, (f.get("designation") or "") if studies else (data.get("strain") or "")))
     body = " ".join(seg for seg in (
         f"In Vivo Repeat Dose Biological Potency {'Studies' if studies else 'Study'} of",
         title_name,

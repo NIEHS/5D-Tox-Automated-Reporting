@@ -179,3 +179,29 @@ def test_a_stated_design_replaces_the_fallback():
     assert (f["strain"], f["route"], f["vehicle"], f["duration_days"]) == (
         "Wistar", "gavage", "water", 5)
     assert f["fallback"] == []
+
+
+def test_a_single_sex_study_names_its_sex_in_the_title():
+    """The published titles name the sex of a single-sex study: "Male Sprague
+    Dawley … Rats" (NIEHS-02 … 06), "Female … Rats and … Mice" (NIEHS-12, 13),
+    and none for both sexes (NIEHS-07 … 10)."""
+    from pipeline.study_design import sex_word, title_subjects
+
+    males = study_design_facts({"doseResponseExperiments": [
+        {"experimentDescription": {"species": "rat", "sex": "male"}},
+        {"experimentDescription": {"species": "rat", "sex": "Male"}}]})
+    both = study_design_facts({"doseResponseExperiments": [
+        {"experimentDescription": {"species": "rat", "sex": "male"}},
+        {"experimentDescription": {"species": "rat", "sex": "female"}}]})
+    assert males["sexes"] == ["male"] and both["sexes"] == ["female", "male"]
+    animals = lambda f: subject_phrase(f, capitalize=True)          # noqa: E731
+    assert title_subjects(males, animals) == "Male Sprague Dawley Rats"
+    assert title_subjects(both, animals) == "Sprague Dawley Rats"
+    assert sex_word(study_design_facts(_integrated(species="rat"))) == ""
+
+    rats = {"species": "rat", "strain": "Sprague-Dawley", "sexes": ["female"]}
+    mice = {"species": "mouse", "strain": "B6D2F1", "sexes": ["female"]}
+    assert (title_subjects({"studies": [rats, mice]}, animals)
+            == "Female Sprague Dawley Rats and B6D2F1 Mice")
+    assert (title_subjects({"studies": [rats, {**mice, "sexes": ["male"]}]}, animals)
+            == "Female Sprague Dawley Rats and Male B6D2F1 Mice")

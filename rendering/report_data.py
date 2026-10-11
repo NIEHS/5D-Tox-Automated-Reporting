@@ -229,17 +229,19 @@ def _build_full_title(ta: dict, design: dict | None = None) -> str:
     form (the full, never-abbreviated name).  The animals come from the study's
     recorded metadata (``design``, pipeline.study_design): "Sprague Dawley
     Rats" when strain and species are recorded, "Rats" with species only,
-    "Animals" with neither.  Single-sourced here because marshal_export_data,
+    "Animals" with neither, led by the sex for a single-sex study ("Male
+    Sprague Dawley Rats", pipeline.study_design.title_subjects).  Single-sourced here because marshal_export_data,
     scaffold_report_data and apply_study_design need the identical title.
     """
-    from pipeline.study_design import subject_phrase
+    from pipeline.study_design import subject_phrase, title_subjects
 
     running_header_name = ta["forms"]["running_header"]["text"]
     # A report over several studies (rendering.report_compose) is of "Studies".
     study = "Studies" if (design or {}).get("studies") else "Study"
+    animals = title_subjects(design or {}, lambda f: subject_phrase(f, capitalize=True))
     return (
         f"In Vivo Repeat Dose Biological Potency {study} of "
-        f"{running_header_name} in {subject_phrase(design or {}, capitalize=True)}"
+        f"{running_header_name} in {animals}"
     )
 
 

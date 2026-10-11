@@ -37,6 +37,9 @@ DESIGN_FIELDS = _FIELDS
 # The session file holding a stated design: {"fields": {...}, "recorded_at": ...}.
 DESIGN_FILE = "study_design.json"
 
+# The sexes a study's experiments record (anything else is ignored).
+_SEXES = ("female", "male")
+
 # NIEHS spelling of the controlled-vocabulary strain names.
 _STRAIN_DISPLAY = {"Sprague-Dawley": "Sprague Dawley"}
 
@@ -132,14 +135,19 @@ def _duration_days(value: str | None) -> int | None:
 
 
 def study_design_facts(integrated: dict | None, dose_unit: str | None = None) -> dict:
-    """{species, strain, route, vehicle, duration_days, conflicts, fallback} from the
-    experiments' recorded metadata.  A field is the value every experiment
+    """{species, strain, route, vehicle, duration_days, sexes, conflicts, fallback}
+    from the experiments' recorded metadata (``sexes``: the sexes the experiments
+    record, sorted).  A field is the value every experiment
     that records it agrees on (disagreements are listed under ``conflicts``);
     a field none records takes the standard-design fallback for ``dose_unit``
     (see the module docstring), listed under ``fallback``."""
     seen: dict[str, set[str]] = {f: set() for f in _FIELDS}
+    sexes: set[str] = set()
     for exp in (integrated or {}).get("doseResponseExperiments") or []:
         ed = exp.get("experimentDescription") or {}
+        sex = str(ed.get("sex") or "").strip().lower()
+        if sex in _SEXES:
+            sexes.add(sex)
         for f in _FIELDS:
             v = ed.get(f)
             if isinstance(v, str) and v.strip():
@@ -157,6 +165,7 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
         "route": route,
         "vehicle": one["articleVehicle"],
         "duration_days": _duration_days(one["studyDuration"]),
+        "sexes": sorted(sexes),
         "conflicts": conflicts,
         "fallback": [],
     }
@@ -275,6 +284,32 @@ def subject_phrase(facts: dict, capitalize: bool = False) -> str:
     noun = species_plural(facts, capitalize)
     strain = strain_display(facts)
     return f"{strain} {noun}" if strain else noun
+
+
+def sex_word(facts: dict) -> str:
+    """"Male" / "Female" when the study's experiments record one sex only — over
+    several studies, when every study is of that one sex — else ""."""
+    if facts.get("studies"):
+        words = {sex_word(f) for f in facts["studies"]}
+        return words.pop() if len(words) == 1 else ""
+    sexes = facts.get("sexes") or []
+    return sexes[0].title() if len(sexes) == 1 else ""
+
+
+def title_subjects(facts: dict, animals) -> str:
+    """The study animals as a title names them, ``animals(study_facts)`` giving
+    one study's ("Sprague Dawley Rats"), led by the sex when the study used one
+    only, as the published books do: "Male Sprague Dawley … Rats" (NIEHS-02 …
+    06); "Female Sprague Dawley … Rats and B6D2F1/Crl Mice" (NIEHS-12, 13,
+    the shared sex named once); "Sprague Dawley … Rats" for both sexes
+    (NIEHS-07 … 10).  Studies of different sexes each lead with their own."""
+    studies = facts.get("studies")
+    if not studies:
+        return " ".join(x for x in (sex_word(facts), animals(facts)) if x)
+    shared = sex_word(facts)
+    each = [animals(f) if shared else " ".join(x for x in (sex_word(f), animals(f)) if x)
+            for f in studies]
+    return " ".join(x for x in (shared, " and ".join(each)) if x)
 
 
 def administration_phrase(facts: dict) -> str:
