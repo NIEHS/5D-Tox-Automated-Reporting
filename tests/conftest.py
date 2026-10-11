@@ -80,6 +80,10 @@ def _patch_sessions_dir(monkeypatch, sessions_path: Path):
     Also creates the directory so tests don't need to mkdir themselves.
     """
     sessions_path.mkdir(parents=True, exist_ok=True)
+    # The leaf is imported first, so it is patched even when nothing has
+    # imported it yet (a module that reads common.paths.SESSIONS_DIR at call
+    # time — web_routes.bookshelf_routes — would otherwise see the real dir).
+    import common.paths  # noqa: F401
     for mod_name in _SESSIONS_DIR_MODULES:
         try:
             mod = sys.modules.get(mod_name)

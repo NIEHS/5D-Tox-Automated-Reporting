@@ -42,11 +42,18 @@ _PDF_TIMEOUT_S = 180
 
 def _download_links(dtxsid: str) -> list[dict]:
     """The right-rail download links for a session's facsimile — the PDF and DOCX
-    previews, each an on-demand GET route below."""
-    return [
+    previews, each an on-demand GET route below — and, for a published study,
+    its comparison with the published book (web_routes.compare_routes)."""
+    from web_routes.compare_routes import published_report
+
+    links = [
         {"label": "PDF (preview)", "href": f"/Bookshelf/{dtxsid}/report.pdf"},
         {"label": "Word (.docx)", "href": f"/Bookshelf/{dtxsid}/report.docx"},
     ]
+    report = published_report(dtxsid)
+    if report:
+        links.append({"label": f"Compare with {report}", "href": f"/Compare/{dtxsid}"})
+    return links
 
 
 def _sessions_root() -> Path:

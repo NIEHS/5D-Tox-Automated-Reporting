@@ -288,6 +288,11 @@ app.include_router(corpus_routes.router)
 import web_routes.bookshelf_routes as bookshelf_routes
 app.include_router(bookshelf_routes.router)
 
+# Published vs generated: GET /Compare and /Compare/{dtxsid} — a published study's
+# Bookshelf book beside ours, side by side / unified / .diff (rendering.bits_compare).
+import web_routes.compare_routes as compare_routes
+app.include_router(compare_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI
