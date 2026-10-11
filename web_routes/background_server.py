@@ -584,6 +584,11 @@ if _wizard_dir.exists():
     async def _workflow_corpus():
         return _index_response()
 
+    # Prompts mode — client-side SPA route (prompt workshop, any study).
+    @app.get("/workflow/prompts")
+    async def _workflow_prompts():
+        return _index_response()
+
     app.mount("/workflow", StaticFiles(directory=_wizard_dir, html=True), name="workflow")
 else:
     logger.warning("Front end not built (%s missing) — / and /workflow disabled. "

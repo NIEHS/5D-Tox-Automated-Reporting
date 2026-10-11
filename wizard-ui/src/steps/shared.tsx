@@ -20,6 +20,7 @@ export interface StepProps {
   gotoConfigure: () => void;
   gotoKnowledgeGraph: () => void;
   gotoCorpus: () => void;
+  gotoPrompts: () => void;
   // Jump straight to the document-mode query console (the database view).
   gotoQuery: () => void;
 }

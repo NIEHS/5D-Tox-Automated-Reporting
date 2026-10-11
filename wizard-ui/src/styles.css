@@ -779,3 +779,12 @@ button.danger { color: var(--err); }
 @media (max-width: 1100px) {
   .workshop-lower, .workshop-columns, .workshop-columns.three { grid-template-columns: 1fr; }
 }
+.workshop-study { margin-top: 0.4rem; }
+.workshop-study select { max-width: 32rem; }
+.workshop-batch-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.workshop-batch-tab { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.2rem 0.55rem; font-size: 0.8rem; cursor: pointer; }
+.workshop-batch-tab .mark { color: var(--muted); }
+.workshop-batch-tab.done .mark { color: var(--ok); }
+.workshop-batch-tab.flagged .mark { color: var(--warn); }
+.workshop-batch-tab.error .mark { color: var(--err); }
+.workshop-batch-tab.active { border-color: var(--accent); background: rgba(56,189,248,0.12); }

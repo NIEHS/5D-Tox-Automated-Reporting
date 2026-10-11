@@ -9,9 +9,10 @@ Routes (`{section}` is a registered template section — "summary" for now):
   POST /api/prompts/{section}                         save a new version {template, rationale, thread_id}
   POST /api/prompts/{section}/current                 make a version current {version, rationale}
   POST /api/prompts/{section}/render                  {dtxsid, template?} → the exact prompt, or the error
-  POST /api/prompts/{section}/run                     {dtxsid, template? | version?} → a run record
+  POST /api/prompts/{section}/run                     {dtxsid, template? | version?, batch_id?} → a run record
   GET  /api/prompts/{section}/runs/{dtxsid}           the session's runs, newest first
   POST /api/prompts/{section}/runs/{dtxsid}/{run_id}/use   save that run's text as the section
+  GET  /api/prompts/{section}/studies                 the studies a prompt can be tested on
   GET  /api/prompts/{section}/published/{dtxsid}      the published text, or 404
   GET  /api/prompts/{section}/threads                 workshop threads
   POST /api/prompts/{section}/threads                 new thread
@@ -26,6 +27,7 @@ persistence in pipeline.prompt_store.
 from __future__ import annotations
 
 import logging
+import re
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -42,6 +44,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_MESSAGE_CHARS = 4000
+# A batch is one template tried on several studies at once; the UI names it.
+_BATCH_ID_RE = re.compile(r"^b[0-9A-Za-z_-]{1,40}$")
 MAX_TEMPLATE_CHARS = 40_000
 
 # The generator for each templated section (one entry per SECTIONS entry).
@@ -171,9 +175,13 @@ async def api_prompt_run(section: str, request: Request):
     dtxsid = validate_dtxsid(str(body.get("dtxsid") or ""))
     text = _template_arg(body)
     version = body.get("version")
+    batch_id = body.get("batch_id") or None
+    if batch_id is not None and not _BATCH_ID_RE.match(str(batch_id)):
+        return _err("invalid batch_id", 400)
     try:
         record = await _GENERATORS[section].generate(
-            dtxsid, text=text, version=int(version) if version is not None else None)
+            dtxsid, text=text, version=int(version) if version is not None else None,
+            batch_id=batch_id)
     except (TemplateError, UnknownVersion):
         raise
     except Exception as e:
@@ -207,6 +215,13 @@ async def api_prompt_use_run(section: str, dtxsid: Dtxsid, run_id: str):
         "model_used": (run.get("prompt") or {}).get("model", ""),
     })
     return JSONResponse({"ok": True})
+
+
+@router.get("/api/prompts/{section}/studies")
+@_guard
+async def api_prompt_studies(section: str):
+    _section(section)
+    return JSONResponse({"studies": _GENERATORS[section].available_studies()})
 
 
 @router.get("/api/prompts/{section}/published/{dtxsid}")

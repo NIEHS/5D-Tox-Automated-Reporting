@@ -16,6 +16,7 @@ export function Landing({
   gotoConfigure,
   gotoKnowledgeGraph,
   gotoCorpus,
+  gotoPrompts,
 }: StepProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -235,6 +236,17 @@ export function Landing({
                 <div className="pillar-title">Corpus curation</div>
                 <div className="pillar-sub">
                   Canonicalize the corpus organ vocabulary, with live history.
+                </div>
+              </button>
+
+              <button
+                className="pillar"
+                onClick={gotoPrompts}
+                title="Tune the prompts that write the report's narrative sections"
+              >
+                <div className="pillar-title">Prompts</div>
+                <div className="pillar-sub">
+                  Try the Summary prompt on any study, or all of them, and improve it by critique.
                 </div>
               </button>
             </div>

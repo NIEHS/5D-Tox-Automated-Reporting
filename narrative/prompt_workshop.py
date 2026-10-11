@@ -24,9 +24,11 @@ actually printed.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 
+import common.paths as paths
 from common.clock import now_iso
 from common.paths import REPO_ROOT
 from narrative import prompt_templates
@@ -64,15 +66,36 @@ Return ONLY JSON: {"reply": "...", "proposed_template": "..." or null,
 "rationale": "..." or ""}"""
 
 
-def published_section(dtxsid: str, section: str) -> dict | None:
-    """The published text of a section for a published study:
-    {report, text}, or None (unpublished study, or the book has no such
-    section — RR-8 has a Discussion, not a Summary)."""
+def report_of(dtxsid: str) -> tuple[str | None, str | None]:
+    """(published report, member study) for a session: ("NIEHS-10", None), or
+    ("NIEHS-13", "rat") for one study of a report over several studies (the
+    composed session's studies.json names its members), or (None, None) for an
+    unpublished study."""
     try:
         from tooling.build_published_reports import STUDIES
     except ImportError:  # tooling absent in a slim deployment
-        return None
-    report = next((r for r, row in STUDIES.items() if row[0] == dtxsid), None)
+        return None, None
+    by_dtxsid = {row[0]: r for r, row in STUDIES.items()}
+    if dtxsid in by_dtxsid:
+        return by_dtxsid[dtxsid], None
+    for parent, report in by_dtxsid.items():
+        try:
+            members = json.loads((paths.SESSIONS_DIR / parent / "studies.json").read_text())
+        except (OSError, ValueError):
+            continue
+        for study, member in (members or {}).items():
+            if member == dtxsid:
+                return report, study
+    return None, None
+
+
+def published_section(dtxsid: str, section: str) -> dict | None:
+    """The published text of a section for a published study:
+    {report, study, paragraphs}, or None (unpublished study, or the book has
+    no such section — RR-8 has a Discussion, not a Summary). For one study of
+    a report over several, it is the whole report's text (`study` says which
+    study the session is)."""
+    report, study = report_of(dtxsid)
     if not report:
         return None
     hits = sorted((BOOKSHELF / report / "breakdown" / "sections").glob(f"*_{section}.md"))
@@ -83,7 +106,7 @@ def published_section(dtxsid: str, section: str) -> dict | None:
     raw = re.sub(r"^#.*$", "", raw, flags=re.M)
     raw = re.sub(r"<[^>]+>", "", raw)  # BMD<sub>L</sub> → BMDL
     paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
-    return {"report": report, "paragraphs": paragraphs}
+    return {"report": report, "study": study, "paragraphs": paragraphs}
 
 
 def _variable_list(section: str) -> str:
@@ -118,7 +141,9 @@ def build_prompt(section: str, *, template: str, run: dict | None,
     if previous_run:
         parts.append(f"PREVIOUS OUTPUT (the run before):\n{_paragraphs(previous_run)}")
     if published:
-        parts.append(f"PUBLISHED TEXT ({published['report']}), for reference — the "
+        scope = (f" — the whole report; this session is its {published['study']} study"
+                 if published.get("study") else "")
+        parts.append(f"PUBLISHED TEXT ({published['report']}{scope}), for reference — the "
                      "wording NIEHS printed for this study:\n"
                      + "\n\n".join(published["paragraphs"]))
     if history:

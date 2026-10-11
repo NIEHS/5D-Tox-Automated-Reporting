@@ -3,6 +3,7 @@ import { diffLines, diffWords } from "diff";
 import {
   api,
   PromptRun,
+  PromptStudy,
   PromptTemplateInfo,
   RenderedPrompt,
   WorkshopMessage,
@@ -11,34 +12,47 @@ import {
 import { ErrorBox, Spinner, StepProps, WarningBox } from "./shared";
 
 // Prompt workshop: tune how a model-written section is generated. The section's
-// prompt is a versioned template (one for every report); the session supplies
-// the example. Run it, compare the output with the previous run (and, for a
+// prompt is a versioned template (one for every report); a study chosen from the
+// list supplies the example. Run it on that study, or on every study at once
+// (one tab per study), compare the output with the previous run (and, for a
 // published study, with what NIEHS printed), critique it in the chat, take or
 // adjust the template change the assistant proposes, and save it as a new
 // version. Nothing is saved for you: a version is saved only when you save it.
 const SECTION = "summary";
+const PARALLEL = 4; // studies generated at once in a run on all
 
 type EditorTab = "edit" | "changes" | "prompt" | "variables";
+type Published = { report: string; study: string | null; paragraphs: string[] };
+type BatchEntry = { status: "queued" | "running" | "done" | "error"; run?: PromptRun; error?: string };
 
-export function PromptWorkshop({ dtxsid, state }: StepProps) {
+export function studyLabel(s: PromptStudy): string {
+  const who = s.study ? `${s.name} (${s.study})` : s.name || s.dtxsid;
+  return s.report ? `${s.report} · ${who}` : `${who} · unpublished`;
+}
+
+export function PromptWorkshop({ dtxsid }: StepProps) {
   const [info, setInfo] = useState<PromptTemplateInfo | null>(null);
   const [editor, setEditor] = useState("");
   const [base, setBase] = useState<{ version: number; text: string } | null>(null);
   const [tab, setTab] = useState<EditorTab>("edit");
   const [rendered, setRendered] = useState<{ prompt?: RenderedPrompt; error?: string } | null>(null);
+  const [studies, setStudies] = useState<PromptStudy[]>([]);
+  const [study, setStudy] = useState<string | null>(null);
   const [runs, setRuns] = useState<PromptRun[]>([]);
   const [runIndex, setRunIndex] = useState(0);
-  const [published, setPublished] = useState<{ report: string; paragraphs: string[] } | null>(null);
+  const [published, setPublished] = useState<Published | null>(null);
+  const [batch, setBatch] = useState<{ id: string; label: string; entries: Record<string, BatchEntry> } | null>(null);
   const [rationale, setRationale] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
 
+  const studyRef = useRef(study); // the study shown, read by a run on all as runs land
+  studyRef.current = study;
   const dirty = base !== null && editor !== base.text;
   const run = runs[runIndex] ?? null;
   const previous = runs[runIndex + 1] ?? null;
-  const processed = state?.artifacts?.hasProcessed !== false;
 
   async function loadTemplate(keepEditor = false) {
     const t = await api.getPrompt(SECTION);
@@ -47,42 +61,55 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
     if (!keepEditor) setEditor(t.template);
   }
 
-  async function loadRuns() {
-    if (!dtxsid) return;
-    const { runs } = await api.listPromptRuns(SECTION, dtxsid);
+  async function loadRuns(id: string | null = study) {
+    if (!id) return;
+    const { runs } = await api.listPromptRuns(SECTION, id);
     setRuns(runs);
     setRunIndex(0);
   }
 
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
+  // The template and the study list; the example study defaults to the
+  // selected session when it can be summarized, else the first in the list.
   useEffect(() => {
     setError(null);
     loadTemplate().catch(fail);
-    if (dtxsid) {
-      loadRuns().catch(fail);
-      api.getPublishedSection(SECTION, dtxsid).then(setPublished).catch(() => setPublished(null));
-    }
+    api.listPromptStudies(SECTION)
+      .then(({ studies }) => {
+        setStudies(studies);
+        setStudy((cur) => cur ?? (studies.find((s) => s.dtxsid === dtxsid) ?? studies[0])?.dtxsid ?? null);
+      })
+      .catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dtxsid]);
+  }, []);
 
-  // The exact prompt the editor's text would send, refreshed as you type.
+  // Everything shown for the example study follows the choice.
   useEffect(() => {
-    if (!dtxsid || !editor) return;
+    if (!study) return;
+    setRuns([]);
+    loadRuns(study).catch(fail);
+    api.getPublishedSection(SECTION, study).then(setPublished).catch(() => setPublished(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [study]);
+
+  // The exact prompt the editor's text would send for the study, refreshed as you type.
+  useEffect(() => {
+    if (!study || !editor) return;
     const t = setTimeout(() => {
-      api.renderPrompt(SECTION, dtxsid, editor)
+      api.renderPrompt(SECTION, study, editor)
         .then((r) => setRendered(r.ok ? { prompt: r.prompt } : { error: r.error }))
         .catch((e) => setRendered({ error: e instanceof Error ? e.message : String(e) }));
     }, 500);
     return () => clearTimeout(t);
-  }, [dtxsid, editor]);
+  }, [study, editor]);
 
   async function doRun() {
-    if (!dtxsid) return;
+    if (!study) return;
     setBusy("Generating…");
     setError(null);
     try {
-      await api.runPrompt(SECTION, dtxsid, dirty ? editor : undefined);
+      await api.runPrompt(SECTION, study, dirty ? editor : undefined);
       await loadRuns();
     } catch (e) {
       fail(e);
@@ -91,10 +118,41 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
     }
   }
 
+  // Run the template (the editor's text when edited) on every study, a few at a
+  // time; each study's tab fills in as its run comes back.
+  async function runAll() {
+    if (!studies.length) return;
+    const id = `b${Date.now().toString(36)}`;
+    const template = dirty ? editor : undefined;
+    const label = template === undefined ? `v${base?.version}` : "unsaved edit";
+    const entries: Record<string, BatchEntry> = Object.fromEntries(
+      studies.map((s) => [s.dtxsid, { status: "queued" } as BatchEntry])
+    );
+    setBatch({ id, label, entries });
+    setError(null);
+    const set = (dtx: string, e: BatchEntry) =>
+      setBatch((b) => (b && b.id === id ? { ...b, entries: { ...b.entries, [dtx]: e } } : b));
+    const queue = studies.map((s) => s.dtxsid);
+    const worker = async () => {
+      for (let dtx = queue.shift(); dtx; dtx = queue.shift()) {
+        set(dtx, { status: "running" });
+        try {
+          const run = await api.runPrompt(SECTION, dtx, template, id);
+          set(dtx, { status: "done", run });
+          if (dtx === studyRef.current) await loadRuns(dtx);
+        } catch (e) {
+          set(dtx, { status: "error", error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    };
+    setBusy(`Running on ${studies.length} studies…`);
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, worker));
+    setBusy(null);
+  }
   async function useRun() {
-    if (!dtxsid || !run) return;
+    if (!study || !run) return;
     try {
-      await api.usePromptRun(SECTION, dtxsid, run.run_id);
+      await api.usePromptRun(SECTION, study, run.run_id);
       setNotice("Saved as the report's Summary (unapproved). Review and approve it in Sections.");
     } catch (e) {
       fail(e);
@@ -102,11 +160,10 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
   }
 
   async function saveVersion() {
-    if (!dtxsid) return;
     setBusy("Saving…");
     setError(null);
     try {
-      const { version } = await api.savePromptVersion(SECTION, editor, rationale, dtxsid, threadId);
+      const { version } = await api.savePromptVersion(SECTION, editor, rationale, study ?? "", threadId);
       setRationale("");
       await loadTemplate();
       setNotice(`Saved as version ${version}; it is now used for every report.`);
@@ -137,18 +194,35 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
     }
   }
 
-  if (!dtxsid) return <p className="muted">Select a session first.</p>;
-
   return (
     <div className="workshop">
       <h2>Prompts — {info?.label ?? "Summary"}</h2>
       <p className="muted">
         The {info?.label ?? "Summary"} is written by a model from the facts the data supports. Its
-        prompt is a template used for <strong>every</strong> report; this study is the example. Run
-        it, critique the output in the chat, edit the template (or take the assistant's proposal),
-        and save a new version. Every run keeps the exact prompt that was sent.
+        prompt is a template used for <strong>every</strong> report. Pick a study to try it on, or
+        run it on all of them at once. Critique the output in the chat, edit the template (or take
+        the assistant's proposal), and save a new version. Every run keeps the exact prompt that
+        was sent.
       </p>
-      {!processed && <WarningBox warning="Process this session first: the Summary's facts come from its results." />}
+      <div className="workshop-toolbar workshop-study">
+        <label>
+          Study{" "}
+          <select value={study ?? ""} onChange={(e) => setStudy(e.target.value || null)}>
+            {studies.map((s) => (
+              <option key={s.dtxsid} value={s.dtxsid}>{studyLabel(s)}</option>
+            ))}
+          </select>
+        </label>
+        <button onClick={runAll} disabled={!!busy || !studies.length}>
+          Run on all {studies.length} studies{dirty ? " (edited template)" : ""}
+        </button>
+        {studies.length === 0 && (
+          <span className="muted">No study has results to summarize yet (run Process on one).</span>
+        )}
+      </div>
+      {batch && (
+        <BatchTabs batch={batch} studies={studies} current={study} onPick={setStudy} onClose={() => setBatch(null)} />
+      )}
       <ErrorBox error={error} />
       {notice && (
         <div className="workshop-notice" onClick={() => setNotice(null)}>
@@ -219,7 +293,7 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
         </section>
 
         <WorkshopChat
-          dtxsid={dtxsid}
+          dtxsid={study ?? ""}
           editor={editor}
           run={run}
           threadId={threadId}
@@ -236,10 +310,63 @@ export function PromptWorkshop({ dtxsid, state }: StepProps) {
   );
 }
 
+// One tab per study of a run on all: its state (queued, running, done — with a
+// count of numbers the model was not given — or failed). A tab shows that
+// study's output below.
+function BatchTabs({ batch, studies, current, onPick, onClose }: {
+  batch: { id: string; label: string; entries: Record<string, BatchEntry> };
+  studies: PromptStudy[];
+  current: string | null;
+  onPick: (dtxsid: string) => void;
+  onClose: () => void;
+}) {
+  const entries = Object.values(batch.entries);
+  const done = entries.filter((e) => e.status === "done" || e.status === "error").length;
+  const flagged = entries.filter((e) => (e.run?.unmatched_numbers.length ?? 0) > 0).length;
+  return (
+    <section className="workshop-panel">
+      <div className="workshop-toolbar">
+        <strong>Run on all · {batch.label}</strong>
+        <span className="muted">
+          {done} of {entries.length} finished
+          {flagged ? ` · ${flagged} with numbers the model was not given` : ""}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button className="small" onClick={onClose}>Close</button>
+      </div>
+      <div className="workshop-batch-tabs">
+        {studies.filter((s) => batch.entries[s.dtxsid]).map((s) => {
+          const e = batch.entries[s.dtxsid];
+          const mark =
+            e.status === "queued" ? "·" :
+            e.status === "running" ? "…" :
+            e.status === "error" ? "✗" :
+            e.run!.unmatched_numbers.length ? `⚠ ${e.run!.unmatched_numbers.length}` : "✓";
+          return (
+            <button
+              key={s.dtxsid}
+              className={"workshop-batch-tab " + e.status + (s.dtxsid === current ? " active" : "") +
+                (e.run?.unmatched_numbers.length ? " flagged" : "")}
+              onClick={() => onPick(s.dtxsid)}
+              title={e.error ?? studyLabel(s)}
+            >
+              <span className="mark">{mark}</span> {s.report ?? s.name}
+              {s.study ? ` ${s.study}` : ""}
+            </button>
+          );
+        })}
+      </div>
+      {current && batch.entries[current]?.status === "error" && (
+        <div className="error-box">{batch.entries[current].error}</div>
+      )}
+    </section>
+  );
+}
+
 function OutputPane(props: {
   run: PromptRun | null;
   previous: PromptRun | null;
-  published: { report: string; paragraphs: string[] } | null;
+  published: Published | null;
   runs: PromptRun[];
   runIndex: number;
   setRunIndex: (i: number) => void;
@@ -251,12 +378,13 @@ function OutputPane(props: {
   const { run, previous, published, runs, runIndex, setRunIndex, busy, dirty } = props;
   const [showDiff, setShowDiff] = useState(true);
   const label = (r: PromptRun) =>
-    `${r.at.replace("T", " ").slice(0, 16)} · ${r.template_version === null ? "unsaved edit" : `v${r.template_version}`}`;
+    `${r.at.replace("T", " ").slice(0, 16)} · ${r.template_version === null ? "unsaved edit" : `v${r.template_version}`}` +
+    (r.batch_id ? " · run on all" : "");
   return (
     <section className="workshop-panel">
       <div className="workshop-toolbar">
         <button className="primary" onClick={props.onRun} disabled={!!busy}>
-          {dirty ? "Run the edited template" : "Run"}
+          {dirty ? "Run the edited template on this study" : "Run on this study"}
         </button>
         {busy && <Spinner label={busy} />}
         {runs.length > 0 && (
@@ -275,7 +403,7 @@ function OutputPane(props: {
         <span style={{ flex: 1 }} />
         <button onClick={props.onUse} disabled={!run}>Use this as the Summary</button>
       </div>
-      {!run && <p className="muted">No runs yet for this study. Press Run.</p>}
+      {!run && <p className="muted">No runs yet for this study.</p>}
       {run && run.unmatched_numbers.length > 0 && (
         <WarningBox
           warning={`Numbers the model was not given: ${run.unmatched_numbers.join(", ")}. The facts must come from the data — check these.`}
@@ -297,7 +425,10 @@ function OutputPane(props: {
           </div>
           {published && (
             <div>
-              <h4>Published · {published.report}</h4>
+              <h4>
+                Published · {published.report}
+                {published.study ? ` (whole report — this is its ${published.study} study)` : ""}
+              </h4>
               <Paragraphs paragraphs={published.paragraphs} />
             </div>
           )}

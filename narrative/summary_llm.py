@@ -89,6 +89,37 @@ def template_variables(inputs: dict) -> dict:
     }
 
 
+def available_studies() -> list[dict]:
+    """The sessions a Summary prompt can be tested on — those whose Process
+    results (the BMD summary or the genomics extraction) exist — with their
+    chemical and, for a published study, its report:
+    [{dtxsid, name, report, study}], published reports first in report order.
+    A report over several studies is offered study by study (its own session
+    holds no results; each member does)."""
+    import common.paths as paths
+    from narrative.prompt_workshop import report_of
+
+    out = []
+    root = paths.SESSIONS_DIR
+    for d in sorted(root.iterdir()) if root.is_dir() else []:
+        if not d.is_dir() or d.name.startswith((".", "_")):
+            continue
+        if not (any(d.glob("_cache_bmd_summary_*.json")) or any(d.glob("_cache_genomics_*.json"))):
+            continue
+        try:
+            name = json.loads((d / "identity.json").read_text(encoding="utf-8")).get("name") or ""
+        except (OSError, ValueError):
+            name = ""
+        report, study = report_of(d.name)
+        out.append({"dtxsid": d.name, "name": name, "report": report, "study": study})
+
+    def key(s: dict) -> tuple:
+        r = s["report"] or ""
+        series, _, num = r.partition("-")
+        return (r == "", series != "RR", int(num) if num.isdigit() else 0, s["study"] or "", s["name"])
+    return sorted(out, key=key)
+
+
 def session_variables(dtxsid: str) -> dict:
     from pipeline.session_store import session_dir
     return template_variables(summary_inputs(session_dir(dtxsid)))
@@ -138,11 +169,12 @@ def render_for_session(dtxsid: str, text: str | None = None) -> tuple[RenderedPr
 
 
 async def generate_summary(dtxsid: str, *, text: str | None = None,
-                           version: int | None = None) -> dict:
+                           version: int | None = None, batch_id: str | None = None) -> dict:
     """Generate the Summary for a session and save the run; return the run
     record. `text` runs an unsaved edit; `version` a saved version; neither,
-    the current version. Raises TemplateError (template) or the model call's
-    exception."""
+    the current version. `batch_id` marks one run of a template tried on
+    several studies at once. Raises TemplateError (template) or the model
+    call's exception."""
     if text is None:
         text, version = prompt_templates.template_text(SECTION, version)
         label = version
@@ -167,6 +199,7 @@ async def generate_summary(dtxsid: str, *, text: str | None = None,
         "draft_paragraphs": variables["draft_paragraphs"],
         "paragraphs": paragraphs,
         "unmatched_numbers": unmatched_numbers(paragraphs, variables),
+        "batch_id": batch_id,
     }
     return prompt_store.save_run(dtxsid, SECTION, record)
 

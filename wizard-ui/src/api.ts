@@ -176,12 +176,16 @@ export interface PromptRun {
   at: string;
   dtxsid: string;
   template_version: number | null; // null = an unsaved edit
+  batch_id?: string | null;
   template: string;
   prompt: RenderedPrompt;
   draft_paragraphs: string[];
   paragraphs: string[];
   unmatched_numbers: string[];
 }
+// A study a prompt can be tested on; `report` is its published report, if any,
+// and `study` names one study of a report over several ("rat" / "mouse").
+export interface PromptStudy { dtxsid: string; name: string; report: string | null; study: string | null }
 export interface WorkshopMessage {
   role: "user" | "assistant";
   content: string;
@@ -542,12 +546,17 @@ export const api = {
       body: JSON.stringify({ dtxsid, template }),
     }).then((r) => jsonOrThrow<{ ok: boolean; prompt?: RenderedPrompt; error?: string }>(r)),
   // `template` runs an unsaved edit; omit it to run the current version.
-  runPrompt: (section: string, dtxsid: string, template?: string) =>
+  runPrompt: (section: string, dtxsid: string, template?: string, batchId?: string) =>
     fetch(`/api/prompts/${section}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(template === undefined ? { dtxsid } : { dtxsid, template }),
+      body: JSON.stringify({ dtxsid, ...(template === undefined ? {} : { template }),
+                             ...(batchId ? { batch_id: batchId } : {}) }),
     }).then((r) => jsonOrThrow<PromptRun>(r)),
+  listPromptStudies: (section: string) =>
+    fetch(`/api/prompts/${section}/studies`).then((r) =>
+      jsonOrThrow<{ studies: PromptStudy[] }>(r)
+    ),
   listPromptRuns: (section: string, dtxsid: string) =>
     fetch(`/api/prompts/${section}/runs/${encodeURIComponent(dtxsid)}`).then((r) =>
       jsonOrThrow<{ runs: PromptRun[] }>(r)
@@ -560,7 +569,7 @@ export const api = {
   getPublishedSection: async (section: string, dtxsid: string) => {
     const r = await fetch(`/api/prompts/${section}/published/${encodeURIComponent(dtxsid)}`);
     if (r.status === 404) return null;
-    return jsonOrThrow<{ report: string; paragraphs: string[] }>(r);
+    return jsonOrThrow<{ report: string; study: string | null; paragraphs: string[] }>(r);
   },
   listWorkshopThreads: (section: string) =>
     fetch(`/api/prompts/${section}/threads`).then((r) =>

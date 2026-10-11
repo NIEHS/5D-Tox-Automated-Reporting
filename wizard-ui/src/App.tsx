@@ -27,7 +27,7 @@ import { PromptWorkshop } from "./steps/PromptWorkshop";
 //   /workflow/knowledge-graph → KNOWLEDGE GRAPH: literature-crawl config editor.
 // The chooser is step 0 conceptually, but it lives on the landing (NOT part of a
 // workflow). The workflows share the selected session via sessionStorage.
-type Mode = "landing" | "data" | "document" | "configure" | "knowledgegraph" | "corpus";
+type Mode = "landing" | "data" | "document" | "configure" | "knowledgegraph" | "corpus" | "prompts";
 
 const DATA_STEPS = [
   { key: "upload", label: "Upload" },
@@ -56,6 +56,7 @@ type StepKey =
 function currentMode(): Mode {
   const path = window.location.pathname.replace(/\/+$/, "");
   if (path.endsWith("/workflow/corpus") || path.endsWith("/corpus")) return "corpus";
+  if (path.endsWith("/workflow/prompts") || path.endsWith("/prompts")) return "prompts";
   if (path.endsWith("/workflow/knowledge-graph") || path.endsWith("/knowledge-graph"))
     return "knowledgegraph";
   if (path.endsWith("/workflow/configure") || path.endsWith("/configure")) return "configure";
@@ -140,6 +141,7 @@ export function App() {
     gotoConfigure: () => window.location.assign("/workflow/configure"),
     gotoKnowledgeGraph: () => window.location.assign("/workflow/knowledge-graph"),
     gotoCorpus: () => window.location.assign("/workflow/corpus"),
+    gotoPrompts: () => window.location.assign("/workflow/prompts"),
     // Deep-link to the document-mode query console: pre-seed the document step
     // index (document mode reads it from sessionStorage on load) so the console
     // opens directly instead of landing on Process.
@@ -212,6 +214,24 @@ export function App() {
           </span>
         </div>
         <Corpus {...common} back={() => window.location.assign("/")} />
+      </div>
+    );
+  }
+
+  // Prompt workshop — standalone: the prompt is shared by every report, and the
+  // study to try it on is chosen inside the page (any study, or all at once).
+  if (mode === "prompts") {
+    return (
+      <div className="wizard">
+        <div className="wizard-header">
+          <h1>5D-Tox Prompts</h1>
+          <span className="session">
+            <a href="/" style={{ marginRight: 12, color: "var(--accent)" }}>
+              ← home
+            </a>
+          </span>
+        </div>
+        <PromptWorkshop {...common} />
       </div>
     );
   }

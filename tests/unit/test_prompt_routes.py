@@ -92,3 +92,36 @@ def test_workshop_thread(api):
 
 def test_published_404_for_an_unpublished_study(api):
     assert api.get(f"/api/prompts/summary/published/{_DTXSID}").status_code == 404
+
+
+def test_studies_lists_sessions_with_results(api, sessions_dir):
+    def session(name, cache=True, identity="X"):
+        d = sessions_dir / name
+        d.mkdir(parents=True, exist_ok=True)
+        if cache:
+            (d / "_cache_bmd_summary_abc.json").write_text("{}")
+        (d / "identity.json").write_text(json.dumps({"name": identity}))
+        return d
+    session("DTXSID5032498", identity="Triclosan")
+    session("DTXSID50469320", identity="PFHxSAm")                  # NIEHS-10
+    session("DTXSID1020431", cache=False, identity="1,4-DCB")      # NIEHS-13, composed
+    (sessions_dir / "DTXSID1020431" / "studies.json").write_text(
+        json.dumps({"rat": "DTXSID1020431_rat"}))
+    session("DTXSID1020431_rat", identity="1,4-DCB")
+    session("DTXSID7037717", cache=False)                          # nothing processed
+    (sessions_dir / "_prompts").mkdir(exist_ok=True)
+
+    studies = api.get("/api/prompts/summary/studies").json()["studies"]
+    assert [(s["dtxsid"], s["report"], s["study"]) for s in studies] == [
+        ("DTXSID50469320", "NIEHS-10", None),
+        ("DTXSID1020431_rat", "NIEHS-13", "rat"),
+        ("DTXSID5032498", None, None),
+    ]
+
+
+def test_a_run_on_all_carries_its_batch_id(api):
+    run = api.post("/api/prompts/summary/run",
+                   json={"dtxsid": _DTXSID, "batch_id": "bk3x9"}).json()
+    assert run["batch_id"] == "bk3x9"
+    assert api.post("/api/prompts/summary/run",
+                    json={"dtxsid": _DTXSID, "batch_id": "../x"}).status_code == 400
