@@ -545,11 +545,13 @@ def _part_slug(part_el, kind: str, n: int) -> str:
             or f"part-{kind}-{n}")
 
 
-def _part_page(part_el, base_dir, images, *, kind: str, n: int = 0) -> _Page:
+def _part_page(part_el, base_dir, images, *, kind: str, n: int = 0, level: int = 2) -> _Page:
     """Render one front-matter part / body part / appendix into a _Page.  The
     heading is the part's title-group (label + title); the content is whatever
     its body, named-book-part-body and back hold (the References part's back
-    holds its ref-list), rendered as it is — nothing is unwrapped or invented."""
+    holds its ref-list), rendered as it is — nothing is unwrapped or invented.
+    Its sections head at `level` (a part's own page: h2; a part within a
+    single-file book's one page, under the part's h2: h3)."""
     tg = part_el.find("book-part-meta/title-group")
     if tg is None:
         tg = part_el
@@ -566,7 +568,7 @@ def _part_page(part_el, base_dir, images, *, kind: str, n: int = 0) -> _Page:
             if _ln(c) == "sec" and c.get("id"):
                 heading = " ".join(x for x in (_ws_text(c.find("label")), _title_text(c)) if x)
                 subnav.append((c.get("id"), heading))
-        _render_blocks(children, 2, out, base_dir, images)
+        _render_blocks(children, level, out, base_dir, images)
     return _Page(slug=_part_slug(part_el, kind, n), kind=kind, title=title, label=label,
                  body="".join(out), subnav=subnav)
 
@@ -582,7 +584,7 @@ def _reflist_page(rl) -> _Page:
 _FRONT_PARTS = ("foreword", "front-matter-part", "ack", "dedication", "preface")
 
 
-def _collect_pages(root, base_dir, images) -> list[_Page]:
+def _collect_pages(root, base_dir, images, level: int = 2) -> list[_Page]:
     """The book's parts, in reading order, one page each.  Labels are the parts'
     own (<label>Appendix A</label>); none is invented here.  A single-file book's
     parts are those of its whole-book <book-part> (bits_bundle.book_regions):
@@ -604,15 +606,17 @@ def _collect_pages(root, base_dir, images) -> list[_Page]:
             if tag == "ref-list":
                 pages.append(_reflist_page(part))
             elif tag in _FRONT_PARTS:
-                pages.append(_part_page(part, base_dir, images, kind="frontmatter", n=n))
+                pages.append(_part_page(part, base_dir, images, kind="frontmatter", n=n,
+                                        level=level))
             elif tag == "book-part":
                 refs = part.find("body") is None and part.find("back/ref-list") is not None
                 pages.append(_part_page(part, base_dir, images,
-                                        kind="refs" if refs else "chapter", n=n))
+                                        kind="refs" if refs else "chapter", n=n, level=level))
             elif tag in ("book-app", "app"):
-                pages.append(_part_page(part, base_dir, images, kind="appendix", n=n))
+                pages.append(_part_page(part, base_dir, images, kind="appendix", n=n, level=level))
             elif tag in ("sec", "glossary", "notes"):
-                pages.append(_part_page(part, base_dir, images, kind="chapter", n=n))
+                pages.append(_part_page(part, base_dir, images, kind="chapter", n=n,
+                                        level=level))
     return pages
 
 
@@ -659,20 +663,27 @@ def _views_panel(downloads: list[dict] | None, cite: str) -> str:
 
 def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | None) -> str:
     from rendering import bookshelf_landing as landing
+    from rendering.bits_bundle import whole_book_part
 
     _OBJ_COUNTER["seq"] = itertools.count(1)
     m = landing.book_facts(root)
-    pages = _collect_pages(root, base_dir, images)
+    # A single-file book is one page on Bookshelf (its landing holds every
+    # part); a chunked book is a Contents landing and a page per part.
+    single = whole_book_part(root) is not None
+    pages = _collect_pages(root, base_dir, images, level=3 if single else 2)
+    parts = [{"slug": p.slug, "kind": p.kind, "title": p.title, "label": p.label}
+             for p in pages]
 
     # The navigation chain: Contents first, then every page.
     chain: list[dict] = [{"slug": "contents", "kind": "contents",
                           "title": "Contents", "label": ""}]
-    chain += [{"slug": p.slug, "kind": p.kind, "title": p.title, "label": p.label}
-              for p in pages]
-
-    banner = landing.book_banner(m)
-    articles = landing.contents_article(pages, m) + "".join(
-        _page_article(p, banner, landing.cite_object(m, p.slug, f"{p.label}, {p.title}" if p.label else p.title)) for p in pages)
+    if single:
+        articles = landing.book_article(pages, m)
+    else:
+        chain += parts
+        banner = landing.book_banner(m)
+        articles = landing.contents_article(pages, m) + "".join(
+            _page_article(p, banner, landing.cite_object(m, p.slug, f"{p.label}, {p.title}" if p.label else p.title)) for p in pages)
 
     bits = [x for x in (m["subtitle"], m["publisher"], m["loc"], m["year"]) if x]
     if m["issn"]:
@@ -701,7 +712,7 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
   <aside class="bk-rail" id="rightcolumn">
     <div class="rail-panel"><div class="rail-title">Views</div>{_views_panel(downloads, landing.CITE_ITEM)}</div>
     {landing.collection_panel(m)}
-    <div class="rail-panel"><div class="rail-title">Sections</div>{_secnav(chain)}</div>
+    <div class="rail-panel"><div class="rail-title">Sections</div>{_secnav(parts if single else chain)}</div>
   </aside>
 </div>
 <footer class="bk-footer">Rendered from BITS/JATS &lt;book&gt; &#8212; a content-only lookalike of the NCBI Bookshelf reader view. Approximate appearance; not an NCBI/NIEHS page.</footer>

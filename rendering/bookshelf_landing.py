@@ -15,6 +15,8 @@ here:
   - the Contents: every part in reading order ("Appendix A. Title"), a body
     part's sections nested under it;
   - the "About the Series" box (series title, ISSN with its format);
+  - a single-file book (NIEHS-02 … 06, RR-8) has no Contents: its landing
+    is the whole book, every part under its heading (book_article);
   - for the rail, "Cite this Page" and "Other titles in this collection"; for
     the foot, the copyright notice and the DOI.
 
@@ -241,6 +243,22 @@ def contents_article(pages: list[_Page], m: dict) -> str:
     return (f'<article class="bk-page" data-slug="contents" hidden>{_title_block(m)}'
             f'<div class="body-content whole_rhythm" itemprop="text">{abstract}'
             f'<h2>Contents</h2><ul class="bk-contents">{"".join(lis)}</ul>'
+            f'{_series_box(m)}</div>{cite_object(m, "contents")}</article>')
+
+
+def book_article(pages: list[_Page], m: dict) -> str:
+    """A single-file book's one page (NIEHS-02 … 06, RR-8): Bookshelf serves the
+    whole book at its landing (tests/fixtures/reference/NIEHS-02/bookshelf-pages/
+    toc-reader.html) — the title block and the abstract, then every part in
+    reading order under its own heading ("Appendix A. Animal Identifiers"),
+    its sections a level below — and About the Series."""
+    parts = "".join(
+        f'<div class="bk-part" id="{_esc(p.slug)}"><h2 id="_{_esc(p.slug)}_">'
+        f'{_esc(f"{p.label}. {p.title}" if p.label else p.title)}</h2>{p.body}</div>'
+        for p in pages)
+    abstract = _abstract_html(m["abstract"]) if m["abstract"] is not None else ""
+    return (f'<article class="bk-page" data-slug="contents" hidden>{_title_block(m)}'
+            f'<div class="body-content whole_rhythm" itemprop="text">{abstract}{parts}'
             f'{_series_box(m)}</div>{cite_object(m, "contents")}</article>')
 
 

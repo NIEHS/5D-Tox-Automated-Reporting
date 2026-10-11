@@ -835,6 +835,10 @@ acceptance. We never hold their production stylesheet. The
   Cite this Page in the rail), one page per part with
   Previous/Next, tables and figures as thumbnail cards that open in a
   lightbox, and cross-references that work across pages.
+- A single-file book (RR-8, NIEHS-02 … 06) is one page, as Bookshelf serves
+  it: the landing holds the title block, the abstract and every part under
+  its own heading, with no contents list. The reference is the real NIEHS-02
+  page, `tests/fixtures/reference/NIEHS-02/bookshelf-pages/toc-reader.html`.
 - It renders what the book says: labels and headings come from the BITS.
   It also renders a chunked bundle directory, including a published book
   from `assets/cebs/_bookshelf/<REPORT>`, so ours and the published report

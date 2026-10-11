@@ -4,10 +4,12 @@ the facsimile.
 
 The page is trimmed to the reader content (pre-content, main-content,
 post-content) and the Views / collection portlets; NCBI's site chrome, the
-Recent Activity portlet and all scripts are dropped.  It is written to
+Recent Activity portlet and all scripts are dropped.  A PubReader page
+(?report=reader) is trimmed to its content (#jr-content), and named with a
+"-reader" suffix.  It is written to
 tests/fixtures/reference/<REPORT>/bookshelf-pages/<page>.html, <page> being the
 page's Bookshelf location (foreword1, fm-authors, a-2-C …; "toc" for the
-landing page).
+landing page, which for a single-file book is the whole book).
 
     python -m tooling.bookshelf_page_fixture saved-page.html [...] [--report NIEHS-10]
 """
@@ -35,21 +37,28 @@ def page_info(page: str) -> dict:
     """The page's Bookshelf accession, book domain and location."""
     acc = re.search(r'name="ncbi_acc" content="([^"]+)"', page)
     domain = re.search(r'name="ncbi_domain" content="([^"]+)"', page)
-    loc = re.search(r'name="bk-non-canon-loc" content="/books/n/[^/]+/([^"/]*)/?"', page)
+    loc = re.search(r'name="bk-non-canon-loc" content="/books/n/[^/]+/([^"/?]*)', page)
+    reader = re.search(r'name="ncbi_report" content="reader"', page)
+    name = loc.group(1) if loc and loc.group(1) else "toc"
     return {"acc": acc.group(1) if acc else "",
             "domain": domain.group(1) if domain else "",
-            "page": (loc.group(1) if loc and loc.group(1) else "toc")}
+            "page": name + ("-reader" if reader else ""),
+            "loc": name}
 
 
 def report_name(domain: str) -> str:
-    """ntpniehs10 → NIEHS-10 (the published-report naming of tooling.bits_structure)."""
-    m = re.fullmatch(r"ntpniehs(\d+)", domain)
+    """ntpniehs10, niehs_13 → NIEHS-10, NIEHS-13 (the published-report naming of
+    tooling.bits_structure)."""
+    m = re.fullmatch(r"(?:ntp)?niehs_?(\d+)", domain)
     return f"NIEHS-{int(m.group(1)):02d}" if m else domain
 
 
 def trim(page: str) -> str:
     """The reader content and the Views / collection portlets, scripts removed."""
     page = re.sub(r"<script\b.*?</script>", "", page, flags=re.S)
+    reader = _between(page, '<div id="jr-content">', '<div id="jr-scripts">')
+    if reader:
+        return reader.rstrip() + "\n"
     content = (_between(page, '<div class="document">', "<!-- Custom content below content -->")
                or _between(page, '<div class="source">', "<!-- Custom content below content -->"))
     portlets = [p for p in re.findall(r'<div class="portlet">.*?(?=<div class="portlet">|<!-- Custom content below discovery)',
@@ -77,8 +86,8 @@ def main() -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         when = f" as served {args.date}" if args.date else ""
         header = (f"<!-- NCBI Bookshelf page {info['acc']} ({report}, /books/n/{info['domain']}/"
-                  f"{'' if info['page'] == 'toc' else info['page'] + '/'}){when}, saved from a\n"
-                  "     browser.  Trimmed by tooling/bookshelf_page_fixture.py to the reader content\n"
+                  f"{'' if info['loc'] == 'toc' else info['loc'] + '/'}){when}, saved or pasted\n"
+                  "     from a browser.  Trimmed by tooling/bookshelf_page_fixture.py to the reader content\n"
                   "     and the Views / collection portlets.  The reference for the facsimile\n"
                   "     (rendering/bookshelf_preview.py). -->\n")
         out.write_text(header + trim(page), encoding="utf-8")
