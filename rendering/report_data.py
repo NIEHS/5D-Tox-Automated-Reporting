@@ -121,7 +121,10 @@ def normalize_apical_section_for_render(sec: dict) -> dict:
         return sec  # nothing to normalize; pass through unchanged
 
     table_data: dict[str, list[dict]] = {}
-    for sex in ("Male", "Female"):
+    # Sexes first, then any other group (a study's animals in a report over
+    # several studies — rendering.report_compose) in data order.
+    for sex in [k for k in ("Male", "Female") if k in src] + [
+            k for k in src if k not in ("Male", "Female")]:
         rows = src.get(sex, []) or []
         if not rows:
             continue

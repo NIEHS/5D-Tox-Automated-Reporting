@@ -668,7 +668,9 @@ class ApicalRow:
 
 @dataclass(frozen=True)
 class ApicalSexBlock:
-    """A Male or Female group within an apical table: a label + its data rows."""
+    """A group of an apical table's rows under its label row: a sex ("Male",
+    "Female") or, in a report over several studies, a study's animals ("Rats",
+    "Female Mice" — rendering.report_compose)."""
     sex_label: str
     rows: list[ApicalRow]
 
@@ -694,7 +696,7 @@ class ApicalTablePlan:
         bmd_columns: False for a table with no BMD/BMDL columns (the internal
                    concentration tables, table_type "pharmacokinetic"); ncols
                    then counts no BMD columns and rows carry no BMD cells.
-        sex_blocks: present sexes in Male, Female order (empty sexes dropped).
+        sex_blocks: the present groups (table_groups order; empty ones dropped).
         footnotes: raw footnote dicts; the emitter renders the markup.
     """
     node_id: str
@@ -708,12 +710,50 @@ class ApicalTablePlan:
     bmd_columns: bool = True
 
 
+_SEX_ORDER = ("Male", "Female")
+
+
+def table_groups(table_data: dict) -> list[tuple[str, list]]:
+    """An apical table's (label, rows) groups with rows: Male, Female, then any
+    other group (a study's animals in a composed report) in data order."""
+    table_data = table_data or {}
+    order = [k for k in _SEX_ORDER if k in table_data]
+    order += [k for k in table_data if k not in _SEX_ORDER]
+    return [(k, table_data[k]) for k in order if table_data[k]]
+
+
+def _dose_union(rows: list[dict]) -> list:
+    """The rows' shared dose grid; the ascending union when they differ."""
+    grids = [row.get("doses") or [] for row in rows if not row.get("is_heading")]
+    grids = [g for g in grids if g]
+    if not grids:
+        return []
+    if all(g == grids[0] for g in grids):
+        return list(grids[0])
+    seen: dict[float, object] = {}
+    for g in grids:
+        for d in g:
+            seen.setdefault(float(d), d)
+    return [seen[k] for k in sorted(seen)]
+
+
+def _on_grid(row: dict, doses: list) -> list:
+    """A row's values placed on the table's dose grid (NA for a level the row's
+    group was not given)."""
+    values = row.get("values", []) or []
+    own = row.get("doses") or []
+    if not own or list(own) == list(doses):
+        return values
+    by_dose = {float(d): v for d, v in zip(own, values)}
+    return [by_dose.get(float(d), "NA") for d in doses]
+
+
 def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
     """
     EXTRACT for the apical dose-response table: section lookup, dose grid, and
-    the Male/Female row cells — all format-agnostic.
+    each group's row cells (table_groups) — all format-agnostic.
 
-    Returns None when the section, its table_data, or both sex row lists are
+    Returns None when the section, its table_data, or every group's rows are
     missing, so the emitter renders its placeholder (preserving the old
     behavior of a placeholder in any of those cases).
     """
@@ -721,35 +761,31 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
     if not section or not section.get("table_data"):
         return None
 
-    table_data = section.get("table_data", {})
-    male_rows = table_data.get("Male", []) or []
-    female_rows = table_data.get("Female", []) or []
-    if not male_rows and not female_rows:
+    groups = table_groups(section.get("table_data", {}))
+    if not groups:
         return None
 
     dose_unit = section.get("dose_unit", "mg/kg")
     first_col = section.get("first_col_header", "Endpoint")
 
-    # All rows share the same dose grid (it IS the column structure); pull it
-    # from the first row that carries one.
-    ref_row = (male_rows or female_rows)[0]
-    doses = ref_row.get("doses", []) or []
+    # The dose grid IS the column structure.  The rows of one study share
+    # theirs; groups from studies with different dose levels share the union,
+    # a level a group was not given showing NA (as the published books do).
+    doses = _dose_union([row for _, rows in groups for row in rows])
     # Columns: label + one per dose + the two BMD/BMDL trailing columns — none
     # for a concentration table, which models no dose response.
     bmd_columns = section.get("table_type") != "pharmacokinetic"
     ncols = 1 + len(doses) + (2 if bmd_columns else 0)
 
     sex_blocks: list[ApicalSexBlock] = []
-    for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
-        if not rows:
-            continue
+    for sex_label, rows in groups:
         built: list[ApicalRow] = []
         for row in rows:
             label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
             if row.get("is_heading"):
                 built.append(ApicalRow(cells=[str(label)], is_n_row=False, is_heading=True))
                 continue
-            values = row.get("values", []) or []
+            values = _on_grid(row, doses)
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
             # Re-round each mean ± SE cell at render time: at the row's own
@@ -1540,12 +1576,19 @@ def _entry_sex_blocks(entry: dict, rows_key: str) -> list[tuple[str, list]]:
         for block in sexes:
             rows = block.get(rows_key) or []
             if rows:
-                out.append((str(block.get("sex", "")).strip().capitalize(), rows))
+                out.append((_group_label(block.get("sex")), rows))
     else:
         rows = entry.get(rows_key) or []
         if rows:
-            out.append((str(entry.get("sex", "")).strip().capitalize(), rows))
+            out.append((_group_label(entry.get("sex")), rows))
     return out
+
+
+def _group_label(value) -> str:
+    """A row group's label as printed: a sex capitalized ("female" → "Female"),
+    a composed group ("Female Rats", report_compose) as given."""
+    s = str(value or "").strip()
+    return s[:1].upper() + s[1:]
 
 
 def _finite_or_none(v):
