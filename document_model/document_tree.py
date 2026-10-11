@@ -158,6 +158,10 @@ def _number_scoped(nodes: list[DocNode], scope: str | None, counters: dict) -> N
             counters["table"] += 1
             node.table_number = counters["table"]
             node.table_label = _scoped_label(scope, counters["table"])
+        if node.node_type == "genomics-section" and scope is None:
+            # Its data-driven tables take their numbers here, in document order
+            # (assign_genomics_table_numbers); the tables after it follow them.
+            counters["table"] += _genomics_count(node, counters.get("genomics"))
         if node.node_type in NUMBERED_FIGURE_TYPES:
             counters["figure"] += 1
             node.figure_number = counters["figure"]
@@ -381,7 +385,7 @@ def study_tree(base, collected, authored=None, facts=None):
             import copy
             nodes = copy.deepcopy(base)
         _fill_titles(nodes, values)
-    compute_table_numbers(nodes)
+    compute_table_numbers(nodes, (facts or {}).get("genomics_sections"))
     return nodes
 
 
@@ -457,7 +461,18 @@ def _resolve_study_bound(nodes, authored: dict, collected: "set | None") -> None
             _resolve_study_bound(n.children, authored, collected)
 
 
-def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
+def _genomics_role(node: DocNode) -> str | None:
+    return _GENOMICS_NARRATIVE_TO_TYPE.get(getattr(node, "narrative_key", None) or "")
+
+
+def _genomics_count(node: DocNode, genomics_sections: list[dict] | None) -> int:
+    """How many data-driven tables a genomics-section node holds."""
+    role = _genomics_role(node)
+    return sum(1 for e in genomics_sections or [] if role and e.get("type") == role)
+
+
+def compute_table_numbers(tree: list[DocNode] | None = None,
+                          genomics_sections: list[dict] | None = None) -> None:
     """
     Walk the whole tree in document order and assign table_number (and
     table_label) to every node whose node_type is in NUMBERED_TABLE_TYPES.
@@ -468,7 +483,9 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     section id, so re-parenting or renaming a section can't silently drop a
     number.  The ONE scope boundary is the appendix (ADR-0025 §5): each
     `appendix` node restarts the count with its letter as prefix ("Table B-1"),
-    and appendix tables never advance the body sequence.
+    and appendix tables never advance the body sequence.  Given the report's
+    ``genomics_sections``, a genomics-section node's data-driven tables are
+    counted where it stands, so the tables after it follow them.
 
     Figures and appendix letters share every call site, so this one call also
     assigns figure numbers/labels and appendix letters.  Mutates nodes in place.
@@ -477,7 +494,7 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
         tree = DOCUMENT_TREE
     # Letters first: the scoped walk prefixes appendix numbers with them.
     compute_appendix_letters(tree)
-    _number_scoped(tree, None, {"table": 0, "figure": 0})
+    _number_scoped(tree, None, {"table": 0, "figure": 0, "genomics": genomics_sections})
 
 
 # Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
@@ -540,8 +557,10 @@ def assign_genomics_table_numbers(
     genomics_sections: list[dict] | None,
 ) -> None:
     """
-    Assign positional ``table_number`` to each genomics-section entry, continuing
-    the sequence the tree's numbered tables established (Table 8 → 9, 10, ...).
+    Assign positional ``table_number`` to each genomics-section entry: the
+    section's tables follow the body tables before it (Table 8 → 9, 10, ...),
+    and compute_table_numbers, given the same sections, numbers the tables
+    after it on from them.
 
     Genomics tables are DATA-DRIVEN, not tree nodes: the tree holds two
     ``genomics-section`` nodes (gene-sets, gene-bmd) that each expand at render
@@ -567,33 +586,44 @@ def assign_genomics_table_numbers(
     if not genomics_sections:
         return
 
-    # Continue from the highest number the tree already assigned (Table 8 here).
-    # Appendix-scoped tables ("B-1") live in their own sequences (ADR-0025 §5)
-    # and must not push the body count.
-    tree_max = 1
-    def _max(node: DocNode) -> None:
-        nonlocal tree_max
-        if node.table_number is not None and not node.appendix_scope:
-            tree_max = max(tree_max, node.table_number)
-    walk_tree(tree, _max)
+    # Positional: a genomics-section node's tables follow the body tables
+    # before it (and the genomics tables of an earlier role) — the count
+    # compute_table_numbers keeps when given the same sections.  Appendix-scoped
+    # tables ("B-1") live in their own sequences (ADR-0025 §5) and never count.
+    counter = 0
+    numbered: set[str] = set()
 
-    # Role sequence in tree order, from the genomics-section nodes themselves.
-    role_order: list[str] = []
-    def _roles(node: DocNode) -> None:
-        if node.node_type == "genomics-section":
-            role = _GENOMICS_NARRATIVE_TO_TYPE.get(
-                getattr(node, "narrative_key", None) or ""
-            )
-            if role and role not in role_order:
-                role_order.append(role)
-    walk_tree(tree, _roles)
-
-    counter = tree_max + 1
-    for role in role_order:
-        for entry in genomics_sections:
-            if entry.get("type") == role:
-                entry["table_number"] = counter
+    def _visit(nodes) -> None:
+        nonlocal counter
+        for node in nodes:
+            if node.node_type == "appendix":
+                continue
+            if node.node_type in NUMBERED_TABLE_TYPES:
                 counter += 1
+            if node.node_type == "genomics-section":
+                role = _genomics_role(node)
+                if role and role not in numbered:
+                    numbered.add(role)
+                    for entry in genomics_sections:
+                        if entry.get("type") == role:
+                            counter += 1
+                            entry["table_number"] = counter
+            _visit(node.children or [])
+
+    _visit(tree)
+
+
+def order_tissues(genomics_sections: list[dict] | None, order: list[str]) -> list[dict]:
+    """The genomic entries in the report's tissue order (a definition's
+    ``tissue_order``: the tissues named first, then the rest alphabetically),
+    each tissue's entries in their given order."""
+    rank = {t: i for i, t in enumerate(order)}
+
+    def key(entry):
+        tissue = (entry.get("organ") or "").strip().lower()
+        return (rank.get(tissue, len(rank)), tissue)
+
+    return sorted(genomics_sections or [], key=key)
 
 
 def assign_genomics_figure_numbers(

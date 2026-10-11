@@ -640,6 +640,9 @@ book_meta:
 # float (Bookshelf shows a card that opens the object); the appendices' are
 # anchored in the text (shown in full) — as NIEHS-07 … 10 have them.
 packaging: chunked
+# The order of the genomic analyses' tissues (tables and per-tissue sections):
+# these first, the rest alphabetically — Liver then Kidney, as NIEHS-07 … 10.
+tissue_order: [liver, kidney]
 object_position:
   body: float
   back: anchor

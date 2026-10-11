@@ -1023,8 +1023,13 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     contents lists.  Runs last, once every study's data is in ``data``."""
     from document_model.document_tree import (
         DOCUMENT_TREE, assign_genomics_figure_numbers, assign_genomics_table_numbers,
-        study_tree,
+        order_tissues, study_tree,
     )
+    from document_model.view_config import study_document_facts
+    # The genomic tissues in the report's order (its definition's tissue_order).
+    if data.get("genomics_sections"):
+        data["genomics_sections"] = order_tissues(
+            data["genomics_sections"], study_document_facts(dtxsid)["tissue_order"])
     # "Not collected" domains (section-level collapse): the render tree drops the
     # apical table nodes whose data domain this study did not collect, so numbering,
     # the List of Tables and the body stay contiguous.  data["apical_sections"]

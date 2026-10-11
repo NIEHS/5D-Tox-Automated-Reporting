@@ -79,3 +79,30 @@ def test_a_scoped_copy_renders_from_its_study():
     mouse_heart = nodes[1].children[0].children[1]
     assert node_data(mouse_heart, DATA)["gene_set_narrative"] == {"paragraphs": ["Mouse heart."]}
     assert node_data(nodes[1], DATA) is DATA      # an unscoped node: the report's data
+
+
+def test_genomic_tables_take_their_numbers_where_their_section_stands():
+    """NIEHS-13: the gene set and gene tables (7–17) come before the internal
+    concentration tables (19, 20), which follow them."""
+    from document_model.document_tree import assign_genomics_table_numbers
+    tree = instantiate([{"region": "body", "children": [
+        {"id": "t1", "type": "data-table", "title": "T1", "data_key": "m"},
+        {"id": "g", "type": "genomics-section", "title": "G", "data_key": "genomics_sections",
+         "narrative_key": "gene_set_narrative"},
+        {"id": "t2", "type": "data-table", "title": "T2", "data_key": "m"}]}])
+    sections = [{"type": "gene_set", "organ": o} for o in ("heart", "liver")]
+    nodes = study_tree(tree, None, None, {"genomics_sections": sections})
+    assign_genomics_table_numbers(nodes, sections)
+    assert [s["table_number"] for s in sections] == [2, 3]
+    assert [n.table_number for n in nodes if n.id in ("t1", "t2")] == [1, 4]
+
+
+def test_the_definition_orders_the_tissues():
+    from document_model.document_tree import order_tissues
+    entries = [{"type": t, "organ": o} for o in ("Liver", "Kidney", "Heart", "Ovary")
+               for t in ("gene_set", "gene")]
+    assert [e["organ"] for e in order_tissues(entries, ["liver", "kidney"])][::2] == [
+        "Liver", "Kidney", "Heart", "Ovary"]
+    alphabetical = order_tissues(entries, [])
+    assert [e["organ"] for e in alphabetical][::2] == ["Heart", "Kidney", "Liver", "Ovary"]
+    assert [e["type"] for e in alphabetical][:2] == ["gene_set", "gene"]

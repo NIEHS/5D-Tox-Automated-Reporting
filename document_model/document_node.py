@@ -169,7 +169,7 @@ class DocNode:
                         study's deposited files it lists (pipeline.deposit.KINDS:
                         apical, genomic, study-tables, animal-data, …), one entry
                         per file of the session's deposit.json.
-        repeat:         On a section: one copy of it per item, expanded per study
+        repeat:         On a section or a table: one copy of it per item, expanded
                         by document_tree.study_tree (repeat_items) —
                         `deposit_species`: per species the deposit holds (the
                         2026 books' "G.3 Rats" / "G.4 Mice"); `study_species`:

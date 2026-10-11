@@ -42,7 +42,7 @@ from common.dtxsid import validate_dtxsid
 
 PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
-                              "changes"})
+                              "tissue_order", "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -69,7 +69,8 @@ def is_extension(raw) -> bool:
 def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
     """The raw template mapping for `name` with every ``extends`` resolved: the
     base's mapping (all its sibling blocks), its ``document`` altered by
-    ``changes``, ``book_meta`` deep-merged and ``packaging`` overridden.  A full
+    ``changes``, ``book_meta`` deep-merged and ``packaging`` / ``tissue_order``
+    overridden.  A full
     template comes back as read."""
     if name in _seen:
         raise ValueError(f"definition {name!r}: extends cycle {' -> '.join((*_seen, name))}")
@@ -88,6 +89,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         if raw["packaging"] not in PACKAGINGS:
             raise ValueError(f"definition {name!r}: packaging must be one of {PACKAGINGS}")
         out["packaging"] = raw["packaging"]
+    if "tissue_order" in raw:
+        out["tissue_order"] = raw["tissue_order"]
     if raw.get("object_position"):
         out["object_position"] = {**(out.get("object_position") or {}), **raw["object_position"]}
     if raw.get("book_meta"):

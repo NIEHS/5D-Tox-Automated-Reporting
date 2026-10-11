@@ -452,7 +452,7 @@ def _validate_derived_file_list(entry: dict, node_id: str) -> None:
 
 def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
     """`deposit_group` belongs to a derived supplementary-material; `repeat`
-    names one of _REPEATS on a section."""
+    names one of _REPEATS on a section or a table."""
     if entry.get("deposit_group") is not None and not (
             node_type in _FILE_ONLY_TYPES and entry.get("binding") == "derived"):
         raise ValueError(f"template node {node_id!r}: deposit_group is only valid on a "
@@ -462,8 +462,8 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
         if repeat not in _REPEATS:
             raise ValueError(f"template node {node_id!r}: repeat must be one of "
                              f"{list(_REPEATS)}, got {repeat!r}")
-        if role_for(node_type) != "sec":
-            raise ValueError(f"template node {node_id!r}: only a section may repeat")
+        if role_for(node_type) not in ("sec", "table-wrap"):
+            raise ValueError(f"template node {node_id!r}: only a section or a table may repeat")
 
 
 def _validate_file_only_entry(entry: dict, node_id: str, node_type: str) -> None:
@@ -843,6 +843,19 @@ def load_object_position(name: str) -> dict:
         raise ValueError(f"template {name!r}: object_position maps front/body/back "
                          f"to one of {_POSITIONS}, got {block!r}")
     return block
+
+
+def load_tissue_order(name: str) -> list[str]:
+    """The order the report takes the tissues of its genomic analyses in
+    (ADR-0029): the tissues named first, in that order, then the rest
+    alphabetically.  [] (all alphabetically) when the template names none."""
+    raw = _load_raw(name)
+    order = raw.get("tissue_order") if isinstance(raw, dict) else None
+    if order is None:
+        return []
+    if not isinstance(order, list) or not all(isinstance(t, str) for t in order):
+        raise ValueError(f"template {name!r}: tissue_order is a list of tissues, got {order!r}")
+    return [t.strip().lower() for t in order]
 
 
 def load_packaging(name: str) -> str:
