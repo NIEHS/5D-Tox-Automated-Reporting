@@ -1,0 +1,1039 @@
+"""
+document_tree.py — Declarative NIEHS report document structure.
+
+This module defines the complete structure of an NIEHS 5-day biological
+potency report as a tree of nodes.  It is the SINGLE SOURCE OF TRUTH for:
+
+  - Heading hierarchy (level 1, 2, 3)
+  - Section ordering
+  - Table numbering (auto-assigned by tree-walk position)
+  - Figure numbering (auto-assigned by tree-walk position)
+  - Navigation panel (a UI projection of this tree, distinct from the ToC)
+  - Preview filtering (given a node ID, find its subtree)
+  - Renderers (the HTML preview and the LaTeX/Overleaf export both walk this tree)
+
+Users can override narrative content; everything structural is determined
+by position in this tree.
+
+The tree matches the NIEHS Report 10 (NBK589955) Table of Contents exactly.
+"""
+
+from __future__ import annotations
+
+from document_model.document_node import DocNode  # node shape; re-exported so existing
+                                   # `from document_tree import DocNode` keeps working
+from document_model.document_template import build_tree
+
+import contextlib
+import contextvars
+
+
+# The node SHAPE is defined in document_node.py (DocNode, re-exported above);
+# the registry of node TYPES and their capabilities / containment / required
+# bindings lives in render_capabilities.COMPONENT_CATALOG.
+
+
+# ---------------------------------------------------------------------------
+# The complete NIEHS report structure
+# ---------------------------------------------------------------------------
+# Matches NIEHS Report 10 (NBK589955) Table of Contents verbatim.
+# Table numbers are auto-assigned by compute_table_numbers() — the
+# position in this tree determines the number.
+
+# Built by instantiating the data-driven template
+# (templates/niehs-5day-report.yaml) against the component catalog — see
+# ADR-0003.  This replaces the former hand-written literal; the golden-tree
+# test (tests/unit/test_document_template.py) proves the instantiated tree is
+# byte-identical to that original literal.
+# NOTE: this reads and parses templates/niehs-5day-report.yaml at IMPORT time.
+# A deliberate fail-fast — a missing/malformed template breaks import loudly
+# rather than yielding a half-built report — but importing document_tree does
+# therefore require the template file to be present and valid.
+#
+# The active template name — single source for both the document STRUCTURE
+# (build_tree below) and the chart config (chart_style/chart_types) loaded by
+# the chart pipeline, so structure and chart styling always come from one file.
+ACTIVE_TEMPLATE = "niehs-5day-report"
+DOCUMENT_TREE: list[DocNode] = build_tree(ACTIVE_TEMPLATE)
+
+
+# ---------------------------------------------------------------------------
+# Front matter vs body
+# ---------------------------------------------------------------------------
+def first_body_node_id(tree: list[DocNode] | None = None) -> str | None:
+    """
+    Return the id of the first top-level node whose region == "body" — the
+    point where page numbering switches from roman to arabic.  Per NIEHS
+    Report 10, front matter is roman-numbered and the body restarts at
+    arabic 1 (Background = page 1).  Both renderers (latex_generator,
+    html_generator) consume this so the switch lands at the same structural
+    point — the boundary lives with the tree, not duplicated in each renderer.
+
+    Pre-ADR-0004-d this looked at node.node_type membership in a frozen
+    FRONT_MATTER_NODE_TYPES set; now it reads node.region, which the
+    instantiator inherits from the template's region containers.  Same
+    result for our template — first body node is "background" — but the
+    boundary is now data-driven rather than type-coded.
+
+    Returns None if no top-level node carries region == "body" (a degenerate
+    tree, e.g. a bare unit-test scaffold without region containers).
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    for node in tree:
+        if node.region == "body":
+            return node.id
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Tree utilities
+# ---------------------------------------------------------------------------
+
+def walk_tree(nodes: list[DocNode], visit) -> None:
+    """
+    Pre-order depth-first walk of a DocNode forest.
+
+    Calls ``visit(node)`` on every node in document order — a node is visited
+    BEFORE its children, and siblings are visited in list order.  This is the
+    one canonical traversal of the document tree (ADR-0006): the renderers,
+    the data gatherer, and the export marshaller each used to re-derive "look
+    at this node, then recurse into ``node.children``" by hand, which let the
+    traversals drift apart.  Centralising it here makes the tree
+    (Architectural Invariant #2) own its own iteration order.
+
+    The walk is intentionally side-effect-only: it returns nothing and does
+    not collect results.  Callers that need to accumulate output (e.g. a
+    renderer building a list of markup chunks) close over their own
+    accumulator inside ``visit`` and append to it — see html_generator._walk_html
+    and latex_generator._walk_latex.  Keeping accumulation out of the primitive is
+    what lets one walk serve callers that produce wildly different outputs.
+
+    Args:
+        nodes: the forest to walk — a list of top-level DocNodes.  Pass a
+            single node as a one-element list (``walk_tree([node], visit)``)
+            to walk one subtree.
+        visit: a callable invoked once per node as ``visit(node)``.  Its
+            return value is ignored; any output it produces is its own
+            responsibility (typically by mutating a closed-over accumulator).
+
+    Returns:
+        None.  This primitive exists for its traversal order, not a value.
+    """
+    for node in nodes:
+        # Pre-order: the node itself is handled before we descend.  Renderers
+        # rely on this so a section's heading/intro chunk lands ahead of its
+        # children's chunks, preserving document order in the flat output.
+        visit(node)
+        walk_tree(node.children, visit)
+
+
+# Node types that render through niehstable, emit \label{tab:<id>}, and so
+# must receive a positional table_number.  This is the single producer-side
+# source of truth; cross_references._TABLE_TYPES is the consumer-side mirror and
+# must stay equal to it (see the assertion in cross_references.py).
+NUMBERED_TABLE_TYPES = frozenset(
+    {"sample-counts-table", "table", "incidence-table", "bmd-summary",
+     # ADR-0025: every table-wrap role preset is numbered, whatever produced it.
+     "data-table", "authored-table"}
+)
+
+
+def _number_scoped(nodes: list[DocNode], scope: str | None, counters: dict) -> None:
+    """
+    The scope-aware numbering walk behind compute_table_numbers /
+    compute_figure_numbers (ADR-0025 §5).
+
+    `scope` is the letter of the enclosing appendix (None in the front matter and
+    body); `counters` holds the running table / figure counts FOR THAT SCOPE.
+    Entering an `appendix` node opens a fresh scope with fresh counters, so its
+    tables read "B-1, B-2, …" and its figures "C-1, C-2, …", while the body
+    sequence is untouched by anything that sits in an appendix.  Every visited
+    node records its scope in `appendix_scope`; the label is the scope-prefixed
+    form the surfaces display, the number the integer within its scope.
+    """
+    for node in nodes:
+        node.appendix_scope = scope
+        if node.node_type in NUMBERED_TABLE_TYPES:
+            counters["table"] += 1
+            node.table_number = counters["table"]
+            node.table_label = _scoped_label(scope, counters["table"])
+        if node.node_type == "genomics-section" and scope is None:
+            # Its data-driven tables take their numbers here, in document order
+            # (assign_genomics_table_numbers); the tables after it follow them.
+            counters["table"] += _genomics_count(node, counters.get("genomics"))
+        if node.node_type in NUMBERED_FIGURE_TYPES:
+            counters["figure"] += 1
+            node.figure_number = counters["figure"]
+            node.figure_label = _scoped_label(scope, counters["figure"])
+        if node.node_type == "appendix":
+            # A new numbering scope: the appendix letter (assigned by
+            # compute_appendix_letters before this walk) prefixes every number.
+            _number_scoped(node.children, node.appendix_letter, {"table": 0, "figure": 0})
+            _label_sections(node.children, node.appendix_letter)
+        else:
+            _number_scoped(node.children, scope, counters)
+
+
+def _label_sections(nodes: list[DocNode], prefix: str | None) -> None:
+    """ADR-0028 §3: number the TITLED sections of an appendix — "C.1", "C.2",
+    and "C.2.1" one level down — into `sec_label`.  Titles never carry the
+    label; BITS emits it as <label>, print composes "C.1. Title".  Untitled
+    sections (an authored block) take no number and pass the prefix through."""
+    from document_model.render_capabilities import role_for
+
+    n = 0
+    for node in nodes:
+        is_sec = (node.role or role_for(node.node_type)) == "sec"
+        if is_sec and (node.title or "").strip() and prefix:
+            n += 1
+            node.sec_label = f"{prefix}.{n}"
+            _label_sections(node.children, node.sec_label)
+        else:
+            node.sec_label = None
+            _label_sections(node.children, prefix)
+
+
+def _scoped_label(scope: str | None, number: int) -> str:
+    """"3" in the body; "B-1" inside Appendix B."""
+    return f"{scope}-{number}" if scope else str(number)
+
+
+def prune_uncollected_tables(tree, collected):
+    """Return `tree` with apical `table` nodes whose data domain (`platform`) is
+    NOT in `collected` removed — the section-level collapse for "not collected"
+    domains.  The parent section node stays (it carries a "not evaluated"
+    narrative); only its data-less table children drop, so once the caller numbers
+    the returned tree the numbering, the List of Tables and the body render all
+    stay contiguous.
+
+    Returns the SAME object when nothing is dropped (a fully-collected report, or
+    `collected` falsy) so that path stays byte-identical; otherwise a pruned
+    deepcopy — the input tree is never mutated, so the shared DOCUMENT_TREE is safe
+    to pass.  A node is dropped only when it is a `table` with a `platform` set
+    that is absent from `collected`; platform-less nodes (front matter, the
+    sample-counts table, genomics sections) are always kept."""
+    import copy
+
+    if not collected:
+        return tree
+
+    def _drops(nodes) -> bool:
+        for n in nodes:
+            if n.node_type == "table" and n.platform and n.platform not in collected:
+                return True
+            if n.children and _drops(n.children):
+                return True
+        return False
+
+    if not _drops(tree):
+        return tree
+
+    def _prune(nodes):
+        out = []
+        for n in nodes:
+            if n.node_type == "table" and n.platform and n.platform not in collected:
+                continue
+            if n.children:
+                n.children = _prune(n.children)
+            out.append(n)
+        return out
+
+    return _prune(copy.deepcopy(tree))
+
+
+# The study facts a node title may name (ADR-0029: "Procurement and
+# Characterization of ${chemical_name}"), filled per study by study_tree.
+TITLE_FIELDS = ("chemical_name",)
+
+
+def caption_values(facts: dict | None, design: dict | None = None) -> dict:
+    """The caption fields ``${subject}`` / ``${treatment}`` for ``design`` (by
+    default the report's study design): "Female Rats and Mice", "Exposed to
+    1,4-Dichlorobenzene for Five Days" (pipeline.study_design.caption_fields)."""
+    from pipeline.study_design import caption_fields
+    facts = facts or {}
+    if not facts.get("chemical_name"):
+        return {}
+    return caption_fields(design if design is not None else facts.get("study_design") or {},
+                          str(facts["chemical_name"]))
+
+
+def _has_title_fields(nodes) -> bool:
+    return any("${" in (n.title or "") or "${" in (n.caption or "")
+               or _has_title_fields(n.children or []) for n in nodes)
+
+
+def _fill(node, values: dict) -> None:
+    """Fill ``${…}`` fields in a node's title and caption."""
+    from string import Template
+    for attr in ("title", "caption"):
+        text = getattr(node, attr, None)
+        if text and "${" in text:
+            setattr(node, attr, Template(text).safe_substitute(values))
+
+
+def _fill_titles(nodes, values: dict) -> None:
+    for n in nodes:
+        _fill(n, values)
+        _fill_titles(n.children or [], values)
+
+
+def _has_repeats(nodes) -> bool:
+    return any(n.repeat or _has_repeats(n.children or []) for n in nodes)
+
+
+# What each repeat is over, and the node field a copy is scoped by (ADR-0029).
+_REPEAT_SCOPE = {"deposit_species": "scope_species", "study_species": "scope_species",
+                 "genomic_organs": "scope_organ"}
+_REPEAT_VARIABLE = {"deposit_species": "species", "study_species": "species",
+                    "genomic_organs": "organ"}
+
+
+def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
+    """{repeat: [{key, title, fields}]} — what each repeat makes one copy for:
+
+    - deposit_species: the species of the study's data deposit;
+    - study_species: the studies of a report over several (facts["studies"],
+      rendering.report_compose); a single study is one, unscoped (``key`` None),
+      titled with its animals ("Rats"; "Animals" before any are recorded);
+      ``fields`` are the study's caption fields (caption_values);
+    - genomic_organs: the tissues of the genomic analyses, in their order."""
+    facts = facts or {}
+    studies = [{"key": s["key"], "title": s["title"],
+                "fields": caption_values(facts, (s.get("data") or {}).get("study_design") or {})}
+               for s in facts.get("studies") or []]
+    if not studies:
+        from pipeline.study_design import species_plural
+        design = facts.get("study_design") or {}
+        studies = [{"key": None, "title": species_plural(design, capitalize=True),
+                    "fields": caption_values(facts)}]
+    organs: list[str] = []
+    for entry in facts.get("genomics_sections") or []:
+        organ = (entry.get("organ") or "").strip()
+        if organ and organ.lower() not in [o.lower() for o in organs]:
+            organs.append(organ)
+    return {
+        "deposit_species": list((facts.get("deposit") or {}).get("species") or []),
+        "study_species": studies,
+        "genomic_organs": [{"key": o.lower(), "title": o[:1].upper() + o[1:]} for o in organs],
+    }
+
+
+def _scope(node, field: str, key: str | None, variable: str, title: str,
+           fields: dict | None = None) -> None:
+    """Scope a copy and every node in it to ``key`` (ids suffixed with it, so
+    they stay unique), filling ``${variable}`` and the item's ``fields`` (a
+    study's ``${subject}`` / ``${treatment}``) in their titles and captions."""
+    if node.first_copy:
+        return                     # shared by the copies: the report's, unscoped
+    if key is not None:
+        node.id = f"{node.id}--{key}"
+        setattr(node, field, key)
+    _fill(node, {**(fields or {}), variable: title})
+    for child in node.children or []:
+        _scope(child, field, key, variable, title, fields)
+
+
+def _drop_first_copy(node) -> None:
+    """A later copy of a repeated section leaves out its `first_copy` nodes."""
+    node.children = [c for c in node.children or [] if not c.first_copy]
+    for child in node.children:
+        _drop_first_copy(child)
+
+
+def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
+    """A repeated section (`repeat:`, see repeat_items) becomes one copy per
+    item, every node in it scoped to the item.  The copy's title fills
+    `${species}` / `${organ}` ("Study Design for ${species}"), or, without one,
+    is the item's title ("Rats", "Heart").  A `first_copy` node stays in the
+    first copy only, unscoped (a table the studies share, under the first
+    study's heading).  With no deposit species, a
+    `deposit_species` section's children stand in its place; with no tissues,
+    a `genomic_organs` section is left out.  Repeats nest — a tissue
+    repeated per study.  Mutates the (already copied) nodes; returns the new
+    list."""
+    import copy
+    out = []
+    for node in nodes:
+        node.children = _expand_repeats(node.children or [], items)
+        if not node.repeat:
+            out.append(node)
+            continue
+        repeat, node.repeat = node.repeat, None
+        found = items.get(repeat) or []
+        if not found:
+            # No deposit species: the files are listed without them.  No tissues:
+            # there is nothing to say per tissue.
+            if repeat == "deposit_species":
+                out.extend(node.children)
+            continue
+        variable = _REPEAT_VARIABLE[repeat]
+        for i, item in enumerate(found):
+            clone = copy.deepcopy(node)
+            if i:
+                _drop_first_copy(clone)
+            if "${" not in (clone.title or ""):
+                clone.title = item["title"]
+            _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"],
+                   item.get("fields"))
+            out.append(clone)
+    return out
+
+
+def study_tree(base, collected, authored=None, facts=None):
+    """THIS study's view of the document tree — the single builder every data
+    layer and emitter uses, so the body, the table numbers and the List of Tables
+    cannot diverge.  On a copy (the shared tree is never mutated); returns `base`
+    itself when nothing applies:
+
+    1. Not-collected domains (`collected`): apical table nodes for uncollected
+       domains are dropped.
+    2. Data gates (`requires_platform`): a node whose domain(s) were not collected
+       keeps its heading but its subtree is dropped and it states the fact
+       (`not_collected_text`).
+    3. Study-bound authored content (`session_content`): freeform nodes take THIS
+       study's text (`authored`), else their `deposit_text` when the study's
+       deposit has a DOI and files, else `missing_content_text`, else pending.
+    4. Study facts in titles and captions: `${chemical_name}` (TITLE_FIELDS)
+       from `facts` (the report data), and the animals and treatment
+       `${subject}` / `${treatment}` (caption_values; in a per-study copy, that
+       study's); a field the facts lack stays as written.
+    5. Repeated sections (`repeat:`): one copy per species of the study's
+       deposit, per study of a report over several, or per genomic tissue
+       (repeat_items, _expand_repeats).
+
+    The result is always (re)numbered — numbering is positional and idempotent,
+    and the emitters read its products (labels, appendix scopes) — so a render
+    never depends on some earlier caller having numbered the shared tree."""
+    nodes = base
+    if collected:
+        nodes = prune_uncollected_tables(base, collected)
+    if _has_study_bound(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        _resolve_study_bound(nodes, authored or {},
+                             set(collected) if collected is not None else None,
+                             _deposit_doi((facts or {}).get("deposit")))
+    if _has_repeats(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        nodes = _expand_repeats(nodes, repeat_items(facts))
+    values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
+    values.update(caption_values(facts))
+    if values and _has_title_fields(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        _fill_titles(nodes, values)
+    compute_table_numbers(nodes, (facts or {}).get("genomics_sections"))
+    return nodes
+
+
+def render_nodes(data: dict, tree=None):
+    """The node list an emitter walks for THIS report: `study_tree` over the
+    passed tree (or DOCUMENT_TREE) with the data layer's `collected_platforms`
+    and `authored` content."""
+    base = tree if tree is not None else DOCUMENT_TREE
+    return study_tree(base, data.get("collected_platforms"), data.get("authored"), data)
+
+
+def platform_gate_closed(node, collected) -> bool:
+    """True when `node.requires_platform` (a domain name or a list of them, any-of)
+    names domains the study did NOT collect — the node's normal content does not
+    apply and its `not_collected_text` is rendered instead.  False when there is
+    no gate or no collected-set signal (a scaffold: nothing is decided yet)."""
+    req = node.requires_platform
+    if not req or collected is None:
+        return False
+    wanted = [req] if isinstance(req, str) else list(req)
+    return not (set(wanted) & set(collected))
+
+
+def not_collected_statement(node) -> str:
+    """The shippable statement for a gated-out node: its authored
+    `not_collected_text`, else one built from its own title."""
+    return node.not_collected_text or f"{node.title} was not evaluated in this study."
+
+
+def _has_study_bound(nodes) -> bool:
+    for n in nodes:
+        if n.session_content or n.requires_platform:
+            return True
+        if n.children and _has_study_bound(n.children):
+            return True
+    return False
+
+
+def _statement_markup(text: str) -> dict:
+    """{html, latex} for a plain shippable statement (no pending marker)."""
+    import html as _html
+    tex = text
+    for a, b in (("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"),
+                 ("$", r"\$"), ("#", r"\#"), ("_", r"\_")):
+        tex = tex.replace(a, b)
+    return {"html": f"<p>{_html.escape(text)}</p>", "latex": tex}
+
+
+def _deposit_doi(deposit: dict | None) -> str | None:
+    """The data deposit's DOI, when it has one and files to list."""
+    deposit = deposit or {}
+    return deposit.get("doi") if deposit.get("doi") and deposit.get("files") else None
+
+
+def _deposit_markup(text: str, doi: str) -> dict:
+    """{html, latex} for a `deposit_text`, its "{doi}" the DOI's link."""
+    import html as _html
+    url = f"https://doi.org/{doi}"
+    before, _, after = text.partition("{doi}")
+    tex = [_statement_markup(x)["latex"] for x in (before, after)]
+    return {"html": f'<p>{_html.escape(before)}<a href="{_html.escape(url)}">'
+                    f"{_html.escape(url)}</a>{_html.escape(after)}</p>",
+            "latex": f"{tex[0]}\\url{{{url}}}{tex[1]}"}
+
+
+def _resolve_study_bound(nodes, authored: dict, collected: "set | None",
+                         doi: str | None = None) -> None:
+    for n in nodes:
+        if platform_gate_closed(n, collected):
+            # One statement stands for the whole gated section: drop its subtree
+            # (sub-headings would otherwise each repeat it).  Narrative nodes get
+            # the statement via resolve_narrative_content; freeform nodes here.
+            n.children = []
+            if n.node_type == "heading-only":
+                # A bare structural heading has no body to carry the statement;
+                # render it as a narrative so the shared narrative resolver's
+                # gate emits the statement under the same heading.
+                n.node_type = "narrative"
+            if n.session_content or n.resolved_content is not None:
+                n.resolved_content = _statement_markup(not_collected_statement(n))
+            continue
+        if n.session_content:
+            content = authored.get(n.session_content)
+            if content:
+                n.resolved_content = dict(content)
+            elif n.deposit_text and doi:
+                n.resolved_content = _deposit_markup(n.deposit_text, doi)
+            elif n.missing_content_text:
+                n.resolved_content = _statement_markup(n.missing_content_text)
+            else:
+                n.resolved_content = None  # required, not yet authored → pending
+        if n.children:
+            _resolve_study_bound(n.children, authored, collected, doi)
+
+
+def _genomics_role(node: DocNode) -> str | None:
+    return _GENOMICS_NARRATIVE_TO_TYPE.get(getattr(node, "narrative_key", None) or "")
+
+
+def _genomics_count(node: DocNode, genomics_sections: list[dict] | None) -> int:
+    """How many data-driven tables a genomics-section node holds."""
+    role = _genomics_role(node)
+    return sum(1 for e in genomics_sections or [] if role and e.get("type") == role)
+
+
+def compute_table_numbers(tree: list[DocNode] | None = None,
+                          genomics_sections: list[dict] | None = None) -> None:
+    """
+    Walk the whole tree in document order and assign table_number (and
+    table_label) to every node whose node_type is in NUMBERED_TABLE_TYPES.
+
+    Numbering is positional and starts at Table 1: the first numbered node in
+    document order is the Methods sample-counts table, so it earns Table 1 by
+    position; the Results tables follow (2, 3, ...).  It is not scoped to a
+    section id, so re-parenting or renaming a section can't silently drop a
+    number.  The ONE scope boundary is the appendix (ADR-0025 §5): each
+    `appendix` node restarts the count with its letter as prefix ("Table B-1"),
+    and appendix tables never advance the body sequence.  Given the report's
+    ``genomics_sections``, a genomics-section node's data-driven tables are
+    counted where it stands, so the tables after it follow them.
+
+    Figures and appendix letters share every call site, so this one call also
+    assigns figure numbers/labels and appendix letters.  Mutates nodes in place.
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    # Letters first: the scoped walk prefixes appendix numbers with them.
+    compute_appendix_letters(tree)
+    _number_scoped(tree, None, {"table": 0, "figure": 0, "genomics": genomics_sections})
+
+
+# Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
+# from tables: a `figure` node is Figure 1, 2, ... in document order.  Genomics
+# CHART figures are DATA-DRIVEN (not tree nodes), so they are numbered by
+# assign_genomics_figure_numbers below — the figure sibling of
+# assign_genomics_table_numbers — which CONTINUES this positional sequence rather
+# than restarting a second counter at 1 (ADR-0021 D1: the render-time fix for the
+# old two-counter leak, where attach_genomics_charts stamped figure_number 1..N
+# on its own).
+NUMBERED_FIGURE_TYPES = frozenset({"figure"})
+
+
+def compute_figure_numbers(tree: list[DocNode] | None = None) -> None:
+    """Walk the tree in document order and assign figure_number / figure_label
+    to every node whose node_type is in NUMBERED_FIGURE_TYPES.  Positional from
+    Figure 1, the figure sibling of compute_table_numbers, with the same
+    per-appendix scoping ("Figure C-1").  It runs the SAME scoped walk (tables
+    are (re)assigned identically), so calling either entry point leaves the
+    tree fully numbered.  Mutates nodes in place."""
+    if tree is None:
+        tree = DOCUMENT_TREE
+    compute_appendix_letters(tree)
+    _number_scoped(tree, None, {"table": 0, "figure": 0})
+
+
+def compute_appendix_letters(tree: list[DocNode] | None = None) -> None:
+    """Walk the tree in document order and assign appendix_letter ("A", "B", …)
+    to every `appendix` node, positional from A.  The letter sibling of
+    compute_table_numbers / compute_figure_numbers: it is the SINGLE source of
+    the appendix letter (titles no longer carry a literal "Appendix A." prefix).
+    Renderers compose "Appendix {letter}. {title}" from it, and the docx surface
+    feeds it into chapter-relative page numbering.  Mutates nodes in place."""
+    if tree is None:
+        tree = DOCUMENT_TREE
+
+    counter = 0  # 0 → "A"
+
+    def visit(node: DocNode) -> None:
+        nonlocal counter
+        if node.node_type == "appendix":
+            node.appendix_letter = chr(ord("A") + counter)
+            counter += 1
+
+    walk_tree(tree, visit)
+
+
+# The two genomics-section nodes carry their role in `narrative_key`; the flat
+# data["genomics_sections"] entries carry the SAME role in `type`.  Mapping one
+# to the other lets us number the data-driven genomics tables in the exact order
+# the renderers emit them, without importing render_common (which would cycle).
+_GENOMICS_NARRATIVE_TO_TYPE = {
+    "gene_set_narrative": "gene_set",
+    "gene_narrative": "gene",
+}
+
+
+def _entry_design(facts: dict, entry: dict) -> dict:
+    """The design of the animals one genomic table has rows for: the studies
+    (or, in one study, the sexes) whose blocks are not empty — NIEHS-13's ovary
+    gene sets are rats' only."""
+    groups = {str(b.get("sex") or "").strip() for b in entry.get("sexes") or []
+              if b.get("gene_sets") or b.get("top_genes")}
+    design = facts.get("study_design") or {}
+    studies = facts.get("studies")
+    if studies:
+        present = [(s.get("data") or {}).get("study_design") or {} for s in studies
+                   if groups & ({s.get("title")} | set((s.get("labels") or {}).values()))]
+        if len(present) == 1:
+            return present[0]
+        shared = {k: design.get(k) for k in ("route", "vehicle", "duration_days")}
+        return {**shared, "studies": present} if present else design
+    sexes = sorted(g.lower() for g in groups if g in ("Male", "Female"))
+    return {**design, "sexes": sexes} if sexes else design
+
+
+def assign_genomics_table_numbers(
+    tree: list[DocNode] | None,
+    genomics_sections: list[dict] | None,
+    facts: dict | None = None,
+) -> None:
+    """
+    Assign positional ``table_number`` to each genomics-section entry: the
+    section's tables follow the body tables before it (Table 8 → 9, 10, ...),
+    and compute_table_numbers, given the same sections, numbers the tables
+    after it on from them.
+
+    Genomics tables are DATA-DRIVEN, not tree nodes: the tree holds two
+    ``genomics-section`` nodes (gene-sets, gene-bmd) that each expand at render
+    time into one table per matching entry in ``genomics_sections``.  So
+    compute_table_numbers() — a pure tree walk — can't see them; this is the
+    data-side companion that numbers them, called by BOTH render paths after
+    ``data["genomics_sections"]`` is finalized (single source of truth: same
+    function, same inputs → identical numbers on both surfaces).
+
+    Ordering is load-bearing: the numbers MUST match the printed order.  The
+    renderers walk the TREE — the gene-sets node emits ALL ``type=="gene_set"``
+    entries first, then gene-bmd emits ALL ``type=="gene"`` — NOT the interleaved
+    order of the raw list.  So we walk the genomics-section nodes in tree order,
+    and for each, number its role's entries in list order.  Deriving the role
+    sequence from the tree (via each node's ``narrative_key``) keeps this
+    template-driven rather than hardcoding ("gene_set", "gene").
+
+    Mutates each entry dict in place (sets ``entry["table_number"]``); entries
+    whose role has no genomics-section node are left unnumbered.  Idempotent.
+
+    With the report data (``facts``), a genomics-section's ``caption_suffix``
+    (", for ${subject} ${treatment}") is filled for each table from the
+    animals it has rows for (``entry["caption_suffix"]``, genomics_table_caption).
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    if not genomics_sections:
+        return
+
+    # Positional: a genomics-section node's tables follow the body tables
+    # before it (and the genomics tables of an earlier role) — the count
+    # compute_table_numbers keeps when given the same sections.  Appendix-scoped
+    # tables ("B-1") live in their own sequences (ADR-0025 §5) and never count.
+    counter = 0
+    numbered: set[str] = set()
+
+    def _visit(nodes) -> None:
+        nonlocal counter
+        for node in nodes:
+            if node.node_type == "appendix":
+                continue
+            if node.node_type in NUMBERED_TABLE_TYPES:
+                counter += 1
+            if node.node_type == "genomics-section":
+                role = _genomics_role(node)
+                if role and role not in numbered:
+                    numbered.add(role)
+                    for entry in genomics_sections:
+                        if entry.get("type") == role:
+                            counter += 1
+                            entry["table_number"] = counter
+                            if node.caption_suffix and facts is not None:
+                                from string import Template
+                                entry["caption_suffix"] = Template(node.caption_suffix).safe_substitute(
+                                    caption_values(facts, _entry_design(facts, entry)))
+            _visit(node.children or [])
+
+    _visit(tree)
+
+
+def order_tissues(genomics_sections: list[dict] | None, order: list[str]) -> list[dict]:
+    """The genomic entries in the report's tissue order (a definition's
+    ``tissue_order``: the tissues named first, then the rest alphabetically),
+    each tissue's entries in their given order."""
+    rank = {t: i for i, t in enumerate(order)}
+
+    def key(entry):
+        tissue = (entry.get("organ") or "").strip().lower()
+        return (rank.get(tissue, len(rank)), tissue)
+
+    return sorted(genomics_sections or [], key=key)
+
+
+def assign_genomics_figure_numbers(
+    tree: list[DocNode] | None,
+    genomics_sections: list[dict] | None,
+) -> None:
+    """
+    Assign positional ``figure_number`` to each attached genomics CHART,
+    continuing the sequence the tree's numbered figures established (Figure 1,
+    2, ...).  The figure sibling of ``assign_genomics_table_numbers``.
+
+    Genomics charts are DATA-DRIVEN, not tree nodes: they hang on each gene_set
+    entry as ``entry["charts"]`` (attached by
+    ``genomics_charts.attach_genomics_charts`` at render time).  So
+    ``compute_figure_numbers()`` — a pure tree walk over ``figure`` nodes — can't
+    see them; this is the data-side companion that numbers them, called by BOTH
+    render paths AFTER charts are attached (single source of truth: same
+    function, same inputs → identical numbers on both surfaces).
+
+    Ordering is load-bearing and matches the printed order: entries iterate in
+    ``genomics_sections`` order, and each entry's charts iterate in attach order
+    (umap → cluster → any data-driven types).  The number CONTINUES from the
+    highest ``figure_number`` any tree ``figure`` node already holds — so a chart
+    can never collide with a tree figure (ADR-0021 D1: this replaces the old
+    independent counter in ``attach_genomics_charts`` that restarted at 1).
+
+    Mutates each chart dict in place (sets ``chart["figure_number"]``).
+    Idempotent.  A no-op when there are no genomics sections / charts.
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    if not genomics_sections:
+        return
+
+    # Continue from the highest figure number the tree already assigned (0 when
+    # the active template has no `figure` nodes — the NIEHS reference case — so
+    # the first chart becomes Figure 1).
+    tree_max = 0
+    def _max(node: DocNode) -> None:
+        nonlocal tree_max
+        # Appendix-scoped figures ("C-1") do not advance the body sequence.
+        if node.figure_number is not None and not node.appendix_scope:
+            tree_max = max(tree_max, node.figure_number)
+    walk_tree(tree, _max)
+
+    counter = tree_max + 1
+    for entry in genomics_sections:
+        for chart in entry.get("charts") or []:
+            chart["figure_number"] = counter
+            counter += 1
+
+
+def build_node_index(tree: list[DocNode]) -> dict[str, DocNode]:
+    """
+    Build an ``{id: node}`` lookup over a forest, enforcing id uniqueness.
+
+    Walks the tree in document order and raises ValueError on the first
+    duplicate id.  Node ids must be globally unique: find_node — and every
+    other id-keyed lookup (xref-token resolution, readiness checks, the
+    renderers' section filter) — keys on id alone, so a duplicate would
+    silently shadow, with the first pre-order match winning for all callers
+    and no warning.  Failing here, at build time, turns that latent template
+    authoring bug into a loud error, consistent with this module's fail-fast
+    template loading (see the import-time note on DOCUMENT_TREE).
+    """
+    index: dict[str, DocNode] = {}
+
+    def visit(node: DocNode) -> None:
+        if node.id in index:
+            raise ValueError(
+                f"duplicate node id {node.id!r} in document tree — node ids "
+                "must be unique (find_node and every id-keyed lookup would "
+                "otherwise silently shadow to the first pre-order match)"
+            )
+        index[node.id] = node
+
+    walk_tree(tree, visit)
+    return index
+
+
+def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None:
+    """
+    Find a node by its ID anywhere in the tree.
+
+    Returns the node, or None if not found.
+
+    For the default tree (DOCUMENT_TREE) this is an O(1) lookup against a
+    prebuilt id->node index (_DOCUMENT_INDEX), not a linear scan.  The index is
+    built once at import and never goes stale: the tree's shape is frozen after
+    build_tree() — nothing in prod mutates node.children — and
+    compute_table_numbers() only sets table_number, not ids.  When an explicit
+    non-default ``tree`` is passed (unit tests, or any future sub-forest), fall
+    back to a linear pre-order walk, since those callers don't share the cache.
+    """
+    if tree is None:
+        tree = _RENDERING_TREE.get()
+        if tree is None:
+            return _DOCUMENT_INDEX.get(node_id)
+
+    for node in tree:
+        if node.id == node_id:
+            return node
+        if node.children:
+            found = find_node(node_id, node.children)
+            if found:
+                return found
+    return None
+
+
+# The tree a render is walking, when it is not DOCUMENT_TREE (a study's own
+# definition, ADR-0029, or a session view).  find_node(id) with no explicit tree
+# looks there, so a cross-reference ("Table N") resolves against the numbers of
+# the tree actually rendered.
+_RENDERING_TREE: contextvars.ContextVar = contextvars.ContextVar("rendering_tree", default=None)
+
+
+@contextlib.contextmanager
+def rendering_tree(tree: list[DocNode] | None):
+    """Within the block, `find_node(id)` resolves against `tree` (no-op for None)."""
+    if tree is None:
+        yield
+        return
+    token = _RENDERING_TREE.set(tree)
+    try:
+        yield
+    finally:
+        _RENDERING_TREE.reset(token)
+
+
+def collect_data_keys(node: DocNode) -> set[str]:
+    """
+    Collect all data_key values from a node and its descendants.
+
+    Used by the preview filter to determine which report data keys
+    to keep when rendering a specific subtree.
+    """
+    # Genomics narrative keys (gene_set_narrative, gene_narrative) are
+    # top-level report data keys, not sub-keys of unified_narratives.
+    # We must add them directly so _apply_section_filter() keeps them.
+    _TOP_LEVEL_NARRATIVE_KEYS = {"gene_set_narrative", "gene_narrative"}
+
+    keys: set[str] = set()
+    if node.data_key:
+        keys.add(node.data_key)
+    if node.narrative_key:
+        if node.narrative_key in _TOP_LEVEL_NARRATIVE_KEYS:
+            keys.add(node.narrative_key)
+        else:
+            keys.add("unified_narratives")
+    # ADR-0003 Part B: a template-authored content item may carry its own
+    # data_key (a table/chart pointer); keep it so the preview section-filter
+    # doesn't drop that item's data.  No-op while no node authors content_items.
+    for ci in node.content_items:
+        if ci.data_key:
+            keys.add(ci.data_key)
+    for child in node.children:
+        keys.update(collect_data_keys(child))
+    return keys
+
+
+def collect_platforms(node: DocNode) -> set[str]:
+    """
+    Collect all platform values from a node and its descendants.
+
+    Used by the preview filter to sub-filter apical_sections
+    to only the platforms in the requested subtree.
+    """
+    platforms: set[str] = set()
+    if node.platform:
+        platforms.add(node.platform)
+        # Legacy compat: "Clinical Observations" also matches "Clinical"
+        if node.platform == "Clinical Observations":
+            platforms.add("Clinical")
+    for child in node.children:
+        platforms.update(collect_platforms(child))
+    return platforms
+
+
+def collect_methods_keys(node: DocNode) -> set[str]:
+    """
+    Collect all methods_key values from a node and its descendants.
+
+    Used by the preview filter to restrict data.methods.sections to
+    only the subsections belonging to the selected M&M node.  A parent
+    node like "Clinical Examinations and Sample Collection" yields its
+    own key plus all its children's keys.
+    """
+    keys: set[str] = set()
+    if node.methods_key:
+        keys.add(node.methods_key)
+    for child in node.children:
+        keys.update(collect_methods_keys(child))
+    return keys
+
+
+def is_leaf_table(node: DocNode) -> bool:
+    """True if this node is a single table with no children."""
+    return node.node_type == "table" and not node.children
+
+
+def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
+    """
+    Serialize the tree to JSON-friendly dicts for the renderers
+    and the frontend navigation panel.
+
+    Each node becomes a dict with all fields + serialized children.
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+
+    def _to_dict(node: DocNode) -> dict:
+        d = {
+            "id": node.id,
+            "title": node.title,
+            "level": node.level,
+            "type": node.node_type,
+        }
+        if node.data_key:
+            d["data_key"] = node.data_key
+        if node.platform:
+            d["platform"] = node.platform
+        if node.narrative_key:
+            d["narrative_key"] = node.narrative_key
+        if node.table_number is not None:
+            d["table_number"] = node.table_number
+        if node.table_label is not None:
+            d["table_label"] = node.table_label
+        if node.figure_number is not None:
+            d["figure_number"] = node.figure_number
+        if node.figure_label is not None:
+            d["figure_label"] = node.figure_label
+        if node.appendix_letter is not None:
+            d["appendix_letter"] = node.appendix_letter
+        if node.ready_key:
+            d["ready_key"] = node.ready_key
+        if node.orientation:
+            d["orientation"] = node.orientation
+        if node.caption:
+            d["caption"] = node.caption
+        # ADR-0004 amendment d: every node carries its book region.  Only
+        # serialize it when set (descendants of region containers; bare
+        # test-scaffold nodes still serialize without it) so the JSON stays
+        # noise-free for the legacy unit-test cases.
+        if node.region:
+            d["region"] = node.region
+        # ADR-0003 Part B: a component's sub-addressable content items.  Only
+        # serialize when present (mirrors the `children` guard) so every current
+        # node — none author content_items yet — serializes byte-identically.
+        if node.content_items:
+            d["content_items"] = [_content_item_to_dict(ci) for ci in node.content_items]
+        if node.children:
+            d["children"] = [_to_dict(c) for c in node.children]
+        return d
+
+    return [_to_dict(n) for n in tree]
+
+
+def _content_item_to_dict(ci) -> dict:
+    """Serialize a ContentItem to a JSON-friendly dict (ADR-0003 Part B).
+
+    Emits `id`/`kind` always, and every other attribute only when set — the same
+    noise-free discipline serialize_tree uses for DocNode, so an item's JSON stays
+    minimal and stable."""
+    d: dict = {"id": ci.id, "kind": ci.kind}
+    if ci.part:
+        d["part"] = ci.part
+    if ci.orientable:
+        d["orientable"] = True
+    if ci.breakable:
+        d["breakable"] = True
+    if ci.orientation:
+        d["orientation"] = ci.orientation
+    if ci.break_before:
+        d["break_before"] = True
+    if ci.break_after:
+        d["break_after"] = True
+    if ci.text is not None:
+        d["text"] = ci.text
+    if ci.data_key:
+        d["data_key"] = ci.data_key
+    if ci.caption:
+        d["caption"] = ci.caption
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Initialize table numbers and the id->node index on module load
+# ---------------------------------------------------------------------------
+compute_table_numbers()
+
+# O(1) id->node lookup for the default tree, used by find_node().  Built once
+# here (eagerly, so a duplicate id fails import like a malformed template) and
+# only invalidated by rebuild_document_tree() (the default-structure editor):
+# ordinary prod never mutates the tree's shape after build_tree(), so the index
+# can't go stale on that path.  Tests passing an explicit sub-forest bypass this
+# and walk linearly instead.
+_DOCUMENT_INDEX: dict[str, DocNode] = build_node_index(DOCUMENT_TREE)
+
+
+def rebuild_document_tree() -> None:
+    """
+    Re-instantiate the global document tree from the (edited) active template,
+    IN PLACE, and refresh the derived globals.  Used by the default-structure
+    editor (document_config.save_default_document_yaml) to apply a template edit
+    live, with no server restart.
+
+    Critically this MUTATES the existing DOCUMENT_TREE list object rather than
+    rebinding the name: latex_generator / html_generator / report_data bound
+    ``DOCUMENT_TREE`` at their own import (``from document_tree import
+    DOCUMENT_TREE``), so a reassignment here would not reach them — a slice
+    assignment does.  The id->node index is likewise cleared + repopulated in
+    place (find_node reads the module global).
+
+    The serialized copy that the browser reads
+    (background_server._SERIALIZED_TREE) is a SEPARATE singleton; the caller
+    refreshes it via background_server.refresh_serialized_tree() after this runs.
+    """
+    new_tree = build_tree(ACTIVE_TEMPLATE)
+    DOCUMENT_TREE[:] = new_tree           # in-place: bound references see it
+    compute_table_numbers()               # positional numbers on the new tree
+    _DOCUMENT_INDEX.clear()
+    _DOCUMENT_INDEX.update(build_node_index(DOCUMENT_TREE))

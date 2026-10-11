@@ -40,8 +40,8 @@ from pathlib import Path
 
 import pytest
 
-from latex_generator import generate_latex
-from report_data import scaffold_report_data
+from rendering.latex_generator import generate_latex
+from rendering.report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------
@@ -171,10 +171,11 @@ def test_heading_only_emits_parent_heading(scaffold):
 
 
 def test_appendix_renders_with_pending_placeholder(scaffold):
-    """Appendices render as heading + visible pending placeholder."""
+    """Appendices render as heading + visible pending placeholder (the scaffold
+    has no expression data, so Appendix C's PCA figure is pending)."""
     tex = generate_latex(scaffold)
     assert r"\section{Appendix A. Internal Dose Assessment}" in tex
-    assert "Appendix body pending" in tex
+    assert "[Figure pending: Principal Component Analysis" in tex
 
 
 def test_tables_list_renders_listoftables(scaffold):
@@ -312,7 +313,7 @@ def test_unrenderable_unicode_is_translated_to_latex():
     both tectonic and Overleaf's pdflatex (a real compile confirmed this for
     "p ≤ 0.05" and "BMD₁Std").
     """
-    from latex_generator import _escape_latex
+    from rendering.latex_generator import _escape_latex
     out = _escape_latex("BMD₁Std, p ≤ 0.05, n ≥ 3")
     # The raw font-unrenderable characters must be gone…
     assert "≤" not in out and "≥" not in out and "₁" not in out
@@ -330,7 +331,7 @@ def test_superscript_exponents_survive_the_compile():
     they DROP from the PDF and silently change the value by orders of magnitude
     ("6.20×10⁻²²" → "6.20×1022").  Regression for issue #11.
     """
-    from latex_generator import _escape_latex
+    from rendering.latex_generator import _escape_latex
     out = _escape_latex("GO enrichment (54 genes, FDR = 6.20×10⁻²²)")
     # Every superscript codepoint must be gone from the output…
     for ch in "⁻²":
@@ -349,8 +350,8 @@ def test_table_caption_prefers_node_caption_over_data_overlay():
     (the current state for all real nodes), the data-overlay caption is used,
     preserving the existing data-driven path.
     """
-    from document_node import DocNode
-    from latex_generator import _table_caption
+    from document_model.document_node import DocNode
+    from rendering.latex_generator import _table_caption
     node = DocNode(id="t", title="Summary of X", level=0, node_type="table",
                    platform="P", table_number=2, caption="Node-authored caption.")
     # node.caption wins over the data-overlay caption argument
@@ -370,8 +371,8 @@ def test_abstract_renders_structured_sections_with_bold_labels():
     and empty sections (e.g. a Methods abstract with no MethodsContext) are
     skipped rather than shown as a placeholder.
     """
-    from document_node import DocNode
-    from latex_generator import _render_front_matter
+    from document_model.document_node import DocNode
+    from rendering.latex_generator import _render_front_matter
     node = DocNode(id="abstract", title="Abstract", level=1,
                    node_type="front-matter", data_key="abstract")
     data = {"abstract": {"sections": [
@@ -547,3 +548,11 @@ def test_pdflatex_compiles(scaffold, tmp_path):
         if (tmp_path / "report.log").exists()
         else ""
     )
+
+
+def test_appendix_subsections_carry_the_appendix_numbering(scaffold):
+    r"""Appendix C's "C.1."/"C.2." headings are unnumbered by LaTeX (no "15.1
+    C.1.") and still listed in the contents."""
+    tex = generate_latex(scaffold)
+    assert "\\subsection*{C.1. Gene Expression Quality Control}" in tex
+    assert "\\addcontentsline{toc}{subsection}{C.1. Gene Expression Quality Control}" in tex

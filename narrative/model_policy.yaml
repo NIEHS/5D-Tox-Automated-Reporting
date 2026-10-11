@@ -1,0 +1,15 @@
+# Which models may receive an UNPUBLISHED study's data.
+#
+# A narrative prompt carries the study's exact results (BMDs, BMDLs, endpoints).
+# Every model is reached through the NIEHS toxpipe gateway, but whether each
+# backend behind it stays inside the institution is not confirmed for every
+# provider. So: a PUBLISHED study (one whose report NIEHS has published) may go
+# to any model the gateway serves; an unpublished study only to a model matching
+# a pattern below. The server enforces this for every generation, comparison,
+# arbiter and workshop-chat call.
+#
+# Patterns are shell-style (fnmatch), matched against the gateway model id.
+# Edit this list to change the policy; there is no other switch.
+unpublished_allowed:
+  - "claude-*"        # Anthropic models served through toxpipe
+  - "azure-*"         # Azure-hosted models (the NIEHS tenant)

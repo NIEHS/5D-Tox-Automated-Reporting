@@ -1,0 +1,1328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>5dToxReport Headless Guide</title>
+<style>
+  /* Layout: a reference manual — sticky contents rail on wide screens, one
+     readable column of prose with full-width tables and code beneath it. */
+  :root {
+    --bg: #ffffff;
+    --fg: #1d2530;
+    --muted: #5b6573;
+    --line: #dde2e8;
+    --head: #f3f5f8;
+    --accent: #1f5f8b;
+    --accent-soft: #e6f0f7;
+    --code-bg: #f6f8fa;
+    --code-fg: #1d2530;
+    --warn: #9a5b00;
+    --warn-soft: #fdf3e1;
+    --ok: #2e7d5b;
+    --ok-soft: #e5f4ec;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Liberation Sans", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #2c333c; --head: #1c2229;
+      --accent: #7fb6de; --accent-soft: #1b2c3a; --code-bg: #1a1f26; --code-fg: #dfe5ec;
+      --warn: #e2b062; --warn-soft: #2e2618; --ok: #7cc9a3; --ok-soft: #17291f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #2c333c; --head: #1c2229;
+    --accent: #7fb6de; --accent-soft: #1b2c3a; --code-bg: #1a1f26; --code-fg: #dfe5ec;
+    --warn: #e2b062; --warn-soft: #2e2618; --ok: #7cc9a3; --ok-soft: #17291f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.6 var(--font-body); }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  .page { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 72px;
+          display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  @media (min-width: 1000px) { .page { grid-template-columns: 220px minmax(0, 1fr); } }
+
+  /* contents rail */
+  nav.toc { font-size: 0.88rem; }
+  nav.toc summary { cursor: pointer; list-style: none; }
+  nav.toc summary::-webkit-details-marker { display: none; }
+  nav.toc .label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+  nav.toc li { counter-increment: toc; }
+  nav.toc a { display: flex; gap: 8px; padding: 4px 8px; border-radius: 5px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
+  nav.toc a::before { content: counter(toc); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  nav.toc li.appendix a::before { content: attr(data-letter); }
+  nav.toc a:hover { background: var(--head); }
+  nav.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
+  @media (min-width: 1000px) {
+    nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; }
+  }
+  @media (max-width: 999px) {
+    nav.toc { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+    nav.toc .label { margin-bottom: 0; }
+    nav.toc .label::after { content: " ▸"; }
+    nav.toc details[open] .label { margin-bottom: 8px; }
+    nav.toc details[open] .label::after { content: " ▾"; }
+    nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  }
+
+  main { min-width: 0; }
+  header.intro { margin-bottom: 8px; }
+  .eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 10px; text-wrap: balance; }
+  h2 { font-size: 1.3rem; line-height: 1.3; margin: 56px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); text-wrap: balance; }
+  h2 .num { color: var(--muted); font-weight: 500; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 1.05rem; margin: 32px 0 8px; }
+  h4 { font-size: 0.95rem; margin: 26px 0 6px; }
+  p, ul, ol.prose { max-width: 75ch; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--muted); font-size: 1.02rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 0.85rem; color: var(--muted); margin: 14px 0 0; }
+  code { font: 0.86em var(--font-mono); background: var(--head); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  ul { padding-left: 1.2em; } li { margin-bottom: 6px; }
+
+  /* two routes */
+  .routes { display: grid; gap: 14px; margin: 26px 0 8px; }
+  .route { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; min-width: 0;
+           display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 22px; align-items: start; }
+  @media (min-width: 760px) { .route { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.6fr); } }
+  .route > div { min-width: 0; }
+  .route .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .route h3 { margin: 4px 0 6px; }
+  .route p { color: var(--muted); font-size: 0.92rem; }
+  .route .code { margin-top: 4px; }
+
+  /* pipeline */
+  .pipeline { list-style: none; margin: 18px 0 8px; padding: 0; display: grid; gap: 0; counter-reset: step; }
+  .pipeline > li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 18px; margin: 0; }
+  .pipeline > li::before { content: ""; position: absolute; left: 21px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+  .pipeline > li:last-child::before { display: none; }
+  .pipeline .dot { width: 44px; height: 34px; border-radius: 17px; display: grid; place-items: center; font-weight: 700; font-size: 0.9rem;
+                   background: var(--accent); color: var(--bg); font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
+  .pipeline li.optional .dot { background: var(--bg); color: var(--accent); border: 2px dashed var(--accent); }
+  .pipeline .body { min-width: 0; padding-top: 4px; }
+  .pipeline .title { font-weight: 650; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .pipeline .desc { color: var(--muted); font-size: 0.92rem; margin: 2px 0 6px; max-width: 75ch; }
+  .pipeline .calls { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; }
+  .pipeline .calls span { color: var(--muted); }
+  .pipeline .calls code { font-size: 0.95em; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+  .chip.phase { background: var(--ok-soft); color: var(--ok); font-family: var(--font-mono); }
+  .chip.opt { background: var(--head); color: var(--muted); }
+  .chip.yaml { background: var(--accent-soft); color: var(--accent); font-family: var(--font-mono); }
+  .chip.slow { background: var(--warn-soft); color: var(--warn); }
+  .phases { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+
+  /* code blocks */
+  .code { position: relative; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--code-bg); min-width: 0; }
+  .code .bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 12px; border-bottom: 1px solid var(--line);
+               font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .code button { font: 600 0.75rem var(--font-body); color: var(--accent); background: transparent; border: 1px solid var(--line);
+                 border-radius: 5px; padding: 2px 9px; cursor: pointer; }
+  .code button:hover { background: var(--bg); }
+  .code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: 0.84rem/1.55 var(--font-mono); color: var(--code-fg); tab-size: 4; }
+  .code pre .c { color: var(--muted); }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 11px; border-bottom: 1px solid var(--line); }
+  thead th { background: var(--head); font-weight: 600; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td:first-child { white-space: nowrap; }
+  td.wrap:first-child { white-space: normal; min-width: 14ch; }
+  .yes { color: var(--warn); font-weight: 600; } .no { color: var(--ok); font-weight: 600; }
+
+  /* callouts */
+  .callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--head); border-radius: 0 8px 8px 0;
+             padding: 12px 16px; margin: 16px 0; max-width: 85ch; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout b { color: var(--fg); }
+
+  .tree { font: 0.84rem/1.6 var(--font-mono); }
+  .tree .f { color: var(--fg); } .tree .d { color: var(--muted); }
+
+  footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="toc" aria-label="Contents"><details open>
+  <summary class="label">Contents</summary>
+  <ol>
+    <li><a href="#pipeline">The pipeline at a glance</a></li>
+    <li><a href="#prereqs">Prerequisites</a></li>
+    <li><a href="#inputs">Input files</a></li>
+    <li><a href="#python">Route A — Python</a></li>
+    <li><a href="#http">Route B — HTTP API</a></li>
+    <li><a href="#outputs">Outputs</a></li>
+    <li><a href="#approval">Approval and the publish gate</a></li>
+    <li><a href="#rerun">Re-running and resetting</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+    <li><a href="#gaps">Known gaps</a></li>
+    <li class="appendix"><a href="#appendix-a" data-letter="A">Render surfaces</a></li>
+    <li class="appendix"><a href="#appendix-b" data-letter="B">What in the report comes from the data</a></li>
+    <li class="appendix"><a href="#appendix-c" data-letter="C">The YAML files and what they can do</a></li>
+  </ol>
+</details></nav>
+
+<main>
+<header class="intro">
+  <p class="eyebrow">rlm-bmdx · 5dToxReport</p>
+  <h1>Generating reports without the browser</h1>
+  <p class="lede">
+    Two ways to take a 5-day study's data files to a finished NIEHS-format report from the command line.
+    Both run the same workflow core as the web UI (<code>workflow/steps.py</code>, ADR-0014) and read and write
+    the same session folder, <code>sessions/&lt;DTXSID&gt;/</code>. A session built one way can be continued the
+    other way, or opened in the browser.
+  </p>
+  <div class="meta">
+    <span>Updated 2026-10-07</span>
+    <span>Scripts: <code>tooling/generate_report.py</code> · <code>tooling/generate_report_api.sh</code></span>
+    <span>Examples use PFHxSAm (DTXSID50469320, NIEHS Report 10)</span>
+  </div>
+</header>
+
+<div class="routes">
+  <section class="route" aria-labelledby="ra">
+    <div><span class="tag">Route A</span>
+    <h3 id="ra">Python, in-process</h3>
+    <p>One command runs every step and writes the deliverables. No server needed. The only route that builds the LaTeX bundle.</p></div>
+    <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.generate_report DTXSID50469320 \
+    --files /data/pfhxsam/* \
+    --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 \
+    --compound-name PFHxSAm --dose-unit mg/kg \
+    --surfaces docx,html,jats,latex,pdf</pre></div>
+  </section>
+  <section class="route" aria-labelledby="rb">
+    <div><span class="tag">Route B</span>
+    <h3 id="rb">HTTP API, with curl</h3>
+    <p>Drives a running server through the same calls the browser makes, in the same order. Use it against a shared or remote deployment.</p></div>
+    <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>BASE=http://localhost:9000 tooling/generate_report_api.sh \
+    -i DTXSID50469320 -n "Perfluorohexanesulfonamide" \
+    -c 41997-13-1 -u mg/kg -k PFHxSAm \
+    -s docx,jats,pdf -o output/DTXSID50469320 \
+    /data/pfhxsam/*</pre></div>
+  </section>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="pipeline"><span class="num">1</span>The pipeline at a glance</h2>
+<p>
+  Each step is one Python function and one HTTP call. You never set the workflow phase yourself: it is worked out from
+  which files exist on disk. The green chips show the phase each step moves the session into.
+</p>
+
+<ol class="pipeline">
+  <li><div class="dot">1</div><div class="body">
+    <div class="title">Import <span class="chip phase">UPLOADED</span></div>
+    <p class="desc">Puts the input files into <code>sessions/&lt;id&gt;/files/</code>. Long-format NTP tables are converted to the wide pivot plus a per-animal sidecar.</p>
+    <div class="calls"><span>Python</span><code>copy into files/</code><span>HTTP</span><code>POST /api/upload-bm2</code><code>POST /api/upload-csv</code></div>
+  </div></li>
+  <li><div class="dot">2</div><div class="body">
+    <div class="title">Validate <span class="chip phase">VALIDATED</span></div>
+    <p class="desc">Fingerprints every file and cross-checks doses, animals, sexes and coverage; writes <code>validation_report.json</code>. Any error-severity issue gives <code>VALIDATION_ERRORS</code> instead, and integration is blocked.</p>
+    <div class="calls"><span>Python</span><code>validate_step</code><span>HTTP</span><code>POST /api/pool/validate/{id}</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">2b</div><div class="body">
+    <div class="title">Resolve conflicts <span class="chip opt">optional</span></div>
+    <p class="desc">Picks the winning file when two cover the same platform. Without a decision, integration prefers <code>bm2 &gt; txt/csv &gt; xlsx</code>.</p>
+    <div class="calls"><span>Python</span><code>resolve_step</code><span>HTTP</span><code>POST /api/pool/resolve</code></div>
+  </div></li>
+  <li><div class="dot">3</div><div class="body">
+    <div class="title">Confirm metadata</div>
+    <p class="desc">Accepts or overrides each file's detected platform and data type.</p>
+    <div class="calls"><span>Python</span><code>confirm_metadata_step</code><span>HTTP</span><code>POST /api/pool/confirm-metadata/{id}</code></div>
+  </div></li>
+  <li><div class="dot">4</div><div class="body">
+    <div class="title">Integrate <span class="chip phase">INTEGRATED</span></div>
+    <p class="desc">BMDExpress 3 (Java) merges the pool into <code>integrated.json</code>, the single source of truth for every report section.</p>
+    <div class="calls"><span>Python</span><code>integrate_step</code><span>HTTP</span><code>POST /api/pool/integrate/{id}</code></div>
+  </div></li>
+  <li><div class="dot">5</div><div class="body">
+    <div class="title">Approve data <span class="chip phase">APPROVED</span></div>
+    <p class="desc">Builds the per-animal traceability report, <code>animal_report.json</code>: each animal mapped to dose, sex and core or biosampling selection.</p>
+    <div class="calls"><span>Python</span><code>generate_animal_report_step</code><span>HTTP</span><code>POST /api/generate-animal-report/{id}</code></div>
+  </div></li>
+  <li><div class="dot">6</div><div class="body">
+    <div class="title">Process <span class="chip slow">minutes when cold</span></div>
+    <p class="desc">NTP statistics (Williams, Dunnett, Jonckheere), BMDS modelling, genomics, charts, LLM narratives and Materials &amp; Methods. Every layer is cached, so a repeat run takes seconds.</p>
+    <div class="calls"><span>Python</span><code>process_step</code> (async)<span>HTTP</span><code>POST /api/process-integrated/{id}</code></div>
+  </div></li>
+  <li><div class="dot">7</div><div class="body">
+    <div class="title">Materialize result sections</div>
+    <p class="desc">Writes the apical result sections as unapproved <code>bm2_&lt;slug&gt;.json</code> drafts.</p>
+    <div class="calls"><span>Python</span><code>materialize_result_sections</code><span>HTTP</span><code>POST /api/pool/materialize-sections/{id}</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">8</div><div class="body">
+    <div class="title">Background <span class="chip opt">optional</span></div>
+    <p class="desc">LLM Background section built from ATSDR, IRIS and PubChem lookups.</p>
+    <div class="calls"><span>Python</span><code>--background</code><span>HTTP</span><code>POST /api/generate</code> (SSE) + <code>save-section</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">8b</div><div class="body">
+    <div class="title">Summary <span class="chip opt">deterministic · Route A writes it</span></div>
+    <p class="desc">Built from the session&rsquo;s results (most sensitive apical endpoints, gene sets and genes, point of departure); never replaces an approved or hand-written summary.</p>
+    <div class="calls"><span>Python</span><code>materialize_summary</code><span>HTTP</span><code>POST /api/generate-summary</code> (LLM variant) + <code>save-section</code></div>
+  </div></li>
+  <li><div class="dot">9</div><div class="body">
+    <div class="title">Render</div>
+    <p class="desc">Word docx, HTML preview, BITS/JATS XML, Bookshelf-style HTML, Overleaf LaTeX bundle and PDF, all from one document tree.</p>
+    <div class="calls"><span>Python</span><code>render_preview</code><span>HTTP</span><code>POST /api/preview/{id}/materialize</code> + <code>GET …/download</code></div>
+  </div></li>
+</ol>
+
+<p>Check the derived phase at any point:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -s localhost:9000/api/workflow/$ID/state | jq '{phase, legal_actions}'</pre></div>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from workflow.engine import WorkflowEngine
+WorkflowEngine("DTXSID50469320").state().to_dict()</pre></div>
+
+<!-- ============================================================ -->
+<h2 id="prereqs"><span class="num">2</span>Prerequisites</h2>
+<p>Both routes need the same environment, because both run the same pipeline. Route B runs it inside the server process.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Need</th><th>Why</th><th>Where, in the sandbox</th></tr></thead>
+  <tbody>
+    <tr><td>Repo + venv</td><td>All the code. Run everything <b>from the repo root</b>: the knowledge base <code>bmdx.duckdb</code> and the templates are found relative to the current directory.</td><td><code>uv sync</code></td></tr>
+    <tr><td>JDK 21 first on <code>PATH</code></td><td>Integration and statistics call compiled Java helpers (class version 65). On JDK 17 they fail with <code>UnsupportedClassVersionError</code>.</td><td><code>/opt/liberica-jdk-21/bin</code></td></tr>
+    <tr><td><code>BMDX_PROJECT_ROOT</code></td><td>Where the Java bridge finds the BMDExpress-3 jars (<code>$BMDX_PROJECT_ROOT/target/*.jar</code>).</td><td><code>/workspace/BMDExpress-3</code></td></tr>
+    <tr><td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_BASE_URL</code></td><td>LLM narratives, Materials &amp; Methods, Background, Summary.</td><td>toxpipe LiteLLM gateway</td></tr>
+    <tr><td><code>SSL_CERT_FILE</code></td><td>The toxpipe gateway uses the NIH CA chain. The Python SDK reads <code>SSL_CERT_FILE</code>, not <code>NODE_EXTRA_CA_CERTS</code>.</td><td><code>/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt</code></td></tr>
+    <tr><td><code>BMDX_ALLOW_ENRICHR=1</code> <span class="chip opt">optional, published data only</span></td><td>Labels the genomics cluster chart with Enrichr terms. Enrichr is a <b>public</b> service, so this sends each cluster's gene list off the NIEHS network. Off by default: clusters are labelled with the study's own GO terms. Never set it for an unpublished study.</td><td>unset</td></tr>
+    <tr><td><code>tect</code> <span class="chip opt">optional</span></td><td>Compiles the LaTeX PDF (Route A <code>pdf</code> surface). Never use plain <code>tectonic</code>.</td><td>baked in</td></tr>
+    <tr><td>LibreOffice <code>docx2pdf</code> <span class="chip opt">optional</span></td><td>PDF over HTTP: <code>GET /Bookshelf/{id}/report.pdf</code>.</td><td>baked in</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>Route A</b> fills in the JDK, <code>BMDX_PROJECT_ROOT</code> and <code>SSL_CERT_FILE</code> defaults itself. Values set in your shell take precedence.</li>
+  <li><b>Route B</b>: start the server with <code>./run-server.sh</code>, which sets the same environment and reads the API key from <code>~/.claude/settings.json</code>.</li>
+</ul>
+<div class="callout warn">
+  <p><b>Data policy.</b> Which data may reach which LLM depends on whether the study is published (the dev/test/prod split).
+  Unpublished study data may only go to the walled toxpipe gateway, never a public model endpoint. The app's egress guard
+  enforces toxpipe-only. Don't work around it by pointing <code>ANTHROPIC_BASE_URL</code> somewhere else.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="inputs"><span class="num">3</span>Input files</h2>
+<p>The same files you would drop on the Upload step.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>File</th><th>Example</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>BMDExpress project</td><td><code>PFHxSAm_Gene_Expression.bm2</code></td><td>Genomic and/or apical BMD results.</td></tr>
+    <tr><td>BMDExpress text exports</td><td><code>Liver_PFHxSAm_Male_GENE_BMD_Results.txt</code>, <code>…_GO_Biological_Process_BMD_Results.txt</code>, <code>…_Expression_Data.txt</code></td><td>Gene-expression tier.</td></tr>
+    <tr><td>NTP long-format tables</td><td><code>body_weight_truth_male.csv</code>, <code>organ_weights_truth_male.csv</code>, <code>clin_chem_truth_female.csv</code></td><td>One row per animal. Converted on import to a wide BMDExpress pivot <code>.txt</code> plus a per-animal <code>.sidecar.json</code>; the original moves to <code>_originals/</code>.</td></tr>
+    <tr><td>Wide pivots + sidecars</td><td><code>body_weight_truth_female.txt</code> + <code>body_weight_truth_female.sidecar.json</code></td><td>The already-converted form. Import both.</td></tr>
+    <tr><td>NTP study workbooks</td><td><code>*.xlsx</code></td><td>Raw study-team data, used to cross-check derived values.</td></tr>
+  </tbody>
+</table></div>
+<p>
+  The platform (Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones, Tissue Concentration, Clinical) and
+  data type (<code>tox_study</code>, <code>inferred</code> or <code>gene_expression</code>) are detected from each file's name and
+  contents. Check them at the confirm-metadata step and override any that are wrong.
+</p>
+<p><b>Published CEBS packages.</b> <code>tooling/cebs_to_pool.py</code> converts a CEBS NIEHS data package (Individual Animal workbooks plus expression files) into these inputs:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.cebs_to_pool --package assets/cebs/NIEHS-13 \
+    --prefix 108020004 --out /tmp/niehs13_inputs \
+    --bundle assets/cebs/_bookshelf/NIEHS-13</pre></div>
+<p><code>--bundle</code> also converts the workbooks of the report's Bookshelf bundle. NIEHS-12 and -13 publish their blood and tissue concentrations only there, as the lab's results workbook. The sheet for the package's species is the one converted.</p>
+<p><code>--mg-per-kg-from PROJECT.json</code> handles RR-8 and NIEHS-02 … 06, which record apical doses in mmol/kg. It converts each dose to the genomic project's mg/kg level, provided the levels share one ratio (the molecular weight). The converter exits non-zero if any workbook fails.</p>
+<p><b>Every downloaded study at once.</b> <code>tooling/build_published_reports.py</code> builds a report for each published package (RR-8, NIEHS-02 … 10, 12, 13) into <code>sessions/&lt;DTXSID&gt;</code> and <code>output/&lt;DTXSID&gt;</code>, so each one is on the Bookshelf. It uses the design, strain designation, genomic tissue/sex and method profile the published report states. NIEHS-12 and 13 report a rat study and a mouse study: each study is built in its own session (<code>&lt;DTXSID&gt;_rat</code>, <code>&lt;DTXSID&gt;_mouse</code>), and the report session lists them (<code>--studies</code>, below). Each build starts from a fresh session: the old one moves to <code>output/_session_backups/</code> and a Background written on the host is kept. <code>tooling/report_qc.py</code> then checks the rendered deliverables, including against the published tables and the published book&rsquo;s structure, and writes <code>output/QC/qc-report.md</code>. <code>tooling/bits_structure.py</code> prints the structure diff alone (<code>-</code> published only, <code>+</code> ours only), and <code>tooling/bookshelf_preview.py</code> renders a published bundle through our Bookshelf facsimile for a side-by-side read:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
+python -m tooling.report_qc                             # every report on the shelf
+python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
+python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html</pre></div>
+
+<!-- ============================================================ -->
+<h2 id="python"><span class="num">4</span>Route A — Python</h2>
+
+<h3>One command: <code>tooling.generate_report</code></h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>cd /workspace/rlm-bmdx
+python -m tooling.generate_report DTXSID50469320 \
+    --files /data/pfhxsam/*.bm2 /data/pfhxsam/*.txt /data/pfhxsam/*.csv \
+    --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 \
+    --compound-name PFHxSAm --dose-unit mg/kg \
+    --surfaces docx,html,jats,latex,pdf</pre></div>
+<p>
+  It imports the files, runs steps 2–7, then renders. Each step prints its result and wall time. A cold run takes several
+  minutes, most of it BMDS dose-response modelling; a repeat run on the same session takes seconds. Deliverables go to
+  <code>output/&lt;DTXSID&gt;/</code> (or <code>--out</code>):
+</p>
+<div class="code"><div class="bar"><span>output/DTXSID50469320/</span></div><pre class="tree">DTXSID50469320.docx            <span class="c">Word deliverable</span>
+DTXSID50469320.html            <span class="c">HTML preview</span>
+DTXSID50469320.xml             <span class="c">BITS &lt;book&gt; XML, for Bookshelf submission</span>
+DTXSID50469320-overleaf.zip    <span class="c">Overleaf bundle: report.tex + niehs.cls + figures/</span>
+DTXSID50469320.pdf             <span class="c">that bundle compiled locally with tect</span></pre></div>
+
+<h4>Options</h4>
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>DTXSID</code></td><td>Session id; the folder is <code>sessions/&lt;DTXSID&gt;/</code>. Any <code>DTXSID…</code> id of letters, digits, <code>_</code> or <code>-</code>.</td></tr>
+    <tr><td><code>--files F …</code></td><td>Import these files first. Leave it out to use the files already in the session. Adding files to a session that has progressed invalidates its downstream artifacts, as an upload does.</td></tr>
+    <tr><td><code>--name</code>, <code>--casrn</code></td><td>Test-article identity. Falls back to <code>identity.json</code>, then to the PubChem/CTX resolver (needs network).</td></tr>
+    <tr><td><code>--compound-name</code></td><td>Short name for captions and narratives. Default: the identity name.</td></tr>
+    <tr><td><code>--dose-unit</code></td><td>The study's dose unit, used on every surface: table headers, Methods, Abstract, Summary, the report&rsquo;s Appendix B roster and the LLM narratives. <b>State it explicitly.</b> If omitted, the unit the data records is used, else <code>mg/kg</code>, and the log says which. A concentration in air (<code>ppm</code>, <code>ppb</code>, <code>mg/m3</code>) makes it an inhalation study: “exposed to … by inhalation”, “exposure concentrations”, “chamber control”, title “(Inhalation Studies)”, no vehicle or dose formulations.</td></tr>
+    <tr><td><code>--metadata FILE</code></td><td>Classification overrides keyed by filename: <code>{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}</code></td></tr>
+    <tr><td><code>--design FILE</code></td><td>Study-design facts the data does not record, set on every experiment (as the UI metadata step does) and kept in <code>sessions/&lt;id&gt;/study_design.json</code>, so every later integration (<code>--reintegrate</code>) puts them back: <code>{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}</code>. Fields: species, strain, articleRoute, administrationMeans, articleVehicle, studyDuration (controlled vocabulary). A fact the metadata does not record takes the standard design as a <b>fallback</b>: Sprague Dawley rats for five days (<code>studyDuration</code>, e.g. <code>"28d"</code>, overrides it), by gavage in corn oil for an oral (mg/kg) unit, by inhalation for an air concentration (ppm), no route fallback for other units. These facts also set the apical table captions: “…of Male Rats Administered X for Five Days”, or “Exposed to X” for inhalation. The log prints <code>NOTE: not recorded in the data, standard design used: …</code>; record the real values with <code>--design</code> whenever they differ. Recorded values that disagree across experiments get no fallback. Facts the data never holds (animal source, quarantine, test-article lot and purity, dose rationale) are a <code>[Placeholder: …]</code> in Materials and Methods, which <code>--strict</code> refuses to ship.</td></tr>
+    <tr><td><code>--experiment-metadata FILE</code></td><td>Experiment metadata the data doesn't record, as <code>{experiment name: {field: value}}</code> (vocabulary-checked), e.g. <code>{"EDHP mg_kg": {"organ": "liver", "sex": "male"}}</code> for a genomic experiment named by chemical and unit. The fields are laid over the named experiments and kept as the metadata approval (<code>metadata_approved.json</code>), the same record the browser's approval writes, so every later integration re-applies them.</td></tr>
+    <tr><td><code>--studies KEY=SESSION…</code></td><td>A report over several studies (ADR-0029 §9), e.g. <code>rat=DTXSID1020431_rat mouse=DTXSID1020431_mouse</code>: each member is a study session built on its own first. Recorded as the session's <code>studies.json</code>; the report renders from them (implies <code>--render-only</code>). Combined tables group rows by study (&ldquo;Rats&rdquo; / &ldquo;Mice&rdquo;) on the union of the studies' dose levels (NA where a study did not test a level); sections the definition repeats per study (<code>repeat: study_species</code>) render from that study's data.</td></tr>
+    <tr><td><code>--deposit DIR</code></td><td>The study's data deposit: the supplemental files deposited with the report. Recorded as the session's <code>deposit.json</code> (each file's size, kind and species, read from its name); the Supplemental Data appendix lists them, one section per kind (and, in the 2026 books, per species). <code>--deposit-exclude GLOB…</code> leaves out files in <code>DIR</code> that are not deposited (<code>build_published_reports</code> passes the Bookshelf package less the book's own XML, figures, <code>TOC.pdf</code>, <code>license.txt</code>, <code>SOURCE.txt</code>).</td></tr>
+    <tr><td><code>--front-matter FILE</code></td><td>Front matter, as the Configure screen saves it to <code>front_matter.json</code>: <code>authors</code>, <code>contributors</code>, <code>publication</code> (<code>report_number</code>, <code>doi</code>, <code>report_date</code>) and <code>strain_designation</code>, the supplier designation the title prints after the strain, e.g. <code>{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}</code>. Keys the file gives replace the saved ones.</td></tr>
+    <tr><td><code>--method-profile NAME</code></td><td>The analysis method profile (<code>profiles/&lt;name&gt;.yaml</code>, ADR-0027). <code>NAME</code> fixes the study on that profile; <code>newest</code> makes it track the newest profile, which is also the default for a study with no pin. A change of profile recomputes. The log prints the profile, unimplemented settings (<code>NOTE</code>) and every setting a <code>.bm2</code> records differently (<code>WARNING</code>).</td></tr>
+    <tr><td><code>--bmd-stats</code>, <code>--go-*</code></td><td>GO gene-set table settings for this run, overriding the method profile's (ntp-5day-2025: <code>--bmd-stats fifth_pct,median</code>, <code>--go-pct 5</code>, <code>--go-min-genes 20</code>, <code>--go-max-genes 500</code>, <code>--go-min-bmd 3</code>). Omit them to use the profile.</td></tr>
+    <tr><td><code>--reintegrate</code></td><td>Integrate again even though <code>integrated.json</code> exists. Wipes every process cache, so processing starts over. Without it, integration is skipped when <code>integrated.json</code> exists.</td></tr>
+    <tr><td><code>--background</code></td><td>Also generate and save the Background section. <code>--model</code> picks the model.</td></tr>
+    <tr><td><code>--stop-after STEP</code></td><td><code>validate</code>, <code>integrate</code> or <code>process</code>: stop there and render nothing.</td></tr>
+    <tr><td><code>--render-only</code></td><td>Skip the pipeline; render the session as it is on disk.</td></tr>
+    <tr><td><code>--surfaces</code></td><td>Comma list from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>bits</code>, <code>latex</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
+    <tr><td><code>--view NAME</code></td><td>Render a saved report view (its filters and chart selection).</td></tr>
+    <tr><td><code>--strict</code></td><td><code>latex</code>/<code>pdf</code>: refuse to build while any <code>[… pending]</code> placeholder remains.</td></tr>
+    <tr><td><code>--draft</code></td><td>Render even when the publish gate is closed (§7).</td></tr>
+    <tr><td><code>-v</code></td><td>Show pipeline logging, including per-cache provenance events.</td></tr>
+  </tbody>
+</table></div>
+<p>The script exits non-zero with the reason when validation finds errors, a step fails, or the publish gate is closed.</p>
+
+<h4>Recipes</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre><span class="c"># Check the inputs only: validation report and detected classification</span>
+python -m tooling.generate_report DTXSID50469320 --files in/* --stop-after validate
+
+<span class="c"># Already processed (e.g. in the browser): just produce the deliverables</span>
+python -m tooling.generate_report DTXSID50469320 --render-only --surfaces docx,pdf,jats
+
+<span class="c"># Correct a misclassified file, then rebuild from scratch</span>
+python -m tooling.generate_report DTXSID50469320 --metadata fixes.json --reintegrate</pre></div>
+
+<h3>Step by step: calling the workflow core yourself</h3>
+<p>
+  For different wrapping (a batch over many studies, a custom stopping point, extra checks), call the steps directly.
+  This is what <code>generate_report.py</code> does, minus its argument handling. Set up the environment first (§2, or copy
+  <code>_bootstrap_env()</code>): <code>bmdx_pipe</code> reads <code>BMDX_PROJECT_ROOT</code> at import time.
+</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>import asyncio, shutil
+from pathlib import Path
+
+from workflow.store import DiskPoolStore
+from workflow.engine import WorkflowEngine
+from workflow.steps import (
+    validate_step, confirm_metadata_step, integrate_step,
+    generate_animal_report_step, process_step, materialize_result_sections,
+)
+from rendering.preview_surface import render_preview
+
+ID = "DTXSID50469320"
+store = DiskPoolStore()
+
+<span class="c"># 1. Import: copy inputs into files/. Validation's disk scan fingerprints them
+#    (and converts long-format CSVs), so no upload call is needed.</span>
+files = store.session_dir(ID) / "files"
+files.mkdir(parents=True, exist_ok=True)
+for p in Path("/data/pfhxsam").iterdir():
+    shutil.copy2(p, files / p.name)
+
+<span class="c"># 2. Validate: stop on error-severity issues</span>
+report = validate_step(ID, store)
+assert not [i for i in report["issues"] if i.get("severity") == "error"]
+
+<span class="c"># 3. Confirm metadata: {} accepts what was detected.
+#    Keys are file ids from store.get_fingerprints(ID).</span>
+confirm_metadata_step(ID, {}, store)
+
+<span class="c"># 4. Integrate (Java)</span>
+integrate_step(ID, {"name": "Perfluorohexanesulfonamide",
+                    "casrn": "41997-13-1", "dtxsid": ID}, store)
+
+<span class="c"># 5. Approve data: build the animal report</span>
+generate_animal_report_step(ID, store)
+
+<span class="c"># 6. Process (async; minutes when cold).  The GO ranking and cutoffs come from</span>
+<span class="c">#    the study's method profile; add bmd_stats / go_* keys only to override it.</span>
+payload = asyncio.run(process_step(ID, {
+    "compound_name": "PFHxSAm", "dose_unit": "mg/kg",
+}, store))
+
+<span class="c"># 7. Materialize the apical result sections as section files</span>
+materialize_result_sections(ID, store)
+print(WorkflowEngine(ID, store).state().to_dict()["phase"])   <span class="c"># APPROVED</span>
+
+<span class="c"># 9. Render: docx gives bytes; html, jats and bookshelf give str</span>
+Path(f"{ID}.docx").write_bytes(render_preview(ID, surface="docx"))
+Path(f"{ID}.xml").write_text(render_preview(ID, surface="jats"))</pre></div>
+
+<p>The optional Background (step 8) uses the same functions as <code>POST /api/generate</code>:</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from narrative.chem_resolver import ChemicalIdentity
+from narrative.data_gatherer import gather_all
+from narrative.background_writer import generate_background
+
+identity = store.read_json(ID, "identity.json")
+result = generate_background(gather_all(ChemicalIdentity.from_dict(identity)))
+store.save_section(ID, "background", {
+    "paragraphs": result["paragraphs"],
+    "references": result.get("references", []),
+    "citation_report": result.get("citation_report"),
+    "abstract_background": result.get("abstract_background", ""),
+    "approved": False,
+}, archive=False)</pre></div>
+<p>
+  For LaTeX, <code>rendering.latex_export</code> provides <code>load_session_data</code> and <code>build_overleaf_bundle</code>.
+  Its standalone CLI (<code>python -m rendering.latex_export --session --dtxsid ID --out bundle.zip</code>) does not apply a
+  saved view's document tree; <code>generate_report --surfaces latex</code> does.
+</p>
+<p>For an interactive run, <code>notebooks/workflow_walkthrough.ipynb</code> runs steps 2–7 one cell each and prints the derived phase after each.</p>
+
+<!-- ============================================================ -->
+<h2 id="http"><span class="num">5</span>Route B — HTTP API</h2>
+
+<h3>Start the server</h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>./run-server.sh                 <span class="c"># 0.0.0.0:9000; sets the JDK, BMDX_PROJECT_ROOT and LLM env</span>
+./run-server.sh --port 9100     <span class="c"># another port</span></pre></div>
+<p>If the server was started with <code>ALLOWED_USERS=alice,bob</code>, every <code>/api/…</code> request needs <code>?user=alice</code>; for the script, set <code>RLM_USER=alice</code>. Without <code>ALLOWED_USERS</code> the server is open.</p>
+
+<h3>One command: <code>generate_report_api.sh</code></h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>BASE=http://localhost:9000 tooling/generate_report_api.sh \
+    -i DTXSID50469320 -n "Perfluorohexanesulfonamide" -c 41997-13-1 -u mg/kg -k PFHxSAm \
+    -s docx,jats,pdf -o output/DTXSID50469320 \
+    /data/pfhxsam/*</pre></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>-i</code></td><td>Session id (required).</td></tr>
+    <tr><td><code>-n</code>, <code>-c</code></td><td>Test-article name and CASRN, sent to integrate.</td></tr>
+    <tr><td><code>-u</code></td><td>Dose unit. Leave it out and the server uses the unit the data records, else <code>mg/kg</code>; the script prints a note.</td></tr>
+    <tr><td><code>-k</code></td><td>Short compound name for captions. Default: <code>-n</code>.</td></tr>
+    <tr><td><code>-b</code></td><td>Also generate the Background section.</td></tr>
+    <tr><td><code>-s</code></td><td>Deliverables from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
+    <tr><td><code>-o</code></td><td>Output directory. Default <code>output/&lt;id&gt;</code>.</td></tr>
+    <tr><td><code>FILE …</code></td><td>Files to upload. Leave out to use the files already in the session.</td></tr>
+  </tbody>
+</table></div>
+<p>It also saves <code>validation_report.json</code> and <code>process_payload.json</code> to the output directory. It needs <code>curl</code> and <code>jq</code>.</p>
+
+<h3>The calls, one by one</h3>
+<p>The examples assume <code>B=http://localhost:9000</code> and <code>ID=DTXSID50469320</code>, plus this helper, which only adds the JSON header:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post() { curl -sS -X POST -H 'Content-Type: application/json' --data "${2:-{\}}" "$B$1"; }</pre></div>
+
+<h4>1 · Upload</h4>
+<p>Multipart field <code>files</code>, repeated for several files. <code>.bm2</code> goes to <code>upload-bm2</code>, everything else to <code>upload-csv</code>. <code>?dtxsid=</code> saves the files into the session and fingerprints them.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sS -F files=@PFHxSAm_Gene_Expression.bm2 "$B/api/upload-bm2?dtxsid=$ID"
+curl -sS -F files=@body_weight_truth_male.csv -F files=@organ_weights_truth_male.csv \
+     "$B/api/upload-csv?dtxsid=$ID"
+curl -sS "$B/api/wizard/$ID/files" | jq      <span class="c"># what is in the pool now</span></pre></div>
+<p><code>POST /api/upload-zip</code> (field <code>file</code>) takes one archive instead. <code>DELETE /api/pool/{id}/files/{filename}</code> removes a file (moved to <code>_removed/</code>, recoverable).</p>
+
+<h4>2 · Validate</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/validate/$ID | jq '{file_count, is_complete,
+    errors: [.issues[] | select(.severity=="error")]}'</pre></div>
+<p>Any <code>error</code> issue sets the phase to <code>VALIDATION_ERRORS</code> and blocks integration; fix the files and validate again. To choose the winner of a platform conflict yourself, record it before integrating:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/resolve '{"dtxsid":"'$ID'","issue_index":3,"chosen_file_id":"&lt;file_id&gt;"}'</pre></div>
+
+<h4>3 · Confirm metadata</h4>
+<p><code>{}</code> accepts everything as detected, the same as clicking through the UI panel unchanged.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sS "$B/api/wizard/$ID/fingerprints" \
+  | jq -r '.fingerprints[] | [.file_id,.filename,.platform,.data_type] | @tsv'
+post /api/pool/confirm-metadata/$ID '{"metadata": {}}'
+
+<span class="c"># override one file:</span>
+post /api/pool/confirm-metadata/$ID \
+  '{"metadata": {"&lt;file_id&gt;": {"platform": "Organ Weight", "data_type": "tox_study"}}}'</pre></div>
+
+<h4>4 · Integrate</h4>
+<p>The identity is saved as <code>identity.json</code>. To fill one in from the DTXSID alone (best-effort, needs network): <code>post /api/resolve '{"identifier": "'$ID'"}'</code>.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/integrate/$ID '{"identity": {"name": "Perfluorohexanesulfonamide",
+  "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' | jq '{experiment_count, bmd_result_count}'</pre></div>
+
+<h4>5 · Approve the data</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/generate-animal-report/$ID | jq '{total_animals, core_count, biosampling_count}'</pre></div>
+
+<h4>6 · Process</h4>
+<p>The request blocks until processing finishes: minutes when cold, seconds when cached. curl has no default timeout; if a proxy sits in front of the server, check its idle timeout. The response includes base64 chart images, so send it to a file. Everything in it is also cached in the session.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/process-integrated/$ID '{"compound_name": "PFHxSAm", "dose_unit": "mg/kg"}' \
+  &gt; process_payload.json</pre></div>
+<p>The server takes the GO ranking and cutoffs from the study's method profile. Send <code>bmd_stats</code>, <code>go_pct</code>, <code>go_min_genes</code>, <code>go_max_genes</code> or <code>go_min_bmd</code> only to override it for this run. Leave out <code>dose_unit</code> and the server uses the unit the data records, else <code>mg/kg</code>.</p>
+
+<h4>7 · Materialize result sections</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/materialize-sections/$ID | jq .materialized</pre></div>
+
+<h4>8 · Background <span class="chip opt">optional</span></h4>
+<p><code>POST /api/generate</code> streams Server-Sent Events (<code>progress</code>, then <code>complete</code> or <code>error</code>). Save the result with a second call:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sSN -X POST -H 'Content-Type: application/json' \
+  --data '{"identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' \
+  "$B/api/generate" \
+| awk '/^event: /{ev=$2} /^data: /{if (ev=="complete") {sub(/^data: /,""); print}}' &gt; bg.json
+
+post /api/session/save-section "$(jq -c --arg d $ID \
+  '{dtxsid: $d, section_type: "background",
+    data: {paragraphs, references, citation_report, abstract_background}}' bg.json)"</pre></div>
+
+<h4>8b · Summary <span class="chip opt">optional</span></h4>
+<p>
+  An LLM synthesis of what the session already holds: the Background, apical result narratives, an approved BMD summary
+  (<code>bmd_summary.json</code>) and any genomics section files. Run it after steps 7 and 8. With none of those present the route
+  returns <code>400 No approved sections found to summarize</code>, so check for <code>.error</code> before saving.
+</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/generate-summary '{"dtxsid": "'$ID'",
+  "identity": {"name": "Perfluorohexanesulfonamide"}}' &gt; summary.json
+post /api/session/save-section "$(jq -c --arg d $ID \
+  '{dtxsid: $d, section_type: "summary", data: {paragraphs, model_used}}' summary.json)"</pre></div>
+<p>Route A writes the Summary itself (<code>workflow.steps.materialize_summary</code>): built deterministically from the BMD summary, the genomics results and the Background&rsquo;s abstract sentence, saved as an unapproved draft. The calls below are the separate LLM variant.</p>
+
+<h4>Front matter <span class="chip opt">optional</span></h4>
+<p>Authors, contributors and publication details fill the About This Report and Publication Details sections. The strain designation goes into the title after the strain.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/document/$ID/front-matter '{"front_matter": {
+  "authors": [{"name": "A. Author", "affiliation": "NIEHS", "role": "Study Scientist"}],
+  "contributors": [],
+  "publication": {"report_number": "NIEHS 14", "report_date": "2026-10"},
+  "strain_designation": "(Hsd:Sprague Dawley® SD®)"}}'</pre></div>
+
+<h4>9 · Render and download</h4>
+<p>
+  <code>materialize</code> renders the requested surface, plus the HTML view, into <code>sessions/&lt;id&gt;/preview/default/</code>,
+  first moving the previous set into <code>history/</code>. So <b>download each surface right after materializing it</b>.
+</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>for s in docx jats; do
+  post /api/preview/$ID/materialize '{"surface": "'$s'"}' &gt;/dev/null
+  curl -sSf -OJ "$B/api/preview/$ID/download?surface=$s"     <span class="c"># saves &lt;ID&gt;_preview.docx, …</span>
+done
+curl -sS "$B/api/preview/$ID/view" &gt; preview.html             <span class="c"># the HTML view</span>
+curl -sSf -o report.pdf "$B/Bookshelf/$ID/report.pdf"          <span class="c"># docx converted to PDF on the server</span></pre></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Surface</th><th>Endpoint</th><th>Publish-gated</th></tr></thead>
+  <tbody>
+    <tr><td><code>docx</code></td><td><code>materialize</code> + <code>download?surface=docx</code></td><td class="yes">yes · 409</td></tr>
+    <tr><td><code>html</code></td><td><code>materialize</code> + <code>download?surface=html</code>, or <code>GET …/view</code></td><td>download yes · view no</td></tr>
+    <tr><td><code>jats</code></td><td><code>materialize</code> + <code>download?surface=jats</code> (BITS XML)</td><td class="yes">yes · 409</td></tr>
+    <tr><td><code>bookshelf</code></td><td><code>materialize</code> + <code>download?surface=bookshelf</code>, or <code>GET /Bookshelf/{id}</code></td><td>download yes · page no</td></tr>
+    <tr><td><code>pdf</code></td><td><code>GET /Bookshelf/{id}/report.pdf</code></td><td class="no">no · preview</td></tr>
+    <tr><td><code>latex</code></td><td>Not available per session over HTTP. Use Route A.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+<p>To render a saved view, add <code>"view": "&lt;name&gt;"</code> to the materialize body and <code>&amp;view=&lt;name&gt;</code> to the download URL.</p>
+
+<h4>Status and inspection</h4>
+<div class="tablewrap"><table>
+  <thead><tr><th>Call</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/workflow/{id}/state</code></td><td>Derived phase, legal actions, artifact flags.</td></tr>
+    <tr><td><code>GET /api/workflow/{id}/sections</code></td><td>Every report section with its kind, readiness and approval state.</td></tr>
+    <tr><td><code>GET /api/workflow/{id}/publish-readiness</code></td><td><code>{can_publish, blocking: [...]}</code></td></tr>
+    <tr><td><code>GET /api/session/{id}</code></td><td>All saved section content.</td></tr>
+    <tr><td><code>GET /api/integrated-summary/{id}</code></td><td>Summary of the integrated dataset.</td></tr>
+    <tr><td><code>GET /api/session/{id}/citation-warnings</code></td><td>Unresolved citations in the Background and genomics narratives.</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="outputs"><span class="num">6</span>Outputs</h2>
+<p>What a finished session holds under <code>sessions/&lt;DTXSID&gt;/</code>:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Artifact</th><th>Written by</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>files/</code>, <code>_originals/</code>, <code>_fingerprints.json</code></td><td>Import, validate</td></tr>
+    <tr><td class="wrap"><code>validation_report.json</code>, <code>precedence.json</code></td><td>Validate, resolve</td></tr>
+    <tr><td class="wrap"><code>identity.json</code>, <code>integrated.json</code>, <code>integrated.bm2</code>, <code>genomics.sidecar.json</code></td><td>Integrate</td></tr>
+    <tr><td class="wrap"><code>animal_report.json</code></td><td>Approve data</td></tr>
+    <tr><td class="wrap"><code>_cache_{ntp,bmds,genomics,sections,methods,bmd_summary,charts,interpretation_*}_&lt;hash&gt;.json</code>, <code>references.json</code>, <code>session.duckdb</code>, <code>session_parquet/</code></td><td>Process</td></tr>
+    <tr><td class="wrap"><code>bm2_&lt;slug&gt;.json</code></td><td>Materialize sections</td></tr>
+    <tr><td class="wrap"><code>background.json</code>, <code>summary.json</code>, <code>bmd_summary.json</code>, <code>front_matter.json</code></td><td>Background, Summary, approving the BMD summary, front matter</td></tr>
+    <tr><td class="wrap"><code>study_design.json</code>, <code>method_profile.json</code>, <code>metadata_approved.json</code></td><td><code>--design</code>, the method pin, approving experiment metadata. Integration re-applies the design and the approval.</td></tr>
+    <tr><td class="wrap"><code>preview/&lt;view&gt;/preview.{docx,html,xml}</code>, <code>manifest.json</code>, <code>history/</code></td><td>HTTP materialize</td></tr>
+  </tbody>
+</table></div>
+<p>Route A writes its deliverables only to <code>--out</code> and leaves <code>sessions/&lt;id&gt;/preview/</code> untouched.</p>
+
+<!-- ============================================================ -->
+<h2 id="approval"><span class="num">7</span>Approval and the publish gate</h2>
+<div class="callout">
+  <p><b>A first report needs no approvals.</b> The deliverable renders whatever the session holds. Generated sections render as
+  unapproved drafts; anything not yet produced shows as a visible <code>[… pending]</code> placeholder. <code>--strict</code> refuses
+  a LaTeX build that still has one.</p>
+</div>
+<p>
+  Approval matters once a session is <b>reprocessed</b>. When the data changes, the LLM-written sections are marked
+  <code>stale</code> and block publishing until a person accepts them again. A blocked report gets HTTP 409 from the download route,
+  and Route A refuses to render without <code>--draft</code>.
+</p>
+<p>Accept a section again in Python (the section key is the file stem):</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from workflow.steps import accept_section_step
+accept_section_step(ID, "bm2_body-weight", store)</pre></div>
+<p>Or over HTTP. The approve route re-saves the section's current content with the approval stamp:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre><span class="c"># a singleton section: background, methods, summary, bmd_summary</span>
+data=$(curl -sS "$B/api/session/$ID" | jq '.background')
+post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
+  '{dtxsid: $d, section_type: "background", data: $x}')"
+
+<span class="c"># an apical result: section_type "bm2" plus the slug (bm2_body-weight.json → body-weight)</span>
+data=$(curl -sS "$B/api/session/$ID" | jq '.bm2_sections["body-weight"]')
+post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
+  '{dtxsid: $d, section_type: "bm2", bm2_slug: "body-weight", data: $x}')"</pre></div>
+<p>Reopen a section with <code>release_section_step</code> or <code>POST /api/session/unapprove</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="rerun"><span class="num">8</span>Re-running, caching and resetting</h2>
+<ul>
+  <li><b>Re-running is cheap.</b> Each processing layer is cached by a hash of its inputs, and content preparation is skipped when nothing it depends on changed. A repeat process on an unchanged session takes seconds.</li>
+  <li><b>Re-integration wipes every process cache</b>, BMDS included, so the next process recomputes from scratch. Route A skips integration when <code>integrated.json</code> exists unless you pass <code>--reintegrate</code>. Route B always integrates. Integration puts back what people stated: the approved experiment metadata (<code>metadata_approved.json</code>) and the <code>--design</code> facts (<code>study_design.json</code>). It also re-pins the method profile when the study tracks the newest one.</li>
+  <li><b>Adding or replacing a file</b> after validation invalidates the validation report, <code>integrated.json</code>, the animal report and the caches, except the BMDS cache, whose hash comes from the data itself. Approved section text is kept but marked <code>stale</code>.</li>
+  <li><b>Changing the method profile</b> (<code>--method-profile</code>, or a newer profile for a study that tracks the newest) changes the NTP, BMDS, sections and Methods cache keys, so the next process recomputes them.</li>
+  <li><b>Reset the pool</b>, keeping identity and sections: <code>POST /api/pool/reset/{id}</code>. <b>Delete the whole session</b>: <code>POST /api/session/reset/{id}</code>. Both are destructive; check the session id first.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="trouble"><span class="num">9</span>Troubleshooting</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>UnsupportedClassVersionError</code> during integrate</td><td>JDK 17 is first on <code>PATH</code>. Put JDK 21 first. <code>run-server.sh</code> and <code>generate_report</code> do this when <code>/opt/liberica-jdk-21</code> exists; otherwise set <code>BMDX_JDK_HOME</code>.</td></tr>
+    <tr><td class="wrap">Integrate fails with a missing class or empty classpath</td><td><code>BMDX_PROJECT_ROOT</code> is unset or wrong. It needs a readable <code>*.jar</code> in <code>$BMDX_PROJECT_ROOT/target/</code>.</td></tr>
+    <tr><td class="wrap">LLM: <code>Could not resolve authentication method</code></td><td><code>ANTHROPIC_API_KEY</code> isn't exported to the Python process. Use <code>run-server.sh</code>, or export the key.</td></tr>
+    <tr><td class="wrap">LLM: <code>Connection error</code> or certificate verify failed</td><td><code>SSL_CERT_FILE</code> doesn't point at the NIH CA bundle, or <code>ANTHROPIC_BASE_URL</code> is exported as an empty string.</td></tr>
+    <tr><td class="wrap"><code>step failed (400): No integrated data found</code></td><td>Process ran before integrate.</td></tr>
+    <tr><td class="wrap"><code>validation found errors</code></td><td>Read the <code>[error]</code> lines (dose mismatch, sex mismatch, unassigned file). Fix the inputs, or correct the classification with <code>--metadata</code>.</td></tr>
+    <tr><td class="wrap">HTTP 409 on download</td><td>The publish gate (§7). Accept the listed sections again.</td></tr>
+    <tr><td class="wrap">HTTP 404 <code>No preview materialized yet</code></td><td>Materialize that surface first. Materializing another surface since then moved it into <code>history/</code>.</td></tr>
+    <tr><td class="wrap">Summary: <code>400 No approved sections found to summarize</code></td><td>The session has no Background, apical narrative, approved BMD summary or genomics section file to summarize. Add one first.</td></tr>
+    <tr><td class="wrap">Background fails or comes back empty</td><td>Some sources (ATSDR, PubChem, IRIS) can't be reached through the sandbox firewall. Run it on the host, or skip it.</td></tr>
+    <tr><td class="wrap">A request hangs, then fails with "no route"</td><td>That is the firewall, not a transient error. Don't retry in a loop.</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="gaps"><span class="num">10</span>Known gaps</h2>
+<p>As of 2026-10-05. <a href="#appendix-b">Appendix B.4</a> lists every place the report still lacks data, with what would close it.</p>
+<ul>
+  <li><b>About This Report</b> (authors, contributors) is human-set front matter (<code>front_matter.json</code>); nothing in the data supplies it.</li>
+  <li><b>Background</b> needs ATSDR and IRIS. Where either is unreachable (the sandbox firewall), <code>--background</code> saves nothing and says so, rather than writing a Background that reports the unreachable sources as data gaps.</li>
+  <li><b>The report&rsquo;s Appendix C.2 (empirical FDR)</b> needs the study&rsquo;s synthetic-null analysis, which is not ingested; its figure stays pending.</li>
+  <li><b>Materials &amp; Methods</b> in the deliverable comes from Process (<code>_cache_methods_*</code>). The browser's separate <i>Generate M&amp;M</i> button saves <code>methods.json</code>, which the renderer does not read. Headless runs get M&amp;M from Process automatically.</li>
+  <li><b>LaTeX over HTTP.</b> <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</li>
+  <li><b>Experiment metadata review</b> (<code>GET</code>/<code>POST /api/experiment-metadata/{id}</code>: species, sex and organ per experiment, written back into <code>integrated.json</code>) is not a step in either script. Call it after integrate if experiment descriptions need correcting.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="appendix-a"><span class="num">A</span>Render surfaces</h2>
+<div class="callout"><p>The report has appendices of its own (A–F). This manual's appendices are referred to as A, B and C, or by section (A.1, B.2, C.3); the report's are always written "the report's Appendix …".</p></div>
+<p>A <b>render surface</b> is one output format of the report. Every surface is a projection of the same two inputs, and none of them is a source of truth. This appendix explains the idea, lists the surfaces, explains BITS and JATS, and says how each surface is checked. It holds as of 2026-10-07.</p>
+<h3>A.1 The idea: one description, many projections</h3>
+<div class="code"><div class="bar"><span>text</span><button type="button">Copy</button></div><pre>session (integrated.json + sidecars + section files + front matter)
+        │  assemble the render data            rendering/report_data.py,
+        ▼                                      rendering/latex_export.load_session_data
+render data  +  document tree (template / view; Appendix C below)
+        │  EXTRACT: what to show, in what order rendering/render_common.py
+        ▼
+markup-free plans (tables, captions, rows, narrative sources, numbering)
+        │  EMIT: one emitter per surface
+        ├─▶ HTML      html_generator.py
+        ├─▶ LaTeX     latex_generator.py   → Overleaf bundle → PDF (tect)
+        ├─▶ Word      docx_generator.py    → PDF (LibreOffice)
+        └─▶ BITS XML  jats_generator.py    → Bookshelf facsimile</pre></div>
+<ul>
+  <li><b>One description.</b> The data assembly and the document tree are shared, so every surface reports the same study: the same sections in the same order, the same tables with the same numbers, rows, footnotes and captions, and the same text.</li>
+  <li><b>Extract, then emit</b> (ADR-0006). The decision about what a node shows is made once, in <code>render_common</code>, as a plan with no markup in it. Each emitter only turns plans into its own format and applies its own escaping. A bug in what a table contains is therefore fixed once, for every surface.</li>
+  <li><b>Shared, surface-independent decisions:</b><ul><li>table and figure numbers, counted by position in the tree;</li><li>captions, built from the design facts;</li><li>"not evaluated" statements and <code>[… pending]</code> placeholders;</li><li>the per-node page breaks and layout styles (<code>styles</code>; see C.2 below);</li><li>cross-references.</li></ul></li>
+  <li><b>Cross-references.</b> Narrative text names a target, not a number (<code>[[xref:bmd-summary]]</code>), so reordering the tree can't leave a stale "Table 3" behind. An unknown target shows as <code>[[xref:??id]]</code>, and only table references are wired so far. Each surface resolves the token to its own form:<ul><li>LaTeX: <code>Table~\ref{tab:bmd-summary}</code>;</li><li>HTML: a link reading "Table 8";</li><li>BITS: <code>&lt;xref ref-type="table" rid="bmd-summary"&gt;Table 8&lt;/xref&gt;</code>.</li></ul></li>
+  <li><b>Outputs are one-way.</b> A surface is never read back. Edits made in Word or Overleaf stay there; the app is not an editor (ADR-0018). The only way in for authored text is a freeform node (C.2 below), which can import a <code>.docx</code> block.</li>
+</ul>
+<h3>A.2 The surfaces</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>Surface (<code>--surfaces</code>)</th><th>Output</th><th>Built by</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>html</code></td><td>One self-contained <code>.html</code></td><td><code>html_generator.generate_html</code></td><td>The on-screen view: the browser's preview frame and a quick check</td></tr>
+    <tr><td class="wrap"><code>docx</code></td><td><code>.docx</code></td><td><code>docx_generator.generate_docx</code></td><td>The default deliverable, for Word-based review. Styles come from the NIEHS-10 reference (<code>assets/templates/niehs-10-base.docx</code>)</td></tr>
+    <tr><td class="wrap"><code>latex</code></td><td><code>-overleaf.zip</code>: <code>main.tex</code>, <code>report.tex</code>, <code>niehs.cls</code>, <code>figures/</code>, a README</td><td><code>latex_generator.generate_latex</code> + <code>latex_export.build_overleaf_bundle</code></td><td>For Overleaf: drop the zip into a new project and compile</td></tr>
+    <tr><td class="wrap"><code>pdf</code></td><td><code>.pdf</code></td><td>The <code>latex</code> bundle compiled locally with <code>tect</code></td><td>A typeset PDF</td></tr>
+    <tr><td class="wrap"><code>jats</code></td><td><code>.xml</code>: a BITS 2.0 <code>&lt;book&gt;</code></td><td><code>jats_generator.generate_bits</code></td><td><b>The submission format</b> for NCBI Bookshelf (A.3)</td></tr>
+    <tr><td class="wrap"><code>bookshelf</code></td><td><code>.bookshelf.html</code></td><td><code>bookshelf_preview.render_book_xml</code> over the BITS book</td><td>A lookalike of the Bookshelf reader, built from the exact XML we would submit</td></tr>
+    <tr><td class="wrap"><code>bits</code></td><td><code>-bits.zip</code>: <code>TOC.nxml</code>, one file per part, the figure files</td><td><code>bits_bundle.bundle_zip</code> over the BITS book</td><td>The book chunked as Bookshelf holds it (NIEHS-07 onward): the submission package's XML</td></tr>
+  </tbody>
+</table></div>
+<p><b>Surface details:</b></p>
+<ul>
+  <li><b>Word</b> is an object model rather than markup. Its handlers modify a document instead of returning strings, and it walks the tree itself. What each section contains still comes from the shared plans (ADR-0008).<ul><li>Its page breaks follow <code>styles</code>.</li><li>Its other typography comes from the Word base styles, not the per-node layout styles.</li><li>Pages are numbered in roman in the front matter, then in arabic from the body.</li></ul></li>
+  <li><b>PDF</b> is produced two ways, which typeset differently. For a Bookshelf submission, the PDF is the one rendition we supply alongside the XML.<ul><li>the <code>pdf</code> surface compiles the LaTeX bundle;</li><li><code>GET /Bookshelf/{id}/report.pdf</code> converts the Word file with LibreOffice (<code>docx2pdf</code>).</li></ul></li>
+  <li><b>The JATS article</b> (<code>jats_generator.generate_jats</code>) emits a PMC journal <code>&lt;article&gt;</code> instead of a book. It covers the prose only and exists for PMC's article tools. Reports publish as books, so it is not a deliverable.</li>
+  <li><b>Typst</b>, an earlier PDF route, was abandoned in the 2026-05 move to LaTeX. <code>report.typ</code> is a leftover.</li>
+</ul>
+<p><b>Where each surface is reached:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Surface</th><th>Command line (Route A)</th><th>Server (Route B)</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>html</code></td><td><code>--surfaces html</code></td><td><code>POST /api/preview/{id}/materialize</code>, always written alongside the chosen surface; <code>GET …/view</code></td></tr>
+    <tr><td class="wrap"><code>docx</code></td><td><code>--surfaces docx</code></td><td>Materialize with <code>surface: docx</code> (the default), then <code>GET …/download</code>; <code>GET /Bookshelf/{id}/report.docx</code></td></tr>
+    <tr><td class="wrap"><code>latex</code></td><td><code>--surfaces latex</code></td><td>Not per session (§10). <code>POST /api/export-overleaf-bundle</code> takes a full report body from the legacy UI</td></tr>
+    <tr><td class="wrap"><code>pdf</code></td><td><code>--surfaces pdf</code> (<code>--strict</code> refuses placeholders)</td><td><code>GET /Bookshelf/{id}/report.pdf</code> (from Word)</td></tr>
+    <tr><td class="wrap"><code>jats</code></td><td><code>--surfaces jats</code></td><td>Materialize with <code>surface: jats</code></td></tr>
+    <tr><td class="wrap"><code>bookshelf</code></td><td><code>--surfaces bookshelf</code></td><td><code>GET /Bookshelf/{id}</code> (the shelf of sessions: <code>GET /Bookshelf</code>)</td></tr>
+  </tbody>
+</table></div>
+<p><b>Materialized previews.</b> A materialized preview is written to <code>sessions/&lt;id&gt;/preview/&lt;view&gt;/</code>, and the previous set is archived under <code>history/</code>. A restyle re-renders the same content without creating a new content version. The command line writes only to <code>--out</code>.</p>
+<h3>A.3 BITS and JATS</h3>
+<ul>
+  <li><b>JATS</b>, the Journal Article Tag Suite, is the NISO standard XML vocabulary for journal articles (Z39.96). PubMed Central archives articles in it.</li>
+  <li><b>BITS</b>, the Book Interchange Tag Suite, is JATS extended for books. It adds:<ul><li>book metadata;</li><li>book parts (chapters);</li><li>front and back matter;</li><li>appendix groups.</li></ul></li>
+</ul>
+<p>NCBI's Bookshelf ingests books as BITS. NIEHS's 5-day reports are published there as books: NIEHS-10 is NBK589955. <b>A BITS <code>&lt;book&gt;</code> is therefore the report's ultimate deliverable</b>, and the other surfaces exist for review and editing along the way.</p>
+<p><b>How our report maps onto a BITS book.</b> The structure is the published book's (ADR-0028), and the template declares it: each top-level node names its BITS <code>element</code> and <code>book_part_type</code>, so the YAML reads like the book's part list. The table below is the shared template's (the 2023 books, chunked). A published study's own definition (ADR-0029, B.1) may be packaged <code>single-file</code> instead, as RR-8 and NIEHS-02 … 06 are: one whole-book <code>&lt;book-part&gt;</code>, titled with the book title, whose front matter adds an <code>&lt;ack&gt;</code>, whose body is top-level <code>&lt;sec&gt;</code> chapters, and whose back holds the <code>&lt;ref-list&gt;</code> and the <code>&lt;app&gt;</code>s. The <code>bits</code> surface then writes it as one <code>TOC.nxml</code>.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Our document</th><th>BITS 2.0</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">The report</td><td><code>&lt;book dtd-version="2.0"&gt;</code></td></tr>
+    <tr><td class="wrap">The series (template <code>book_meta:</code>)</td><td><code>&lt;collection-meta&gt;</code>: the Bookshelf collection; the book series with its ISSN</td></tr>
+    <tr><td class="wrap">Title page, front matter (report number, DOI, date, authors), abstract</td><td><code>&lt;book-meta&gt;</code>: <code>book-id</code> (DOI), <code>book-title-group</code> (the title page's title + the report number as <code>subtitle</code>), <code>contrib-group</code> + <code>aff</code>, <code>pub-date</code>, <code>publisher</code>, <code>permissions</code>, <code>abstract</code> with one <code>&lt;sec&gt;</code> per declared part</td></tr>
+    <tr><td class="wrap">Foreword; Authors, Contributors, Peer Review, Publication Details, Acknowledgments</td><td><code>&lt;front-matter&gt;</code>: <code>&lt;foreword&gt;</code>; <code>&lt;front-matter-part book-part-type="authors" / "contributors" / "peer-review" / "section" / "acknowledgments"&gt;</code></td></tr>
+    <tr><td class="wrap">Background, Materials and Methods, Results, Summary</td><td><code>&lt;book-body&gt;</code>: one <code>&lt;book-part book-part-type="section"&gt;</code> each; its <code>&lt;body&gt;</code> holds the content directly</td></tr>
+    <tr><td class="wrap">References</td><td>the last <code>&lt;book-part&gt;</code>: <code>&lt;back&gt;&lt;ref-list&gt;</code> of <code>&lt;ref&gt;&lt;label&gt;n&lt;/label&gt;&lt;mixed-citation&gt;</code></td></tr>
+    <tr><td class="wrap">Sections</td><td><code>&lt;sec&gt;</code>; inside an appendix it carries its computed <code>&lt;label&gt;</code> (C.1, C.2.1)</td></tr>
+    <tr><td class="wrap">Tables, with their footnotes</td><td><code>&lt;table-wrap&gt;</code>: <code>&lt;label&gt;</code>, <code>&lt;caption&gt;&lt;title&gt;</code>, <code>&lt;table&gt;</code>, <code>&lt;table-wrap-foot&gt;</code>, <code>&lt;fn&gt;</code>; always a block in its section</td></tr>
+    <tr><td class="wrap">Figures</td><td><code>&lt;fig&gt;</code>: <code>&lt;label&gt;</code>, <code>&lt;caption&gt;&lt;p&gt;</code>, <code>&lt;graphic&gt;</code></td></tr>
+    <tr><td class="wrap">Appendices A–F</td><td><code>&lt;book-back&gt;</code>: <code>&lt;book-app book-part-type="appendix"&gt;</code> with <code>&lt;label&gt;Appendix A&lt;/label&gt;</code>; authored HTML becomes <code>&lt;sec&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;table-wrap&gt;</code> and <code>&lt;list&gt;</code></td></tr>
+    <tr><td class="wrap"><code>[[xref:id]]</code></td><td><code>&lt;xref ref-type="table" rid="id"&gt;</code></td></tr>
+  </tbody>
+</table></div>
+<p>Print-only nodes (the table of contents, the list of tables) have no BITS element: Bookshelf builds its own contents. The <code>bits</code> surface cuts the book into the chunked bundle the published books use: <code>TOC.nxml</code> (collection-meta, book-meta with the abstract, and a <code>&lt;toc&gt;</code>), plus one <code>&lt;book-part-wrapper&gt;</code> per part.</p>
+<p><b>The submission package</b> (NCBI's specification NBK554845) holds:</p>
+<ul>
+  <li>the BITS XML;</li>
+  <li>at least one PDF, which we supply (A.2);</li>
+  <li>the images.</li>
+</ul>
+<p>NCBI renders the HTML book page from the XML on its own servers after acceptance. We never hold their production stylesheet. The <code>bookshelf</code> surface is our lookalike of that page:</p>
+<ul>
+  <li>It reproduces the reader content: a contents landing page laid out like the real one for NIEHS Report 10 (title, subtitle, series, authors with an affiliations toggle, publication line, copyright, the abstract with inline part headings, the contents with sections nested, About the Series, and Cite this Page in the rail), one page per part with Previous/Next, tables and figures as thumbnail cards that open in a lightbox, and cross-references that work across pages.</li>
+  <li>A single-file book (RR-8, NIEHS-02 … 06) is one page, as Bookshelf serves it: the landing holds the title block, the abstract and every part under its own heading, with no contents list. The reference is the real NIEHS-02 page, <code>tests/fixtures/reference/NIEHS-02/bookshelf-pages/toc-reader.html</code>.</li>
+  <li>It renders what the book says: labels and headings come from the BITS. It also renders a chunked bundle directory, including a published book from <code>assets/cebs/_bookshelf/&lt;REPORT&gt;</code>, so ours and the published report of a study read side by side.</li>
+  <li>It deliberately leaves out NCBI's site chrome, and a banner marks every page as a preview.</li>
+</ul>
+<h3>A.4 How surfaces are checked</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>Check</th><th>What it guards</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">Dispatch parity</td><td>HTML, LaTeX and Word handle every renderable node type. Checked at import and by test</td><td><code>render_common.assert_dispatch_covers</code>, <code>tests/unit/test_renderer_dispatch_parity.py</code></td></tr>
+    <tr><td class="wrap">Semantic parity</td><td>Surfaces agree on table and figure numbers, cross-references and BMD summary endpoints</td><td><code>tests/unit/test_render_semantic_parity.py</code></td></tr>
+    <tr><td class="wrap">DTD validity</td><td>The BITS book and the JATS article validate against the vendored BITS 2.0 and JATS 1.3 DTDs (<code>assets/bits-dtd</code>, <code>assets/jats-dtd</code>)</td><td><code>tests/unit/test_jats_stylecheck.py</code></td></tr>
+    <tr><td class="wrap">PMC StyleChecker</td><td>Zero errors from NLM's StyleChecker (style <code>book</code> and <code>article</code>), run offline from the vendored v5.48 transforms (<code>assets/stylechecker</code>)</td><td><code>rendering/jats_stylecheck.py</code>, the same test</td></tr>
+    <tr><td class="wrap">BITS grammar</td><td>The template and the reference report's structure instantiate as a valid BITS profile; part declarations and flow-before-sub-sections are enforced</td><td><code>tests/unit/test_bits_profile.py</code>, <code>tests/unit/test_bits_part_declaration.py</code></td></tr>
+    <tr><td class="wrap">Published structure</td><td>The NIEHS-10 book's outline equals the published book's, apart from a listed set of content gaps; the chunked bundle round-trips</td><td><code>tests/unit/test_bits_published_structure.py</code>, <code>tests/unit/test_bits_book.py</code>; <code>report_qc</code> <code>structure</code> for every study</td></tr>
+    <tr><td class="wrap">Report definitions</td><td>Each of the 12 published reports, built from its document definition, has its published book's section structure (apart from listed content and data gaps), validates against the DTD and carries its published series ISSN</td><td><code>tests/unit/test_report_definitions.py</code></td></tr>
+    <tr><td class="wrap">No placeholders</td><td><code>--strict</code> refuses a LaTeX or PDF build while any <code>[… pending]</code> remains</td><td><code>tooling/generate_report.py</code></td></tr>
+  </tbody>
+</table></div>
+<p><b>Previewing a book online.</b> NCBI's online tools are the PMC Article Previewer and the online StyleChecker. The sandbox firewall blocks them, so use them from the host.</p>
+<p><b>BITS sits outside the dispatch-parity guard by design.</b> A node type it doesn't yet project emits a visible <code>&lt;!-- TODO --&gt;</code> in the XML, never nothing.</p>
+<h3>A.5 Limits</h3>
+<ul>
+  <li><b>Charts in BITS.</b> Genomics chart images aren't packaged into the book yet: a tree <code>figure</code> projects to <code>&lt;fig&gt;</code>, but data-driven chart images don't. The shipped template draws no charts, so this doesn't affect current reports.</li>
+  <li><b>Citations.</b> References are <code>&lt;mixed-citation&gt;</code> text, not structured <code>&lt;element-citation&gt;</code> records.</li>
+  <li><b>Cross-references</b> to sections and figures fall through to the broken-reference marker. Only table references resolve.</li>
+  <li><b>LaTeX over HTTP.</b> There is no per-session LaTeX route, and the preview's <code>latex</code> surface returns 501. Use the command line.</li>
+  <li><b>Word typography.</b> Word applies page breaks from <code>styles</code> but not the per-node fonts and spacing.</li>
+  <li><b>Checking Word output.</b> Converting a <code>.docx</code> in the sandbox uses LibreOffice. The project's fidelity reference for Word is OnlyOffice, which runs on the host.</li>
+</ul>
+<!-- ============================================================ -->
+<h2 id="appendix-b"><span class="num">B</span>What in the report comes from the data</h2>
+<p>This appendix sets out everything in a report that is driven by the data: the rules (B.1), how each fact is worked out from the files (B.2), where each part of the report comes from (B.3), and where it still falls short (B.4). It holds as of 2026-10-07.</p>
+<h3>B.1 The rules</h3>
+<ul>
+  <li><b>The integrated dataset is the source of truth.</b> Every number and study fact in the report is read from <code>integrated.json</code> (the BMDExpress project that Integrate builds) and its sidecars, the per-animal files that keep what the pivot drops: cohort (Core or Biosample), observation day, terminal flag and units. Nothing reads the raw <code>.bm2</code>, <code>.txt</code> or <code>.xlsx</code> uploads directly.</li>
+  <li><b>The document tree sets the structure.</b> Headings, their order and the table and figure numbers come from the study's document definition, or from a saved view's own structure. A new study's definition is the shared template (<code>templates/niehs-5day-report.yaml</code>). A published study has its own (<code>templates/studies/&lt;id&gt;/document.yaml</code>, ADR-0029): its era's base (<code>templates/eras/</code>) plus that report's alterations. A study's overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>) selects what is shown. Numbers are given by position, never typed in.</li>
+  <li><b>The method profile sets how the data is analysed.</b> The statistical tests, thresholds, BMD acceptance criteria, internal-dose rules, GO ranking and number formats come from the study's pinned profile (<code>profiles/*.yaml</code>, ADR-0027). The footnotes, Methods text and the report's Appendix D that describe the method are generated from those same settings, so the text can't claim a test that didn't run.</li>
+  <li><b>A fact the data doesn't hold is never invented.</b> It takes one of three forms:<ul><li>a <b>logged fallback</b> (the standard design, the dose unit, an inferred BMR), printed as a <code>NOTE</code> and, for the BMR, footnoted in the report;</li><li>a visible <b>placeholder</b> (<code>[Placeholder: …]</code>, <code>[… pending]</code>) that <code>--strict</code> refuses to ship;</li><li>"not evaluated", for a data domain the study didn't collect.</li></ul></li>
+  <li><b>People supply what no file records.</b> That covers <code>--design</code>, front matter, experiment-metadata approval and section approval. Each is kept in the session and re-applied when integration runs again.</li>
+</ul>
+<h3>B.2 How the data is read</h3>
+<p>Each fact below is worked out from the files at the step named. Where a rule is a method setting, the setting's name in the profile is given, with its <code>ntp-5day-2025</code> value.</p>
+<p><b>YAML labels.</b> An item set by a YAML file carries a label naming the file:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Label</th><th>File</th><th>What it sets</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>template.yaml</code></td><td><code>templates/niehs-5day-report.yaml</code>, the report type</td><td>Sections, their order and headings, the Methods subsections, which data each section shows, the appendix text files it names, page breaks (<code>styles</code>), and charts (<code>charts</code>, <code>chart_style</code>, <code>chart_types</code>)</td></tr>
+    <tr><td class="wrap"><code>deposit.yaml</code></td><td><code>templates/studies/&lt;id&gt;/deposit.yaml</code> (optional)</td><td>The study's own wording for deposited files (<code>captions:</code>), a file's kind where its name breaks the depositors' convention (<code>kinds:</code>), and the deposit's DOI (<code>doi:</code>), which opens the Supplemental Data appendix ("The following supplemental files are available at https://doi.org/…")</td></tr>
+    <tr><td class="wrap"><code>document.yaml</code></td><td>A published study's definition, <code>templates/studies/&lt;id&gt;/document.yaml</code>, extending an era (<code>templates/eras/&lt;era&gt;.yaml</code>) that extends the template (ADR-0029)</td><td>What that report's structure does differently: <code>changes</code> (set / remove / insert / move nodes), <code>packaging</code> (chunked or single-file), <code>object_position</code>, <code>book_meta</code> (series, ISSN, publisher), <code>tissue_order</code> (the genomic tissues named first, the rest alphabetically). A title or caption may name the study's chemical (<code>${chemical_name}</code>) and its animals and treatment (<code>${subject} ${treatment}</code>: "Female Rats and Mice Exposed to … for Five Days"; a per-study copy names its own study); a genomics section's <code>caption_suffix</code> ends each of its tables' captions so, naming the animals that table has rows for. A section may <code>repeat:</code> per deposit species, per study of a report over several (<code>${species}</code>) or per genomic tissue (<code>${organ}</code>); a <code>first_copy</code> node in it stays in the first copy only, showing the whole report's data (a table the studies share, under the first study's heading)</td></tr>
+    <tr><td class="wrap"><code>view.yaml</code></td><td>A study overlay, <code>templates/studies/&lt;id&gt;/view.yaml</code>, or a saved view, <code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code></td><td>Selections (<code>filters</code>: organs, sex, assays, genes, gene sets); a saved view can also carry its own structure; an overlay's <code>methods:</code> block overrides profile settings for that study</td></tr>
+    <tr><td class="wrap"><code>profile.yaml</code></td><td>The pinned method profile, <code>profiles/&lt;name&gt;.yaml</code></td><td>Statistical tests and thresholds, BMD engine, eligibility, BMR fallback and acceptance, internal-dose rules, GO ranking and display, the settings expected in a <code>.bm2</code></td></tr>
+  </tbody>
+</table></div>
+<p>An item without a label is computed from the data or fixed in code. Stated facts (<code>study_design.json</code>, <code>front_matter.json</code>) are JSON, not YAML. B.4 lists the code-fixed settings that belong in a YAML file.</p>
+<p><b>Files (Validate, Integrate)</b></p>
+<ul>
+  <li><b>What a file is.</b> Each file gets a platform (Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones, tissue concentration, clinical observations) and a data type (<code>tox_study</code>, <code>inferred</code> or <code>gene_expression</code>). Confirm metadata (<code>--metadata</code>) can override either. They are detected differently:<ul><li>a <code>.bm2</code> from its content and chip (ADR-0017);</li><li>a text or CSV file's platform from NTP naming patterns in its file name, e.g. <code>organ_weights_truth_male.txt</code>.</li></ul></li>
+  <li><b>Cross-checks.</b> Validation compares the files with each other: dose groups, sexes, animals and coverage per platform. When two files cover the same data, it asks which one wins. A truth CSV derived from a study workbook is checked value by value against that workbook.</li>
+  <li><b>Long tables become a pivot plus a sidecar.</b> A one-row-per-animal table becomes the BMDExpress pivot (<code>.txt</code>) that Integrate needs, plus a <code>.sidecar.json</code>. The sidecar keeps what the pivot drops: each animal's cohort, observation day, terminal flag and raw value.</li>
+  <li><b>Units.</b> Units come from the study workbook's "Key to Column Labels" sheet, or from the <code>.units.json</code> that <code>cebs_to_pool</code> writes. Where both give one, the workbook wins. A unit stated nowhere is left unrecorded and flagged, never assumed. Studies differ: NIEHS-07 to -09 report plasma in ng/mL, NIEHS-10 in µg/mL.</li>
+</ul>
+<p><b>The study (Integrate, then every step)</b></p>
+<ul>
+  <li><b>Identity.</b> Name, CASRN and DTXSID come from <code>identity.json</code>. The short name in captions comes from <code>--compound-name</code>.</li>
+  <li><b>Doses and sexes</b> are read from the files: every file's dose groups and sexes, and the animal report's dose groups.</li>
+  <li><b>Cohorts.</b> Each animal's Selection says which cohort it belongs to:<ul><li>"Core Animals" are the cohort that every table, statistic and group size is built from.</li><li>"Biosampling Animals" (NIEHS-10) and "Biosample Animals" (NIEHS-07, -12, -13) are the internal-dose cohort. Both spellings count.</li><li>A study whose files mark no cohort (NIEHS-02 to -06, RR-8) treats every animal as Core.</li><li>A database export that marks "Original Animals" uses those, as published.</li></ul></li>
+  <li><b>Group sizes</b> for Methods and the N rows:<ul><li>Distinct Core animals are counted per sex and dose across all sidecars.</li><li>The group size is the most common count over the treated groups. The control size is the most common count over the control groups.</li><li>Doses with biosampling animals are listed separately ("Additional animals in the … groups").</li></ul></li>
+  <li><b>Design facts.</b> Species, strain, route, vehicle and duration come from each experiment's <code>experimentDescription</code>, and every experiment that records one must agree. Integration fills these from the stated design (<code>study_design.json</code>) or approved metadata, else infers them. A fact still missing falls back to the standard design, and the fallback is logged. Values that disagree get no fallback. The standard design is:<ul><li>Sprague Dawley rats for five days;</li><li>by gavage in corn oil for an oral unit (mg/kg);</li><li>by inhalation for an air concentration (ppm, ppb, mg/m³).</li></ul></li>
+  <li><b>Dose unit.</b> The stated unit wins, else the one unit the data records, else mg/kg (logged). An air-concentration unit changes the wording throughout:<ul><li>"exposed to" and "by inhalation";</li><li>"exposure concentrations";</li><li>"chamber control";</li><li>"postexposure";</li><li>"(Inhalation Studies)";</li><li>no vehicle or dose formulations.</li></ul></li>
+  <li><b>Wording from the design.</b> Captions are built from these facts, e.g. "Summary of Body Weights of Male Rats Administered Triclosan for Five Days". So are the title's animals and study type, and the Methods animals sentence. Durations up to ten print in words.</li>
+</ul>
+<p><b>Apical endpoints (Process)</b></p>
+<ul>
+  <li><b>Derived endpoints:</b><ul><li>Relative organ weight = organ weight ÷ terminal body weight × 1000 (mg/g), per animal.</li><li>Body weight gain = last-day weight − first-day weight, per animal.</li><li>Both get full statistics, LOEL and NOEL, and BMDs.</li></ul></li>
+  <li><b>Statistics</b> <span class="chip yaml">profile.yaml</span> follow the profile's <code>apical.statistics</code>:<ul><li>A Jonckheere trend test runs on every endpoint.</li><li>When its p ≤ <code>trend_select_p</code> (0.01), the trend-sensitive pairwise test runs: Williams for weights, Shirley for clinical pathology.</li><li>Otherwise Dunnett runs for weights and Dunn for clinical pathology (<code>pairwise</code> per platform).</li><li>Groups smaller than <code>min_group_n</code> (2) are left out.</li><li>Markers are <code>*</code> at p ≤ <code>alpha</code> (0.05) and <code>**</code> at p ≤ <code>alpha_strong</code> (0.01).</li><li>The footnote naming the tests is built from the family that ran.</li></ul></li>
+  <li><b>LOEL</b> <span class="chip yaml">profile.yaml</span> is the lowest dose with a significant pairwise difference from control, at <code>alpha</code>.</li>
+  <li><b>NOEL</b> is the highest tested dose below the LOEL. It is "ND" when there is no LOEL or no dose below it, never the control or the top dose.</li>
+  <li><b>Direction</b> (up or down) is shown only when the trend test is significant.</li>
+  <li><b>Which rows appear.</b> Every measured endpoint the selections <span class="chip yaml">view.yaml</span> keep appears in the tables, whether or not it is significant. N rows count Core animals. The row rules per table are:<ul><li><b>Body weights:</b> the first and last day, plus any day between that is significant in both the trend and a pairwise test, as NIEHS-12 prints them;</li><li><b>Organ weights:</b> each organ has an absolute row (g) and a relative row (mg/g), with terminal body weight as context.</li></ul></li>
+  <li><b>Attrition.</b> An animal whose terminal flag falls before the scheduled sacrifice is attrition. Attrition footnotes give the day from the data. Mortality counts Core deaths only, so scheduled biosample sacrifices aren't counted as deaths.</li>
+  <li><b>Clinical observations.</b> Incidence counts Core animals. The onset of signs is the first day they were recorded. Without clinical-observation data the narrative says nothing about overt toxicity.</li>
+  <li><b>Decimals.</b> Every mean ± SE in a row prints at one precision, chosen by the endpoint. The precision NIEHS's published summary tables use comes first; an endpoint they don't list uses the precision its values are recorded with (at least one decimal).</li>
+</ul>
+<p><b>Apical BMDs (Process)</b></p>
+<ul>
+  <li><b>Where a BMD comes from.</b> <span class="chip yaml">profile.yaml</span><ul><li>The <code>.bm2</code>'s BMDExpress results are used where they exist.</li><li>An endpoint the <code>.bm2</code> didn't model is fitted with ToxicR Laplace model averaging (<code>apical.bmd.engine</code>) and marked as filled.</li><li>Where both exist they must agree, or processing stops.</li></ul></li>
+  <li><b>Eligibility.</b> <span class="chip yaml">profile.yaml</span> A BMD is reported only for an endpoint with a significant trend and a significant pairwise test (<code>eligibility: trend_and_pairwise</code>).</li>
+  <li><b>BMR.</b> <span class="chip yaml">profile.yaml</span> The BMR is the one the <code>.bm2</code> analysis records. Where it records none, <code>bmr_when_unrecorded</code> (1 SD) is used and footnoted as inferred.</li>
+  <li><b>Acceptance</b> <span class="chip yaml">profile.yaml</span> (<code>acceptance</code>) applies to every BMD, whatever its source. The report's Appendix D-1 prints these values:<ul><li>R² &lt; 0.6, BMD/BMDL &gt; 10, or a BMD above the highest dose → "NVM" (no viable model);</li><li>a BMD below ⅓ of the lowest nonzero dose → "&lt;LNZD/3".</li></ul></li>
+  <li><b>Precision.</b> BMDs print at one precision report-wide: 3 decimals for the NIEHS-10 method (gene expression without gene-level analysis), else 1.</li>
+</ul>
+<p><b>Internal dose (Process)</b></p>
+<p>The rules come from the profile's <code>internal_dose</code> settings <span class="chip yaml">profile.yaml</span>, except for the plasma concentration table and the toxicokinetics:</p>
+<ul>
+  <li>Tables are built by study day, from biosample animals.</li>
+  <li>A group with ≤ 20 % of values detected prints "BD" (<code>bd_if_detected_share_at_most</code>). Otherwise values below the limit count as half the limit (<code>below_limit: half_limit</code>).</li>
+  <li>Outliers are removed by the Dixon r10 test at α = 0.01 (<code>outliers</code>).</li>
+  <li>Pairwise markers use Shirley or Dunn, and only when the control has a mean.</li>
+  <li>Values print to 3 significant figures (<code>sig_figs</code>). Normalized rows divide each animal's concentration by its group's nominal dose or exposure concentration.</li>
+  <li><b>Plasma concentration table</b> (studies with timepoints after dosing, e.g. NIEHS-10):<ul><li>rows are the sampling times ("2 h postdose");</li><li>columns are the dose groups that have biosample animals;</li><li>values are the mean ± SE of the biosample animals, with values below the limit of quantification counted as half the limit;</li><li>it has no statistics or BMDs.</li></ul></li>
+  <li><b>Toxicokinetics</b> (<code>tables/toxicokinetics.py</code>) uses the group-mean concentrations at two time points:<ul><li>elimination rate k = ln(C₁/C₂) / Δt and half-life t½ = ln 2 / k, computed only with exactly two time points and a falling concentration;</li><li>dose proportionality: the high-to-low concentration ratio against the dose ratio;</li><li>a bioaccumulation flag when t½ &gt; 24 h.</li></ul></li>
+</ul>
+<p>These numbers reproduce NIEHS-10's to the decimal, and the Abstract's internal-dose paragraph reports them.</p>
+<p><b>Transcriptomics (Integrate, Process)</b></p>
+<ul>
+  <li><b>Experiments.</b> <span class="chip yaml">view.yaml</span> Organ and sex come from each experiment's metadata: approved metadata, else inferred. A view's <code>organs</code> and <code>sex</code> selections choose which organ × sex sections show.</li>
+  <li><b>Assay.</b> The assay (TempO-Seq, Affymetrix, Illumina) is read from the chip.</li>
+  <li><b>Sample counts.</b> The sample-counts table counts each experiment's samples per organ, sex and dose.</li>
+  <li><b>GO tables</b> <span class="chip yaml">profile.yaml</span>:<ul><li>They come from the <code>.bm2</code>'s GO category analyses.</li><li>They are ranked by <code>genomics.go_ranking</code> (5th percentile, then median).</li><li>They are cut by <code>go_display</code>: top 5 %, 20 to 500 genes, BMD ≥ 3.</li><li>Up and down counts come from the genes' directions.</li></ul></li>
+  <li><b>Gene tables.</b> The top genes come from BMDExpress's gene-level (GENE) analysis, sorted by BMD. Fold change is the mean over each gene's probes.</li>
+  <li><b>Methods.</b> The transcriptomic Methods prompt takes the analysis settings the <code>.bm2</code> records: version, prefilter, models, BMR and GO filters.</li>
+  <li><b>Mismatch check.</b> <span class="chip yaml">profile.yaml</span> At integration these recorded settings are compared with <code>genomics.recorded</code> (BMR 25 % relative deviation, model averaging). A disagreement is a <code>method_mismatch</code> warning; neither side wins.</li>
+  <li><b>The report's Appendix C.1 PCA</b> is drawn per tissue and sex from the integrated expression matrix: one dot per animal, coloured by dose. Columns are mean-centred without scaling and decomposed by SVD, with scikit-learn's sign convention. This reproduces NIEHS-10's figures exactly when given the full matrix.</li>
+  <li><b>Organ order.</b> Genomics sections come one per organ, both sexes stacked: liver, then kidney, then the rest alphabetically.</li>
+  <li><b>Genomics prose</b> has two layers:<ul><li>an intro and one findings paragraph per organ, built without a model from the ranked tables, using the reliability rules below;</li><li>the LLM interpretation per organ and sex, grounded in the knowledge base (<code>bmdx.duckdb</code>).</li></ul></li>
+  <li><b>Charts.</b> <span class="chip yaml">template.yaml</span> <span class="chip yaml">view.yaml</span> The UMAP and cluster charts are off: the template's <code>charts: []</code> matches the NIEHS report, which has no main-body genomics figures. Turned on, clusters are labelled with the study's own GO terms, or with Enrichr terms only if <code>BMDX_ALLOW_ENRICHR=1</code>. New chart types can be declared in the template (<code>chart_types</code>) over the GO table columns, without code.</li>
+  <li><b>References.</b> The genomics prose may cite only the <code>[Pn]</code> papers it was given, and the Background only its numbered sources. <code>citation_check</code> drops any citation that points at nothing given. The reference list is built from the papers actually cited.</li>
+</ul>
+<p><b>What appears, and where (render)</b></p>
+<ul>
+  <li><b>Sections follow the data.</b> <span class="chip yaml">template.yaml</span> The template lists every possible section, in order, with its heading and the data it shows. Each one renders with what the session has:<ul><li>a platform the study didn't measure reads "not evaluated";</li><li>content not yet produced is a visible <code>[… pending]</code>;</li><li>a genomics section appears for each organ the expression data has.</li></ul></li>
+  <li><b>Numbering and captions.</b> <span class="chip yaml">template.yaml</span> Tables and figures are numbered by their position in the template's tree, and appendix tables per appendix ("Table B-1"). Captions are built from the design facts and the sexes in the data.</li>
+  <li><b>Views narrow the report without recomputing.</b> <span class="chip yaml">view.yaml</span> A study overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>) or a saved view selects what is shown, and changes neither the data nor the statistics. NIEHS-10's overlay, for instance, keeps the liver-only, male-only organ weight table and the hand-picked "Select" endpoints. The shared template selects nothing, so a study is reported in full unless its overlay says otherwise. The axes are:<ul><li><code>organs</code> (per area: genomics, organ weight);</li><li><code>sex</code> (apical, genomics);</li><li><code>assays</code> (clinical chemistry, hematology, hormones; per sex if needed);</li><li><code>genes</code>;</li><li><code>gene_sets</code>;</li><li><code>charts</code>.</li></ul></li>
+  <li><b>Page breaks and appendix text.</b> <span class="chip yaml">template.yaml</span> The template's <code>styles</code> block sets where pages break, matching NIEHS-10. The report's Appendix C, D and E prose comes from the files the template names (<code>templates/freeform/appendix-{c,d,e}.*</code>). Its Appendix A and F come from the study's own files (<code>templates/studies/&lt;id&gt;/appendix-{a,f}.*</code>), so no other study inherits them.</li>
+</ul>
+<p><b>The animal report and the report's Appendix B (Approve data)</b></p>
+<ul>
+  <li><b>The animal report</b> (<code>animal_report.json</code>) traces every animal ID across every file. It has five parts:<ul><li>the study design, as dose × sex × cohort counts;</li><li>the roster, with each animal's presence per platform;</li><li>platform coverage;</li><li>attrition, giving who dropped out and why;</li><li>sex and dose consistency checks.</li></ul></li>
+  <li><b>The report's Appendix B</b> lists each animal with its number, sex, dose and tissue, and the FASTQ name of its expression sample.</li>
+</ul>
+<p><b>The workflow itself</b></p>
+<ul>
+  <li><b>Phase.</b> The phase (<code>EMPTY → UPLOADED → VALIDATED → INTEGRATED → APPROVED</code>) is derived from which artifacts exist, never set.</li>
+  <li><b>Caches.</b> Every cache is keyed by a hash of its inputs: the data, the view and the method signature. A change recomputes only what depends on it.</li>
+  <li><b>Stale sections.</b> <span class="chip yaml">template.yaml</span> When the data changes under an approved section, the section is kept but marked <code>stale</code>, and it blocks publishing until accepted again (§7). The list of sections that need approval is itself derived from the document tree.</li>
+</ul>
+<p><b>Prose built from the data (Process)</b></p>
+<ul>
+  <li><b>No model involved.</b> These are assembled from the numbers above, so they can't disagree with the tables:<ul><li>the Abstract (except its Background sentence);</li><li>the Summary;</li><li>the Animal Condition, Clinical Pathology and Internal Dose narratives;</li><li>Methods' Study Design, Dose Selection and Chemistry;</li><li>the genomics intros and per-organ findings.</li></ul></li>
+  <li><b>"Most sensitive" lists</b> in the Abstract and Summary take reliable BMDs only:<ul><li>the BMD must be viable and not NVM;</li><li>it must be at or above the lower limit of extrapolation (⅓ of the lowest nonzero dose);</li><li>it must not be anomalous: a BMD below NOEL/10, or LOEL/10 without a NOEL, is left out.</li></ul></li>
+  <li><b>LLM-written prose</b> <span class="chip yaml">template.yaml</span> <span class="chip yaml">profile.yaml</span> is given only the session's numbers, and only through the NIEHS gateway. Genomics narratives may cite only the papers the knowledge base supplies. That prose covers:<ul><li>the apical BMD paragraph;</li><li>the genomics narratives;</li><li>the remaining Methods subsections. The template places them and gives their headings; which subsections exist, and when each applies, is fixed in code (<code>SUBSECTION_SKELETON</code>). The Statistical Analysis and apical BMD prompts are built from the profile;</li><li>the Background.</li></ul></li>
+</ul>
+<h3>B.3 Where each part of the report comes from</h3>
+<p>Every row's place and heading come from <code>template.yaml</code>. The YAML column names the files that also shape its content (see the labels in B.2).</p>
+<p><b>Kinds of source:</b></p>
+<ul>
+  <li><b>Data:</b> computed from the integrated dataset.</li>
+  <li><b>Profile:</b> the method profile.</li>
+  <li><b>Stated:</b> given by a person.</li>
+  <li><b>LLM:</b> written by a model from the data, through the NIEHS gateway only.</li>
+  <li><b>Fixed:</b> NIEHS boilerplate.</li>
+</ul>
+<div class="tablewrap"><table>
+  <thead><tr><th>Report part</th><th>Source</th><th>How it's derived</th><th>When the data doesn't say</th><th>YAML</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">Title: chemical, CASRN</td><td>Data / stated</td><td><code>identity.json</code> (<code>--name</code>, <code>--casrn</code>, or the resolver)</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Title: strain, species, route ("Gavage Studies")</td><td>Data / stated</td><td>The experiments' metadata (<code>study_design_facts</code>)</td><td>The standard design, logged</td><td>—</td></tr>
+    <tr><td class="wrap">Title: supplier designation "(Hsd:…)"</td><td>Stated</td><td><code>front_matter.json</code> <code>strain_designation</code></td><td>Left out</td><td>—</td></tr>
+    <tr><td class="wrap">Report number, date, DOI</td><td>Stated</td><td><code>front_matter.json</code> <code>publication</code></td><td>"to be assigned" placeholders</td><td>—</td></tr>
+    <tr><td class="wrap">Foreword, Peer Review, Acknowledgments</td><td>Fixed</td><td>Boilerplate in code (<code>rendering/report_data.py</code>)</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">About This Report</td><td>Stated</td><td><code>front_matter.json</code> authors and contributors</td><td>Pending</td><td>—</td></tr>
+    <tr><td class="wrap">Abstract: Methods, Results, Summary</td><td>Data</td><td>Built from the BMD summary, the genomics results and the design facts, without a model</td><td>Paragraphs drop out for absent data</td><td>—</td></tr>
+    <tr><td class="wrap">Abstract: Background, Background section</td><td>LLM</td><td>ATSDR, IRIS and PubChem lookups (<code>--background</code>)</td><td>Nothing is saved when a source is unreachable</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: Study Design, Dose Selection, Chemistry</td><td>Data</td><td>Group sizes (Core cohort), doses, dose unit, design facts, identity</td><td><code>[Placeholder: …]</code> for the source, age, quarantine, randomization, dose rationale, lot and purity</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: Statistical Analysis, apical BMD</td><td>LLM from profile</td><td>The prompt is built from the profile's test families, alphas, BMR and acceptance criteria</td><td>—</td><td><code>profile.yaml</code></td></tr>
+    <tr><td class="wrap">Methods: transcriptomic BMD</td><td>LLM</td><td>The prompt carries the <code>.bm2</code>'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters)</td><td>"not recorded"</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: clinical exams, organ and clin-path endpoints</td><td>LLM</td><td>The prompt lists the endpoints in the data</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: other subsections</td><td>LLM</td><td>Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility</td><td>— (see gap G14)</td><td><code>template.yaml</code> (placement, headings)</td></tr>
+    <tr><td class="wrap">Sample counts table</td><td>Data</td><td>Animal report and expression samples per organ, sex and dose</td><td>Omitted without expression data</td><td>—</td></tr>
+    <tr><td class="wrap">Results: body, organ weight, clinical pathology tables</td><td>Data + profile</td><td>Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook</td><td>A domain that isn't collected reads "not evaluated"</td><td><code>profile.yaml</code>, <code>view.yaml</code></td></tr>
+    <tr><td class="wrap">Results: Animal Condition, Clinical Pathology narratives</td><td>Data</td><td>Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model</td><td>—</td><td><code>view.yaml</code></td></tr>
+    <tr><td class="wrap">Results: Internal Dose table and narrative</td><td>Data + profile</td><td>The BD share, ½-LOD, Dixon outlier test, test family and significant figures come from the profile; units come from the lab workbook</td><td>Omitted without concentration data</td><td><code>profile.yaml</code></td></tr>
+    <tr><td class="wrap">Apical BMD summary</td><td>Data + profile</td><td><code>.bm2</code> results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics</td><td>The BMR is inferred from the profile and footnoted; NOEL is "ND"</td><td><code>profile.yaml</code>, <code>view.yaml</code></td></tr>
+    <tr><td class="wrap">Apical BMD analytical paragraph</td><td>LLM</td><td>The summary rows</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Gene set and gene BMD tables</td><td>Data + profile</td><td>BMDExpress gene-level and GO analyses from the <code>.bm2</code>; ranking statistic and cutoffs from the profile; fold change is the mean over probes</td><td>—</td><td><code>profile.yaml</code>, <code>view.yaml</code></td></tr>
+    <tr><td class="wrap">Gene set and gene narratives</td><td>Data, then LLM + knowledge base</td><td>Intro and per-organ findings built from the ranked tables; then the per-organ, per-sex interpretation grounded in <code>bmdx.duckdb</code></td><td>Findings drop out without dose groups</td><td><code>view.yaml</code></td></tr>
+    <tr><td class="wrap">References</td><td>Knowledge base, Background sources</td><td>The papers the narratives actually cite; <code>citation_check</code> drops citations to anything not given</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Genomics charts</td><td>Data</td><td>UMAP and cluster charts from the GO tables; off in the shipped template (<code>charts: []</code>)</td><td>—</td><td><code>template.yaml</code>, <code>view.yaml</code></td></tr>
+    <tr><td class="wrap">Summary</td><td>Data</td><td>Built from the same inputs as the Abstract, without a model</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix A (internal dose method), F (supplemental files)</td><td>Stated</td><td>Study overlay HTML/TeX (PFHxSAm only)</td><td>Pending</td><td>— (study files)</td></tr>
+    <tr><td class="wrap">Appendix B animal roster</td><td>Data</td><td>Animal report joined to the FASTQ sample names</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix C.1 PCA</td><td>Data</td><td>Integrated expression matrix</td><td>—</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix C.2 eFDR</td><td>—</td><td>Not ingested</td><td>Pending figure</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix D acceptance table, configuration table</td><td>Profile, data</td><td>Profile criteria; the <code>.bm2</code> analyses' recorded configuration</td><td>—</td><td><code>profile.yaml</code></td></tr>
+    <tr><td class="wrap">Appendix D, C and E prose</td><td>Fixed</td><td>Shared freeform files</td><td>—</td><td><code>template.yaml</code> (names the files)</td></tr>
+  </tbody>
+</table></div>
+<p><b>Precedence when sources disagree:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Fact</th><th>Precedence (strongest first)</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">Dose unit</td><td><code>--dose-unit</code> (stated) &gt; the one unit the data records &gt; <code>mg/kg</code> (logged)</td></tr>
+    <tr><td class="wrap">Design facts</td><td>Experiment metadata, including the <code>--design</code> facts re-applied at each integration &gt; the standard design (logged). Recorded values that disagree get no fallback</td></tr>
+    <tr><td class="wrap">Experiment organ and sex</td><td>Approved metadata (<code>metadata_approved.json</code>) &gt; inference from names and the LLM</td></tr>
+    <tr><td class="wrap">Method setting</td><td>Request (CLI or UI) &gt; study overlay <code>methods:</code> &gt; pinned profile &gt; built-in default. Each value carries its source</td></tr>
+    <tr><td class="wrap">Apical BMR</td><td>Recorded in the <code>.bm2</code> &gt; the profile's <code>bmr_when_unrecorded</code> (footnoted as inferred)</td></tr>
+    <tr><td class="wrap"><code>.bm2</code> setting vs profile</td><td>Neither wins. A disagreement is a <code>method_mismatch</code> warning</td></tr>
+  </tbody>
+</table></div>
+<h3>B.4 Gap analysis</h3>
+<p><b>Status values:</b></p>
+<ul>
+  <li><b>Input:</b> no file the pipeline receives carries the fact, so a person or a new data source must supply it.</li>
+  <li><b>Wiring:</b> the data exists but doesn't reach the report.</li>
+  <li><b>Text:</b> fixed wording that should come from the profile or the data.</li>
+  <li><b>Structure:</b> a section NIEHS publishes that the template lacks.</li>
+</ul>
+<p><b>Input gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G1</td><td>Strain, route, vehicle and duration aren't in the BMDExpress project or the STQ weight extracts</td><td>The standard design (logged), or <code>--design</code>. BPAF and Triclosan were stated as the standard design on 2026-10-07</td><td>Ingest the study's protocol record (CEBS study metadata or the source-of-truth <code>.xlsx</code> Key sheet)</td></tr>
+    <tr><td class="wrap">G2</td><td>Animal source, age, quarantine, randomization, dose rationale, test-article lot and purity, formulation analyses</td><td><code>[Placeholder]</code> in Methods; <code>--strict</code> blocks</td><td>A study-facts input, or text authored in Word (ADR-0018)</td></tr>
+    <tr><td class="wrap">G3</td><td>Supplier strain designation</td><td>Front matter only; the title leaves it out if unset</td><td>The same protocol record as G1</td></tr>
+    <tr><td class="wrap">G4</td><td>eFDR (synthetic-null analysis)</td><td>The report's Appendix C.2 is pending; Methods says it isn't included</td><td>Ingest the synthetic-null BMDExpress results</td></tr>
+    <tr><td class="wrap">G5</td><td>Theoretical inhaled dose (inhalation studies)</td><td>Rows normalized by inhaled dose aren't built</td><td>A file recording the inhaled-dose calculation</td></tr>
+    <tr><td class="wrap">G6</td><td>Authors, report number, DOI, Background sources</td><td>Front matter and <code>--background</code> on the host</td><td>Human input; host network</td></tr>
+  </tbody>
+</table></div>
+<p><b>Wiring gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G7</td><td>Experiment metadata (organ, sex, species)</td><td>Inferred from experiment names (LLM) unless approved; the source-of-truth <code>.xlsx</code> is primary only for classification</td><td>Read the workbook's Key and Data sheets first (ADR-0017/0019)</td></tr>
+    <tr><td class="wrap">G8</td><td>Multi-species studies (NIEHS-13: rats and mice)</td><td>One gene-expression <code>.bm2</code> per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only</td><td>Key genomics by species and keep every expression project</td></tr>
+    <tr><td class="wrap">G9</td><td>Animal report counts NIEHS-13's biosample animals as Core</td><td>The animal report's Core count is too high; the tables use the right cohort</td><td>Use the cohort rule the tables use</td></tr>
+    <tr><td class="wrap">G10</td><td>The UI's Process step sends <code>mg/kg</code> when no unit is set, and a few render helpers (the report's Appendix B dose header, the genomics table labels) fall back to <code>mg/kg</code> when no unit is passed</td><td>Hides the recorded unit and the logged fallback</td><td>Send nothing and let the server resolve it; pass the resolved unit everywhere</td></tr>
+    <tr><td class="wrap">G11</td><td>A text or CSV file's platform is read from its file name</td><td>A file not named to NTP conventions is unassigned or misclassified until overridden</td><td>Classify by content (endpoint names), as <code>.bm2</code> files are</td></tr>
+    <tr><td class="wrap">G12</td><td>Apical outlier exclusion (NIEHS staff judgement)</td><td>Not represented; the profile says <code>outliers: null</code></td><td>A per-study exclusion list in the overlay</td></tr>
+    <tr><td class="wrap">G13</td><td>NIEHS-10's apical engine (BMDS 2.7) and <code>all_endpoints</code></td><td>Listed as profile deviations; the substitute runs</td><td>Implement, or accept as recorded</td></tr>
+  </tbody>
+</table></div>
+<p><b>Text gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G14</td><td>Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text</td><td>The LLM writes plausible, older-era protocol text</td><td>Move the guides into the profile, or build them from data</td></tr>
+    <tr><td class="wrap">G15</td><td>The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes"</td><td>Can disagree with the profile's GO ranking</td><td>Generate from the profile, as the statistics guide is</td></tr>
+    <tr><td class="wrap">G16</td><td>The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose</td><td>Fixed text</td><td>Generate from the profile and the recorded configuration</td></tr>
+    <tr><td class="wrap">G17</td><td>The report's Appendix E describes liver, kidney and heart whatever was weighed</td><td>Can describe organs the study didn't weigh, and miss ones it did</td><td>Select descriptions by the organs in the data</td></tr>
+    <tr><td class="wrap">G18</td><td>The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10)</td><td>Fixed in code, not the profile</td><td>Read them from the profile, as the acceptance criteria are</td></tr>
+    <tr><td class="wrap">G19</td><td>BMD precision (1 or 3 decimals) is inferred from whether the <code>.bm2</code> has gene-level analyses</td><td>A data heuristic standing in for a method setting</td><td>A profile setting</td></tr>
+    <tr><td class="wrap">G20</td><td>The transcriptomics Methods guides name TempO-Seq and the S1500+ platform</td><td>Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip</td><td>Build the guides from the detected assay</td></tr>
+    <tr><td class="wrap">G21</td><td>The set of Methods subsections, and when each applies, is fixed in code (<code>narrative/methods_models.SUBSECTION_SKELETON</code>)</td><td>A template node can place or retitle a subsection but not add one the LLM writes</td><td>Derive the list from the template's <code>methods_key</code> nodes</td></tr>
+    <tr><td class="wrap">G22</td><td>Peer Review says the design and methods are identical to those reviewed</td><td>Not checked</td><td>Compare the pinned profile with the reviewed one</td></tr>
+    <tr><td class="wrap">G23</td><td>The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type</td><td>Both are built from the design facts but drop these parts</td><td>Build both from the cover title, with the sexes in the data</td></tr>
+  </tbody>
+</table></div>
+<p><b>Structure gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G24</td><td>NIEHS-13's "most potent GO per tissue" table, the report's Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
+    <tr><td class="wrap">G25</td><td>Genomics organs are ordered liver, kidney, then alphabetical</td><td>NIEHS-10's order, fixed in code; another study's published order may differ</td><td>Order by the template or the study overlay</td></tr>
+  </tbody>
+</table></div>
+<!-- ============================================================ -->
+<h2 id="appendix-c"><span class="num">C</span>The YAML files and what they can do</h2>
+<p>Appendix B says which parts of a report each YAML file sets. This appendix covers the files themselves: where they live, what each key can do, how they combine, and how they are checked. It holds as of 2026-10-07.</p>
+<h3>C.1 The files</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>File</th><th>Scope</th><th>Edited with</th><th>Takes effect</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>templates/niehs-5day-report.yaml</code>: the <b>report template</b></td><td>Every report</td><td>A text editor, or the default-template routes (<code>POST /api/document-config-default</code>, <code>/api/report-filters-default</code>, <code>/api/layout-style-default</code>)</td><td>Saving through a route rebuilds the tree at once. A hand edit to <code>document:</code> needs a server restart; the other blocks are read at each render</td></tr>
+    <tr><td class="wrap"><code>templates/studies/&lt;id&gt;/view.yaml</code>: the <b>study overlay</b></td><td>One study, version-controlled</td><td>A text editor</td><td>The next render; its <code>methods:</code> block, the next Process</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code>: a <b>saved view</b></td><td>One session</td><td>The Configure screen, <code>POST /api/views/{id}/{name}</code></td><td>The next render, with no reprocessing</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/document.yaml</code>: the session's <b>structure</b></td><td>One session</td><td>The Configure structure editor, <code>POST /api/document-config/{id}</code></td><td>The next render</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/styles.yaml</code>: the session's <b>layout styles</b></td><td>One session</td><td><code>POST /api/layout-style/{id}</code></td><td>The next render</td></tr>
+    <tr><td class="wrap"><code>profiles/&lt;name&gt;.yaml</code>: a <b>method profile</b></td><td>Every study pinned to it</td><td>A new file; profiles are never edited</td><td>The next Process of a study pinned to it, or tracking the newest</td></tr>
+    <tr><td class="wrap"><code>vocab/&lt;name&gt;.yaml</code>: a <b>style vocabulary</b></td><td>Word output that opts in</td><td><code>docx_style_extract --emit-vocabulary</code> (generated layer) and by hand (curated layer)</td><td>The next docx render</td></tr>
+  </tbody>
+</table></div>
+<p><b>History.</b></p>
+<ul>
+  <li>Every save through a route archives the previous file under <code>sessions/&lt;id&gt;/history/</code>, so a structure, style or view edit can be undone.</li>
+  <li>The template and the profiles are in git.</li>
+  <li>A route save of the template rewrites only its <code>document:</code> block. That drops the file's comments, so review the diff before committing.</li>
+</ul>
+<h3>C.2 The report template</h3>
+<p><b>Top-level keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>What it sets</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>document</code></td><td>The structure: three region containers (<code>front</code>, <code>body</code>, <code>back</code>), each with <code>children</code> node entries</td></tr>
+    <tr><td class="wrap"><code>organs</code>, <code>sex</code>, <code>assays</code>, <code>genes</code>, <code>gene_sets</code></td><td>Shared selections. The shipped template sets none, so every study is reported in full; a study's choices go in its overlay (C.3)</td></tr>
+    <tr><td class="wrap"><code>charts</code></td><td>The genomics chart types to draw. The shipped <code>[]</code> draws none, as the NIEHS report has none</td></tr>
+    <tr><td class="wrap"><code>chart_style</code></td><td>Chart styling, merged in four layers: built-in, then <code>defaults</code>, then <code>types.&lt;type&gt;</code>, then <code>instances."&lt;organ&gt;|&lt;sex&gt;|&lt;type&gt;"</code>. Keys follow <code>genomics/chart_style.STYLE_KEY_SCHEMA</code>: size, colours, palette, marker, legend, margins and axes</td></tr>
+    <tr><td class="wrap"><code>chart_types</code></td><td>New chart types declared without code (below)</td></tr>
+    <tr><td class="wrap"><code>styles</code></td><td>Typography and page flow for every surface, merged in three layers: <code>defaults</code>, then <code>types.&lt;content-type&gt;</code>, then <code>instances.&lt;node-id&gt;</code></td></tr>
+  </tbody>
+</table></div>
+<p><b>Regions.</b> A region (<code>front</code>, <code>body</code>, <code>back</code>) maps directly to BITS <code>&lt;front-matter&gt;</code>, <code>&lt;book-body&gt;</code> and <code>&lt;book-back&gt;</code>. It also switches page numbering from roman to arabic. Every node inherits its container's region.</p>
+<p><b>Node entries.</b> Each entry needs <code>id</code> and <code>title</code>, plus <code>type</code> or an explicit <code>role</code> + <code>binding</code> pair that names a preset. Other keys:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>type</code></td><td>The component (list below)</td></tr>
+    <tr><td class="wrap"><code>title</code></td><td>The heading, or the table or figure title. <code>""</code> gives an untitled block</td></tr>
+    <tr><td class="wrap"><code>data_key</code></td><td>The key in the render data the node shows (<code>methods</code>, <code>bmd_summary</code>, <code>genomics_sections</code>, <code>appendix_animals_matrix</code>, …)</td></tr>
+    <tr><td class="wrap"><code>platform</code></td><td>For apical tables: the platform whose section the table shows (<code>Body Weight</code>, <code>Clinical Chemistry</code>, …)</td></tr>
+    <tr><td class="wrap"><code>narrative_key</code></td><td>The narrative a <code>narrative+tables</code> or genomics node shows above its tables</td></tr>
+    <tr><td class="wrap"><code>methods_key</code></td><td>For a Methods subsection: which subsection's prose it shows (<code>study_design</code>, <code>stat_analysis</code>, …). It must be a key the Methods writer produces</td></tr>
+    <tr><td class="wrap"><code>ready_key</code></td><td>The navigation flag that enables the section in the browser</td></tr>
+    <tr><td class="wrap"><code>requires_platform</code></td><td>A data gate: one platform, or a list of which any one is enough. Without it, the node renders its <code>not_collected_text</code></td></tr>
+    <tr><td class="wrap"><code>not_collected_text</code></td><td>What a gated node says instead (default: "&lt;title&gt; was not evaluated in this study.")</td></tr>
+    <tr><td class="wrap"><code>orientation</code></td><td><code>landscape</code> or <code>portrait</code> for a table or figure. A per-session override in the UI wins</td></tr>
+    <tr><td class="wrap"><code>caption</code></td><td>A caption paragraph for a table or figure. It overrides the caption built from the data</td></tr>
+    <tr><td class="wrap"><code>subtype</code></td><td>The cover or title-page layout (<code>niehs-5d-tox</code>), or a figure's kind (<code>chart</code>, <code>logo</code>)</td></tr>
+    <tr><td class="wrap"><code>content</code>, <code>content_file</code>, <code>representation</code></td><td>Authored content, for freeform nodes (below)</td></tr>
+    <tr><td class="wrap"><code>session_content</code>, <code>missing_content_text</code></td><td>Per-study authored content, looked up in <code>sessions/&lt;id&gt;/authored/</code> then <code>templates/studies/&lt;id&gt;/</code>. Without it, <code>missing_content_text</code> is shown, or a pending placeholder if that is unset</td></tr>
+    <tr><td class="wrap"><code>content_items</code></td><td>Ordered blocks inside one component (text, table, chart), each addressable as <code>&lt;node-id&gt;::&lt;item-id&gt;</code></td></tr>
+    <tr><td class="wrap"><code>children</code></td><td>Nested nodes</td></tr>
+  </tbody>
+</table></div>
+<p><b>Computed, never written:</b></p>
+<ul>
+  <li>the heading level;</li>
+  <li>table and figure numbers, counted by position (per appendix inside an appendix: "B-1");</li>
+  <li>appendix letters, counted in order;</li>
+  <li>the region.</li>
+</ul>
+<p><b>Node types</b> (<code>document_model/render_capabilities.COMPONENT_CATALOG</code>; the second column is what each needs):</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Type</th><th>Needs</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>cover</code>, <code>title-page</code></td><td>—</td><td>Fixed pages laid out from the identity, design and front matter</td></tr>
+    <tr><td class="wrap"><code>toc</code>, <code>tables-list</code>, <code>figures-list</code></td><td>—</td><td>Generated lists</td></tr>
+    <tr><td class="wrap"><code>heading-only</code></td><td>—</td><td>A heading whose children carry the content; may nest</td></tr>
+    <tr><td class="wrap"><code>page-break</code></td><td>—</td><td>A forced page break</td></tr>
+    <tr><td class="wrap"><code>front-matter</code></td><td><code>data_key</code></td><td>Front-matter prose (foreword, abstract, …)</td></tr>
+    <tr><td class="wrap"><code>narrative</code></td><td><code>data_key</code></td><td>A prose section</td></tr>
+    <tr><td class="wrap"><code>narrative+tables</code></td><td>—</td><td>A narrative (<code>narrative_key</code>) with child <code>table</code> nodes</td></tr>
+    <tr><td class="wrap"><code>table</code>, <code>incidence-table</code></td><td><code>platform</code></td><td>An apical table built from the data</td></tr>
+    <tr><td class="wrap"><code>sample-counts-table</code>, <code>data-table</code></td><td><code>data_key</code></td><td>A table built from a prepared matrix</td></tr>
+    <tr><td class="wrap"><code>bmd-summary</code></td><td><code>data_key</code></td><td>The apical BMD summary</td></tr>
+    <tr><td class="wrap"><code>genomics-section</code></td><td><code>data_key</code>, <code>narrative_key</code></td><td>One gene set or gene section per organ</td></tr>
+    <tr><td class="wrap"><code>figure</code></td><td>—</td><td>A figure (<code>subtype: chart</code> for a data figure)</td></tr>
+    <tr><td class="wrap"><code>appendix</code></td><td>—</td><td>An appendix; holds sections, tables, figures and authored content</td></tr>
+    <tr><td class="wrap"><code>freeform-page</code>, <code>freeform-block</code>, <code>authored-table</code></td><td>—</td><td>Authored content: a page of its own, an inline block, or a table with supplied markup</td></tr>
+    <tr><td class="wrap"><code>supplementary-material</code></td><td>—</td><td>A supplied data file (<code>content_file</code>)</td></tr>
+  </tbody>
+</table></div>
+<p><b>Authored content</b> goes in freeform nodes:</p>
+<ul>
+  <li>Give exactly one source:<ul><li>inline <code>content</code> with a <code>representation</code> (<code>latex</code> or <code>html</code>);</li><li><code>content_file</code> (a path under <code>templates/</code>) with a <code>representation</code> (<code>latex</code>, <code>html</code> or <code>docx</code>; a <code>.docx</code> is converted at load);</li><li>or <code>content: {latex: …, html: …}</code> with no representation, when the two surfaces need different markup.</li></ul></li>
+  <li>A single-surface node shows a short pending note on the other surface.</li>
+  <li>The report's Appendix C, D and E use this mechanism. Their text is in <code>templates/freeform/</code>.</li>
+</ul>
+<p><b>Data-driven chart types</b> (<code>chart_types</code>):</p>
+<ul>
+  <li>Required keys:<ul><li><code>trace</code>: <code>scatter</code>, <code>bar</code> or <code>line</code>;</li><li><code>x</code> and <code>y</code>: GO table columns.</li></ul></li>
+  <li>Optional keys:<ul><li><code>color</code>: one trace per distinct value;</li><li><code>size</code>;</li><li><code>sort: {by, dir}</code>;</li><li><code>limit</code>;</li><li><code>axes</code>: titles and types per axis;</li><li><code>layout</code>;</li><li><code>caption</code>.</li></ul></li>
+  <li>Available columns are <code>bmd</code>, <code>bmdl</code>, <code>direction</code>, <code>fishers_p</code>, <code>go_id</code>, <code>go_term</code>, <code>n_down</code>, <code>n_genes</code>, <code>n_genes_with_bmd</code>, <code>n_up</code> and <code>rank</code>.</li>
+  <li>Titles may use <code>${dose_unit}</code>, and captions <code>{organ_title}</code> and <code>{sex_title}</code>.</li>
+  <li>The built-in <code>umap</code> and <code>cluster</code> types can't be redeclared.</li>
+  <li>A declared type is drawn only when it is listed in <code>charts</code>.</li>
+</ul>
+<p><b>Layout styles</b> (<code>styles</code>) keys:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Values</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>font_family</code></td><td><code>serif</code>, <code>sans</code>, <code>mono</code></td></tr>
+    <tr><td class="wrap"><code>font_size</code></td><td>A length, e.g. <code>11pt</code> (pt, mm, cm, in, em, ex)</td></tr>
+    <tr><td class="wrap"><code>line_height</code></td><td>A number, e.g. <code>1.4</code></td></tr>
+    <tr><td class="wrap"><code>weight</code></td><td><code>normal</code>, <code>bold</code></td></tr>
+    <tr><td class="wrap"><code>style</code></td><td><code>normal</code>, <code>italic</code></td></tr>
+    <tr><td class="wrap"><code>color</code></td><td><code>#rgb</code> or <code>#rrggbb</code></td></tr>
+    <tr><td class="wrap"><code>align</code></td><td><code>left</code>, <code>right</code>, <code>center</code>, <code>justify</code></td></tr>
+    <tr><td class="wrap"><code>space_before</code>, <code>space_after</code>, <code>first_line_indent</code></td><td>A length</td></tr>
+    <tr><td class="wrap"><code>break_before</code>, <code>break_after</code></td><td><code>auto</code>, <code>page</code></td></tr>
+    <tr><td class="wrap"><code>keep_together</code></td><td><code>true</code>, <code>false</code></td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>Breaks on every surface.</b> Word gets <code>pageBreakBefore</code>, LaTeX <code>\clearpage</code>, and HTML <code>break-before: page</code>.</li>
+  <li><b>The shipped breaks</b> reproduce NIEHS-10's pagination: front-matter pages, Results, Summary, References, three tables and every appendix.</li>
+  <li><b>Precedence:</b> the template, then the session's <code>styles.yaml</code>, then the request.</li>
+</ul>
+<h3>C.3 Study overlays and saved views</h3>
+<p>A study overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>) and a saved view (<code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code>) share one format:</p>
+<div class="code"><div class="bar"><span>yaml</span><button type="button">Copy</button></div><pre>document: [ …node entries… ]   # saved views only: this view's own structure
+filters:
+  organs:    {genomics: [liver, kidney], organ-weight: [liver]}
+  sex:       {organ-weight: [male]}
+  assays:
+    clinical-chemistry: {male: [cholesterol], female: ["aspartate aminotransferase"]}
+    hematology: ["neutrophil count"]          # a flat list = both sexes
+  genes:     [egr1, ddit4]
+  gene_sets: ["GO:1902893", "cell division"]
+charts: [umap, cluster]        # or [] for none; leave out to use the template's
+methods:                       # study overlay only: method overrides (C.4)
+  apical: {statistics: {alpha: 0.05}}</pre></div>
+<p><b>Selection axes</b>, all optional:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Axis</th><th>Areas</th><th>Matching</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>organs</code></td><td><code>genomics</code> (sections, charts, narratives, gene tables), <code>organ-weight</code> (the table and its narrative)</td><td>By component: <code>kidney</code> matches "Kidney-Left" and "R. Kidney"</td></tr>
+    <tr><td class="wrap"><code>sex</code></td><td><code>apical</code> (every apical table's columns, the BMD summary, the narratives), <code>genomics</code> (whole sections), <code>organ-weight</code> (the organ weight table only)</td><td>Exact: <code>male</code>, <code>female</code></td></tr>
+    <tr><td class="wrap"><code>assays</code></td><td><code>clinical-chemistry</code>, <code>hematology</code>, <code>hormones</code></td><td>By component on the endpoint label: <code>count</code> keeps every "… count" row. Use several words to narrow it ("total thyroxine")</td></tr>
+    <tr><td class="wrap"><code>genes</code></td><td>—</td><td>Gene symbols</td></tr>
+    <tr><td class="wrap"><code>gene_sets</code></td><td>—</td><td>A GO accession or a word of the term: <code>division</code> keeps "cell division"</td></tr>
+  </tbody>
+</table></div>
+<p><b>How values work:</b></p>
+<ul>
+  <li>Any area's value may be a flat list (both sexes) or <code>{male: […], female: […]}</code>.</li>
+  <li>A missing axis or area, or an empty list, means no selection.</li>
+  <li>An unknown area is a load error.</li>
+</ul>
+<p><b>Which file applies:</b></p>
+<ul>
+  <li><b>Filters and charts:</b> the session's saved view wins, then the study overlay, then the template. A layer counts when it states <code>filters</code> or <code>charts</code>.</li>
+  <li><b>Structure:</b> a saved view's <code>document:</code>, then the session's <code>document.yaml</code> (only when the session has no views), then the template.</li>
+  <li><b>Methods:</b> the overlay's <code>methods:</code> block applies when processing.</li>
+</ul>
+<p>Selections are a projection at render time. The statistics and BMDs are computed over everything, so switching or adding a view never reprocesses. NIEHS-10's overlay is the worked example: the liver-only, male-only organ weight table and the hand-picked "Select" endpoints of its published Tables 4–6.</p>
+<h3>C.4 Method profiles</h3>
+<p>A profile (<code>profiles/&lt;name&gt;.yaml</code>) states the whole analysis method.</p>
+<p><b>Identity keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>name</code></td><td>The profile's name</td></tr>
+    <tr><td class="wrap"><code>series</code></td><td>Its series: <code>ntp-5day</code></td></tr>
+    <tr><td class="wrap"><code>effective</code></td><td>The year it takes effect: <code>"2025"</code></td></tr>
+    <tr><td class="wrap"><code>reference</code></td><td>The published report whose data its tests reproduce</td></tr>
+    <tr><td class="wrap"><code>description</code></td><td>A short description</td></tr>
+  </tbody>
+</table></div>
+<p><b>Method keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Values (registered implementations)</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>apical.statistics.trend_test</code></td><td><code>jonckheere</code></td></tr>
+    <tr><td class="wrap"><code>apical.statistics.trend_select_p</code>, <code>alpha</code>, <code>alpha_strong</code></td><td>Probabilities</td></tr>
+    <tr><td class="wrap"><code>apical.statistics.min_group_n</code></td><td>A whole number</td></tr>
+    <tr><td class="wrap"><code>apical.statistics.pairwise.&lt;platform&gt;</code></td><td><code>williams_or_dunnett</code>, <code>shirley_or_dunn</code>, <code>none</code></td></tr>
+    <tr><td class="wrap"><code>apical.statistics.outliers</code></td><td><code>{test: dixon_r10, alpha}</code> or null</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.engine</code></td><td><code>toxicr_model_average</code>; <code>bmds_2_7_high_dose_drop</code> is registered but not implemented</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.eligibility</code></td><td><code>trend_and_pairwise</code>; <code>all_endpoints</code> is registered but not implemented</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.bmr_when_unrecorded.&lt;platform or default&gt;</code></td><td><code>{type: sd | rel_dev, factor}</code></td></tr>
+    <tr><td class="wrap"><code>apical.bmd.acceptance</code></td><td><code>r2_min</code>, <code>bmd_bmdl_max</code>, <code>bmd_above_highest_dose</code> (<code>nvm</code>, <code>keep</code>), <code>not_reportable_fraction</code></td></tr>
+    <tr><td class="wrap"><code>internal_dose.pairwise</code></td><td>As for apical pairwise</td></tr>
+    <tr><td class="wrap"><code>internal_dose.below_limit</code></td><td><code>half_limit</code></td></tr>
+    <tr><td class="wrap"><code>internal_dose.bd_if_detected_share_at_most</code></td><td>A probability</td></tr>
+    <tr><td class="wrap"><code>internal_dose.outliers</code></td><td>As for apical outliers</td></tr>
+    <tr><td class="wrap"><code>internal_dose.sig_figs</code></td><td>A whole number</td></tr>
+    <tr><td class="wrap"><code>genomics.go_ranking</code></td><td>A list from <code>fifth_pct</code>, <code>tenth_pct</code>, <code>median</code>, <code>mean</code>, <code>minimum</code>, <code>weighted_mean</code>, <code>lower95</code>, <code>upper95</code></td></tr>
+    <tr><td class="wrap"><code>genomics.go_display</code></td><td><code>{pct, min_genes, max_genes, min_bmd}</code></td></tr>
+    <tr><td class="wrap"><code>genomics.recorded.bmr</code></td><td>What a genomic <code>.bm2</code> should record: <code>{type, factor}</code></td></tr>
+    <tr><td class="wrap"><code>genomics.recorded.model_selection</code></td><td><code>model_average</code>, <code>lowest_aic</code></td></tr>
+  </tbody>
+</table></div>
+<p><b>Rules:</b></p>
+<ul>
+  <li><b>The schema is closed.</b><ul><li>An unknown key, a missing key or an unregistered value fails at load.</li><li>A profile must state every key. <code>null</code> means "to confirm" and resolves to the built-in default, reported as such.</li><li>A registered value the tool doesn't implement runs the default and is listed as a deviation (e.g. <code>ntp-5day-2021</code>'s BMDS 2.7 engine).</li></ul></li>
+  <li><b>Profiles are immutable.</b> A study pins a profile by name and content hash (<code>sessions/&lt;id&gt;/method_profile.json</code>), and an edited profile fails the pin check. A revised method is a new file.<ul><li>A study that tracks its series moves to the newest file automatically.</li><li><code>--method-profile NAME</code> fixes a study on one profile.</li></ul></li>
+  <li><b>Layers.</b> The built-in default, then the profile, then the study overlay's <code>methods:</code> block, then the request (CLI or UI). A study overlay or request may state any subset of keys. Every resolved value carries its source.</li>
+  <li><b>Text follows the profile.</b> Footnotes, the Methods statistics and BMD text, and the report's Appendix D-1 are generated from the resolved values.</li>
+</ul>
+<p>The shipped profiles are <code>ntp-5day-2025</code> (NIEHS-12/13, the reference NIEHS-13) and <code>ntp-5day-2021</code> (NIEHS-07 to -10, the reference NIEHS-10).</p>
+<h3>C.5 Style vocabularies</h3>
+<p><code>vocab/&lt;name&gt;.yaml</code> maps the report's semantic roles (report title, section heading, table title, …) to Word paragraph styles. It has two layers:</p>
+<ul>
+  <li><code>ntp-report-generated.yaml</code> is extracted from a reference <code>.docx</code> and never hand-edited;</li>
+  <li><code>ntp-report.yaml</code> extends it with stable role names.</li>
+</ul>
+<p>A render uses a vocabulary only when the render data names one (<code>vocabulary</code>); otherwise Word output uses its built-in styling.</p>
+<h3>C.6 What YAML can't change yet</h3>
+<p>These are fixed in code; Appendix B.4 tracks each one:</p>
+<ul>
+  <li>the boilerplate text: Foreword, Peer Review, Acknowledgments;</li>
+  <li>the set of Methods subsections and their LLM instructions;</li>
+  <li>table captions and the wording of the prose built from the data;</li>
+  <li>endpoint decimals;</li>
+  <li>the "most sensitive" lower limit and anomaly ratio;</li>
+  <li>BMD precision;</li>
+  <li>the genomics organ order.</li>
+</ul>
+
+<footer>
+  Source: <code>docs/headless-report-generation.md</code> in the rlm-bmdx repository. Scripts: <code>tooling/generate_report.py</code>,
+  <code>tooling/generate_report_api.sh</code>.
+</footer>
+</main>
+</div>
+
+<script>
+  // Copy buttons: copy the block's text; fall back to selecting it when the clipboard is refused.
+  document.querySelectorAll(".code button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.closest(".code").querySelector("pre");
+      var text = pre.innerText;
+      var done = function (label) { btn.textContent = label; setTimeout(function () { btn.textContent = "Copy"; }, 1400); };
+      var select = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); done("Selected");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, select);
+      } else { select(); }
+    });
+  });
+
+  // Collapse the contents box on narrow screens so the manual itself comes first.
+  if (window.matchMedia("(max-width: 999px)").matches) {
+    var tocDetails = document.querySelector("nav.toc details");
+    if (tocDetails) tocDetails.open = false;
+  }
+
+  // Highlight the contents entry for the section in view.
+  (function () {
+    if (!("IntersectionObserver" in window)) return;
+    var links = {};
+    document.querySelectorAll("nav.toc a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        Object.values(links).forEach(function (a) { a.classList.remove("active"); });
+        if (links[e.target.id]) links[e.target.id].classList.add("active");
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    document.querySelectorAll("main h2[id]").forEach(function (h) { io.observe(h); });
+  })();
+</script>
+</body>
+</html>

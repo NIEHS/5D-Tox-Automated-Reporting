@@ -1,0 +1,46 @@
+# NIEHS-13's own wording for its deposited files (ADR-0029, pipeline.deposit):
+# the caption each is listed under in its Supplemental Data appendix, as the
+# published book has it (tooling.deposit_captions).  Files not named here are
+# listed by their file name.
+
+# The deposit's DOI, as the published book's Supplemental Data cites it.
+doi: 10.22427/NIEHS-DATA-NIEHS-13
+captions:
+  108020004_BMD_NOEL_and_LOEL_Summary_for_Apical_Endpoints.pdf: BMD, NOEL and LOEL Summary for Apical Endpoints
+  108020004_4D_Rat_NonGenomic.bm2: BMDExpress Project File Rat Apical (bm2 Format)
+  108020004_Body_Weights_Summary.pdf: Mean Body Weights Summary
+  108020004_OrganWeights_Summary.pdf: Organ Weights Summary
+  108020004_Attenuation-adjustedRawReadCountsRatStudy.zip: Attenuation-adjusted Raw Read Counts Rat Study
+  108020004_4D_Rat_Genomic.bm2: BMDExpress Project File Rat Genomic (bm2 Format)
+  108020004_4D_Rat_Genomic.json: BMDExpress Project File Rat Genomic (JSON Format)
+  108020004_Most_Potent_GO_Biological_Process_In_Each_Tissue.pdf: Most Potent GO Biological Process in Each Tissue
+  108020004_TempO-SeqS1500v1.2FullManifestRattusNorvegicus.csv: TempO-Seq S1500v1.2 Full Manifest Rattus Norvegicus
+  108020004_TranscriptomicsDataQCReport.zip: Transcriptomics Data QC Report
+  108020004_I01_Animal_Removal_Summary.pdf: I01 – Animal Removal Summary
+  108020004_I02_Animal_Removals.pdf: I02 – Animal Removals
+  108020004_I04_Mean_Body_Weights_and_Survival.pdf: I04 – Mean Body Weights and Survival
+  108020004_I04G_Mean_Body_Weight_Gain.pdf: I04G – Mean Body Weight Gain
+  108020004_I05_Clinical_Observations_Summary.pdf: I05 – Clinical Observations Summary
+  108020004_PA06_Organ_Weights_Summary.pdf: PA06 – Organ Weights Summary
+  108020004_PA41_Clinical_Chemistry_Summary.pdf: PA41 – Clinical Chemistry Summary
+  108020004_PA43_Hematology_Summary.pdf: PA43 – Hematology Summary
+  108020004_Blood_and_Tissue_Concentration.pdf: PA48 – Blood and Tissue Concentration
+  108020005_BMD_NOEL_and_LOEL_Summary_for_Apical_Endpoints_Mouse.pdf: BMD, NOEL and LOEL Summary for Apical Endpoints
+  108020005_4D_NonGenomic_Mouse.bm2: BMDExpress Project File Mouse Apical (bm2 Format)
+  108020005_Attenuation-adjustedRawReadCountsMouseStudy.zip: Attenuation-adjusted Raw Read Counts Mouse Study
+  108020005_4D_Mouse_Genomic.bm2: BMDExpress Project File Mouse Genomic (bm2 Format)
+  108020005_4D_Mouse_Genomic.json: BMDExpress Project File Mouse Genomic (JSON Format)
+  108020005_Most_Potent_GO_Biological_Process_In_Each_Tissue.pdf: Most Potent GO Biological Process in Each Tissue
+  108020005_TempO-SeqS1500v1.2FullManifestMusMusculus.csv: TempO-Seq S1500v1.2 Full Manifest Mus Musculus
+  108020005_TranscriptomicsDataQCReport.zip: Transcriptomics Data QC Report
+  108020005_I01_Animal_Removal_Summary.pdf: I01 – Animal Removal Summary
+  108020005_I02_Animal_Removals.pdf: I02 – Animal Removals
+  108020005_I04_Mean_Body_Weights_and_Survival.pdf: I04 – Mean Body Weights and Survival
+  108020005_I04G_Mean_Body_Weight_Gain.pdf: I04G – Mean Body Weight Gain
+  108020005_I05_Clinical_Observations_Summary.pdf: I05 – Clinical Observations Summary
+  108020005_PA06_Organ_Weights_Summary.pdf: PA06 – Organ Weights Summary
+  108020005_PA41_Clinical_Chemistry_Summary.pdf: PA41 – Clinical Chemistry Summary
+  108020005_Blood_and_Tissue_Concentration.pdf: PA48 – Blood and Tissue Concentration
+  AnalysisPipelineEvaluation.zip: Analysis Pipeline Evaluation
+  DTT_tBMD_Pipelinebm2.zip: DTT tBMD Pipeline bm2
+  EPA_tBMD_Pipelinebm2.zip: EPA tBMD Pipeline bm2

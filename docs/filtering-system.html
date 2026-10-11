@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rlm-bmdx — The Filtering System</title>
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #57606a;
+    --line: #e4e2dd;
+    --accent: #2c5282;
+    --accent-soft: #ebf2fb;
+    --code-bg: #f5f4f1;
+    --code-ink: #24292f;
+    --red: #dc2626;
+    --green: #15803d;
+    --sidebar-w: 280px;
+    --maxw: 860px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* ---- Layout: fixed sidebar + scrolling main ---- */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 24px 18px 40px;
+  }
+  .sidebar h1 { font-size: 15px; line-height: 1.4; margin: 0 0 4px; color: var(--ink); }
+  .sidebar .sub { font-size: 12px; color: var(--muted); margin: 0 0 18px; }
+  .toc { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+  .toc li { margin: 2px 0; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-radius: 6px; }
+  .toc a:hover { background: var(--accent-soft); color: var(--accent); }
+
+  main {
+    margin-left: var(--sidebar-w);
+    padding: 40px 48px 120px;
+  }
+  .wrap { max-width: var(--maxw); }
+
+  h2 {
+    font-size: 22px;
+    margin: 48px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--line);
+    scroll-margin-top: 20px;
+  }
+  h3 { font-size: 17px; margin: 28px 0 8px; color: var(--accent); }
+  p { margin: 12px 0; }
+  ul, ol { margin: 12px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+
+  code {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font: 13.5px/1.5 "SF Mono", "Menlo", "Consolas", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font: 13px/1.55 "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--code-ink);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--line); }
+  tbody tr:hover { background: var(--accent-soft); }
+
+  .note {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 18px 0;
+    font-size: 15px;
+  }
+  .note strong { color: var(--accent); }
+  .rule {
+    background: #fff8f0;
+    border-left: 3px solid var(--red);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 18px 0;
+  }
+  .lead { color: var(--muted); font-size: 16px; margin: 4px 0 8px; }
+  .src { color: var(--muted); font-size: 12.5px; font-family: "SF Mono","Menlo","Consolas",monospace; }
+  .ok { color: var(--green); font-weight: 600; }
+  .no { color: var(--red); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <h1>The Filtering System</h1>
+  <p class="sub">rlm-bmdx · after the 4-phase filter refactor<br>(<code>e3b85aa</code> → <code>2505f0e</code>)</p>
+  <ul class="toc">
+    <li><a href="#what">1 · What "filtering" means</a></li>
+    <li><a href="#predicate">2 · The predicate</a></li>
+    <li><a href="#config">3 · The config shape</a></li>
+    <li><a href="#apply">4 · Where filters are applied</a></li>
+    <li><a href="#cache">5 · Cache keys</a></li>
+    <li><a href="#versions">6 · Versions</a></li>
+    <li><a href="#checklist">7 · Adding a dimension</a></li>
+    <li><a href="#followups">8 · Known follow-ups</a></li>
+  </ul>
+</nav>
+
+<main>
+<div class="wrap">
+
+<p class="lead">How report-level data filters work end to end — the predicate, the
+config shape, where filters are applied, and how they enable multiple report
+<b>versions</b> over one processed dataset. File:line references are to the
+current tree.</p>
+
+<!-- ========================================================= -->
+<h2 id="what">1 · What "filtering" means here</h2>
+<p>A filter narrows <em>which data appears in a report</em> without changing the
+data itself. There are <b>eight dimensions</b>, grouped into three families:</p>
+
+<table>
+  <thead><tr><th>Family</th><th>Dimensions</th><th>Scope</th></tr></thead>
+  <tbody>
+    <tr><td>Apical</td><td><code>sex</code> (apical area), <code>assays</code></td><td>Dose-response tables (Clinical Chemistry, Hematology, Hormones) + BMD summary + narratives</td></tr>
+    <tr><td>Organ-weight</td><td><code>organs</code> (organ-weight area), <code>sex</code> (organ-weight area)</td><td>The Organ Weight table + its narrative</td></tr>
+    <tr><td>Genomics</td><td><code>organs</code> (genomics area), <code>sex</code> (genomics area), <code>genes</code>, <code>gene_sets</code>, + GO <b>cutoffs</b></td><td>Genomics gene-set / gene tables + charts</td></tr>
+  </tbody>
+</table>
+
+<p>Two conceptually different operations live under "filtering":</p>
+<ul>
+  <li><b>Subtractive filters</b> (all eight dimensions): compute the full
+  <em>superset</em>, then drop rows/sections at render time. Never part of a cache key.</li>
+  <li><b>Method options</b> (BMD stat; and since phase 4, the GO cutoffs behave the
+  same way): select or re-derive a slice of an already-computed superset. The BMD
+  stat is stored per-slice (<code>gene_sets_by_stat</code>); the GO cutoffs are a
+  post-extraction subtractive filter.</li>
+</ul>
+
+<div class="rule">
+<strong>The governing rule, enforced across the codebase:</strong> Filters are
+subtractive → applied at render, never cache-keyed. Method options are generative
+→ per-slice. Document structure is render-only.
+</div>
+
+<!-- ========================================================= -->
+<h2 id="predicate">2 · The predicate — one function, three contracts</h2>
+<p>All filtering ultimately calls one predicate:
+<span class="src">document_model/filters.py::filter_allows (line 78)</span>.</p>
+
+<div class="note">
+<strong>Where these live.</strong> The filter predicates are report-level
+<em>data selection</em> — which sexes/assays/organs/genes appear — consumed across
+<code>pipeline/</code>, <code>narrative/</code>, <code>rendering/</code>, and the table
+builders. They live in <code>document_model/filters.py</code>, beside the filter
+<em>config</em> loaders (<code>document_template.py</code>), NOT under <code>tables/</code>.
+They were historically extracted into <code>tables/table_builder_common.py</code> by
+proximity (the organ matcher started inside <code>body_weight_table.py</code>), which
+conflated data selection with table-cell construction; that module now just
+re-exports them for backward compatibility.
+</div>
+
+<pre><code>filter_allows(candidate: str, allowlist: list[str] | None, *,
+              mode: str = "component", alt_id: str | None = None) -> bool</code></pre>
+
+<p>An <b>empty/None allowlist means "no filtering"</b> (returns <code>True</code>)
+in every mode — the universal backward-compatible default.</p>
+
+<p>The three modes are deliberately distinct and must <b>not</b> be collapsed:</p>
+<ul>
+  <li><b><code>"component"</code></b> (organ, assay, gene) — <code>_component_match</code>
+  (line 37). Candidate is lower-cased and split on <code>[\s.\-/]+</code>; passes if
+  a listed token equals the whole candidate OR any one component. One token covers
+  inconsistent spellings: <code>"kidney"</code> matches <code>"Kidney-Left"</code> /
+  <code>"R. Kidney"</code>; <code>"count"</code> matches <code>"Basophil count"</code>.</li>
+  <li><b><code>"exact"</code></b> (sex) — <code>_exact_match</code> (line 65). Exact
+  case-insensitive membership, NOT component-wise. Sex is a closed binary; a component
+  split would wrongly let a partial token leak between <code>male</code>/<code>female</code>.</li>
+  <li><b><code>"dual"</code></b> (gene_set) — passes when <code>alt_id</code> (the GO
+  accession, e.g. <code>GO:0051301</code>) equals a listed token OR <code>candidate</code>
+  (the human-readable term) component-matches. Both <code>"GO:0051301"</code> and
+  <code>"cell division"</code> work.</li>
+</ul>
+
+<p>The five named predicates are thin wrappers preserving these contracts:</p>
+<table>
+  <thead><tr><th>Wrapper</th><th>Line</th><th>mode</th></tr></thead>
+  <tbody>
+    <tr><td><code>organ_allowed(organ, allowlist)</code></td><td>111</td><td>component</td></tr>
+    <tr><td><code>sex_allowed(sex, allowlist)</code></td><td>125</td><td>exact</td></tr>
+    <tr><td><code>assay_allowed(label, allowlist)</code></td><td>137</td><td>component</td></tr>
+    <tr><td><code>gene_allowed(symbol, allowlist)</code></td><td>149</td><td>component</td></tr>
+    <tr><td><code>gene_set_allowed(go_id, go_term, allowlist)</code></td><td>160</td><td>dual (<code>alt_id=go_id</code>)</td></tr>
+  </tbody>
+</table>
+<p>The allowlist is expected <b>pre-lower-cased</b> (the loaders guarantee this); only
+the candidate is folded at match time.</p>
+
+<!-- ========================================================= -->
+<h2 id="config">3 · The config shape</h2>
+
+<h3>3.1 Where filters are declared</h3>
+<p>Filters live in the <b>template YAML</b>
+(<code>templates/niehs-5day-report.yaml</code>) as siblings of the
+<code>document:</code> block, and — since phase 3 — optionally in a
+<b>per-version file</b> (<code>sessions/&lt;dtxsid&gt;/versions/&lt;name&gt;.yaml</code>).
+The template supplies the global default; a version overrides it.</p>
+
+<pre><code>organs:                       # {area: [tokens]}
+  genomics: [liver, kidney]
+  organ-weight: [liver]
+
+sex:                          # {area: [tokens]}
+  organ-weight: [male]
+
+assays:                       # {area: [tokens] | {sex: [tokens]}}
+  clinical-chemistry:
+    male: [cholesterol]
+    female: ["aspartate aminotransferase", "sorbitol dehydrogenase"]
+  hematology:
+    male: ["neutrophil count"]
+    female: ["manual hematocrit"]
+
+# genes: [egr1, ddit4]              # flat list (genomics-only)
+# gene_sets: ["GO:1902893", "cell division"]
+
+charts: []                    # closed-vocab enable list (see 3.4)</code></pre>
+
+<h3>3.2 The three legacy loader shapes</h3>
+<p><code>document_model/document_template.py</code> has one <code>load_report_*</code>
+per block, returning <b>three incompatible shapes</b> — a historical wart the
+refactor tamed but did not delete (existing compute call-sites still use them):</p>
+<table>
+  <thead><tr><th>Loader</th><th>Line</th><th>Return shape</th></tr></thead>
+  <tbody>
+    <tr><td><code>load_report_organs</code></td><td>740</td><td><code>{area: [tokens]}</code> (genomics, organ-weight)</td></tr>
+    <tr><td><code>load_report_sex</code></td><td>756</td><td><code>{area: [tokens]}</code> (apical, genomics, organ-weight)</td></tr>
+    <tr><td><code>load_report_assays</code></td><td>796</td><td><code>{area: [tokens] | {sex: [tokens]}}</code> — polymorphic per area</td></tr>
+    <tr><td><code>load_report_genes</code></td><td>862</td><td><code>[tokens]</code> — flat</td></tr>
+    <tr><td><code>load_report_gene_sets</code></td><td>874</td><td><code>[tokens]</code> — flat</td></tr>
+    <tr><td><code>load_report_charts</code></td><td>888</td><td><code>[types] | None</code> — closed-vocab (3.4)</td></tr>
+  </tbody>
+</table>
+<p>Valid areas are closed vocabularies (<code>REPORT_ORGAN_AREAS</code>,
+<code>REPORT_SEX_AREAS</code>, <code>REPORT_ASSAY_AREAS</code> — lines 617/626/632),
+so a typo'd area fails loudly at load.</p>
+
+<h3>3.3 The canonical shape</h3>
+<p>To let one caller consume all dimensions uniformly, phase 1 added a
+<b>canonical form</b> and a normalizer:</p>
+<pre><code>{dimension: {area: {sex_key: [tokens]}}}</code></pre>
+<p><code>sex_key</code> is <code>"*"</code> (both sexes / not sex-scoped) or
+<code>"male"</code>/<code>"female"</code>; flat dimensions collapse to area
+<code>"*"</code>, non-per-sex areas to sex <code>"*"</code>.</p>
+<ul>
+  <li><code>_normalize_dimension(raw)</code> (line 956) — maps any legacy shape to the canonical nesting.</li>
+  <li><code>normalize_filters(organs=…, sex=…, …)</code> (line 982) — composes loader outputs, omitting empty dimensions.</li>
+  <li><code>load_report_filters(name)</code> (line 1008) — returns <code>{"filters": &lt;canonical&gt;, "charts": &lt;list|None&gt;}</code>, the seam the render/version path consumes.</li>
+  <li><code>resolve_report_allowlist(filters, dimension, area=None, sex=None)</code> (line 1034) — extracts one token list, falling back through the <code>"*"</code> wildcards; <code>None</code> ⇒ no filtering.</li>
+</ul>
+
+<h3>3.4 <code>charts</code> — the closed-vocabulary exception</h3>
+<p>Every token allowlist treats empty/absent as "no filtering". <code>charts</code>
+is different: it enables a closed set of chart <em>types</em>. <code>load_report_charts</code>
+(line 888) is <b>presence-sensitive</b>:</p>
+<ul>
+  <li>key <b>absent</b> → <code>None</code> → render all types (default),</li>
+  <li>key <b>present</b> (even <code>[]</code>) → render only those types (<code>[]</code> = render none).</li>
+</ul>
+<p>The normalizer must never fold <code>charts</code> in, or that empty-semantics
+distinction would break.</p>
+
+<!-- ========================================================= -->
+<h2 id="apply">4 · Where filters are applied</h2>
+<div class="note">
+The load-bearing decision (phase 2): <strong>compute the full superset, cache it
+filter-agnostically, apply filters after the cache read.</strong> This is what lets
+one processed dataset back many filtered versions with no reprocessing. Genomics
+already worked this way; phases 2 &amp; 4 brought apical, organ-weight, and the GO
+cutoffs into the same model.
+</div>
+
+<h3>4.1 The apply functions (<span class="src">pipeline/processing_helpers.py</span>)</h3>
+<ul>
+  <li><code>apply_apical_filters(platform_tables, sex_allow, assay_filters)</code> (269) —
+  filters <code>{platform: {sex: [TableRow]}}</code>. Drops non-allowed sexes (exact) and,
+  on the two assay platforms, non-allowed endpoint rows (component). Resolves the
+  polymorphic assay shape inside its sex loop. Feeds the BMD summaries + narratives.</li>
+  <li><code>apply_section_filters(sections, *, sex_allow, assay_filters, organ_allowlist, ow_sex_allow, compound_name)</code> (339) —
+  filters <em>already-serialized</em> section cards. Prunes sexes, drops assay/organ
+  rows, and <b>rebuilds the Organ Weight caption</b> from the surviving rows
+  ("Liver Weights of <em>Male</em> Rats" is derived from what renders). <b>Always keeps
+  the structural <code>n</code> / <code>is_n_row</code> row</b> regardless of assay filter.</li>
+  <li><code>apply_genomics_cutoffs(genomics_sections, *, go_pct, go_min_genes, go_max_genes, go_min_bmd)</code> (883) —
+  re-applies the four GO cutoffs to a cutoff-agnostic superset; filters
+  <code>gene_sets_chart_by_stat</code> by <code>n_genes</code>/<code>n_genes_with_bmd</code>/pct
+  and re-slices the top-10 <code>gene_sets_by_stat</code> with fresh ranks.</li>
+  <li><code>filter_genomics_sections(sections, *, organ, sex, genes, gene_sets)</code>
+  (<span class="src">document_model/filters.py:174</span>) — the single genomics
+  organ/sex/gene/gene-set choke point, shared by compute and both export surfaces.</li>
+  <li><code>prune_card_sexes(card, sex_allow)</code> (448) — sex-prunes a single card;
+  used for sidecar cards (Tissue Concentration, Clinical Observations) that bypass
+  <code>platform_tables</code>.</li>
+</ul>
+
+<div class="rule">
+<strong>Gotcha — the display-relabel trap.</strong> The BMD summary's endpoint labels
+are display-relabeled (<code>"Neutrophil Count"</code> → <code>"Neutrophils"</code>),
+so it must be built from the <em>raw-label</em> filtered <code>platform_tables</code>,
+<b>not</b> by filtering the relabeled summary rows. See <code>_build_bmd_summary</code>.
+</div>
+
+<h3>4.2 Compute path (<span class="src">process_integrated.py</span>, <code>run_process</code>)</h3>
+<ol>
+  <li><b>NTP stats</b> → <code>platform_tables</code> (full superset). No filtering.</li>
+  <li><b><code>_get_sections</code></b> builds the superset cards (no filters), caches
+  them (<code>_hash_sections</code>, filter-agnostic), then <code>apply_section_filters</code>
+  after the read. Default-filtered <code>unified_narratives</code> are re-persisted into
+  the sections cache for the session-reload export.</li>
+  <li><b>BMDS</b> models <em>every</em> endpoint (superset), so its result cache serves any filter set.</li>
+  <li><b><code>_build_bmd_summary</code></b> builds from the superset, then rebuilds from an
+  <code>apply_apical_filters</code>-narrowed copy of <code>platform_tables</code>.</li>
+  <li><b><code>_get_genomics</code></b> extracts the superset with <b>cutoffs OFF</b>
+  (<code>_GO_CUTOFFS_OFF</code>, line 880), caches it (<code>_hash_genomics</code>, keyed only
+  on <code>bmd_stats</code>+<code>ge_filename</code>), then <code>apply_genomics_cutoffs</code>
+  and <code>filter_genomics_sections</code> after the read.</li>
+  <li><b><code>_build_charts</code></b> — chart cache key folds in the GO cutoffs directly
+  (because <code>genomics_hash</code> is cutoff-agnostic but charts render from the
+  cutoff-filtered sets).</li>
+</ol>
+
+<h3>4.3 Render / export path (<span class="src">latex_export.py::load_session_data</span>)</h3>
+<p>The Overleaf/session-reload export has no live payload — it reads the caches
+(supersets) and re-applies the version's filters, mirroring the compute step:</p>
+<ul>
+  <li><code>_resolve_apical_filters(dtxsid, version)</code> (259) → apical/organ-weight
+  allowlists as flat args; <code>apply_section_filters</code> projects the superset cards.</li>
+  <li><code>_resolve_go_cutoffs(dtxsid, version)</code> (298) → the version's GO cutoffs
+  (its <code>methods</code> block, else pipeline defaults); <code>apply_genomics_cutoffs</code>
+  then <code>filter_genomics_sections</code> project the genomics superset.</li>
+</ul>
+
+<!-- ========================================================= -->
+<h2 id="cache">5 · What is (and isn't) in a cache key</h2>
+<table>
+  <thead><tr><th>Cache</th><th>Keyed on</th><th>NOT keyed on</th></tr></thead>
+  <tbody>
+    <tr><td>NTP stats (<code>_hash_ntp</code>)</td><td>integrated identity, primary bmd_stat</td><td>filters</td></tr>
+    <tr><td>Sections (<code>_hash_sections</code>)</td><td>ntp hash, compound, dose_unit, sidecar hash, imputed_cells</td><td><span class="no">all filters</span> (phase 2)</td></tr>
+    <tr><td>BMD summary (<code>_hash_bmd_summary</code>)</td><td>ntp hash + bmds hash</td><td>filters</td></tr>
+    <tr><td>BMDS (<code>_hash_bmds</code>)</td><td>dose-response data + method version</td><td>bmd_stat, filters</td></tr>
+    <tr><td>Genomics (<code>_hash_genomics</code>)</td><td>bmd_stats, ge_filename</td><td><span class="no">GO cutoffs</span> (phase 4), organ/sex/gene filters</td></tr>
+    <tr><td>Charts</td><td>genomics_hash, chart style/types, <b>GO cutoffs</b></td><td>organ/sex/gene filters</td></tr>
+  </tbody>
+</table>
+<p>The consequence: two versions differing only in filters/cutoffs
+<span class="ok">share every compute cache</span> and re-project at render — no BMDS
+re-run, no Java re-extraction.</p>
+
+<!-- ========================================================= -->
+<h2 id="versions">6 · Versions — filters as a per-report projection</h2>
+<p><code>document_model/version_config.py</code> stores a version at
+<code>sessions/&lt;dtxsid&gt;/versions/&lt;name&gt;.yaml</code>:</p>
+<pre><code>document:  [ ...node entries... ]   # optional — structure (else global tree)
+filters:                            # optional — canonical shape (3.3)
+  sex:    {apical: {"*": [male]}}
+methods:                            # optional — GO cutoffs (+ future method opts)
+  go_pct: 10
+  go_min_bmd: 5
+charts:  [umap, cluster]            # optional — closed-vocab enable list</code></pre>
+<ul>
+  <li><code>DEFAULT_VERSION = "default"</code> (42) is <b>implicit</b> (no file required),
+  <b>undeletable</b>, and falls back to the global template — a session with no versions
+  renders exactly as before.</li>
+  <li><code>resolve_version_filters(dtxsid, name)</code> (138): a version's own
+  <code>filters</code>/<code>charts</code> win; else the global template's.</li>
+  <li><code>build_version_tree(dtxsid, name)</code> (161): the version's <code>document</code>,
+  else the legacy <code>document.yaml</code>, else the global <code>DOCUMENT_TREE</code>.</li>
+  <li>Version names are slug-validated (no <code>/ \ . ..</code>) so they can't escape <code>versions/</code>.</li>
+</ul>
+<p>CRUD: <code>GET/POST/DELETE /api/versions/{dtxsid}[/{name}]</code>
+(<span class="src">export_routes.py</span>). The render path takes a
+<code>version</code> arg (<code>load_session_data(..., version=…)</code>).</p>
+<div class="note">
+<strong>Net effect:</strong> process a DTXSID once; define N versions, each with its
+own structure + filters + GO cutoffs; each renders from the shared superset caches
+with zero reprocessing.
+</div>
+
+<!-- ========================================================= -->
+<h2 id="checklist">7 · Adding a new filter dimension — checklist</h2>
+<ol>
+  <li>Add a loader in <code>document_template.py</code> (or reuse <code>_load_per_area_block</code>
+  / <code>_load_flat_block</code>); register any new area in the relevant
+  <code>REPORT_*_AREAS</code> closed vocabulary.</li>
+  <li>Wire it into <code>normalize_filters</code> / <code>load_report_filters</code> so it
+  appears in the canonical shape.</li>
+  <li>Choose the predicate mode (<code>component</code> / <code>exact</code> / <code>dual</code>)
+  — reuse <code>filter_allows</code>; do not hand-roll matching.</li>
+  <li>Apply it <b>after</b> the relevant cache read (an <code>apply_*</code> function),
+  never in the cache key — unless it is a <em>generative</em> method option, in which
+  case key the cache per-slice instead.</li>
+  <li>If it affects charts or a display-relabeled table, mind the two gotchas: the
+  chart cache must fold in generative params, and summaries must filter on raw labels.</li>
+  <li>Add unit tests mirroring <code>test_filter_unification.py</code>,
+  <code>test_axis_filters.py</code>, <code>test_genomics_cutoffs.py</code>, plus a
+  byte-identical check that the default projection is unchanged.</li>
+</ol>
+
+<!-- ========================================================= -->
+<h2 id="followups">8 · Known follow-ups (not yet done)</h2>
+<ul>
+  <li><b>Per-version narrative regeneration at export.</b> The default version's
+  Overleaf narratives are correct, but a non-default version's narrative <em>prose</em>
+  is not yet regenerated at export (its tables are). The narratives are sex-generative
+  and cheap to regenerate; the hook is <code>load_session_data</code>.</li>
+  <li><b>Wizard version picker.</b> The version backend (store + CRUD + render wiring)
+  is complete and tested; the wizard UI does not yet expose a version selector.</li>
+</ul>
+
+</div>
+</main>
+</body>
+</html>

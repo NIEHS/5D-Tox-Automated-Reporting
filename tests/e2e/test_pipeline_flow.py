@@ -7,7 +7,7 @@ browser.  At each checkpoint the Playwright Inspector opens and waits for
 the tester to press "Resume".  A structured log is written to
 tests/test.log for a second terminal running `tail -f`.
 
-Golden fixture data: tests/fixtures/golden/DTXSID50469320/files/
+Golden fixture data: tests/fixtures/regression/given-pfhxsam-2026/files/
 This session has 6 .bm2 files + 12 txt/csv data files across Body Weight,
 Clinical Chemistry, Hematology, Hormones, Organ Weights, and Gene Expression.
 
@@ -27,8 +27,8 @@ from tests.e2e.conftest import check
 # Paths to golden fixture files — only the types the UI upload accepts
 # ---------------------------------------------------------------------------
 GOLDEN_FILES_DIR = (
-    Path(__file__).resolve().parent.parent / "fixtures" / "golden"
-    / "DTXSID50469320" / "files"
+    Path(__file__).resolve().parent.parent / "fixtures" / "regression"
+    / "given-pfhxsam-2026" / "files"
 )
 
 # .bm2 files (BMDExpress 3 project files — apical + genomics)

@@ -33,6 +33,8 @@ uv run python background_server.py --port 8080 --host 0.0.0.0
 
 Open `http://localhost:9000` in a browser. The login gate displays the usage guide — read it before proceeding.
 
+**Without the browser:** `python -m tooling.generate_report <DTXSID> --files …` runs the whole pipeline in-process, and `tooling/generate_report_api.sh` drives a running server with `curl`. See [`docs/headless-report-generation.html`](docs/headless-report-generation.html) (Markdown source: [`.md`](docs/headless-report-generation.md)).
+
 **Prerequisites:**
 - Python 3.12+
 - Java 21 JRE (for `.bm2` file processing via BMDExpress helper classes)
@@ -118,7 +120,6 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 |--------|---------|
 | `session_store.py` | On-disk session persistence with per-section version history |
 | `server_state.py` | Shared mutable state (upload registries, pool fingerprints) |
-| `style_learning.py` | Global writing style profile learned from user edits |
 | `java/` | Pre-compiled BMDExpress 3 helper classes (`.bm2` parsing, Williams/Dunnett tests) |
 
 ---

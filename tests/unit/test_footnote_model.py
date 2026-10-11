@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from table_builder_common import (
+from tables.table_builder_common import (
     legend_footnote,
     definition_footnote,
     lettered_footnote,
@@ -310,3 +310,20 @@ class TestBuildAttritionFootnote:
         )
         # Only males dead -> text says "male", not "male and female".
         assert record["text"].startswith("All male 1,000 mg/kg")
+
+    def test_removal_day_comes_from_the_sidecar(self):
+        # The removed animals' rows carry their (empty) observations on the
+        # day they left; the latest is the footnote's "by study day N".
+        def animal(day, sel="Core Animals"):
+            return {"dose": 1000.0, "selection": sel,
+                    "observations": [{"day": day, "endpoint": "Liver", "value": None}]}
+        sidecars = {"Male": {"animals": {"1": animal("SD3"), "2": animal("SD4"),
+                                         "9": animal("SD5", "Biosample Animals")}}}
+        total = {"Male": {1000.0: 2}}
+        core_n = {"Male": {1000.0: 0}}
+        record, _ = build_attrition_footnote(total, core_n, [1000.0], "mg/kg",
+                                             sidecar_data=sidecars)
+        assert record["text"].endswith("euthanized by study day 4.")
+        # No day recorded: never assumed.
+        record, _ = build_attrition_footnote(total, core_n, [1000.0], "mg/kg")
+        assert record["text"].endswith("euthanized before study termination.")

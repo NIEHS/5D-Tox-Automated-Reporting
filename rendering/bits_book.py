@@ -1,0 +1,591 @@
+"""
+rendering.bits_book — the report as a BITS <book>, shaped like the published one.
+
+The reports publish on NCBI Bookshelf as BITS books (NIEHS Report 10 =
+NBK589955).  This module builds the book SHELL — <collection-meta>, <book-meta>
+and the parts of <front-matter> / <book-body> / <book-back> — and reuses the
+block emitters of rendering.jats_generator (sections, tables, figures, freeform
+prose, xrefs) for what goes inside each part.
+
+ADR-0028: the structure is the published book's, and it is DECLARED in the
+template, not decided here.  Each top-level node names its BITS `element` and
+`book_part_type`; this module projects them:
+
+  element            emitted as
+  -----------------  ------------------------------------------------------------
+  book-meta          the title page: <book-title> (the title page's own title
+                     builder) + <subtitle> (the report number, when supplied)
+  abstract           <book-meta><abstract>, one <sec> per declared part
+  foreword           <foreword book-part-type=…> in <front-matter>
+  front-matter-part  <front-matter-part book-part-type=…>; the authors /
+                     contributors types list the session's roster
+  book-part          <book-part book-part-type=…> whose <body> holds the node's
+                     content directly (no repeated <sec>); a reference list's
+                     part holds <back><ref-list> of numbered <ref>s instead
+  book-app           <book-app book-part-type="appendix"> in <book-back>
+  ack                <ack>: title + prose, in the front matter
+  sec                a chapter as a top-level <sec> (title, content, sections)
+  ref-list           the numbered <ref-list>, titled, in the back matter
+  app                <app>: <label>Appendix A</label> + <title> + content
+  (none)             print-only nodes (toc, tables-list): Bookshelf builds its
+                     own table of contents
+
+ADR-0029: the definition's `packaging` decides the shell.  A chunked book
+(NIEHS-07 on) holds its parts in <front-matter> / <book-body> / <book-back>; a
+single-file book (RR-8, NIEHS-02 … 06) is one whole-book <book-part>, titled
+with the book title, whose <front-matter> / <body> / <back> hold them.  Which
+elements each packaging takes is render_capabilities.PACKAGING_PART_ELEMENTS.
+
+The series facts (collection, series title + ISSN, publisher, permissions) come
+from the template's `book_meta:` block; the study's (report number, DOI, date,
+authors) from the session's front matter, and are emitted only when supplied.
+Where a declared part has no content yet, a visible pending paragraph keeps the
+gap in view instead of dropping the part.
+"""
+
+from __future__ import annotations
+
+import copy
+import re
+from datetime import date
+
+from lxml import etree
+
+from document_model.document_node import DocNode
+from document_model.render_capabilities import PACKAGING_PART_ELEMENTS
+from document_model.document_tree import render_nodes, rendering_tree
+from rendering.jats_generator import E, _XLINK, _append_node, _p, _p_inline
+from rendering.render_common import (
+    front_matter_plan,
+    inline_plain_text,
+    resolve_narrative_content,
+)
+
+_BITS_DOCTYPE = (
+    '<!DOCTYPE book PUBLIC '
+    '"-//NLM//DTD BITS Book Interchange DTD v2.0 20151225//EN" '
+    '"BITS-book2.dtd">'
+)
+
+# The container each top-level node's part goes into, by packaging: a chunked
+# book's own regions, or those of a single-file book's whole-book <book-part>.
+_REGION_CONTAINER = {
+    "chunked": {"front": "front-matter", "body": "book-body", "back": "book-back"},
+    "single-file": {"front": "front-matter", "body": "body", "back": "back"},
+}
+
+# The roster-listing front-matter parts: the front matter's roster of the same
+# name (authors, contributors, collaborators), listed with the paragraph
+# content-types the NTP report grammar gives its person and affiliation styles
+# (document_model.ntp_grammar).
+_ROSTER_PARTS = ("authors", "contributors", "collaborators")
+
+_MONTHS = {m: i for i, m in enumerate(
+    ("january", "february", "march", "april", "may", "june", "july", "august",
+     "september", "october", "november", "december"), start=1)}
+
+
+# ---------------------------------------------------------------------------
+# Declarations: the series (template) and the study (front matter)
+# ---------------------------------------------------------------------------
+
+def book_meta_declaration(data: dict) -> dict:
+    """The series facts: `data["book_meta"]` when the caller supplies it, else
+    the active template's `book_meta:` block (ADR-0028 §6)."""
+    if isinstance(data.get("book_meta"), dict):
+        return data["book_meta"]
+    from document_model.document_template import load_book_meta
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return load_book_meta(ACTIVE_TEMPLATE)
+
+
+def _front_matter(data: dict) -> dict:
+    fm = data.get("front_matter")
+    return fm if isinstance(fm, dict) else {}
+
+
+def _publication(data: dict) -> dict:
+    pub = _front_matter(data).get("publication")
+    return pub if isinstance(pub, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# <collection-meta> + <book-meta>
+# ---------------------------------------------------------------------------
+
+def _collection_meta(decl: dict) -> list:
+    """The Bookshelf collection and the book series (title + ISSN), as the
+    published books carry them."""
+    out = []
+    collection = decl.get("collection") or {}
+    if collection.get("title"):
+        out.append(E("collection-meta", {"collection-type": "ncbi-books-collection"},
+                     E("title-group", E.title(str(collection["title"])))))
+    series = decl.get("series") or {}
+    if series.get("title") or series.get("issn"):
+        cm = E("collection-meta", {"collection-type": "book-series"})
+        if series.get("title"):
+            tg = E("title-group", E.title(str(series["title"])))
+            if series.get("acronym"):     # e.g. the NTP Research Report's "RR-CS"
+                tg.append(E("alt-title", {"alt-title-type": "pub-acronym-title"},
+                            str(series["acronym"])))
+            cm.append(tg)
+        if series.get("issn"):
+            cm.append(E.issn({"publication-format": "electronic"}, str(series["issn"])))
+        out.append(cm)
+    return out
+
+
+def _book_title(title_node: DocNode | None, data: dict) -> str:
+    """The book title: the title page's own title (its cover layout's title
+    builder), so the BITS title and the printed title page cannot differ."""
+    if title_node is not None:
+        from document_model.cover_layouts import get_cover_layout
+        builder = get_cover_layout(title_node.subtype).title_builder
+        if builder is not None:
+            title = " ".join(ln.strip() for ln in builder(data) if ln and ln.strip())
+            if title:
+                return title
+    return str(data.get("chemical_name") or data.get("title") or "Untitled Report")
+
+
+def _authors(data: dict) -> list[dict]:
+    return [a for a in _front_matter(data).get("authors") or []
+            if isinstance(a, dict) and (a.get("name") or "").strip()]
+
+
+def _name(full: str) -> etree._Element:
+    """A roster name as BITS <name name-style="western">.  The roster holds one
+    name string ("Scott S. Auerbach, Ph.D."); the StyleChecker requires the
+    parsed form, so the part before any comma (degrees, titles) is split at its
+    last space: surname = the last word, given-names = the rest."""
+    words = full.split(",", 1)[0].split()
+    name = E.name({"name-style": "western"}, E.surname(words[-1] if words else full.strip()))
+    if len(words) > 1:
+        name.append(E("given-names", " ".join(words[:-1])))
+    return name
+
+
+def _contrib_group(data: dict) -> list:
+    """<contrib-group content-type="authors"> + one <aff> per distinct
+    affiliation, from the author roster (nothing when no roster is supplied)."""
+    authors = _authors(data)
+    if not authors:
+        return []
+    affs: list[str] = []
+    for a in authors:
+        aff = (a.get("affiliation") or "").strip()
+        if aff and aff not in affs:
+            affs.append(aff)
+    cg = E("contrib-group", {"content-type": "authors"})
+    for a in authors:
+        contrib = E.contrib({"contrib-type": "author"}, _name(a["name"]))
+        aff = (a.get("affiliation") or "").strip()
+        if aff:
+            n = affs.index(aff) + 1
+            contrib.append(E.xref({"ref-type": "aff", "rid": f"aff-{n}"}, E.sup(str(n))))
+        cg.append(contrib)
+    return [cg] + [E.aff({"id": f"aff-{n}"}, E.label(str(n)), aff)
+                   for n, aff in enumerate(affs, start=1)]
+
+
+def _pub_date(data: dict) -> etree._Element:
+    """<pub-date> from the publication date the front matter (or data) states:
+    month + year when it names a month.  StyleChecker needs a parsed <year>;
+    before the report is dated the current year stands in as provisional —
+    NCBI stamps the authoritative date at publication."""
+    raw = str(_publication(data).get("report_date") or data.get("report_date") or "")
+    pub_date = E("pub-date", {"date-type": "pub", "publication-format": "electronic"})
+    month = next((n for name, n in _MONTHS.items() if name in raw.lower()), None)
+    if month:
+        pub_date.append(E.month(f"{month:02d}"))
+    m = re.search(r"\b(\d{4})\b", raw)
+    pub_date.append(E.year(m.group(1) if m else str(date.today().year)))
+    return pub_date
+
+
+def _abstract(node: DocNode, data: dict) -> etree._Element:
+    """<abstract> with one <sec> per DECLARED part (node.parts) in order — the
+    published Background / Methods / Results / Summary.  A part with no text
+    yet gets a visible pending paragraph; a labeled part the data holds but the
+    template does not declare is kept, after the declared ones.  A definition
+    that declares no parts (RR-8) has an unstructured abstract: one paragraph
+    per text, its label run in bold ("Background: …")."""
+    plan = front_matter_plan(node, data)
+    texts: dict[str, list[str]] = {}
+    current = ""
+    for label, body in (plan.labeled_parts if plan.kind == "labeled" else []):
+        current = label or current
+        if (body or "").strip():
+            texts.setdefault(current, []).append(body)
+    if not node.parts:
+        return _unstructured_abstract(node, texts)
+    declared = list(node.parts or [])
+    order = declared + [lbl for lbl in texts if lbl not in declared]
+    abstract = E.abstract({"id": "abstract1"}, E.title(node.title or "Abstract"))
+    n = 0
+    for i, label in enumerate(order, start=1):
+        sec = E.sec({"id": f"Sabs{i}"})
+        if label:
+            sec.append(E.title(label))
+        bodies = texts.get(label) or []
+        if not bodies:
+            bodies = [f"[Abstract {label or 'text'} pending: not yet generated for this study.]"]
+        for body in bodies:
+            n += 1
+            para = _p(body)
+            para.set("id", f"Pabs{n}")
+            sec.append(para)
+        abstract.append(sec)
+    return abstract
+
+
+def _unstructured_abstract(node: DocNode, texts: dict[str, list[str]]) -> etree._Element:
+    abstract = E.abstract({"id": "abstract1"}, E.title(node.title or "Abstract"))
+    n = 0
+    for label, bodies in texts.items():
+        for i, body in enumerate(bodies):
+            n += 1
+            para = _p(body)
+            para.set("id", f"Pabs{n}")
+            if label and i == 0:
+                run_in = E.bold(f"{label}:")
+                run_in.tail = " " + (para.text or "")
+                para.text = None
+                para.insert(0, run_in)
+            abstract.append(para)
+    if not n:
+        abstract.append(_pending(node, "not yet generated for this study"))
+    return abstract
+
+
+def _build_book_meta(data: dict, nodes: list[DocNode], decl: dict) -> etree._Element:
+    """<book-meta>, in the BITS content-model order: book-id, the title group,
+    authors + affiliations, pub-date, publisher, permissions, abstract."""
+    pub = _publication(data)
+    bm = E("book-meta")
+    if (pub.get("doi") or "").strip():
+        bm.append(E("book-id", {"book-id-type": "doi"}, pub["doi"].strip()))
+    title_node = next((n for n in nodes if n.element == "book-meta"), None)
+    btg = E("book-title-group", E("book-title", _book_title(title_node, data)))
+    if (pub.get("report_number") or "").strip():
+        btg.append(E.subtitle(pub["report_number"].strip()))
+    bm.append(btg)
+    for el in _contrib_group(data):
+        bm.append(el)
+    bm.append(_pub_date(data))
+    publisher = decl.get("publisher") or {}
+    name = str(publisher.get("name") or data.get("publisher") or "")
+    if name:
+        pub_el = E.publisher(E("publisher-name", name))
+        if publisher.get("loc"):
+            pub_el.append(E("publisher-loc", str(publisher["loc"])))
+        bm.append(pub_el)
+    permissions = decl.get("permissions") or {}
+    if permissions.get("statement"):
+        lic = E.license(E("license-p", str(permissions["statement"])))
+        if permissions.get("license_href"):
+            lic.set(f"{{{_XLINK}}}href", str(permissions["license_href"]))
+        bm.append(E.permissions(lic))
+    abstract_node = next((n for n in nodes if n.element == "abstract"), None)
+    if abstract_node is not None:
+        bm.append(_abstract(abstract_node, data))
+    return bm
+
+
+# ---------------------------------------------------------------------------
+# Parts
+# ---------------------------------------------------------------------------
+
+def _part_meta(node: DocNode, label: str | None = None) -> etree._Element:
+    title_group = E("title-group")
+    if label:
+        title_group.append(E.label(label))
+    title_group.append(E.title(node.title or ""))
+    return E("book-part-meta", title_group)
+
+
+def _part_attrs(node: DocNode, prefix: str) -> dict:
+    attrs = {"id": f"{prefix}-{node.id}"}
+    if node.book_part_type:
+        attrs["book-part-type"] = node.book_part_type
+    return attrs
+
+
+def _pending(node: DocNode, why: str = "content pending") -> etree._Element:
+    return E.p(f"[{node.title}: {why}.]")
+
+
+def _prose_blocks(node: DocNode, data: dict) -> list:
+    """The prose of a front-matter node as <p>s (a labeled node's parts as
+    titled <sec>s), via the shared narrative resolver."""
+    rc = resolve_narrative_content(node, data)
+    out: list = []
+    if rc.kind in ("paragraphs", "methods"):
+        for para in rc.paragraphs:
+            if inline_plain_text(para).strip():
+                out.append(_p_inline(para))
+    elif rc.kind == "labeled":
+        for label, btext in rc.labeled_parts:
+            if (btext or "").strip():
+                out.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
+    return out
+
+
+def _roster_blocks(node: DocNode, data: dict) -> list:
+    """An authors / contributors / collaborators part, as the published books
+    list it: a <list list-type="simple"> whose items go affiliation by
+    affiliation, and within one by contribution.  An affiliation's first item
+    opens with the affiliation (bold); an item for a contribution opens with it
+    (italic); then one line per person, "Name, Role".  Paragraph content-types
+    are the NTP report grammar's for the part (author / author-affiliation /
+    author-contributions, …).  Only what the roster states."""
+    from document_model.ntp_grammar import roster_content_types
+    types = roster_content_types(node.book_part_type)
+    roster = [p for p in _front_matter(data).get(node.book_part_type) or []
+              if isinstance(p, dict) and (p.get("name") or "").strip()]
+    if not roster:
+        return []
+    groups: dict[str, dict[str, list[dict]]] = {}
+    for person in roster:
+        aff = (person.get("affiliation") or "").strip()
+        contribution = (person.get("contribution") or "").strip()
+        groups.setdefault(aff, {}).setdefault(contribution, []).append(person)
+    lst = E("list", {"list-type": "simple", "list-content": "contributors"})
+    for aff, by_contribution in groups.items():
+        for i, (contribution, people) in enumerate(by_contribution.items()):
+            item = E("list-item")
+            if aff and i == 0:
+                item.append(E.p({"content-type": types["affiliation"]}, E.bold(aff)))
+            if contribution and types.get("contributions"):
+                item.append(E.p({"content-type": types["contributions"]},
+                                E.italic({"toggle": "yes"}, contribution)))
+            for person in people:
+                line = ", ".join(x for x in ((person.get("name") or "").strip(),
+                                             (person.get("role") or "").strip()) if x)
+                item.append(E.p({"content-type": types["person"]}, line))
+            lst.append(item)
+    return [lst]
+
+
+def _front_part(node: DocNode, data: dict) -> etree._Element:
+    """<foreword> / <front-matter-part>: title in <book-part-meta>, content in
+    <named-book-part-body> — its prose (or roster), then its own sections (the
+    RR-8 Peer Review's "Peer Reviewers")."""
+    blocks: list = []
+    if node.book_part_type in _ROSTER_PARTS:
+        blocks = _roster_blocks(node, data)
+        if not blocks:
+            blocks = _prose_blocks(node, data) or [
+                _pending(node, "not supplied for this study")]
+    else:
+        blocks = _prose_blocks(node, data) or [_pending(node)]
+    body = E("named-book-part-body", *blocks)
+    for child in node.children:
+        _append_node(body, child, data)
+    return E(node.element, _part_attrs(node, "fm"), _part_meta(node), body)
+
+
+_REF_NUMBER_RE = re.compile(r"^\s*\[(\d+)\]\s*")
+
+
+def _ref_list(node: DocNode, data: dict) -> etree._Element:
+    """<ref-list> of numbered <ref>s, one per reference paragraph.  The citation
+    keeps its text (<mixed-citation>); its "[n]" in-text number becomes the
+    <label>.  No references yet → a pending paragraph inside the list."""
+    rc = resolve_narrative_content(node, data)
+    if rc.kind in ("paragraphs", "methods"):
+        texts = [inline_plain_text(p) for p in rc.paragraphs]
+    elif rc.kind == "labeled":
+        texts = [btext for _label, btext in rc.labeled_parts]
+    else:
+        texts = []
+    rl = E("ref-list", {"id": "ref-list1"})
+    for i, text in enumerate((t.strip() for t in texts if t and t.strip()), start=1):
+        m = _REF_NUMBER_RE.match(text)
+        label = m.group(1) if m else str(i)
+        citation = text[m.end():] if m else text
+        rl.append(E.ref({"id": f"ref{i}"}, E.label(label), E("mixed-citation", citation)))
+    if not len(rl):
+        rl.append(_pending(node, "no references yet"))
+    return rl
+
+
+def _part_body(node: DocNode, data: dict) -> etree._Element:
+    """A body part's <body>: the node's own content, directly.  The node is
+    rendered through the shared block emitters and its own <sec> is unwrapped —
+    the part's <title-group> is its heading, so the body never repeats it."""
+    scratch = E.body()
+    _append_node(scratch, node, data)
+    body = E.body()
+    for el in list(scratch):
+        if el.tag == "sec" and el.get("id") == f"sec-{node.id}":
+            for child in list(el):
+                if child.tag not in ("label", "title"):
+                    body.append(child)
+        else:
+            body.append(el)
+    if not any(isinstance(c.tag, str) for c in body):
+        body.append(E.p(f"[Section pending: {node.title}]"))
+    return body
+
+
+def _book_part(node: DocNode, data: dict) -> etree._Element:
+    """<book-part>: the References list as <back><ref-list>, any other part as
+    <body>."""
+    meta = _part_meta(node)
+    if node.role == "ref-list":
+        return E("book-part", _part_attrs(node, "bp"), meta, E.back(_ref_list(node, data)))
+    return E("book-part", _part_attrs(node, "bp"), meta, _part_body(node, data))
+
+
+def _ack(node: DocNode, data: dict) -> etree._Element:
+    """<ack>: its title, then its prose."""
+    return E.ack({"id": f"ack-{node.id}"}, E.title(node.title or ""),
+                 *(_prose_blocks(node, data) or [_pending(node)]))
+
+
+def _titled_ref_list(node: DocNode, data: dict) -> etree._Element:
+    rl = _ref_list(node, data)
+    rl.insert(0, E.title(node.title or ""))
+    return rl
+
+
+def _as_app(book_app: etree._Element) -> etree._Element:
+    """The shared appendix emitter's <book-app> as an <app>: its label and title
+    directly on the element, its body's content after them."""
+    app = E.app({"id": book_app.get("id")})
+    tg = book_app.find("book-part-meta/title-group")
+    for tag in ("label", "title"):
+        el = tg.find(tag) if tg is not None else None
+        if el is not None:
+            app.append(copy.deepcopy(el))
+    body = book_app.find("body")
+    for child in (list(body) if body is not None else []):
+        app.append(child)
+    return app
+
+
+def _part(node: DocNode, data: dict) -> list:
+    """The part(s) a top-level node contributes to its region container."""
+    element = node.element
+    if element in ("foreword", "front-matter-part"):
+        return [_front_part(node, data)]
+    if element == "book-part":
+        return [_book_part(node, data)]
+    if element == "ack":
+        return [_ack(node, data)]
+    if element == "ref-list":
+        return [_titled_ref_list(node, data)]
+    if element in ("book-app", "app", "sec"):
+        holder = E.x()
+        _append_node(holder, node, data)   # the shared emitter (+ any protection
+        parts = list(holder)               # marker comment before it)
+        if element == "app":
+            parts = [_as_app(p) if p.tag == "book-app" else p for p in parts]
+        return parts
+    return []   # book-meta / abstract (in <book-meta>) and print-only nodes
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def _object_position(data: dict) -> dict:
+    """Where the definition places tables and figures, per region (ADR-0029):
+    `data["object_position"]` when the caller supplies the study's, else the
+    active template's."""
+    if isinstance(data.get("object_position"), dict):
+        return data["object_position"]
+    from document_model.document_template import load_object_position
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return load_object_position(ACTIVE_TEMPLATE)
+
+
+def _packaging(data: dict) -> str:
+    """How the book is packaged (ADR-0029): `data["packaging"]` when the caller
+    supplies the study's, else the active template's."""
+    if data.get("packaging"):
+        return data["packaging"]
+    from document_model.document_template import load_packaging
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return load_packaging(ACTIVE_TEMPLATE)
+
+
+def _whole_book_part(book_meta: etree._Element, containers: dict) -> etree._Element:
+    """A single-file book's one <book-part>: titled with the book title (and
+    subtitle), holding the front matter, body and back."""
+    title_group = E("title-group")
+    btg = book_meta.find("book-title-group")
+    if btg is not None and btg.find("book-title") is not None:
+        title = copy.deepcopy(btg.find("book-title"))
+        title.tag = "title"
+        title_group.append(title)
+        for sub in btg.findall("subtitle"):
+            title_group.append(copy.deepcopy(sub))
+    part = E("book-part", {"id": "book", "book-part-type": "section"},
+             E("book-part-meta", title_group))
+    for region in ("front-matter", "body", "back"):
+        if region in containers:
+            part.append(containers[region])
+    return part
+
+
+def build_book(data: dict, tree=None) -> etree._Element:
+    """The BITS <book> element for a report (see the module docstring).  `tree`
+    is the study's document tree (its definition or view), else DOCUMENT_TREE."""
+    nodes = render_nodes(data, tree)                # this study's tree, numbered
+    with rendering_tree(nodes):                     # cross-references number from it
+        return _build_book(data, nodes)
+
+
+def _build_book(data: dict, nodes: list) -> etree._Element:
+    decl = book_meta_declaration(data)
+    # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
+    # with the literal "xlink" prefix the BITS/JATS DTD fixes (an auto-assigned
+    # ns0 prefix is rejected: "No declaration for attribute href").
+    book = etree.Element("book", {"dtd-version": "2.0"}, nsmap={"xlink": _XLINK})
+    for cm in _collection_meta(decl):
+        book.append(cm)
+    book_meta = _build_book_meta(data, nodes, decl)
+    book.append(book_meta)
+    packaging = _packaging(data)
+    allowed = PACKAGING_PART_ELEMENTS[packaging]
+    region_container = _REGION_CONTAINER[packaging]
+    containers: dict[str, etree._Element] = {}
+    positions = _object_position(data)
+    for node in nodes:
+        if node.element is not None and node.element not in allowed:
+            raise ValueError(f"node {node.id!r} is a <{node.element}>, which a {packaging} "
+                             f"book does not hold (it holds {sorted(allowed)})")
+        parts = _part(node, data)
+        if not parts:
+            continue
+        region = region_container[node.region or "body"]
+        if region not in containers:
+            containers[region] = E(region)
+        # Floating objects show on Bookshelf as a card that opens the object,
+        # anchored ones in full in the text; the definition says which, per
+        # region.
+        position = positions.get(node.region or "body")
+        for part in parts:
+            for obj in part.iter("table-wrap", "fig"):
+                if position and obj.get("position") is None:
+                    obj.set("position", position)
+            containers[region].append(part)
+    if packaging == "single-file":
+        book.append(E("book-body", _whole_book_part(book_meta, containers)))
+        return book
+    for region in ("front-matter", "book-body", "book-back"):
+        if region in containers:
+            book.append(containers[region])
+    return book
+
+
+def generate_bits(data: dict, tree=None) -> str:
+    """Project the report to a BITS <book> XML string (the Bookshelf submission
+    form): XML declaration + BITS 2.0 DOCTYPE + the book."""
+    return etree.tostring(
+        build_book(data, tree), xml_declaration=True, encoding="UTF-8", pretty_print=True,
+        doctype=_BITS_DOCTYPE,
+    ).decode("utf-8")

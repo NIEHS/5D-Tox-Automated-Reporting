@@ -8,7 +8,6 @@ The actual integration (Java-backed) is mocked; we test the endpoint wiring:
   - Caches result in _integrated_pool and writes integrated.json
 """
 
-import json
 
 import pytest
 
@@ -39,13 +38,13 @@ class TestPoolIntegrate:
             },
         }
 
-    def test_integrate_returns_200(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_returns_200(self, given_pfhxsam, mock_bmdx_pipe):
         """
         Given a validated session with fingerprints and coverage matrix,
         integration should succeed and return 200.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 
@@ -62,15 +61,15 @@ class TestPoolIntegrate:
         )
         assert resp.status_code == 200, f"Integrate failed: {resp.text}"
 
-    def test_integrate_caches_in_memory(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_caches_in_memory(self, given_pfhxsam, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool dict.
 
         Note: integrated.json is written by bmdx_pipe.integrate_pool() itself
         (which is mocked here), so we verify the in-memory cache instead.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
-        import pool_orchestrator
+        from web_routes.background_server import app
+        import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 
@@ -85,11 +84,11 @@ class TestPoolIntegrate:
         cached = pool_orchestrator._integrated_pool["DTXSID50469320"]
         assert "doseResponseExperiments" in cached
 
-    def test_integrate_populates_memory(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_populates_memory(self, given_pfhxsam, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool."""
         from fastapi.testclient import TestClient
-        from background_server import app
-        import pool_orchestrator
+        from web_routes.background_server import app
+        import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 
@@ -105,7 +104,7 @@ class TestPoolIntegrate:
     def test_integrate_without_validation_returns_400(self, sessions_dir):
         """Integration without prior validation should fail (no fingerprints)."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
@@ -121,7 +120,7 @@ class TestPoolIntegrate:
     def test_integrate_without_files_returns_404(self, sessions_dir):
         """Integration with no files/ directory returns 404."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         (sessions_dir / "DTXSID_EMPTY").mkdir(parents=True)

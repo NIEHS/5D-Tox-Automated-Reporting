@@ -1,0 +1,248 @@
+# eras/niehs-2026 — the NIEHS Report as published in 2026 (NIEHS-12, 13: whole-
+# body inhalation studies, NBK621711 / NBK621744).  ADR-0029: the 2023
+# generation (eras/niehs-2023, chunked) plus what these books do differently.
+# A published study of this generation extends this file.
+#
+# These books report a rat study and a mouse study together (ADR-0029 §9,
+# rendering.report_compose).  Their per-study and per-tissue sections are
+# repeats (document_tree.repeat_items): one Study Design per study; the
+# combined tables of each apical result with the result for each study under
+# it; each study's internal concentrations; and Heart … Ovary under the gene
+# set and gene analyses, each with its studies.  Which studies and tissues
+# there are is the report's data; that they are written this way is this file.
+extends: eras/niehs-2023
+# The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
+tissue_order: []
+
+changes:
+  # ── Materials and Methods: Chemistry first, with the test article's
+  # procurement and the vapor generation, monitoring and chamber atmosphere.
+  - move: mm-chemistry
+    before: mm-study-design
+  - insert:
+    - {id: mm-chem-procurement, type: narrative, data_key: methods,
+       title: "Procurement and Characterization of ${chemical_name}",
+       methods_key: chemistry_procurement}
+    - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
+       title: Vapor Generation and Exposure System, methods_key: vapor_generation}
+    - {id: mm-chem-vapor-monitoring, type: narrative, data_key: methods,
+       title: Vapor Concentration Monitoring, methods_key: vapor_monitoring}
+    - {id: mm-chem-chamber, type: narrative, data_key: methods,
+       title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere}
+    into: mm-chemistry
+  - set: mm-study-design
+    title: "Study Design for ${species}"
+    repeat: study_species
+  - set: mm-dose-rationale
+    title: Exposure Concentration Selection Rationale
+  - set: mm-internal-dose
+    title: Internal Concentration Assessment
+
+  # ── Results: the apical results grouped; a summary closing the gene set
+  # analysis; the theoretical inhaled dose, then the internal concentrations.
+  - insert:
+    - {id: apical-analysis, type: heading-only, title: Apical Endpoint Analysis}
+    into: results
+    at: first
+  - move: animal-condition
+    into: apical-analysis
+  - move: clinical-path
+    into: apical-analysis
+  - move: bmd-summary
+    into: apical-analysis
+  # The 2026 captions name the animals and their treatment (", for Female Rats
+  # and Mice Exposed to 1,4-Dichlorobenzene for Five Days"), each table those
+  # it has data for.
+  - set: bmd-summary
+    caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High, for ${subject} ${treatment}"
+  - set: gene-sets
+    caption_suffix: ", for ${subject} ${treatment}"
+  - set: gene-bmd
+    caption_suffix: ", for ${subject} ${treatment}"
+  - insert:
+    - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
+       data_key: gene_set_summary}
+    into: gene-sets
+  - insert:
+    - {id: theoretical-inhaled-dose, type: narrative+tables, title: Theoretical Inhaled Dose,
+       narrative_key: theoretical_inhaled_dose}
+    after: gene-bmd
+  - move: internal-dose
+    after: theoretical-inhaled-dose
+  - set: internal-dose
+    title: Internal Concentration Assessment
+
+  # ── Each study's results under the tables the studies share; each study's
+  # internal concentrations (its own table); each tissue's gene set and gene
+  # results per study.
+  - set: animal-condition
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: animal-condition-study, type: narrative+tables, title: "${species}",
+       narrative_key: animal_condition, repeat: study_species}
+    into: animal-condition
+  # The tables the studies share stand under the first study's heading, after
+  # its prose (NIEHS-13 Tables 2 and 3 under "Rats").
+  - move: table-body-weight
+    into: animal-condition-study
+  - move: table-organ-weight
+    into: animal-condition-study
+  - set: table-body-weight
+    first_copy: true
+  - set: table-organ-weight
+    first_copy: true
+  - move: table-hematology          # hematology before clinical chemistry (NIEHS-13)
+    before: table-clin-chem
+  - set: clinical-path
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: clinical-path-study, type: narrative+tables, title: "${species}",
+       narrative_key: clinical_pathology, repeat: study_species}
+    into: clinical-path
+  - move: table-hematology
+    into: clinical-path-study
+  - move: table-clin-chem
+    into: clinical-path-study
+  - set: table-hematology
+    first_copy: true
+  - set: table-clin-chem
+    first_copy: true
+  - set: internal-dose
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: internal-dose-study, type: narrative+tables, title: "${species}",
+       narrative_key: internal_dose, repeat: study_species}
+    into: internal-dose
+  - move: table-tissue-conc
+    into: internal-dose-study
+  - insert:
+    - id: gene-set-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-set-tissue-study, type: narrative, title: "${species}",
+         data_key: gene_set_narrative, repeat: study_species}
+    before: gene-set-summary
+  - insert:
+    - id: gene-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-tissue-study, type: narrative, title: "${species}",
+         data_key: gene_narrative, repeat: study_species}
+    into: gene-bmd
+
+  # ── Appendices A–G ───────────────────────────────────────────────────────
+  # A: how the chamber concentrations were generated (the study's own text).
+  - insert:
+    - id: appendix-chamber
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Chemical Characterization and Generation of Chamber Concentrations
+      children:
+      - id: appendix-chamber-procurement
+        type: heading-only
+        title: "Procurement and Characterization of ${chemical_name}"
+        children:
+        - {id: appendix-chamber-procurement-text, type: freeform-block, title: "",
+           session_content: chamber-procurement,
+           missing_content_text: "The test article's procurement and characterization are not supplied for this study."}
+      - id: appendix-chamber-vapor-generation
+        type: heading-only
+        title: Vapor Generation and Exposure System
+        children:
+        - {id: appendix-chamber-vapor-generation-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-generation,
+           missing_content_text: "The vapor generation and exposure system are not supplied for this study."}
+      - id: appendix-chamber-vapor-monitoring
+        type: heading-only
+        title: Vapor Concentration Monitoring
+        children:
+        - {id: appendix-chamber-vapor-monitoring-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-monitoring,
+           missing_content_text: "The vapor concentration monitoring is not supplied for this study."}
+      - id: appendix-chamber-atmosphere
+        type: heading-only
+        title: Chamber Atmosphere Characterization
+        children:
+        - {id: appendix-chamber-atmosphere-text, type: freeform-block, title: "",
+           session_content: chamber-atmosphere,
+           missing_content_text: "The chamber atmosphere characterization is not supplied for this study."}
+    before: appendix-a
+  # B: the internal concentration method (the study's appendix-a content, with
+  # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
+  - set: appendix-a
+    title: Internal Concentration Assessment
+  - move: appendix-a-body
+    into: appendix-a
+  - remove: appendix-a-quantitation
+  # C: each study's animals and their sequencing files, one table per study.
+  - set: table-b-1
+    title: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
+    caption: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
+    repeat: study_species
+  # No BMDS model-selection appendix; E defines the top gene sets' genes.
+  - remove: appendix-d
+  - insert:
+    - id: appendix-gene-definitions
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Gene Set and Gene Definitions
+      children:
+      - {id: table-gene-definitions, type: data-table,
+         title: Active Genes and Definitions within the Top 10 Gene Ontology Biological Process Gene Sets,
+         data_key: appendix_gene_definitions_matrix}
+    after: appendix-c
+  # G: Supplemental Data opens with the materials and methods and the
+  # theoretical inhaled dose, lists each species' files in its own section
+  # ("G.3 Rats", "G.4 Mice": one per species of the deposit), and closes with
+  # the software.  The lists are derived from the study's data deposit.
+  - insert:
+    - id: appendix-f-methods
+      type: heading-only
+      title: Materials and Methods
+      children:
+      - {id: appendix-f-methods-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: methods}
+    - id: appendix-f-inhaled-dose
+      type: heading-only
+      title: Theoretical Inhaled Dose
+      children:
+      - {id: appendix-f-inhaled-dose-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: inhaled-dose}
+    - {id: appendix-f-species, type: heading-only, title: Species, repeat: deposit_species}
+    after: appendix-f-body
+  - move: appendix-f-apical
+    into: appendix-f-species
+  - move: appendix-f-genomic
+    into: appendix-f-species
+  - move: appendix-f-tables
+    into: appendix-f-species
+  - move: appendix-f-animals
+    into: appendix-f-species
+  - insert:
+    - id: appendix-f-software
+      type: heading-only
+      title: Software
+      children:
+      - id: appendix-f-pipeline-evaluation
+        type: heading-only
+        title: Analysis Pipeline Evaluation
+        children:
+        - {id: appendix-f-pipeline-evaluation-files, type: supplementary-material,
+           binding: derived, title: "", deposit_group: software}
+      - id: appendix-f-bmdexpress-preview
+        type: heading-only
+        title: BMDExpress Preview Software
+        children:
+        - {id: appendix-f-bmdexpress-preview-text, type: freeform-block, title: "",
+           session_content: supplemental-bmdexpress-preview,
+           missing_content_text: "The BMDExpress preview software is not supplied for this study."}
+    into: appendix-f

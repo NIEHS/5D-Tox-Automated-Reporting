@@ -1,0 +1,236 @@
+{
+  "_README": "Characterization contract for the JS phase machine (web/js/pool_state.js), the source of truth being ported to workflow/phases.py per ADR-0014. Inputs + hand-authored `expected` outputs are the LOCKED contract. tests/tools/gen_phase_oracle.mjs runs these inputs through the REAL pool_state.js and (a) asserts real-JS output equals `expected` here — catching any human misreading of the JS — and (b) emits workflow_phase_oracle.json. The Python port must reproduce this table byte-for-byte. Shapes verified 2026-08-13 against bmdx_pipe file_integrator._build_coverage_matrix (cell = {xlsx: fid|null, txt_csv: [fids], bm2: fid|null}; compound key 'Platform|data_type' or bare 'gene_expression').",
+
+  "_EVOLVING_THIS_CONTRACT": {
+    "what_it_locks": "This pins CURRENT OBSERVABLE BEHAVIOR at sampled input points — outputs, not the port's internals (a dict or a dataclass both pass) and not the set of cases. It is a sampling, not a specification: behavior no case exercises can change silently, so the risk is UNDER-coverage, never over-rigidity. When you find an untested corner, that is a case to ADD (procedure 1), not a flaw in what is locked.",
+    "1_add_coverage": "A case you didn't think of. Append it to the relevant array (derive_phase / section_completeness / node_complete), then regenerate: `node tests/tools/gen_phase_oracle.mjs` (or, post-cutover, the Python successor). You are widening the net, not moving it. No tension. Encouraged.",
+    "2_change_a_requirement": "A rule genuinely changed (new phase, new platform, e.g. gene_expression now needs xlsx). Change it AT THE SOURCE first, as its own deliberate commit: edit web/js/pool_state.js (pre-cutover) or workflow/phases.py (post-cutover), THEN regenerate the oracle from that source. The `expected` values here update to match the new reality. The contract does not resist this — it just forces 'I am changing behavior' to be an explicit, reviewable act rather than a side effect buried in the port.",
+    "3_forbidden": "Do NOT edit an `expected` value (or hand-edit the generated oracle) to make a red port turn green. That is 'I changed behavior while pretending to preserve it' — the one thing this test exists to fight. The always-on oracle-sync guard (test_oracle_matches_case_table) makes it tamper-EVIDENT: the oracle is GENERATED from the source, so a faked value shows up as a suspicious hand-edit to a generated file. If a port case is red, the port is wrong (procedure 2 if the requirement really changed), not the table.",
+    "source_of_truth_inverts_at_cutover": "While pool_state.js still holds the phase logic, the oracle is generated FROM the JS (correct for the port window). Once ADR-0014 migration step 5 deletes derivePoolPhase/the completeness fns from pool_state.js, the Node generator can no longer read them — Python becomes the source of truth, and gen_phase_oracle.mjs must be replaced by a gen_phase_oracle.py that regenerates the same oracle from the port. Tracked as an ADR-0014 follow-up."
+  },
+
+  "derive_phase": [
+    {
+      "name": "no_files_is_empty",
+      "why": "Branch 1: !hasFiles wins. All downstream flags set to prove the gate short-circuits.",
+      "input": {"hasFiles": false, "hasStale": true, "validationReport": {"issues": []}, "hasValidationErrors": true, "hasIntegrated": true, "hasAnimalReport": true},
+      "expected": "EMPTY"
+    },
+    {
+      "name": "files_no_validation_is_uploaded",
+      "why": "Branch 3: files exist, no validation report yet.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": null, "hasValidationErrors": false, "hasIntegrated": false, "hasAnimalReport": false},
+      "expected": "UPLOADED"
+    },
+    {
+      "name": "stale_regresses_to_uploaded_over_everything",
+      "why": "EDGE (accreted): hasStale beats a fully-approved artifact set. Pool mutated after approval must force re-validate. Branch 2 precedes integrated/approved branches.",
+      "input": {"hasFiles": true, "hasStale": true, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": true, "hasAnimalReport": true},
+      "expected": "UPLOADED"
+    },
+    {
+      "name": "stale_beats_validation_errors",
+      "why": "EDGE: stale precedence over VALIDATION_ERRORS branch too.",
+      "input": {"hasFiles": true, "hasStale": true, "validationReport": {"issues": [{"severity": "error"}]}, "hasValidationErrors": true, "hasIntegrated": false, "hasAnimalReport": false},
+      "expected": "UPLOADED"
+    },
+    {
+      "name": "validation_errors",
+      "why": "Branch 4: validated, errors present.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": [{"severity": "error"}]}, "hasValidationErrors": true, "hasIntegrated": false, "hasAnimalReport": false},
+      "expected": "VALIDATION_ERRORS"
+    },
+    {
+      "name": "validated_clean_not_integrated",
+      "why": "Branch 5: validation report present, no errors, not yet integrated.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": false, "hasAnimalReport": false},
+      "expected": "VALIDATED"
+    },
+    {
+      "name": "integrated_not_approved",
+      "why": "Branch 6: integrated exists, no animal report (not approved).",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": true, "hasAnimalReport": false},
+      "expected": "INTEGRATED"
+    },
+    {
+      "name": "fully_approved",
+      "why": "Branch 7 (fall-through): everything present.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": true, "hasAnimalReport": true},
+      "expected": "APPROVED"
+    },
+    {
+      "name": "independent_flags_integrated_true_animal_false",
+      "why": "CONTRACT NOTE: derivePoolPhase treats hasIntegrated and hasAnimalReport as INDEPENDENT, even though the web caller (chemical.js) currently conflates both to !!data.animal_report. The port will feed them SEPARATELY (integrated.json exists vs animal_report.json exists) — more correct — so the pure function must honor the independent contract. This case pins it.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": true, "hasAnimalReport": false},
+      "expected": "INTEGRATED"
+    },
+    {
+      "name": "validation_report_present_errors_flag_false_takes_precedence_over_missing_integrated",
+      "why": "EDGE: ordering — a present clean report with no integration lands on VALIDATED, not something further along.",
+      "input": {"hasFiles": true, "hasStale": false, "validationReport": {"issues": [{"severity": "warning"}]}, "hasValidationErrors": false, "hasIntegrated": false, "hasAnimalReport": false},
+      "expected": "VALIDATED"
+    }
+  ],
+
+  "section_completeness": [
+    {
+      "name": "body_weight_complete",
+      "why": "Apical platform with both tox-study and bm2 → complete.",
+      "input": {"Body Weight|tox_study": {"xlsx": null, "txt_csv": ["f1"], "bm2": "f2"}},
+      "expected": {"Body Weight": {"hasToxStudy": true, "hasBm2": true, "complete": true, "missing": []}}
+    },
+    {
+      "name": "body_weight_missing_bm2",
+      "why": "Apical missing bm2 → one missing message.",
+      "input": {"Body Weight|tox_study": {"xlsx": null, "txt_csv": ["f1"], "bm2": null}},
+      "expected": {"Body Weight": {"hasToxStudy": true, "hasBm2": false, "complete": false, "missing": ["Requires .bm2 for BMD/BMDL values"]}}
+    },
+    {
+      "name": "body_weight_missing_tox",
+      "why": "Apical missing study data → study-data message.",
+      "input": {"Body Weight|tox_study": {"xlsx": null, "txt_csv": [], "bm2": "f2"}},
+      "expected": {"Body Weight": {"hasToxStudy": false, "hasBm2": true, "complete": false, "missing": ["Requires study data (.txt/.csv) for NTP statistics"]}}
+    },
+    {
+      "name": "body_weight_missing_both",
+      "why": "Apical missing both → BOTH messages, in source order (tox first, then bm2).",
+      "input": {"Body Weight|tox_study": {"xlsx": null, "txt_csv": [], "bm2": null}},
+      "expected": {"Body Weight": {"hasToxStudy": false, "hasBm2": false, "complete": false, "missing": ["Requires study data (.txt/.csv) for NTP statistics", "Requires .bm2 for BMD/BMDL values"]}}
+    },
+    {
+      "name": "apical_xlsx_counts_as_toxstudy",
+      "why": "EDGE: hasToxStudy = xlsx OR txt_csv>0. An apical platform with xlsx-only study data + bm2 is complete.",
+      "input": {"Hormones|tox_study": {"xlsx": "f1", "txt_csv": [], "bm2": "f2"}},
+      "expected": {"Hormones": {"hasToxStudy": true, "hasBm2": true, "complete": true, "missing": []}}
+    },
+    {
+      "name": "clinical_alias_collapses_and_completes",
+      "why": "EDGE (accreted): fingerprinter emits short name 'Clinical'; PLATFORM_ALIASES maps it to 'Clinical Observations'. Clinical Observations needs only tox-study (CSV incidence), no bm2 → complete.",
+      "input": {"Clinical|tox_study": {"xlsx": null, "txt_csv": ["f1"], "bm2": null}},
+      "expected": {"Clinical Observations": {"hasToxStudy": true, "hasBm2": false, "complete": true, "missing": []}}
+    },
+    {
+      "name": "clinical_observations_missing_csv",
+      "why": "Clinical Observations with no study data → its own message.",
+      "input": {"Clinical|x": {"xlsx": null, "txt_csv": [], "bm2": null}},
+      "expected": {"Clinical Observations": {"hasToxStudy": false, "hasBm2": false, "complete": false, "missing": ["Requires clinical observation CSV data"]}}
+    },
+    {
+      "name": "tissue_concentration_xlsx_complete",
+      "why": "Tissue Concentration needs xlsx sidecar only (no bm2 columns).",
+      "input": {"Tissue Concentration|biosampling": {"xlsx": "f1", "txt_csv": [], "bm2": null}},
+      "expected": {"Tissue Concentration": {"hasToxStudy": true, "hasBm2": false, "complete": true, "missing": []}}
+    },
+    {
+      "name": "tissue_concentration_txt_only_still_incomplete",
+      "why": "EDGE: hasToxStudy is TRUE (txt_csv>0) yet the platform is INCOMPLETE because the check is specifically `if (!tiers.xlsx)`. Proves the completeness gate is per-platform-specific, not just hasToxStudy.",
+      "input": {"Tissue Concentration|x": {"xlsx": null, "txt_csv": ["f1"], "bm2": null}},
+      "expected": {"Tissue Concentration": {"hasToxStudy": true, "hasBm2": false, "complete": false, "missing": ["Requires .xlsx with Biosampling Animal data"]}}
+    },
+    {
+      "name": "gene_expression_bare_key_complete",
+      "why": "Genomics uses the bare 'gene_expression' key (no compound), needs bm2 with gene-expression data.",
+      "input": {"gene_expression": {"xlsx": null, "txt_csv": [], "bm2": "f1"}},
+      "expected": {"gene_expression": {"hasToxStudy": false, "hasBm2": true, "complete": true, "missing": []}}
+    },
+    {
+      "name": "gene_expression_missing_bm2",
+      "why": "Genomics without bm2 → genomics-specific message.",
+      "input": {"gene_expression": {"xlsx": null, "txt_csv": [], "bm2": null}},
+      "expected": {"gene_expression": {"hasToxStudy": false, "hasBm2": false, "complete": false, "missing": ["Requires .bm2 with gene expression data"]}}
+    },
+    {
+      "name": "unknown_platform_defaults_complete",
+      "why": "EDGE: a platform in NO requirement branch (not apical, not tissue/clinical/gene) has no missing list → complete:true with empty missing. Prevents the port from over-restricting.",
+      "input": {"Peer Review|x": {"xlsx": null, "txt_csv": ["f1"], "bm2": null}},
+      "expected": {"Peer Review": {"hasToxStudy": true, "hasBm2": false, "complete": true, "missing": []}}
+    },
+    {
+      "name": "compound_keys_collapse_and_merge_tiers",
+      "why": "EDGE: two compound keys for the same platform collapse into ONE platform, MERGING tiers (bm2 from one, txt_csv from the other) → complete. Pins the collapse/merge behavior.",
+      "input": {"Body Weight|tox_study": {"xlsx": null, "txt_csv": [], "bm2": "a"}, "Body Weight|other": {"xlsx": null, "txt_csv": ["b"], "bm2": null}},
+      "expected": {"Body Weight": {"hasToxStudy": true, "hasBm2": true, "complete": true, "missing": []}}
+    },
+    {
+      "name": "empty_matrix_yields_empty_map",
+      "why": "Empty coverage matrix → empty completeness map.",
+      "input": {},
+      "expected": {}
+    }
+  ],
+
+  "document_tree": [
+    {"id": "background", "title": "Background"},
+    {"id": "table-body-weight", "title": "Body Weights", "platform": "Body Weight"},
+    {"id": "animal-condition", "title": "Animal Condition", "children": [
+      {"id": "t-bw", "platform": "Body Weight"},
+      {"id": "t-ow", "platform": "Organ Weight"}
+    ]},
+    {"id": "narrative-group", "title": "Interpretation", "children": [
+      {"id": "prose-1", "title": "Prose"}
+    ]}
+  ],
+
+  "node_complete": [
+    {
+      "name": "non_data_node_always_complete",
+      "why": "A node with neither platform nor children (narrative/front matter) is always complete.",
+      "input": {"nodeId": "background", "completeness": {"Body Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": true, "missing": []}
+    },
+    {
+      "name": "leaf_complete_when_platform_complete",
+      "why": "Leaf table node inherits its platform's completeness.",
+      "input": {"nodeId": "table-body-weight", "completeness": {"Body Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": true, "missing": []}
+    },
+    {
+      "name": "leaf_incomplete_propagates_missing",
+      "why": "Leaf node surfaces the platform's missing list verbatim.",
+      "input": {"nodeId": "table-body-weight", "completeness": {"Body Weight": {"complete": false, "missing": ["Requires .bm2 for BMD/BMDL values"]}}},
+      "expected": {"complete": false, "missing": ["Requires .bm2 for BMD/BMDL values"]}
+    },
+    {
+      "name": "leaf_platform_absent_from_map",
+      "why": "EDGE: leaf whose platform has no completeness entry → its own 'No data for platform' message.",
+      "input": {"nodeId": "table-body-weight", "completeness": {"Organ Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": false, "missing": ["No data for platform: Body Weight"]}
+    },
+    {
+      "name": "group_complete_when_all_children_complete",
+      "why": "Group node complete only if ALL child table nodes complete.",
+      "input": {"nodeId": "animal-condition", "completeness": {"Body Weight": {"complete": true, "missing": []}, "Organ Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": true, "missing": []}
+    },
+    {
+      "name": "group_incomplete_labels_child_by_platform",
+      "why": "EDGE: a child with no title falls back to child.platform as its label; the group aggregates 'Label: reasons'.",
+      "input": {"nodeId": "animal-condition", "completeness": {"Body Weight": {"complete": true, "missing": []}, "Organ Weight": {"complete": false, "missing": ["Requires .bm2 for BMD/BMDL values"]}}},
+      "expected": {"complete": false, "missing": ["Organ Weight: Requires .bm2 for BMD/BMDL values"]}
+    },
+    {
+      "name": "group_child_platform_absent_from_map",
+      "why": "EDGE: group child whose platform is missing from the map → 'No data for <platform>' inside the aggregated label.",
+      "input": {"nodeId": "animal-condition", "completeness": {"Body Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": false, "missing": ["Organ Weight: No data for Organ Weight"]}
+    },
+    {
+      "name": "group_with_no_table_children_is_complete",
+      "why": "EDGE: a group whose children have no platform (pure prose) has nothing to gate on → complete.",
+      "input": {"nodeId": "narrative-group", "completeness": {"Body Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": true, "missing": []}
+    },
+    {
+      "name": "unknown_node_id_is_complete",
+      "why": "EDGE: a nodeId not present in the tree → treated as a non-data node, complete:true.",
+      "input": {"nodeId": "does-not-exist", "completeness": {"Body Weight": {"complete": true, "missing": []}}},
+      "expected": {"complete": true, "missing": []}
+    },
+    {
+      "name": "empty_completeness_map_blocks_everything",
+      "why": "EDGE: an empty completeness map short-circuits to the 'validate the pool first' message, regardless of node.",
+      "input": {"nodeId": "table-body-weight", "completeness": {}},
+      "expected": {"complete": false, "missing": ["No completeness data — validate the pool first"]}
+    }
+  ]
+}

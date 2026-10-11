@@ -11,8 +11,8 @@ byte-identical guarantee), and a representative rich spec emits the expected
 directives on each.
 """
 
-import html_generator as hg
-import latex_generator as lg
+import rendering.html_generator as hg
+import rendering.latex_generator as lg
 
 
 RICH = {

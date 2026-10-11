@@ -1,0 +1,1645 @@
+"""
+Unified apical narrative generator — cross-platform NTP-style results prose.
+
+The NIEHS reference report (Bookshelf_NBK589955.pdf) groups its results into
+two unified narrative sections, each spanning multiple measurement platforms:
+
+  1. "Animal Condition, Body Weights, and Organ Weights" (p.11)
+     — one narrative covering mortality, clinical signs, body weight findings,
+       and organ weight findings, followed by Tables 2-3.
+
+  2. "Clinical Pathology" (p.14)
+     — one narrative covering clinical chemistry, hematology, and hormones,
+       followed by Tables 4-6.
+
+Previously, `generate_results_narrative()` in bmdx-pipe was called per-platform
+inside `_build_section_cards()`, producing isolated per-card narratives.  This
+module replaces that with two unified cross-platform narrative generators that
+match the reference report's structure.
+
+This is presentation logic (report writing), so it lives in rlm-bmdx (the web
+app), not in bmdx-pipe (the pipeline library).  See CLAUDE.md TODO:
+"Move generate_results_narrative out of bmdx-pipe".
+
+Depends on:
+  - bmdx_pipe.apical_report.TableRow  — the per-endpoint data row
+  - Body weight sidecar JSON           — per-animal terminal day for mortality
+  - bmdx_pipe.clinical_observations.IncidenceRow — clinical obs incidence
+"""
+
+import json
+import logging
+import re
+from collections import Counter
+
+from bmdx_pipe import TableRow
+from common.animal_selection import is_biosampling
+
+from narrative.section_template import (
+    Literal,
+    Slot,
+    SlotKind,
+    Template,
+    render,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Constants
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Platform groupings matching the NIEHS reference report structure.
+# These canonical platform names come from _BM2_PLATFORM_MAP in file_integrator.
+APICAL_PLATFORMS = {"Body Weight", "Organ Weight"}
+CLINICAL_PATH_PLATFORMS = {"Clinical Chemistry", "Hematology", "Hormones"}
+
+# Ordering within the clinical pathology narrative — the reference report
+# presents sub-platforms in this sequence (p.14-15).
+CLINICAL_PATH_ORDER = ["Clinical Chemistry", "Hematology", "Hormones"]
+
+
+# "Not collected" domains (section-level collapse): when a Results section's data
+# domains were ALL absent from the pool, its table nodes are pruned at render
+# (report_data._prune_uncollected_tables) and the section carries this explicit,
+# shippable statement — distinct from "collected, no findings" (which the
+# generators word as "no significant effects ...") and from a pending scaffold
+# stub.  Keyed by the section's narrative_key.
+SECTION_DOMAINS: dict[str, frozenset] = {
+    "apical": frozenset(APICAL_PLATFORMS),
+    "clinical_pathology": frozenset(CLINICAL_PATH_PLATFORMS),
+    "internal_dose": frozenset({"Tissue Concentration"}),
+}
+_NOT_EVALUATED_STATEMENT: dict[str, str] = {
+    "apical": "Body and organ weights were not evaluated in this study.",
+    "clinical_pathology": "Clinical pathology (clinical chemistry, hematology, and "
+                          "hormone analyses) was not evaluated in this study.",
+    "internal_dose": "The internal dose (plasma concentration) was not assessed in "
+                     "this study.",
+}
+
+
+def not_evaluated_narrative(section_key: str) -> list[str]:
+    """The one-line "not evaluated in this study" statement for a Results section
+    whose data domains were all absent (not-collected domains).  Returns a
+    single-paragraph list, or [] for an unknown key."""
+    stmt = _NOT_EVALUATED_STATEMENT.get(section_key)
+    return [stmt] if stmt else []
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Helper functions — copied from bmdx_pipe/apical_report.py
+# ═══════════════════════════════════════════════════════════════════════════
+# These are private helpers in bmdx-pipe that aren't part of its public API.
+# Rather than modifying bmdx-pipe's exports, we copy them here.  When
+# bmdx-pipe's generate_results_narrative() is eventually deprecated, these
+# become the only copies.
+
+
+def _parse_cell_mean(cell_text: str) -> float | None:
+    """
+    Extract the numeric mean from a formatted table cell value.
+
+    Table cells look like "330.2 ± 5.1**" — this function pulls out
+    the leading number (330.2) and ignores the SE and significance markers.
+
+    Args:
+        cell_text: Formatted cell string, e.g., "330.2 ± 5.1**".
+
+    Returns:
+        The mean as a float, or None if parsing fails.
+    """
+    if not cell_text or cell_text.strip() == "–":
+        return None
+    # Match the leading number (possibly negative, with decimal)
+    match = re.match(r"(-?\d+\.?\d*)", cell_text.strip())
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def _parse_organ_label(label: str) -> tuple[str, str]:
+    """
+    Parse an endpoint label into (organ_name, weight_type).
+
+    The .bm2 endpoint labels follow patterns like:
+        "Liver Absolute"       → ("Liver", "absolute")
+        "Liver Weight Relative" → ("Liver", "relative")
+        "R. Kidney Absolute"   → ("R. Kidney", "absolute")
+        "Terminal Body Wt."    → ("", "body_weight")
+        "SD5"                  → ("", "body_weight")
+        "Alanine aminotransferase" → ("Alanine aminotransferase", "endpoint")
+
+    The organ_name is used to group absolute/relative pairs.  "endpoint" is
+    for clinical pathology endpoints whose narrative omits the word "weight".
+
+    Args:
+        label: The endpoint label string from the TableRow.
+
+    Returns:
+        A 2-tuple (organ_name, weight_type) where weight_type is one of:
+        "absolute", "relative", "body_weight", or "endpoint".
+    """
+    lower = label.lower()
+
+    # Body weight endpoints — various naming conventions from BMDExpress
+    if "body" in lower and ("wt" in lower or "weight" in lower):
+        return ("", "body_weight")
+
+    # "SD5", "SD 5", etc. — Study Day N terminal body weight labels
+    if re.match(r"^sd\s*\d+$", lower):
+        return ("", "body_weight")
+
+    # Organ weight endpoints — last word is "Absolute" or "Relative"
+    if lower.endswith("absolute"):
+        organ = label[: -len("Absolute")].strip()
+        organ = re.sub(r"\s+(?:Weight|Wt\.?)$", "", organ, flags=re.IGNORECASE)
+        return (organ, "absolute")
+    elif lower.endswith("relative"):
+        organ = label[: -len("Relative")].strip()
+        organ = re.sub(r"\s+(?:Weight|Wt\.?)$", "", organ, flags=re.IGNORECASE)
+        return (organ, "relative")
+
+    # Fallback: clinical pathology or other non-weight endpoints
+    return (label, "endpoint")
+
+
+def _endpoint_direction(row: TableRow) -> str:
+    """
+    Determine whether an endpoint increased or decreased relative to control.
+
+    Compares the control group mean to the highest-dose group mean.  This
+    is a simplification — real studies might have non-monotonic responses —
+    but it matches the NTP report convention of reporting the overall
+    direction of the dose-response.
+
+    Args:
+        row: A TableRow with values_by_dose.
+
+    Returns:
+        "increase" or "decrease".
+    """
+    sorted_doses = sorted(row.values_by_dose.keys())
+    if len(sorted_doses) < 2:
+        return "increase"  # fallback
+
+    control_mean = _parse_cell_mean(row.values_by_dose.get(sorted_doses[0], ""))
+    highest_mean = _parse_cell_mean(row.values_by_dose.get(sorted_doses[-1], ""))
+
+    if control_mean is None or highest_mean is None:
+        return "increase"  # fallback
+
+    return "decrease" if highest_mean < control_mean else "increase"
+
+
+def _lowest_sig_dose(row: TableRow) -> float | None:
+    """
+    Find the lowest non-control dose group that has pairwise significance.
+
+    Significance is indicated by * or ** appended to the cell value.
+    The control dose (0.0) is excluded because its marker represents the
+    trend test, not pairwise comparison.
+
+    Args:
+        row: A TableRow with values_by_dose containing formatted strings.
+
+    Returns:
+        The lowest dose (float) with a pairwise significance marker,
+        or None if no treatment dose is significant.
+    """
+    sorted_doses = sorted(row.values_by_dose.keys())
+    for dose in sorted_doses:
+        if dose == 0.0:
+            continue
+        val = row.values_by_dose.get(dose, "")
+        if "*" in val:
+            return dose
+    return None
+
+
+def _fmt_dose(dose: float) -> str:
+    """
+    Format a dose value for prose output.
+
+    Drops trailing ".0" for integer-valued doses to match natural writing
+    style:  12.0 → "12", 0.15 → "0.15".
+
+    Args:
+        dose: Dose value in dose units.
+
+    Returns:
+        Clean string representation.
+    """
+    if dose == int(dose):
+        return str(int(dose))
+    return str(dose)
+
+
+def _oxford_comma(items: list[str], conjunction: str = "or") -> str:
+    """
+    Join a list of strings with an Oxford comma.
+
+    Follows the NTP report convention:
+        []            → ""
+        ["a"]         → "a"
+        ["a", "b"]    → "a or b"
+        ["a", "b", "c"] → "a, b, or c"
+
+    Args:
+        items:       List of strings to join.
+        conjunction: The conjunction word ("or", "and").
+
+    Returns:
+        The joined string with Oxford comma formatting.
+    """
+    if len(items) == 0:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} {conjunction} {items[1]}"
+    return ", ".join(items[:-1]) + f", {conjunction} {items[-1]}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Mortality extraction from body weight sidecar JSON
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
+    """
+    Extract mortality data from body weight sidecar JSON files.
+
+    Animals whose terminal observation falls before the expected terminal day
+    (the most common terminal day across the study, usually the last study day
+    like SD5) are counted as early deaths.  Only the Core cohort counts: the
+    biosampling (internal-dose) animals are removed on their own schedule
+    (e.g. SD4 in NIEHS-13), which is not mortality.  For example, an animal with
+    terminal=true on SD0 when the expected day is SD5 means it was "found dead
+    on study day 0".
+
+    Args:
+        sidecar_paths: Dict mapping sex label ("Male"/"Female") to the
+                       absolute path of the sidecar JSON file.  Produced by
+                       body_weight_table.find_sidecar_paths().
+
+    Returns:
+        Dict with structure:
+        {
+            "expected_terminal_day": "SD5",
+            "by_dose": {
+                dose_float: {
+                    sex_str: {
+                        "total": int,           # animals assigned to this group
+                        "early_deaths": int,     # terminated before expected day
+                        "death_days": {"SD0": 1, "SD1": 3},  # when they died
+                    }
+                }
+            },
+            "all_survived_doses": [0.0, 0.15, ...],  # doses where nobody died early
+        }
+        Empty dict if no sidecar files are available.
+    """
+    if not sidecar_paths:
+        return {}
+
+    # First pass: collect ALL terminal days across both sexes to find the
+    # expected (modal) terminal day.  This is study-wide, not per-sex.
+    all_terminal_days: list[str] = []
+    # Collect per-animal records grouped by (dose, sex)
+    animal_records: dict[tuple[float, str], list[dict]] = {}
+
+    for sex, sc_path in sidecar_paths.items():
+        try:
+            with open(sc_path, "r") as f:
+                sc = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Could not read sidecar %s: %s", sc_path, exc)
+            continue
+
+        for _animal_id, animal in sc.get("animals", {}).items():
+            if is_biosampling(animal.get("selection")):
+                continue
+            dose = float(animal.get("dose", 0.0))
+            key = (dose, sex)
+            animal_records.setdefault(key, [])
+
+            # Find terminal observation for this animal
+            terminal_day = None
+            last_day = None
+            for obs in animal.get("observations", []):
+                last_day = obs.get("day", "") or last_day
+                if obs.get("terminal"):
+                    terminal_day = obs.get("day", "")
+                    all_terminal_days.append(terminal_day)
+                    break
+
+            animal_records[key].append({
+                "terminal_day": terminal_day,
+                # An animal with NO terminal observation left the study without
+                # a recorded removal weight; its last observed day bounds when.
+                "last_day": last_day,
+            })
+
+    if not all_terminal_days:
+        return {}
+
+    # The expected terminal day is the mode — the day most animals terminate
+    # on, which is the scheduled sacrifice day (e.g., SD5 for a 5-day study).
+    day_counts = Counter(all_terminal_days)
+    expected_day = day_counts.most_common(1)[0][0]
+
+    # Parse the numeric portion of a study day label for comparison.
+    # "SD5" → 5, "SD0" → 0.  Handles "SD 5" and "SD05" too.
+    def _day_num(day_str: str) -> int:
+        match = re.search(r"\d+", day_str or "")
+        return int(match.group()) if match else -1
+
+    expected_day_num = _day_num(expected_day)
+
+    # Second pass: compute mortality per (dose, sex) group
+    by_dose: dict[float, dict[str, dict]] = {}
+    all_doses: set[float] = set()
+
+    for (dose, sex), records in animal_records.items():
+        all_doses.add(dose)
+        total = len(records)
+        early_deaths = 0
+        death_days: dict[str, int] = {}
+
+        for rec in records:
+            td = rec["terminal_day"]
+            if td and _day_num(td) < expected_day_num:
+                early_deaths += 1
+                death_days[td] = death_days.get(td, 0) + 1
+            elif not td and rec["last_day"] and _day_num(rec["last_day"]) < expected_day_num:
+                # Never reached the scheduled sacrifice and no removal weight was
+                # recorded: still an early removal.  Its day is unknown, so it is
+                # counted but contributes no "by study day N" evidence.
+                early_deaths += 1
+
+        by_dose.setdefault(dose, {})[sex] = {
+            "total": total,
+            "early_deaths": early_deaths,
+            "death_days": death_days,
+        }
+
+    # Identify doses where all animals (both sexes) survived to the expected day
+    all_survived_doses = []
+    for dose in sorted(all_doses):
+        dose_data = by_dose.get(dose, {})
+        any_deaths = any(
+            sex_data.get("early_deaths", 0) > 0
+            for sex_data in dose_data.values()
+        )
+        if not any_deaths:
+            all_survived_doses.append(dose)
+
+    return {
+        "expected_terminal_day": expected_day,
+        "by_dose": by_dose,
+        "all_survived_doses": all_survived_doses,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Paragraph builders — internal building blocks
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _animals(design: dict | None) -> str:
+    """The study's species plural for prose ("rats", "mice"; "animals" when
+    unrecorded); None ⇒ the standard design."""
+    from pipeline.study_design import design_or_standard, species_plural
+
+    return species_plural(design_or_standard(design))
+
+
+def _mortality_sex_subject(mortality: dict, animals: str = "rats") -> str:
+    """The subject phrase for the study's ACTUAL sexes, from the mortality
+    data (`by_dose[dose]` is keyed by sex): "male and female rats" when both are
+    present, "male rats" / "female rats" for a single-sex study, else "rats".
+    `animals` is the study's species plural (pipeline.study_design)."""
+    sexes = {
+        str(s).lower()
+        for per_sex in (mortality.get("by_dose") or {}).values()
+        for s in (per_sex or {})
+    }
+    if {"male", "female"} <= sexes:
+        return f"male and female {animals}"
+    if sexes == {"male"}:
+        return f"male {animals}"
+    if sexes == {"female"}:
+        return f"female {animals}"
+    return animals
+
+
+def _animal_condition_survived_template(subject: str = "male and female rats",
+                                        observed: bool = True) -> Template:
+    """The all-survived brief statement.  `expected_day` (the terminal study day,
+    e.g. "SD5") is NUMERIC — a day identifier that just refreshes.  `subject` is the
+    study's sex phrase (_mortality_sex_subject) — structural, baked as a Literal.
+    "without signs of overt toxicity" only when clinical observations were
+    recorded (`observed`) — absent data is not evidence of no signs."""
+    return [
+        Literal(f"All {subject} survived to study termination ("),
+        Slot("expected_day", SlotKind.NUMERIC),
+        Literal(") without signs of overt toxicity." if observed else ")."),
+    ]
+
+
+def _animal_condition_survived_with_signs_template(
+    subject: str, verb: str, compound_name: str, signs_subject: str,
+    has_onset: bool = False,
+) -> Template:
+    """All animals survived, but some treated groups showed clinical signs —
+    the all-survived statement without its "without signs of overt toxicity"
+    claim, then which groups showed what and from which study day.
+    `expected_day`/`doses`/`unit`/`onset_day` are NUMERIC; the `signs` list is
+    CATEGORICAL (finding words)."""
+    segs: list = [
+        Literal(f"All {subject} survived to study termination ("),
+        Slot("expected_day", SlotKind.NUMERIC),
+        Literal(f"). {signs_subject[:1].upper()}{signs_subject[1:]} {verb} "),
+        Slot("doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+    ]
+    if has_onset:
+        segs += [
+            Literal(f" of {compound_name} began exhibiting clinical signs on study day "),
+            Slot("onset_day", SlotKind.NUMERIC),
+        ]
+    else:
+        segs += [Literal(f" of {compound_name} exhibited clinical signs")]
+    segs += [
+        Literal(", which included "),
+        Slot("signs", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
+    return segs
+
+
+def _signs_at_doses(clinical_obs_incidence: dict[str, list] | None,
+                    doses: list[float]) -> tuple[list[str], int | None]:
+    """(findings, onset day) of the clinical signs seen in the given dose
+    groups: the findings in incidence order, and the earliest study day any of
+    them was observed there (IncidenceRow.onset_day_by_dose; None when the
+    observations record no day)."""
+    findings: list[str] = []
+    onset: int | None = None
+    wanted = set(doses)
+    for _sex, rows in (clinical_obs_incidence or {}).items():
+        for row in rows:
+            hit = [d for d, cell in (getattr(row, "incidence_by_dose", None) or {}).items()
+                   if d in wanted and str(cell).split("/")[0].strip() not in ("", "0")]
+            if not hit:
+                continue
+            label = str(getattr(row, "label", row)).lower()
+            if label not in findings:
+                findings.append(label)
+            onsets = getattr(row, "onset_day_by_dose", None) or {}
+            for d in hit:
+                day = onsets.get(d)
+                if day is not None and (onset is None or day < onset):
+                    onset = day
+    return findings, onset
+
+
+def _treated_signs(clinical_obs_incidence: dict[str, list] | None
+                   ) -> tuple[list[float], list[str], list[str]]:
+    """(doses, sexes, findings) of the clinical signs seen in TREATED groups
+    (dose > 0, incidence n > 0), from the Core-cohort incidence tables."""
+    doses: set[float] = set()
+    sexes: list[str] = []
+    findings: list[str] = []
+    for sex, rows in (clinical_obs_incidence or {}).items():
+        for row in rows:
+            hit = [d for d, cell in (getattr(row, "incidence_by_dose", None) or {}).items()
+                   if d and d > 0 and str(cell).split("/")[0].strip() not in ("", "0")]
+            if not hit:
+                continue
+            doses.update(hit)
+            if sex not in sexes:
+                sexes.append(sex)
+            label = str(getattr(row, "label", row)).lower()
+            if label not in findings:
+                findings.append(label)
+    return sorted(doses), sexes, findings
+
+
+def _animal_condition_opening_template(
+    compound_name: str, has_onset: bool,
+    subject: str = "male and female rats", verb: str = "administered",
+) -> Template:
+    """The clinical-signs opening sentence for the groups with deaths: what
+    signs they showed and the study day the first appeared.  `compound_name` is
+    baked into a Literal — the chemical identity is structural, not a reprocess
+    value.  Dose magnitudes/unit/onset day are NUMERIC (silent-refresh-safe);
+    the `signs` list is CATEGORICAL — it is data-DERIVED content (finding
+    words), not a magnitude, so a change there is a wording concern, not a
+    silent refresh.  The onset clause is present only when the clinical
+    observations record a day.  `verb` is "administered", or "exposed to" for
+    an inhalation study (pipeline.study_design.exposure_verb)."""
+    segs: list = [
+        Literal(f"{subject[:1].upper()}{subject[1:]} {verb} "),
+        Slot("doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(f" of {compound_name}"),
+    ]
+    if has_onset:
+        segs += [
+            Literal(" began exhibiting signs of overt toxicity on study day "),
+            Slot("onset_day", SlotKind.NUMERIC),
+        ]
+    else:
+        segs += [Literal(" exhibited signs of overt toxicity")]
+    segs += [
+        Literal(", which included "),
+        Slot("signs", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
+    return segs
+
+
+def _animal_condition_death_detail_template(has_latest_day: bool, singular: bool = False) -> Template:
+    """One per-dose mortality detail.  Dose/unit/count-phrase/study-day are all
+    NUMERIC — the `counts` phrase ("3 male rats and 1 female rat") is a count
+    aggregation whose refresh just replaces a magnitude.  The trailing study-day
+    clause is present only when the former `latest_day_num > 0` branch fired."""
+    segs: list = [
+        Literal("In the "),
+        Slot("dose", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(" group, "),
+        Slot("counts", SlotKind.NUMERIC),
+        # "1 male rat was" / "2 male rats were" / "1 male rat and 1 female rat were"
+        Literal(" was found dead or moribund" if singular else " were found dead or moribund"),
+    ]
+    if has_latest_day:
+        segs += [
+            Literal(" by study day "),
+            Slot("latest_day", SlotKind.NUMERIC),
+        ]
+    segs += [Literal(".")]
+    return segs
+
+
+def _animal_condition_surviving_template(animals: str = "rats",
+                                         observed: bool = True) -> Template:
+    """The surviving-doses closing sentence.  `surv_doses` (the dose list) and
+    `unit` are NUMERIC; `animals` is the study's species plural.  The "no signs"
+    claim is made only when clinical observations were recorded (`observed`)."""
+    return [
+        Literal(f"{animals.capitalize()} in the "),
+        Slot("surv_doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(" groups did not exhibit signs of overt toxicity, and all "
+                "survived to study termination." if observed else
+                " groups all survived to study termination."),
+    ]
+
+
+def _build_animal_condition_paragraphs(
+    compound_name: str,
+    dose_unit: str,
+    mortality: dict,
+    clinical_obs_incidence: dict[str, list] | None,
+    design: dict | None = None,
+) -> list[str]:
+    """
+    Build the "Animal Condition" paragraph(s) for the apical narrative.
+
+    Reference (p.11): "Male and female rats administered 333 and 1000 mg/kg
+    of PFHxSAm began exhibiting signs of overt toxicity on study day 0,
+    which included ..."
+
+    This is the opening paragraph of the "Animal Condition, Body Weights,
+    and Organ Weights" section.  It describes mortality (from sidecar data)
+    and clinical signs (from clinical obs incidence data).
+
+    Args:
+        compound_name:          Chemical name for prose.
+        dose_unit:              Dose unit string (e.g., "mg/kg").
+        mortality:              Output from extract_mortality().
+        clinical_obs_incidence: Optional {sex: [IncidenceRow]} from
+                                build_clinical_obs_tables().  Used to list
+                                clinical signs and their onset.  None means
+                                no clinical observations were recorded, so
+                                nothing is said about signs; {} means they
+                                were recorded and all normal.
+        design:                 Study design facts (pipeline.study_design) for
+                                the species and verb; None ⇒ the standard design.
+
+    Returns:
+        List of paragraph strings (usually 1-2 paragraphs).
+    """
+    from pipeline.study_design import (
+        design_or_standard, exposure_verb, species_plural, species_singular,
+    )
+
+    facts = design_or_standard(design)
+    animals, animal = species_plural(facts), species_singular(facts)
+    paragraphs: list[str] = []
+
+    if not mortality or not mortality.get("by_dose"):
+        # No mortality data available — skip the animal condition paragraph.
+        # The per-card narrative from bmdx-pipe never included this, so this
+        # is a graceful no-op for sessions without sidecar files.
+        return paragraphs
+
+    by_dose = mortality["by_dose"]
+    expected_day = mortality.get("expected_terminal_day", "")
+    all_survived = mortality.get("all_survived_doses", [])
+
+    # Identify doses with any early deaths (either sex)
+    death_doses: list[float] = []
+    for dose in sorted(by_dose.keys()):
+        dose_data = by_dose[dose]
+        total_deaths = sum(
+            sd.get("early_deaths", 0) for sd in dose_data.values()
+        )
+        if total_deaths > 0:
+            death_doses.append(dose)
+
+    if not death_doses:
+        sign_doses, sign_sexes, sign_findings = _treated_signs(clinical_obs_incidence)
+        if sign_findings:
+            # Everyone survived, but treated groups showed clinical signs: never
+            # claim "without signs of overt toxicity" over the incidence data.
+            signs_subject = _mortality_sex_subject(
+                {"by_dose": {0: {s: {} for s in sign_sexes}}}, animals)
+            _, onset_day = _signs_at_doses(clinical_obs_incidence, sign_doses)
+            binding = {
+                "expected_day": expected_day,
+                "doses": _oxford_comma([_fmt_dose(d) for d in sign_doses], conjunction="and"),
+                "unit": dose_unit,
+                "signs": _oxford_comma(sign_findings[:5], conjunction="and"),
+            }
+            if onset_day is not None:
+                binding["onset_day"] = str(onset_day)
+            paragraphs.append(render(
+                _animal_condition_survived_with_signs_template(
+                    _mortality_sex_subject(mortality, animals), exposure_verb(facts),
+                    compound_name, signs_subject, onset_day is not None),
+                binding,
+            ))
+            return paragraphs
+        # No mortality and no signs — brief statement that all survived
+        # (template + render; byte-identical to the former f-string).
+        paragraphs.append(
+            render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals),
+                                                       observed=clinical_obs_incidence is not None),
+                   {"expected_day": expected_day})
+        )
+        return paragraphs
+
+    # ── Build the mortality/toxicity paragraph ──
+
+    # List the affected dose groups
+    death_dose_strs = [_fmt_dose(d) for d in death_doses]
+    dose_list_str = _oxford_comma(death_dose_strs, conjunction="and")
+
+    # Clinical signs seen in the groups with deaths, and the study day the
+    # first appeared (the clinical observations' onset, never a death day).
+    clinical_signs, onset_day = _signs_at_doses(clinical_obs_incidence, death_doses)
+
+    # The opening sentence (template + render) — only when the clinical
+    # observations record signs in those groups; without them the death
+    # details stand alone rather than assert signs nobody recorded.
+    sentence1 = ""
+    if clinical_signs:
+        opening_binding = {
+            "doses": dose_list_str, "unit": dose_unit,
+            # Limit to the first 5 signs to keep the prose manageable
+            "signs": _oxford_comma(clinical_signs[:5], conjunction="and"),
+        }
+        if onset_day is not None:
+            opening_binding["onset_day"] = str(onset_day)
+        sentence1 = render(
+            _animal_condition_opening_template(
+                compound_name, onset_day is not None,
+                subject=_mortality_sex_subject(mortality, animals), verb=exposure_verb(facts)),
+            opening_binding,
+        )
+
+    # Per-dose mortality details: "In the 1000 mg/kg group, 5 male rats
+    # and 5 female rats were found dead or moribund..."
+    death_details: list[str] = []
+    for dose in death_doses:
+        dose_data = by_dose[dose]
+        sex_counts: list[str] = []
+        # Latest death day for this dose (for the "by study day X" clause)
+        latest_day_num = 0
+        for sex in ["Male", "Female"]:
+            sd = dose_data.get(sex, {})
+            n_dead = sd.get("early_deaths", 0)
+            if n_dead > 0:
+                sex_counts.append(f"{n_dead} {sex.lower()} {animal if n_dead == 1 else animals}")
+                for day_str in sd.get("death_days", {}):
+                    match = re.search(r"\d+", day_str)
+                    if match:
+                        dnum = int(match.group())
+                        if dnum > latest_day_num:
+                            latest_day_num = dnum
+        if sex_counts:
+            count_str = _oxford_comma(sex_counts, conjunction="and")
+            detail_binding = {
+                "dose": _fmt_dose(dose),
+                "unit": dose_unit,
+                "counts": count_str,
+            }
+            if latest_day_num > 0:
+                detail_binding["latest_day"] = str(latest_day_num)
+            singular = len(sex_counts) == 1 and sex_counts[0].startswith("1 ")
+            death_details.append(render(
+                _animal_condition_death_detail_template(latest_day_num > 0, singular),
+                detail_binding,
+            ))
+
+    # Surviving doses sentence
+    surviving_sentence = ""
+    if all_survived:
+        surviving_dose_strs = [_fmt_dose(d) for d in all_survived if d > 0]
+        if surviving_dose_strs:
+            surv_list = _oxford_comma(surviving_dose_strs, conjunction="and")
+            surviving_sentence = render(
+                _animal_condition_surviving_template(
+                    animals, observed=clinical_obs_incidence is not None),
+                {"surv_doses": surv_list, "unit": dose_unit},
+            )
+
+    # Combine into the paragraph
+    para_parts = [sentence1] if sentence1 else []
+    para_parts.extend(death_details)
+    if surviving_sentence:
+        para_parts.append(surviving_sentence)
+
+    paragraphs.append(" ".join(para_parts))
+    return paragraphs
+
+
+def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
+                                   animals: str = "rats",
+                                   subject: str = "Terminal body weight") -> Template:
+    """The significant-body-weight sentence as author wording + typed data slots.
+
+    `sex_lower` is baked into a Literal — a row's sex is structural and never
+    changes under a data reprocess.  `direction`/`trend` are CATEGORICAL (a
+    reprocess flip means the author's wording may contradict the data → Phase 3
+    review flag); the BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The
+    LOEL clause is present only when a pairwise-significant dose exists, matching
+    the former `if low_dose is not None` branch exactly.  `subject` names the
+    row ("Terminal body weight"; "Body weight gain" for the derived endpoint) —
+    structural, like the sex.
+    """
+    segs: list = [
+        Literal(f"{subject} was significantly "),
+        Slot("direction", SlotKind.CATEGORICAL),
+        Literal(f" in {sex_lower} {animals}"),
+    ]
+    if has_loel:
+        segs += [
+            Literal(" at ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+    segs += [
+        Literal(" with a "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trend (Table 2). The BMD and BMDL were "),
+        Slot("bmd", SlotKind.NUMERIC),
+        Literal(" and "),
+        Slot("bmdl", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(", respectively."),
+    ]
+    return segs
+
+
+def _bind_body_weight(bw_row, dose_unit, direction, low_dose) -> dict:
+    """Project a body-weight TableRow into the slot binding the template renders
+    against.  Mirrors the values the former f-string computed inline."""
+    binding = {
+        "direction": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+        "bmd": bw_row.bmd_str,
+        "bmdl": bw_row.bmdl_str,
+    }
+    if low_dose is not None:
+        binding["loel"] = _fmt_dose(low_dose)
+    return binding
+
+
+def _build_body_weight_paragraphs(
+    platform_tables: dict[str, dict[str, list]],
+    compound_name: str,
+    dose_unit: str,
+    animals: str = "rats",
+) -> list[str]:
+    """
+    Build body weight finding paragraphs from the Body Weight platform data.
+
+    Follows the reference report convention (p.11):
+      - If not significant: "No significant changes in terminal body weight
+        for male rats (Table 2) or female rats (Table 2) occurred..."
+      - If significant: "Terminal body weight was significantly {dir} in
+        {sex} rats at ≥{loel} {dose_unit} with a {trend} trend (Table 2).
+        The BMD and BMDL were {bmd} and {bmdl} {dose_unit}, respectively."
+
+    Args:
+        platform_tables: The full {platform -> {sex -> [TableRow]}} dict.
+        compound_name:   Chemical name for prose.
+        dose_unit:       Dose unit string.
+
+    Returns:
+        List of paragraph strings (usually 1 paragraph).
+    """
+    bw_data = platform_tables.get("Body Weight", {})
+    if not bw_data:
+        return []
+
+    significant: list[str] = []   # full sentences, one per responsive row
+    nd_sexes: list[str] = []      # "<sex> rats (Table 2)" — ONCE per sex
+
+    for sex in ["Male", "Female"]:
+        rows = bw_data.get(sex, [])
+        bw_rows = [r for r in rows if _parse_organ_label(r.label)[1] == "body_weight"]
+        if not bw_rows:
+            continue
+        sex_sentences: list[str] = []
+        for bw_row in bw_rows:
+            if not bw_row.responsive or bw_row.bmd_str == "ND":
+                continue
+            # Significant — full sentence built as a template (author wording
+            # Literals + live data Slots) then rendered.  Byte-identical to the
+            # former f-string; the template is what lets a wording edit and a
+            # data reprocess stay separable (Phase 2, section_template).
+            direction = _endpoint_direction(bw_row)
+            low_dose = _lowest_sig_dose(bw_row)
+            subject = ("Body weight gain" if bw_row.label == "Body Weight Gain"
+                       else "Terminal body weight")
+            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals, subject)
+            binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
+            sex_sentences.append(render(tpl, binding))
+        if sex_sentences:
+            significant.extend(sex_sentences)
+        else:
+            # The "no change" note is about the SEX, not about each body-weight
+            # row (a session carries several — terminal weight, gain, per-study-
+            # day weights). Appending one ref per row produced "male rats
+            # (Table 2), male rats (Table 2), male rats (Table 2)" (2026-09-24).
+            nd_sexes.append(f"{sex.lower()} {animals} (Table 2)")
+
+    if not significant and not nd_sexes:
+        return []
+
+    nd_sentence = (
+        f"No significant changes in terminal body weight for "
+        f"{_oxford_comma(nd_sexes, conjunction='or')} occurred with exposure to "
+        f"{compound_name}."
+    ) if nd_sexes else ""
+
+    if not significant:
+        return [nd_sentence]
+    # Mixed: the significant finding(s) first, then the no-change note for the
+    # other sex as its own sentence (never a bare "female rats (Table 2)" fragment).
+    return [" ".join(significant + ([nd_sentence] if nd_sentence else []))]
+
+
+def _is_numeric_bmd(value) -> bool:
+    """True for a finite positive BMD string ("63", "1.13e+03"); False for the
+    "—" / "ND" / "NVM" / "UREP" markers."""
+    try:
+        f = float(str(value).strip())
+    except (TypeError, ValueError):
+        return False
+    return f > 0 and f != float("inf")
+
+
+def _organ_finding_template(
+    organ_name: str,
+    wt_type_str: str,
+    has_weight_types: bool,
+    has_loel: bool,
+    part_qualifiers: list[str | None],
+    has_bmd: bool = True,
+) -> Template:
+    """One organ finding as author wording + typed data slots.
+
+    ``has_bmd`` False (no row has a numeric BMD — none modeled, or held back)
+    drops the BMD clause rather than printing "The BMD (BMDL) was — (—)".
+
+    Structural facts are baked into Literals — the organ name, the weight-type
+    words (``wt_type_str`` and each part's ``(absolute weight)`` qualifier), and
+    the singular/plural "BMD (BMDL)" vs "BMDs (BMDLs)" framing all describe WHICH
+    endpoints exist, not a data value that shifts on reprocess.  ``direction``
+    (noun ``increase``/``decrease`` in the weight-type form, adjective
+    ``increased``/``decreased`` otherwise) and ``trend`` are CATEGORICAL — a flip
+    can contradict the author's wording (Phase 3 review flag).  The LOEL and
+    per-part BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The
+    ``part_qualifiers`` list carries one entry per group row (the ``absolute``/
+    ``relative`` word, or None); its length picks singular vs plural framing and
+    reproduces the former ``_oxford_comma`` join exactly.
+    """
+    if has_weight_types:
+        segs: list = [
+            Literal("a significant "),
+            Slot("direction_noun", SlotKind.CATEGORICAL),
+            Literal(f" in {organ_name} {wt_type_str} weight occurred"),
+        ]
+    else:
+        segs = [
+            Literal(f"{organ_name} was significantly "),
+            Slot("direction_adj", SlotKind.CATEGORICAL),
+        ]
+
+    if has_loel:
+        segs += [
+            Literal(" in dose groups ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+
+    segs += [
+        Literal("; these endpoints had "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trends (Table 3)"),
+    ]
+
+    def _part_segs(i: int) -> list:
+        # One BMD/BMDL part: "{bmd} ({bmdl}) {unit}" plus an optional structural
+        # "({qualifier} weight)" — mirrors the former bmd_parts f-string.
+        out: list = [
+            Slot(f"bmd{i}", SlotKind.NUMERIC),
+            Literal(" ("),
+            Slot(f"bmdl{i}", SlotKind.NUMERIC),
+            Literal(") "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+        if part_qualifiers[i] is not None:
+            out.append(Literal(f" ({part_qualifiers[i]} weight)"))
+        return out
+
+    n = len(part_qualifiers)
+    if not has_bmd:
+        segs += [Literal(".")]
+    elif n == 1:
+        segs += [Literal(". The BMD (BMDL) was ")]
+        segs += _part_segs(0)
+        segs += [Literal(".")]
+    else:
+        segs += [Literal(". The BMDs (BMDLs) were ")]
+        # Reproduce _oxford_comma(bmd_parts, "and"): ", " between all parts
+        # except the final join, which is " and " (n==2) or ", and " (n>=3).
+        for i in range(n):
+            if i > 0:
+                if n == 2:
+                    segs += [Literal(" and ")]
+                elif i == n - 1:
+                    segs += [Literal(", and ")]
+                else:
+                    segs += [Literal(", ")]
+            segs += _part_segs(i)
+        segs += [Literal(", respectively.")]
+
+    return segs
+
+
+def _bind_organ_finding(group_rows, dose_unit, direction, min_low_dose) -> dict:
+    """Project an organ group's rows into the finding slot binding.  Mirrors the
+    magnitudes the former f-strings computed inline; per-part BMD/BMDL are keyed
+    positionally (bmd{i}/bmdl{i}) in group_rows order."""
+    binding = {
+        "direction_noun": direction,
+        "direction_adj": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+    }
+    if min_low_dose is not None:
+        binding["loel"] = _fmt_dose(min_low_dose)
+    for i, r in enumerate(group_rows):
+        binding[f"bmd{i}"] = r.bmd_str
+        binding[f"bmdl{i}"] = r.bmdl_str
+    return binding
+
+
+def _build_organ_weight_paragraphs(
+    platform_tables: dict[str, dict[str, list]],
+    compound_name: str,
+    dose_unit: str,
+    organ_allowlist: list[str] | None = None,
+    sex_allowlist: list[str] | None = None,
+    animals: str = "rats",
+) -> list[str]:
+    """
+    Build organ weight finding paragraphs from the Organ Weight platform data.
+
+    Reference structure (p.11-12):
+      - Per sex, in order: Male then Female
+      - Significant findings: "In {sex} rats at study termination, a significant
+        {increase/decrease} in {organ} {abs/rel} weight occurred at ≥{loel};
+        these endpoints had {pos/neg} trends (Table 3).  The BMDs (BMDLs) for
+        {organ} weights were {bmd} ({bmdl}) and {bmd} ({bmdl}) {dose_unit}."
+      - Non-significant: "Significant trend and pairwise comparisons were not
+        observed in {endpoint_list}."
+
+    Args:
+        platform_tables: The full {platform -> {sex -> [TableRow]}} dict.
+        compound_name:   Chemical name for prose.
+        dose_unit:       Dose unit string.
+        organ_allowlist: Report-level organ allowlist (lower-cased tokens) for
+                         the "organ-weight" area.  Empty/None ⇒ no filtering.
+                         Keeps the prose in lock-step with the filtered Organ
+                         Weight table.  Scoped to organ-weight rows ONLY (this
+                         builder), so clinical-chemistry endpoints — which
+                         _parse_organ_label also names — are untouched.
+        sex_allowlist:   Report-level sex allowlist (lower-cased) for the
+                         "organ-weight" area.  Empty/None ⇒ both sexes.  Keeps
+                         the prose in lock-step with the Organ Weight TABLE,
+                         which already honors sex.organ-weight — before this the
+                         narrative looped a fixed Male/Female and could name a
+                         sex the table had dropped.
+
+    Returns:
+        List of paragraph strings (one per sex that has data).
+    """
+    from document_model.filters import organ_allowed, sex_allowed
+
+    ow_data = platform_tables.get("Organ Weight", {})
+    if not ow_data:
+        return []
+
+    paragraphs: list[str] = []
+
+    for sex in ["Male", "Female"]:
+        if not sex_allowed(sex, sex_allowlist):
+            continue
+        rows = ow_data.get(sex, [])
+        if not rows:
+            continue
+
+        # Separate organ-weight rows from any body-weight rows that might be
+        # mixed in, then apply the report-level organ allowlist (matched on the
+        # parsed organ token) so the prose names only the kept organs.
+        organ_rows = [
+            r for r in rows
+            if _parse_organ_label(r.label)[1] != "body_weight"
+            and organ_allowed(_parse_organ_label(r.label)[0], organ_allowlist)
+        ]
+        if not organ_rows:
+            continue
+
+        # Absolute weights carry the bare organ label ("Liver"), which
+        # _parse_organ_label reads as a generic endpoint.  Once relative
+        # weights ("Liver Relative") sit beside them, name both kinds.
+        has_relative = any(_parse_organ_label(r.label)[1] == "relative" for r in organ_rows)
+
+        def _weight_label(label: str) -> tuple[str, str]:
+            organ_name, wtype = _parse_organ_label(label)
+            if has_relative and wtype == "endpoint":
+                wtype = "absolute"
+            return organ_name, wtype
+
+        # Split into significant (responsive with BMD) and non-significant
+        sig_rows = [r for r in organ_rows if r.responsive and r.bmd_str != "ND"]
+        nonsig_rows = [r for r in organ_rows if not r.responsive or r.bmd_str == "ND"]
+
+        if not sig_rows:
+            # No significant findings for this sex
+            paragraphs.append(
+                f"In {sex.lower()} {animals} at study termination, there were no "
+                f"organ weights that exhibited significant trend and pairwise "
+                f"comparisons."
+            )
+            continue
+
+        # Group significant rows by organ name to pair absolute/relative
+        organ_groups: dict[str, list[TableRow]] = {}
+        for r in sig_rows:
+            organ_name, _wtype = _weight_label(r.label)
+            organ_groups.setdefault(organ_name, []).append(r)
+
+        # Build per-organ finding descriptions.  Each finding is a template
+        # (author wording Literals + live data Slots) rendered against the
+        # group's projection; byte-identical to the former f-strings, but the
+        # numbers and the data-derived words are now separable (Phase 2,
+        # section_template).  Structural facts (organ name, weight-type words,
+        # singular/plural framing) are baked into the template's Literals.
+        sex_findings: list[str] = []
+        for organ_name, group_rows in organ_groups.items():
+            direction = _endpoint_direction(group_rows[0])
+
+            # Find lowest pairwise-significant dose across the group
+            low_doses = [_lowest_sig_dose(r) for r in group_rows]
+            low_doses = [d for d in low_doses if d is not None]
+            min_low_dose = min(low_doses) if low_doses else None
+
+            # Determine weight types present (per-part qualifier, or None)
+            weight_types = [_weight_label(r.label)[1] for r in group_rows]
+            part_qualifiers = [
+                wt if wt in ("absolute", "relative") else None for wt in weight_types
+            ]
+
+            has_weight_types = any(
+                wt in ("absolute", "relative") for wt in weight_types
+            )
+            wt_type_str = _oxford_comma(
+                sorted(set(wt for wt in weight_types if wt in ("absolute", "relative"))),
+                conjunction="and",
+            ) if has_weight_types else ""
+
+            tpl = _organ_finding_template(
+                organ_name, wt_type_str, has_weight_types,
+                min_low_dose is not None, part_qualifiers,
+                has_bmd=any(_is_numeric_bmd(r.bmd_str) for r in group_rows),
+            )
+            binding = _bind_organ_finding(
+                group_rows, dose_unit, direction, min_low_dose)
+            sex_findings.append(render(tpl, binding))
+
+        # Opening line + findings
+        sex_para = f"In {sex.lower()} {animals} at study termination, "
+        sex_para += " ".join(sex_findings)
+
+        # Non-significant endpoints listed at the end
+        if nonsig_rows:
+            nonsig_labels = []
+            for r in nonsig_rows:
+                organ_name, wtype = _weight_label(r.label)
+                if wtype in ("absolute", "relative"):
+                    nonsig_labels.append(f"{wtype} {organ_name.lower()}")
+                else:
+                    nonsig_labels.append(r.label.lower())
+            nonsig_str = _oxford_comma(nonsig_labels, conjunction="or")
+            sex_para += (
+                f" Significant trend and pairwise comparisons were not "
+                f"observed in {nonsig_str} weights."
+            )
+
+        paragraphs.append(sex_para)
+
+    return paragraphs
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Clinical pathology paragraph builders
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _sub_platform_finding_template(label: str, has_loel: bool) -> Template:
+    """One clinical-pathology endpoint finding as author wording + typed slots.
+
+    `label` (the endpoint identity, e.g. "Glucose") is baked into a Literal — it
+    names WHICH endpoint and does not change under a data reprocess, same as the
+    organ name in the organ-weight finding.  `direction`/`trend` are CATEGORICAL
+    (a reprocess flip may contradict the author's wording → Phase 3 review flag);
+    the LOEL/BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The LOEL
+    clause is present only when a pairwise-significant dose exists, matching the
+    former `if low_dose is not None` branch exactly.
+    """
+    segs: list = [
+        Literal(f"{label} was significantly "),
+        Slot("direction", SlotKind.CATEGORICAL),
+    ]
+    if has_loel:
+        segs += [
+            Literal(" at ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+    segs += [
+        Literal(" with a "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trend. The BMD and BMDL were "),
+        Slot("bmd", SlotKind.NUMERIC),
+        Literal(" and "),
+        Slot("bmdl", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(", respectively."),
+    ]
+    return segs
+
+
+def _bind_sub_platform_finding(row, dose_unit, direction, low_dose) -> dict:
+    """Project a clinical-pathology TableRow into the finding slot binding.
+    Mirrors the values the former f-string computed inline."""
+    binding = {
+        "direction": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+        "bmd": row.bmd_str,
+        "bmdl": row.bmdl_str,
+    }
+    if low_dose is not None:
+        binding["loel"] = _fmt_dose(low_dose)
+    return binding
+
+
+def _build_sub_platform_paragraphs(
+    sub_platform: str,
+    sex_rows: dict[str, list],
+    compound_name: str,
+    dose_unit: str,
+    animals: str = "rats",
+) -> list[str]:
+    """
+    Build narrative paragraphs for one clinical pathology sub-platform.
+
+    Reference structure (p.14-15): each sub-platform (Clinical Chemistry,
+    Hematology, Hormones) gets its own block, organized by sex (Male then
+    Female).  Endpoints with significant trend AND pairwise comparisons are
+    described with direction, LOEL, and BMD/BMDL.
+
+    Args:
+        sub_platform: Display name, e.g., "Clinical Chemistry".
+        sex_rows:     {sex -> [TableRow]} for this sub-platform.
+        compound_name: Chemical name for prose.
+        dose_unit:     Dose unit string.
+
+    Returns:
+        List of paragraph strings (one per sex with data, possibly zero).
+    """
+    paragraphs: list[str] = []
+
+    for sex in ["Male", "Female"]:
+        rows = sex_rows.get(sex, [])
+        if not rows:
+            continue
+
+        # Split into significant and non-significant
+        sig_rows = [r for r in rows if r.responsive and r.bmd_str != "ND"]
+        nonsig_rows = [r for r in rows if not r.responsive or r.bmd_str == "ND"]
+
+        if not sig_rows:
+            # Nothing significant for this sex in this sub-platform
+            paragraphs.append(
+                f"In {sex.lower()} {animals}, no {sub_platform.lower()} endpoints "
+                f"exhibited significant trend and pairwise comparisons."
+            )
+            continue
+
+        # Build per-endpoint findings — each is a template (author wording
+        # Literals + live data Slots) rendered against the row's projection.
+        # Byte-identical to the former f-string (Phase 2, section_template).
+        findings: list[str] = []
+        for r in sig_rows:
+            direction = _endpoint_direction(r)
+            low_dose = _lowest_sig_dose(r)
+            tpl = _sub_platform_finding_template(r.label, low_dose is not None)
+            binding = _bind_sub_platform_finding(r, dose_unit, direction, low_dose)
+            findings.append(render(tpl, binding))
+
+        sex_para = f"In {sex.lower()} {animals}, "
+        sex_para += " ".join(findings)
+
+        # Non-significant endpoints
+        if nonsig_rows:
+            nonsig_labels = [r.label.lower() for r in nonsig_rows]
+            nonsig_str = _oxford_comma(nonsig_labels, conjunction="or")
+            sex_para += (
+                f" Significant trend and pairwise comparisons were not "
+                f"observed in {nonsig_str}."
+            )
+
+        paragraphs.append(sex_para)
+
+    return paragraphs
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Public API — the two unified narrative generators
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def generate_apical_narrative(
+    platform_tables: dict[str, dict[str, list]],
+    compound_name: str,
+    dose_unit: str,
+    sidecar_mortality: dict | None = None,
+    clinical_obs_incidence: dict[str, list] | None = None,
+    organ_allowlist: list[str] | None = None,
+    ow_sex_allowlist: list[str] | None = None,
+    design: dict | None = None,
+) -> list[str]:
+    """
+    Unified "Animal Condition, Body Weights, and Organ Weights" narrative.
+
+    Produces paragraphs in the same order as the NIEHS reference report (p.11):
+      1. Animal condition (mortality + clinical signs)
+      2. Body weight findings per sex
+      3. Organ weight findings per sex (significant, then non-significant list)
+
+    This replaces the per-platform generate_results_narrative() calls for
+    Body Weight and Organ Weight platforms.
+
+    Args:
+        platform_tables:        The full {platform -> {sex -> [TableRow]}} dict
+                                from the NTP stats pipeline.  Only the
+                                "Body Weight" and "Organ Weight" entries are used.
+        compound_name:          Chemical name for prose (e.g., "PFHxSAm").
+        dose_unit:              Dose unit string (e.g., "mg/kg").
+        sidecar_mortality:      Output from extract_mortality().  If None, the
+                                animal condition paragraph is omitted.
+        clinical_obs_incidence: Optional {sex: [IncidenceRow]} from
+                                build_clinical_obs_tables().  If None, clinical
+                                signs are omitted from the condition paragraph.
+        organ_allowlist:        Report-level organ allowlist (lower-cased
+                                tokens) for the "organ-weight" area, applied to
+                                the organ-weight findings so the prose matches
+                                the filtered Organ Weight table.  Empty/None ⇒
+                                no filtering.
+        ow_sex_allowlist:       Report-level sex allowlist for the
+                                "organ-weight" area, applied to the organ-weight
+                                findings so the prose shows the same sexes the
+                                Organ Weight table does (which already honors
+                                sex.organ-weight).  Empty/None ⇒ both sexes.
+        design:                 Study design facts (pipeline.study_design) for
+                                the species and verb; None ⇒ the standard design.
+
+    Returns:
+        List of paragraph strings, ready for display or export.
+    """
+    animals = _animals(design)
+    paragraphs: list[str] = []
+
+    # 1. Animal condition (mortality + clinical signs)
+    if sidecar_mortality:
+        paragraphs.extend(
+            _build_animal_condition_paragraphs(
+                compound_name, dose_unit, sidecar_mortality,
+                clinical_obs_incidence, design,
+            )
+        )
+
+    # 2. Body weight findings
+    paragraphs.extend(
+        _build_body_weight_paragraphs(platform_tables, compound_name, dose_unit, animals)
+    )
+
+    # 3. Organ weight findings
+    paragraphs.extend(
+        _build_organ_weight_paragraphs(
+            platform_tables, compound_name, dose_unit, organ_allowlist,
+            ow_sex_allowlist, animals,
+        )
+    )
+
+    return paragraphs
+
+
+def generate_platform_narrative(
+    platform: str | None,
+    sex_rows: dict[str, list],
+    compound_name: str,
+    dose_unit: str,
+    design: dict | None = None,
+) -> list[str]:
+    """
+    Per-platform narrative entry — one platform's {sex -> [TableRow]} at a time.
+
+    This is the templated replacement for bmdx_pipe.generate_results_narrative:
+    the per-card callers (bm2 upload preview, per-platform section cards) hand in
+    a single platform's rows and get back that platform's NIEHS-structured prose.
+    generate_apical_narrative / generate_clinical_pathology_narrative remain the
+    cross-platform unified entries; this composes the same _build_* builders for
+    one platform.
+
+    Dispatch:
+      - "Body Weight"    → _build_body_weight_paragraphs
+      - "Organ Weight"   → _build_organ_weight_paragraphs
+      - Clinical Chemistry / Hematology / Hormones → _build_sub_platform_paragraphs
+      - anything else / None → auto-detect by row type (mirrors the old twin's
+        _parse_organ_label dispatch): the body- and organ-weight builders each
+        self-filter to their row type, so a mixed bm2 card (body + organ weights,
+        no clean platform string) routes cleanly; when neither yields prose, fall
+        back to the generic sub-platform builder.
+
+    Args:
+        platform:      Canonical platform name, or None/unknown to auto-detect.
+        sex_rows:      {sex -> [TableRow]} for this one platform.
+        compound_name: Chemical name for prose.
+        dose_unit:     Dose unit string (e.g., "mg/kg").
+        design:        Study design facts (pipeline.study_design) for the
+                       species; None ⇒ the standard design.
+
+    Returns:
+        List of paragraph strings (possibly empty).
+    """
+    if not sex_rows:
+        return []
+    animals = _animals(design)
+
+    if platform == "Body Weight":
+        return _build_body_weight_paragraphs(
+            {"Body Weight": sex_rows}, compound_name, dose_unit, animals)
+    if platform == "Organ Weight":
+        return _build_organ_weight_paragraphs(
+            {"Organ Weight": sex_rows}, compound_name, dose_unit, animals=animals)
+    if platform in CLINICAL_PATH_PLATFORMS:
+        return _build_sub_platform_paragraphs(
+            platform, sex_rows, compound_name, dose_unit, animals)
+
+    # Unknown/None platform → auto-detect by row type.  Each builder self-filters
+    # (_build_body_weight keeps only body_weight rows; _build_organ_weight keeps
+    # only non-body-weight rows), so passing the same mixed sex_rows to both
+    # reproduces the old twin's body-then-organ structure.
+    out = _build_body_weight_paragraphs(
+        {"Body Weight": sex_rows}, compound_name, dose_unit, animals)
+    out += _build_organ_weight_paragraphs(
+        {"Organ Weight": sex_rows}, compound_name, dose_unit, animals=animals)
+    if out:
+        return out
+    return _build_sub_platform_paragraphs(
+        platform or "", sex_rows, compound_name, dose_unit, animals)
+
+
+def generate_clinical_pathology_narrative(
+    platform_tables: dict[str, dict[str, list]],
+    compound_name: str,
+    dose_unit: str,
+    design: dict | None = None,
+) -> list[str]:
+    """
+    Unified "Clinical Pathology" narrative.
+
+    Produces paragraphs organized by sub-platform then by sex, in the same
+    order as the NIEHS reference report (p.14-15):
+      - Clinical Chemistry (male, female)
+      - Hematology (male, female)
+      - Hormones (male, female)
+
+    This replaces the per-platform generate_results_narrative() calls for
+    Clinical Chemistry, Hematology, and Hormones platforms.
+
+    Args:
+        platform_tables: The full {platform -> {sex -> [TableRow]}} dict.
+                         Only Clinical Chemistry, Hematology, and Hormones
+                         entries are used.
+        compound_name:   Chemical name for prose (e.g., "PFHxSAm").
+        dose_unit:       Dose unit string (e.g., "mg/kg").
+        design:          Study design facts (pipeline.study_design) for the
+                         species; None ⇒ the standard design.
+
+    Returns:
+        List of paragraph strings, ready for display or export.
+    """
+    animals = _animals(design)
+    paragraphs: list[str] = []
+
+    for sub_platform in CLINICAL_PATH_ORDER:
+        sex_rows = platform_tables.get(sub_platform, {})
+        if not sex_rows:
+            continue
+
+        # Sub-platform heading is implicit in the prose — the reference report
+        # doesn't use explicit sub-headers within the Clinical Pathology section,
+        # it just transitions between topics.  We add a brief label for clarity.
+        sub_paras = _build_sub_platform_paragraphs(
+            sub_platform, sex_rows, compound_name, dose_unit, animals,
+        )
+        paragraphs.extend(sub_paras)
+
+    return paragraphs
+
+
+# ---------------------------------------------------------------------------
+# Categorical signature (Phase 3b — reprocess wording-review detection)
+# ---------------------------------------------------------------------------
+#
+# A programmatic finding sentence carries data-DERIVED WORDS (direction / trend),
+# not just magnitudes. A data reprocess auto-refreshes the numbers, but a FLIP of
+# one of those words can leave an author's approved wording contradicting the data.
+# These projections capture ONLY the categorical slot values per significant
+# finding, keyed by a stable identity (`{sex}|{label}`), so a later reprocess can
+# diff old-vs-new and flag the flip (workflow.reprocess.cat_signature_flips). They
+# are a SEPARATE pass over the same rows the paragraph builders use — the prose path
+# is untouched, so narrative output stays byte-identical.
+#
+# Only the CATEGORICAL binding values are collected (direction/trend/direction_noun/
+# direction_adj); numeric slots (bmd/bmdl/loel/unit) are silent-refresh-safe and
+# excluded. The filtering predicates mirror the builders EXACTLY (responsive AND
+# bmd_str != "ND"), so a finding appears in the signature iff it is templated in the
+# prose.
+
+
+def _cat_only(binding: dict) -> dict:
+    """Keep just the categorical slot values from a `_bind_*` projection."""
+    return {
+        k: v for k, v in binding.items()
+        if k in ("direction", "trend", "direction_noun", "direction_adj")
+    }
+
+
+def platform_cat_signature(
+    platform: str | None,
+    sex_rows: dict[str, list],
+    dose_unit: str,
+) -> dict[str, dict[str, str]]:
+    """Per-card categorical signature — one platform's `{sex -> [TableRow]}`.
+
+    The signature twin of `generate_platform_narrative`: dispatches to the same
+    per-platform projection so a section CARD (built per platform) carries the
+    categorical values of exactly the findings its prose describes. Keyed
+    `{sex}|{label}` (body weight / clinical) or `{sex}|{organ_name}` (organ). Empty
+    for platforms with no templated categorical findings (e.g. Tissue Concentration).
+    """
+    if not sex_rows:
+        return {}
+    if platform == "Body Weight":
+        return apical_cat_signature({"Body Weight": sex_rows}, dose_unit)
+    if platform == "Organ Weight":
+        return apical_cat_signature({"Organ Weight": sex_rows}, dose_unit)
+    if platform in CLINICAL_PATH_PLATFORMS:
+        return clinical_pathology_cat_signature({platform: sex_rows}, dose_unit)
+    # Unknown/None → auto-detect exactly like generate_platform_narrative: try the
+    # apical (body+organ) projection, else the clinical one.
+    sig = apical_cat_signature(
+        {"Body Weight": sex_rows, "Organ Weight": sex_rows}, dose_unit)
+    if sig:
+        return sig
+    return clinical_pathology_cat_signature({(platform or ""): sex_rows}, dose_unit)
+
+
+def apical_cat_signature(
+    platform_tables: dict[str, dict[str, list]],
+    dose_unit: str,
+    organ_allowlist: list[str] | None = None,
+    ow_sex_allowlist: list[str] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Categorical values for the significant Body Weight + Organ Weight findings.
+
+    Keyed `{sex}|{label}` for body weight (one row per endpoint) and
+    `{sex}|{organ_name}` for organ weight (grouped by organ, matching the prose).
+    Pure; mirrors _build_body_weight_paragraphs / _build_organ_weight_paragraphs
+    filtering so the signature and the prose describe the same findings.
+    """
+    sig: dict[str, dict[str, str]] = {}
+
+    # Body weight — one significant row per sex/endpoint.
+    bw_data = platform_tables.get("Body Weight", {})
+    for sex in ["Male", "Female"]:
+        for bw_row in bw_data.get(sex, []):
+            if _parse_organ_label(bw_row.label)[1] != "body_weight":
+                continue
+            if not bw_row.responsive or bw_row.bmd_str == "ND":
+                continue
+            direction = _endpoint_direction(bw_row)
+            binding = _bind_body_weight(bw_row, dose_unit, direction, None)
+            sig[f"{sex}|{bw_row.label}"] = _cat_only(binding)
+
+    # Organ weight — grouped by organ name per sex (same grain as the prose).
+    from document_model.filters import organ_allowed, sex_allowed
+
+    ow_data = platform_tables.get("Organ Weight", {})
+    for sex in ["Male", "Female"]:
+        if not sex_allowed(sex, ow_sex_allowlist):
+            continue
+        organ_rows = [
+            r for r in ow_data.get(sex, [])
+            if _parse_organ_label(r.label)[1] != "body_weight"
+            and organ_allowed(_parse_organ_label(r.label)[0], organ_allowlist)
+        ]
+        sig_rows = [r for r in organ_rows if r.responsive and r.bmd_str != "ND"]
+        organ_groups: dict[str, list] = {}
+        for r in sig_rows:
+            organ_name, _wt = _parse_organ_label(r.label)
+            organ_groups.setdefault(organ_name, []).append(r)
+        for organ_name, group_rows in organ_groups.items():
+            direction = _endpoint_direction(group_rows[0])
+            binding = _bind_organ_finding(group_rows, dose_unit, direction, None)
+            sig[f"{sex}|{organ_name}"] = _cat_only(binding)
+
+    return sig
+
+
+def clinical_pathology_cat_signature(
+    platform_tables: dict[str, dict[str, list]],
+    dose_unit: str,
+) -> dict[str, dict[str, str]]:
+    """Categorical values for the significant Clinical Pathology findings.
+
+    Keyed `{sub_platform}|{sex}|{label}` (one significant row per endpoint). Pure;
+    mirrors _build_sub_platform_paragraphs filtering.
+    """
+    sig: dict[str, dict[str, str]] = {}
+    for sub_platform in CLINICAL_PATH_ORDER:
+        sex_rows = platform_tables.get(sub_platform, {})
+        for sex in ["Male", "Female"]:
+            for r in sex_rows.get(sex, []):
+                if not r.responsive or r.bmd_str == "ND":
+                    continue
+                direction = _endpoint_direction(r)
+                binding = _bind_sub_platform_finding(r, dose_unit, direction, None)
+                sig[f"{sub_platform}|{sex}|{r.label}"] = _cat_only(binding)
+    return sig

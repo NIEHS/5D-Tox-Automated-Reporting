@@ -1,5 +1,11 @@
 # E2E Visual Step-Through Tests
 
+> **STALE (2026-09-18):** these tests drive the retired Alpine UI (`web/`,
+> deleted) by its button ids (`#btn-validate`, `#btn-integrate`, …). The live
+> SPA (`wizard-ui/`, served at `/` and `/workflow`) has different markup, so
+> this suite cannot pass until it is rewritten against the SPA. It is already
+> excluded from default `pytest` runs (see pyproject `addopts`).
+
 Playwright-based end-to-end tests that run in a real browser. You watch the
 test execute in Chromium while tailing a structured log in a second terminal.
 

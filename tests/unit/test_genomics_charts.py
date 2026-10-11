@@ -16,7 +16,7 @@ pass the decode-validation) exercises the branch directly.
 
 import base64
 
-from genomics_charts import attach_genomics_charts
+from genomics.genomics_charts import attach_genomics_charts
 
 # Smallest decodable PNG (1x1 transparent) — attach validates the base64
 # decodes, so any real PNG bytes suffice.

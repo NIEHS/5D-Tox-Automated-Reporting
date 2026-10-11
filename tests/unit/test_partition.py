@@ -6,9 +6,8 @@ experimentDescription.platform field to partition NTP stats output into
 per-platform section cards.
 """
 
-import pytest
 
-from pool_orchestrator import _filter_gene_expression, _partition_by_platform
+from pipeline.pool_orchestrator import _filter_gene_expression, _partition_by_platform
 from bmdx_pipe import TableRow
 
 
@@ -134,6 +133,22 @@ class TestPartitionByPlatform:
         assert "Body Weight" in result
         assert "Clinical Chemistry" in result
 
+    def test_derived_relative_weight_follows_its_organ(self):
+        """build_table_data derives "<organ> Relative" rows that have no probe in
+        the integrated data; they belong to the organ's platform."""
+        integrated = {
+            "doseResponseExperiments": [
+                self._make_experiment("organ_weights_truth_male", "Organ Weight",
+                                      ["Liver", "Terminal Body Weight"]),
+            ],
+        }
+        table_data = {
+            "Male": [self._make_table_row("Liver"), self._make_table_row("Liver Relative")],
+        }
+        result = _partition_by_platform(integrated, {}, table_data)
+        assert [r.label for r in result["Organ Weight"]["Male"]] == ["Liver", "Liver Relative"]
+        assert "unknown" not in result
+
     def test_uses_platform_field_not_domain(self):
         """
         The new domain model uses experimentDescription.platform.
@@ -168,3 +183,19 @@ class TestPartitionByPlatform:
         for platform_data in result.values():
             for sex_rows in platform_data.values():
                 assert len(sex_rows) == 0
+
+
+def test_internal_dose_experiments_left_out_of_the_stats_pipeline():
+    """Tissue Concentration is a measured internal dose: its table comes from the
+    sidecars, and it must reach neither the apical tables nor the BMD summary."""
+    from pipeline.processing_helpers import _drop_internal_dose
+
+    integrated = {"doseResponseExperiments": [
+        {"name": "body_weight_truth_female", "experimentDescription": {"platform": "Body Weight"}},
+        {"name": "tissue_conc_truth_female",
+         "experimentDescription": {"platform": "Tissue Concentration"}},
+        {"name": "tissue_conc_truth_male"},                      # legacy: no description
+    ]}
+    kept = _drop_internal_dose(integrated)["doseResponseExperiments"]
+    assert [e["name"] for e in kept] == ["body_weight_truth_female"]
+    assert len(integrated["doseResponseExperiments"]) == 3      # input untouched

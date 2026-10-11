@@ -73,6 +73,11 @@
 % inside it.
 \RequirePackage{longtable}
 
+% array for >{\raggedright\arraybackslash}p{...} columns: a matrix that gives
+% column widths (e.g. the Appendix D tables) wraps its cells ragged-right
+% instead of justifying them across a narrow column.
+\RequirePackage{array}
+
 % --- Figures -------------------------------------------------------------
 % graphicx for \includegraphics{figures/<chart>.png}.  Each genomics chart
 % ships as a PNG (decoded from the session chart cache) in the figures/
@@ -253,10 +258,17 @@
 % that already fit pass through at natural size.  This is why a too-wide
 % dose-response table on a landscape page now fits (scaled to ~9in) instead
 % of running off the edge, while ordinary portrait tables look unchanged.
+% \ifniehsunlisted — set by the generator when it opens an appendix (ADR-0025
+% phase 4): tables inside an appendix keep their numbered caption but take the
+% EMPTY short-caption form, which the caption package treats as "no entry in
+% \listoftables" — the appendix's own Tables list carries them instead, as in
+% the reference report.
+\newif\ifniehsunlisted
+\niehsunlistedfalse
 \newenvironment{niehstable}[2]{%
   \begin{table}[htbp]%
     \centering%
-    \caption{#2}\label{tab:#1}%
+    \ifniehsunlisted\caption[]{#2}\else\caption{#2}\fi\label{tab:#1}%
     \begin{adjustbox}{max width=\linewidth}%
     \begin{threeparttable}%
 }{%

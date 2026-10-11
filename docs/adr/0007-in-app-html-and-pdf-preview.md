@@ -1,6 +1,21 @@
 # 0007 — In-app HTML live view + PDF view (local compile + reference compare)
 
-- **Status:** Proposed (2026-07-07).
+- **Status:** **Partially implemented; remainder RETIRED (user 2026-08-17).** The
+  in-app HTML live view SHIPPED and stays — `/api/preview-latex-html` renders the
+  editable HTML from the same tree walk as the `.tex` (ADR-0006), and the title
+  page shipped as `\maketitle`. The still-deferred parts — the **server-side
+  local-compile PDF view** and the **reference-compare PDF** — are **NO LONGER
+  NEEDED** (user decision 2026-08-17): with the Overleaf compile path live
+  (`/api/compile-pdf`) and Overleaf as the committee-review surface, an in-app PDF
+  preview is redundant. Do NOT build the PDF-view / reference-compare half. What
+  this ADR leaves live is exactly the shipped HTML preview. Was Proposed
+  2026-07-07.
+- **Framing amended-by:** [ADR-0018](0018-app-is-not-an-editor.md) (2026-09-11).
+  This ADR's language calls the HTML pane the "editing content pane" / "the work
+  surface." Per ADR-0018 the app is **not** an editor — there is no in-app authoring
+  of prose. The HTML view **survives, but as a PREVIEW surface, not an editing
+  surface.** Read every "edit"/"editing pane" phrase below as "preview." The live
+  preview mechanics are unchanged; only the framing is corrected.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0005](0005-overleaf-round-trip-content-sync.md) (Overleaf is
   the committee-review surface; this ADR reduces the number of round trips to

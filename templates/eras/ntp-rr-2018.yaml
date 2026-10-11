@@ -1,0 +1,105 @@
+# eras/ntp-rr-2018 — the 5-day study as an NTP Research Report (RR-8, December
+# 2018: Triphenyl Phosphate), the model the NIEHS Report series was later built
+# on.  ADR-0029: the 2022 generation (eras/niehs-2022, single-file) plus what
+# this book does differently.
+extends: eras/niehs-2022
+
+# Every table and figure floats, the appendices' included.
+object_position: {body: float, back: float}
+
+# The NTP Research Report series, published by the National Toxicology Program.
+book_meta:
+  collection: {title: NTP Research Reports}
+  series: {title: NTP Research Report, acronym: RR-CS, issn: 2473-4756}
+  publisher: {name: National Toxicology Program, loc: Durham (NC)}
+
+changes:
+  # ── Front matter: Acknowledgments, Collaborators, Contributors, Peer Review
+  # (with its Peer Reviewers), Publication Details.  No Foreword, no Authors.
+  - remove: foreword
+  - remove: authors
+  - move: acknowledgments
+    before: contributors
+  - insert:
+    - id: collaborators
+      type: front-matter
+      title: Collaborators
+      data_key: collaborators
+      element: front-matter-part
+      book_part_type: collaborators
+    before: contributors
+  # The abstract is unstructured: no Background / Methods / Results / Summary.
+  - set: abstract
+    parts: null
+  - insert:
+    - id: peer-reviewers
+      type: heading-only
+      title: Peer Reviewers
+      children:
+      - {id: peer-reviewers-list, type: freeform-block, title: "", session_content: peer-reviewers,
+         missing_content_text: "The peer reviewers are not listed for this study."}
+    into: peer-review
+
+  # ── Materials and Methods ───────────────────────────────────────────────
+  - insert:
+    - id: mm-chemistry-procurement
+      type: narrative
+      title: Procurement, Characterization, and Formulation
+      data_key: methods
+      methods_key: chemistry_procurement
+    into: mm-chemistry
+  - remove: mm-body-organ-wt
+  - set: mm-stat-apical
+    title: Statistical Analysis of Body Weights, Organ Weights, Clinical Chemistry
+  - set: mm-bmd-apical
+    title: Benchmark Dose (BMD) Analysis of Organ Weights and Clinical Pathology
+  - set: mm-bmd-tx
+    title: BMD Analysis of Transcriptomics Data
+
+  # ── Results, then a Discussion where the NIEHS Reports have a Summary ────
+  - set: animal-condition
+    title: Animal Condition, Body and Organ Weights
+  - set: bmd-summary
+    title: Apical Endpoint and Clinical Chemistry Benchmark Dose Summary Table
+  - set: gene-sets
+    title: Gene Set BMD Analysis
+  - set: gene-bmd
+    title: Differentially Expressed Gene Analysis
+  - remove: summary
+  - insert:
+    - id: discussion
+      type: narrative
+      title: Discussion
+      data_key: discussion
+      element: sec
+    after: results
+
+  # ── Appendices A–E ───────────────────────────────────────────────────────
+  # A: the animal identifiers with the endpoint analyses; B: the analytical
+  # chemistry; C: the toxicology data tables; D: transcriptomic QC (as 2022's
+  # C); E: the apical endpoints' QC.  B and E are the study's own content.
+  - set: appendix-b
+    title: Animal Identifiers and Endpoint Analyses
+  - insert:
+    - id: appendix-analytical-chemistry
+      type: appendix
+      element: app
+      title: Analytical Chemistry
+      children:
+      - {id: appendix-analytical-chemistry-body, type: freeform-block, title: "",
+         session_content: analytical-chemistry,
+         missing_content_text: "The analytical chemistry is not supplied for this study."}
+    after: appendix-b
+  - remove: appendix-d
+  - remove: appendix-e
+  - remove: appendix-f
+  - insert:
+    - id: appendix-apical-qc
+      type: appendix
+      element: app
+      title: Apical Endpoint Quality Control and Additional Data Analysis
+      children:
+      - {id: appendix-apical-qc-body, type: freeform-block, title: "",
+         session_content: apical-quality-control,
+         missing_content_text: "The apical endpoint quality control is not supplied for this study."}
+    after: appendix-c

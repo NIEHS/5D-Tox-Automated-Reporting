@@ -14,7 +14,7 @@ The load-bearing properties:
 
 import pytest
 
-import vocabulary as V
+import document_model.vocabulary as V
 
 
 # ---------------------------------------------------------------------------

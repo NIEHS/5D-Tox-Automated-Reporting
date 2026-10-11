@@ -29,11 +29,19 @@
     "type": "tables-list"
   },
   {
-    "data_key": "about_report",
-    "id": "about",
+    "data_key": "authors",
+    "id": "authors",
     "level": 1,
     "region": "front",
-    "title": "About This Report",
+    "title": "Authors",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "contributors",
+    "id": "contributors",
+    "level": 1,
+    "region": "front",
+    "title": "Contributors",
     "type": "front-matter"
   },
   {
@@ -171,22 +179,25 @@
             "type": "narrative"
           },
           {
+            "children": [
+              {
+                "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                "data_key": "sample_counts",
+                "id": "table-sample-counts",
+                "level": 0,
+                "region": "body",
+                "table_label": "1",
+                "table_number": 1,
+                "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                "type": "sample-counts-table"
+              }
+            ],
             "data_key": "methods",
             "id": "mm-tx-qc",
             "level": 3,
             "region": "body",
             "title": "Sequencing Quality Checks and Outlier Removal",
             "type": "narrative"
-          },
-          {
-            "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-            "data_key": "sample_counts",
-            "id": "table-sample-counts",
-            "level": 0,
-            "region": "body",
-            "table_number": 1,
-            "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-            "type": "sample-counts-table"
           },
           {
             "data_key": "methods",
@@ -273,6 +284,7 @@
             "platform": "Body Weight",
             "ready_key": "animalCondition",
             "region": "body",
+            "table_label": "2",
             "table_number": 2,
             "title": "Summary of Body Weights",
             "type": "table"
@@ -284,6 +296,7 @@
             "platform": "Organ Weight",
             "ready_key": "animalCondition",
             "region": "body",
+            "table_label": "3",
             "table_number": 3,
             "title": "Summary of Organ Weights",
             "type": "table"
@@ -306,6 +319,7 @@
             "platform": "Clinical Chemistry",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "4",
             "table_number": 4,
             "title": "Summary of Select Clinical Chemistry Data",
             "type": "table"
@@ -317,6 +331,7 @@
             "platform": "Hematology",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "5",
             "table_number": 5,
             "title": "Summary of Select Hematology Data",
             "type": "table"
@@ -328,6 +343,7 @@
             "platform": "Hormones",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "6",
             "table_number": 6,
             "title": "Summary of Select Hormone Data",
             "type": "table"
@@ -349,6 +365,7 @@
             "platform": "Tissue Concentration",
             "ready_key": "internalDose",
             "region": "body",
+            "table_label": "7",
             "table_number": 7,
             "title": "Summary of Plasma Concentration Data",
             "type": "table"
@@ -356,6 +373,7 @@
         ],
         "id": "internal-dose",
         "level": 2,
+        "narrative_key": "internal_dose",
         "ready_key": "internalDose",
         "region": "body",
         "title": "Internal Dose Assessment",
@@ -368,6 +386,7 @@
         "level": 2,
         "ready_key": "bmdSummary",
         "region": "body",
+        "table_label": "8",
         "table_number": 8,
         "title": "Apical Endpoint Benchmark Dose Summary",
         "type": "bmd-summary"
@@ -411,9 +430,9 @@
     "data_key": "references",
     "id": "references",
     "level": 1,
-    "region": "back",
+    "region": "body",
     "title": "References",
-    "type": "narrative"
+    "type": "reference-list"
   },
   {
     "appendix_letter": "A",
@@ -434,6 +453,18 @@
   },
   {
     "appendix_letter": "B",
+    "children": [
+      {
+        "data_key": "appendix_animals_matrix",
+        "id": "table-b-1",
+        "level": 0,
+        "region": "back",
+        "table_label": "B-1",
+        "table_number": 1,
+        "title": "Animal Numbers and FASTQ Data File Names",
+        "type": "data-table"
+      }
+    ],
     "id": "appendix-b",
     "level": 1,
     "region": "back",
@@ -442,6 +473,53 @@
   },
   {
     "appendix_letter": "C",
+    "children": [
+      {
+        "children": [
+          {
+            "id": "appendix-c-qc-text",
+            "level": 3,
+            "region": "back",
+            "title": "",
+            "type": "freeform-block"
+          },
+          {
+            "data_key": "appendix_pca_figure",
+            "figure_label": "C-1",
+            "figure_number": 1,
+            "id": "figure-c-pca",
+            "level": 0,
+            "region": "back",
+            "title": "Principal Component Analysis of the Normalized Transcriptomic Data",
+            "type": "figure"
+          }
+        ],
+        "id": "appendix-c-qc",
+        "level": 2,
+        "region": "back",
+        "title": "Gene Expression Quality Control",
+        "type": "heading-only"
+      },
+      {
+        "children": [
+          {
+            "data_key": "appendix_efdr_figure",
+            "figure_label": "C-2",
+            "figure_number": 2,
+            "id": "figure-c-efdr",
+            "level": 0,
+            "region": "back",
+            "title": "Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination",
+            "type": "figure"
+          }
+        ],
+        "id": "appendix-c-efdr",
+        "level": 2,
+        "region": "back",
+        "title": "Empirical False Discovery Rate",
+        "type": "heading-only"
+      }
+    ],
     "id": "appendix-c",
     "level": 1,
     "region": "back",
@@ -457,23 +535,52 @@
         "region": "back",
         "title": "",
         "type": "freeform-block"
+      },
+      {
+        "data_key": "appendix_bmd_acceptance_matrix",
+        "id": "table-d-1",
+        "level": 0,
+        "region": "back",
+        "table_label": "D-1",
+        "table_number": 1,
+        "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints",
+        "type": "data-table"
+      },
+      {
+        "data_key": "appendix_bmd_config_matrix",
+        "id": "table-d-2",
+        "level": 0,
+        "region": "back",
+        "table_label": "D-2",
+        "table_number": 2,
+        "title": "BMDExpress/ToxicR Analysis Configuration",
+        "type": "data-table"
       }
     ],
     "id": "appendix-d",
     "level": 1,
     "region": "back",
-    "title": "Benchmark Dose Model Recommendation and Selection Methodologies",
+    "title": "Benchmark Dose Modeling and Acceptance Criteria",
     "type": "appendix"
   },
   {
     "appendix_letter": "E",
     "children": [
       {
-        "id": "appendix-e-body",
+        "children": [
+          {
+            "id": "appendix-e-body",
+            "level": 3,
+            "region": "back",
+            "title": "",
+            "type": "freeform-block"
+          }
+        ],
+        "id": "appendix-e-descriptions",
         "level": 2,
         "region": "back",
-        "title": "",
-        "type": "freeform-block"
+        "title": "Organ Weight Descriptions",
+        "type": "heading-only"
       }
     ],
     "id": "appendix-e",

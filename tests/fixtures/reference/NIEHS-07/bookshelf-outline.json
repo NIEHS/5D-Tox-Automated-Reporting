@@ -1,0 +1,996 @@
+[
+ {
+  "depth": 0,
+  "kind": "book-title",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of 6:1 Fluorotelomer Alcohol (CASRN 375-82-6) in Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)"
+ },
+ {
+  "depth": 0,
+  "kind": "subtitle",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report 07"
+ },
+ {
+  "depth": 0,
+  "kind": "contrib-group",
+  "part_type": "authors",
+  "label": "",
+  "title": "19 contrib"
+ },
+ {
+  "depth": 0,
+  "kind": "abstract",
+  "part_type": "",
+  "label": "",
+  "title": "Abstract"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "foreword",
+  "part_type": "foreword",
+  "label": "",
+  "title": "Foreword"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "authors",
+  "label": "",
+  "title": "Authors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "contributors",
+  "label": "",
+  "title": "Contributors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "peer-review",
+  "label": "",
+  "title": "Peer Review"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Publication Details"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "acknowledgments",
+  "label": "",
+  "title": "Acknowledgments"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Study Design"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Dose Selection Rationale"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Chemistry"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Examinations and Sample Collection"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Observations"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Body and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Internal Dose Assessment"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sample Collection for Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "RNA Isolation, Library Creation, and Sequencing"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sequence Data Processing"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sequencing Quality Checks and Outlier Removal"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 1",
+  "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Normalization"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Accessibility"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Animal Condition, Body Weights, and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 2",
+  "title": "Summary of Body Weights of Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 3",
+  "title": "Summary of Select Organ Weights of Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 4",
+  "title": "Summary of Select Clinical Chemistry Data for Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 5",
+  "title": "Summary of Select Hematology Data for Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Days"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 6",
+  "title": "Summary of Select Hormone Data for Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Days"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Internal Dose Assessment"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 7",
+  "title": "Summary of Plasma Concentration Data for Male and Female Rats Administered 6:1 Fluorotelomer Alcohol for Five Daysa"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Apical Endpoint Benchmark Dose Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 8",
+  "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Set Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 9",
+  "title": "Top 10 Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 10",
+  "title": "Top 10 Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 11",
+  "title": "Top 10 Liver Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 12",
+  "title": "Top 10 Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "book-part",
+  "part_type": "section",
+  "label": "",
+  "title": "References"
+ },
+ {
+  "depth": 1,
+  "kind": "ref-list",
+  "part_type": "",
+  "label": "",
+  "title": ""
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix A",
+  "title": "Internal Dose Assessment"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "A.1",
+  "title": "Quantitation of 6:1 Fluorotelomer Alcohol in Plasma"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix B",
+  "title": "Animal Identifiers"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-1",
+  "title": "Animal Numbers and FASTQ Data File Names"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix C",
+  "title": "Transcriptomic Quality Control and Empirical False Discovery Rate"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.1",
+  "title": "Gene Expression Quality Control"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-1",
+  "title": "A Principal Component Analysis of the Normalized Data from the Liver of Male Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-2",
+  "title": "A Principal Component Analysis of the Normalized Data from the Liver of Female Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-3",
+  "title": "A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-4",
+  "title": "A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.2",
+  "title": "Empirical False Discovery Rate"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.2.1",
+  "title": "Methods"
+ },
+ {
+  "depth": 3,
+  "kind": "disp-formula",
+  "part_type": "",
+  "label": "(1)",
+  "title": ""
+ },
+ {
+  "depth": 3,
+  "kind": "disp-formula",
+  "part_type": "",
+  "label": "(2)",
+  "title": ""
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.2.2",
+  "title": "Results"
+ },
+ {
+  "depth": 3,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-5",
+  "title": "Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination"
+ },
+ {
+  "depth": 3,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure C-6",
+  "title": "Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue per Sex Combination"
+ },
+ {
+  "depth": 3,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table C-1",
+  "title": "Number of False Positives"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix D",
+  "title": "Benchmark Dose Model Recommendation and Selection Methodologies"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table D-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose Execution of Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-2",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution of Gene Sets with Expression Changes Enacted by Chemical Exposure"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix E",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "E.1",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 0,
+  "kind": "book-app",
+  "part_type": "appendix",
+  "label": "Appendix F",
+  "title": "Supplemental Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.1",
+  "title": "Apical Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Mean Body Weight Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Organ Weights Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Chemistry Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Hematology Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Hormone and Enzymes Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD, NOEL and LOEL Summary for Apical Endpoints"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Male BMD Apical Endpoints Model Fits"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Female BMD Apical Endpoints Model Fits"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD Model Recommendation Selection Rules"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Read Me"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Male Model Parameters"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Female Model Parameters"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDs code package"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.2",
+  "title": "Genomic Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File (bm2 format)"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation_Kidney"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets_Kidney"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation_Liver"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets_Liver"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data_Kidney_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data_Kidney_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data_Liver_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data_Liver_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results_Kidney_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results_Kidney_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results_Liver_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results_Liver_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Prefilter Results_ Kidney _Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Prefilter Results_ Kidney _Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Prefilter Results_ Liver _Female"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Prefilter Results_ Liver _Male"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Animal and Fastaq Metadata"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Kidney Principal Components Analysis Files"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Liver Principal Components Analysis Files"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Gene BMD Analysis Results File"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Software"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File (JSON format)"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "GO Biological Process BMD Analysis Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.3",
+  "title": "Study Tables"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04 – Mean_Body_Weight_Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I05 – Clinical_Observations_Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA06 – Organ_Weights_Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA41 – Clinical_Chemistry_Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA43 – Hematology Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA48 – Summary of Tissue Concentration"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "R07 – Hormone_Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.4",
+  "title": "Individual Animal Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Body Weight Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Chemistry Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Observations Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Hormone Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Organ Weight Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Hematology Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Tissue Concentration Data"
+ }
+]

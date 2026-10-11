@@ -1,0 +1,261 @@
+<title>Section Catalog Dependency Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #f4f6f8;
+    --panel: #ffffff;
+    --ink: #1b2531;
+    --muted: #5b6b7a;
+    --rule: #d6dde4;
+    --accent: #0e6b77;
+    --accent-soft: #dcefF1;
+    --warn: #a35a0a;
+    --warn-soft: #fbeedb;
+    --code-bg: #eef2f5;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1720; --panel: #172130; --ink: #e4eaef; --muted: #96a5b3; --rule: #2b3846;
+      --accent: #5cc0cb; --accent-soft: #163a41; --warn: #e0a15a; --warn-soft: #3a2a14; --code-bg: #1d2836;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f1720; --panel: #172130; --ink: #e4eaef; --muted: #96a5b3; --rule: #2b3846;
+    --accent: #5cc0cb; --accent-soft: #163a41; --warn: #e0a15a; --warn-soft: #3a2a14; --code-bg: #1d2836;
+  }
+  body { background: var(--paper); color: var(--ink); font-family: var(--serif); font-size: 16px; line-height: 1.55; padding-inline: 16px; padding-block: 0 4rem; margin: 0; }
+  .wrap { max-width: 72ch; margin: 0 auto; }
+  header { padding-block: 2.5rem 1.5rem; border-bottom: 1px solid var(--rule); margin-bottom: 2rem; }
+  .eyebrow { font-family: var(--sans); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.6rem; }
+  h1 { font-family: var(--sans); font-weight: 600; font-size: 2rem; line-height: 1.15; margin: 0 0 0.8rem; text-wrap: balance; }
+  h2 { font-family: var(--sans); font-weight: 600; font-size: 1.3rem; margin: 2.6rem 0 0.8rem; text-wrap: balance; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
+  h3 { font-family: var(--sans); font-weight: 600; font-size: 1rem; margin: 1.6rem 0 0.5rem; }
+  p { margin: 0 0 1rem; }
+  .lede { font-size: 1.08rem; color: var(--muted); }
+  .verdict { display: grid; grid-template-columns: auto 1fr; gap: 0.9rem; align-items: start; background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 1rem 1.1rem; margin: 1.4rem 0; font-family: var(--sans); }
+  .verdict .word { font-size: 1.6rem; font-weight: 600; color: var(--accent); line-height: 1; padding-top: 0.15rem; }
+  .verdict p { margin: 0; }
+  code, .path { font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto; margin: 0.8rem 0 1.2rem; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .tablewrap { overflow-x: auto; margin: 0.8rem -16px 1.4rem; padding: 0 16px; }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 0.86rem; line-height: 1.4; }
+  th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 600; font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--rule); white-space: nowrap; }
+  td code { white-space: nowrap; }
+  .wide table { min-width: 880px; }
+  .gap { color: var(--warn); font-weight: 600; }
+  .tag { display: inline-block; font-family: var(--sans); font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.45rem; border-radius: 3px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: 0.4rem; }
+  .callout { background: var(--warn-soft); border: 1px solid var(--rule); border-left: 4px solid var(--warn); padding: 0.8rem 1rem; margin: 1.2rem 0; font-family: var(--sans); font-size: 0.95rem; }
+  .callout p { margin: 0; }
+  figure { margin: 1.2rem 0 1.6rem; }
+  figcaption { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+  .diagram { overflow-x: auto; }
+  .diagram svg { display: block; min-width: 640px; max-width: 100%; }
+  .diagram .box { fill: var(--panel); stroke: var(--rule); stroke-width: 1.2; }
+  .diagram .box.tree { stroke: var(--accent); stroke-width: 1.6; }
+  .diagram .box.lit { stroke: var(--warn); stroke-width: 1.6; }
+  .diagram .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+  .diagram text { font-family: var(--sans); font-size: 12.5px; fill: var(--ink); }
+  .diagram .sub { font-size: 10.5px; fill: var(--muted); }
+  .diagram .label { font-size: 10.5px; fill: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .diagram #ah path { fill: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 1rem; font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-top: 0.4rem; }
+  .legend span::before { content: ""; display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; margin-right: 0.35em; vertical-align: -0.1em; border-radius: 2px; }
+  .legend .t { color: var(--accent); } .legend .l { color: var(--warn); }
+  .meta { font-family: var(--sans); font-size: 0.85rem; color: var(--muted); }
+  @media (max-width: 480px) { h1 { font-size: 1.6rem; } body { font-size: 15px; } }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">rlm-bmdx · design note · 2026-09-21 · phase 1 of 2</p>
+  <h1>Section Catalog Dependency Map</h1>
+  <p class="lede">Are the workflow's sections created dynamically from the report configuration? Where section identity actually comes from today, every place that duplicates it, and the single catalog that would replace them.</p>
+  <p class="meta">Status: analysis only. No code change described here is implemented. Source of record: <span class="path">docs/plans/section-catalog-dependency-map.md</span>.</p>
+</header>
+
+<div class="verdict">
+  <div class="word">No.</div>
+  <p>The report configuration drives <strong>rendering</strong>. The workflow's notion of a section (what can be generated, approved, and shown) is hand-maintained in <strong>seven places</strong> that never read the tree. They agree today only because someone kept them in step by hand.</p>
+</div>
+
+<p>This note is phase 1: identity. Phase 2, described at the end, traces every <em>downstream</em> dependency of the configured document and needs a document configuration that contains every section currently implemented, so that the traversal covers every path. The user will author that configuration.</p>
+
+<h2>1. The finding</h2>
+<p>The template <span class="path">templates/niehs-5day-report.yaml</span> is instantiated by <span class="path">document_model/document_template.py</span> into the <code>DocNode</code> tree, optionally overridden per session by <span class="path">document_model/document_config.py</span>. That tree drives heading hierarchy, order, table and figure numbering, the table of contents, platform-to-section mapping, and section filtering. All four render surfaces consume it (<span class="path">rendering/report_data.py:455–497</span>, <span class="path">rendering/latex_export.py:893,1111</span>, <span class="path">rendering/preview_surface.py:72</span>).</p>
+<p>It does not drive the workflow. What can be generated, what unlocks what, what the session payload carries, and what the Sections screen lists are each a separate literal list. This week's bugs were exactly the places where those lists had drifted:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Symptom, 2026-09-21</th><th>Root cause</th></tr></thead>
+  <tbody>
+    <tr><td>Materials &amp; Methods showed "0 paragraphs" and re-called the model on every visit</td><td>The screen counted only the flat <code>paragraphs</code> shape; Methods stores <code>sections[].paragraphs</code></td></tr>
+    <tr><td>Summary never generated after Background was approved</td><td>The screen never called <code>/api/generate-summary</code></td></tr>
+    <tr><td>Apical BMD Summary always "not generated"</td><td>The screen never fetched the derivation route</td></tr>
+    <tr><td>Internal Dose renders in the report but has no readiness entry, no payload field, no row</td><td>The node exists in the template only</td></tr>
+  </tbody>
+</table></div>
+
+<p>The tree even carries a <code>ready_key</code> on every content node (<span class="path">document_model/document_node.py:62,125</span>). It is a leftover for the retired Alpine store. Nothing reads it now, and the new UI never requests <code>/api/document-tree</code>.</p>
+
+<h2>2. Section inventory today</h2>
+<p>Content-bearing nodes in the template: 44. The 21 Methods sub-nodes collapse to one section for workflow purposes. Cells marked <span class="gap">none</span> are nodes the workflow does not know about.</p>
+
+<div class="tablewrap wide"><table>
+  <thead><tr><th>Template node(s)</th><th>Type</th><th>Binding</th><th>Workflow key today</th><th>Produced by</th><th>Stored as</th><th>Unlock rule</th><th>Sections row</th></tr></thead>
+  <tbody>
+    <tr><td><code>foreword</code> <code>about</code> <code>peer-review</code> <code>publication</code> <code>acknowledgments</code></td><td>front-matter</td><td><code>data_key</code></td><td><span class="gap">none</span> (Configure step)</td><td><span class="tag">authored</span></td><td><code>front_matter.json</code></td><td>—</td><td>Configure</td></tr>
+    <tr><td><code>abstract</code></td><td>front-matter</td><td><code>data_key: abstract</code></td><td><span class="gap">none</span> (derived at render)</td><td><span class="tag">programmatic</span> + LLM distillation</td><td><code>background.json:abstract_background</code></td><td>—</td><td>—</td></tr>
+    <tr><td><code>background</code></td><td>narrative</td><td><code>data_key: background</code></td><td><code>background</code></td><td><span class="tag">llm</span> background_writer</td><td><code>background.json</code></td><td><code>()</code></td><td>yes, auto-generates</td></tr>
+    <tr><td><code>methods</code> + 21 <code>mm-*</code></td><td>heading + narratives</td><td><code>data_key: methods</code>, <code>methods_key</code></td><td><code>methods</code></td><td><span class="tag">llm</span> methods_*</td><td><code>methods.json</code> (<code>sections[]</code>)</td><td><code>("processed",)</code></td><td>yes, auto-generates</td></tr>
+    <tr><td><code>table-sample-counts</code></td><td>sample-counts-table</td><td><code>data_key: sample_counts</code></td><td><span class="gap">none</span></td><td><span class="tag">programmatic</span></td><td>inside <code>methods.json:table1</code></td><td>—</td><td>—</td></tr>
+    <tr><td><code>animal-condition</code> + 2 tables</td><td>narrative+tables</td><td><code>narrative_key</code>, <code>platform</code></td><td><code>bm2_body-weight</code>, <code>bm2_organ-weight</code></td><td><span class="tag">programmatic</span> unified_narrative, tables</td><td><code>bm2_&lt;slug&gt;.json</code></td><td><code>()</code></td><td>yes, per instance</td></tr>
+    <tr><td><code>clinical-path</code> + 3 tables</td><td>narrative+tables</td><td><code>narrative_key</code>, <code>platform</code></td><td><code>bm2_clinical-chemistry</code>, <code>bm2_hematology</code>, <code>bm2_hormones</code></td><td><span class="tag">programmatic</span></td><td><code>bm2_&lt;slug&gt;.json</code></td><td><code>()</code></td><td>yes</td></tr>
+    <tr><td><code>internal-dose</code> + 1 table</td><td>narrative+tables</td><td><code>narrative_key: internal_dose</code></td><td><code>bm2_tissue-concentration</code> for the table; <span class="gap">narrative has no key</span></td><td><span class="tag">programmatic</span></td><td><code>_cache_sections_*:internal_dose</code>, no section file</td><td>—</td><td>table row only</td></tr>
+    <tr><td><code>bmd-summary</code></td><td>bmd-summary</td><td><code>data_key: bmd_summary</code></td><td><code>bmd_summary</code></td><td><span class="tag">derived</span> + <span class="tag">llm</span> paragraph</td><td><code>bmd_summary.json</code> once approved; <code>_cache_apical_narrative_*</code></td><td><code>()</code></td><td>yes, derived on demand</td></tr>
+    <tr><td><code>gene-sets</code> <code>gene-bmd</code></td><td>genomics-section</td><td><code>data_key</code>, <code>narrative_key</code></td><td><code>genomics_&lt;organ&gt;_&lt;sex&gt;</code></td><td><span class="tag">llm</span> genomics_llm + knowledge base</td><td><code>_cache_interpretation_*</code>, overrides file</td><td><code>("knowledge_base",)</code></td><td>yes, no controls</td></tr>
+    <tr><td><code>summary</code></td><td>narrative</td><td><code>data_key: summary</code></td><td><code>summary</code></td><td><span class="tag">llm</span> api_generate_summary</td><td><code>summary.json</code></td><td><code>("background","results")</code></td><td>yes, auto-generates</td></tr>
+    <tr><td><code>references</code></td><td>narrative</td><td><code>data_key: references</code></td><td><span class="gap">none</span></td><td><span class="tag">derived</span> references_builder</td><td><code>references.json</code></td><td>—</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<ul>
+  <li>Three producer kinds exist and are never declared anywhere: model-written, programmatic, derived. The readiness engine encodes them only implicitly, through its rule tuples.</li>
+  <li>"Section" means three different things: a tree node (44 of them), a workflow unit (12 keys), and a storage file. No object holds the mapping between them.</li>
+  <li>Internal Dose is the clean proof: template yes, processing yes (<span class="path">report_data_overlays.py:360</span>), render yes, workflow no.</li>
+</ul>
+
+<h2>3. The registries</h2>
+<p>Every place section identity is written by hand.</p>
+
+<div class="tablewrap wide"><table>
+  <thead><tr><th>#</th><th>Location</th><th>What it hardcodes</th><th>Consumer</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td><span class="path">workflow/section_readiness.py:57–70</span> and <span class="path">:84–99</span></td><td>Section types and unlock groups in <code>_UNLOCK_RULES</code>; prefix mapping for <code>bm2_*</code> and <code>genomics_*</code></td><td>readiness route</td></tr>
+    <tr><td>R2</td><td><span class="path">web_routes/session_routes.py:739–741</span></td><td>The approvable types, <code>VALID_SECTION_TYPES</code></td><td>approve</td></tr>
+    <tr><td>R3</td><td><span class="path">web_routes/session_routes.py:803–870</span>, <span class="path">:929–955</span></td><td>Per-type approve branches and section-key resolution (file naming, required extras)</td><td>approve, unapprove</td></tr>
+    <tr><td>R4</td><td><span class="path">web_routes/session_routes.py:594–618</span></td><td>The fixed file list the session payload reads</td><td>session load, then the UI</td></tr>
+    <tr><td>R5</td><td><span class="path">web_routes/session_routes.py:1562</span></td><td>Files touched on reset</td><td>reset</td></tr>
+    <tr><td>R6</td><td><span class="path">wizard-ui/src/steps/Sections.tsx:13–17</span>, <span class="path">:241–244</span>, <span class="path">:322–326</span>, <span class="path">:372</span></td><td>Which rows exist, which auto-generate, how each approves, the BMD summary special case</td><td>Sections screen</td></tr>
+    <tr><td>R7</td><td><span class="path">wizard-ui/src/api.ts</span> <code>SessionLoad</code> plus one client function per generator</td><td>Payload shape and producers</td><td>all steps</td></tr>
+  </tbody>
+</table></div>
+
+<p>Generic and safe to keep: <span class="path">workflow/ownership.py</span> (facts keyed by the section dict, not its type), <span class="path">workflow/labels.py</span>, <span class="path">workflow/currency.py</span>, <code>session_store.save_section</code>, and the cache plumbing.</p>
+<div class="callout"><p>The per-session document config (<code>build_session_tree</code>) is consumed only by rendering and the Configure step. Readiness and the Sections screen never see it: a section added or removed in the configurator changes the report but not the workflow.</p></div>
+
+<h2>4. The dependency chain as it exists</h2>
+<figure>
+<div class="diagram">
+<svg viewBox="0 0 760 560" role="img" aria-label="Dependency chain from raw files through processing, materialization, readiness, the Sections screen, approval, and rendering">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+  <rect class="box" x="40" y="20" width="220" height="44" rx="4"/>
+  <text x="52" y="38">raw files</text><text class="sub" x="52" y="54">.bm2, txt, csv, xlsx</text>
+  <path class="arrow" d="M150,64 L150,96"/>
+  <text class="label" x="160" y="84">validate · integrate</text>
+
+  <rect class="box" x="40" y="96" width="220" height="44" rx="4"/>
+  <text x="52" y="114">integrated.json + sidecars</text><text class="sub" x="52" y="130">single source of truth</text>
+  <path class="arrow" d="M150,140 L150,172"/>
+  <text class="label" x="160" y="160">Process · run_process</text>
+
+  <rect class="box" x="40" y="172" width="420" height="60" rx="4"/>
+  <text x="52" y="190">payload contract, 12 keys</text>
+  <text class="sub" x="52" y="206">sections · unified_narratives · methods · apical_bmd_summary(+bmds) · apical_bmd_narrative</text>
+  <text class="sub" x="52" y="221">genomics_sections · gene_set_narrative · gene_narrative · chart_images · bmd_stats(+labels)</text>
+  <path class="arrow" d="M150,232 L150,264"/>
+  <text class="label" x="160" y="252">persisted as _cache_* files + references.json</text>
+
+  <rect class="box" x="40" y="264" width="220" height="44" rx="4"/>
+  <text x="52" y="282">materialize</text><text class="sub" x="52" y="298">bm2_&lt;slug&gt;.json per platform</text>
+  <path class="arrow" d="M150,308 L150,340"/>
+
+  <rect class="box lit" x="40" y="340" width="220" height="44" rx="4"/>
+  <text x="52" y="358">readiness  R1</text><text class="sub" x="52" y="374">rules + which files exist on disk</text>
+  <path class="arrow" d="M150,384 L150,416"/>
+
+  <rect class="box lit" x="40" y="416" width="220" height="44" rx="4"/>
+  <text x="52" y="434">session payload  R4</text><text class="sub" x="52" y="450">fixed file list</text>
+  <path class="arrow" d="M260,438 L300,438"/>
+
+  <rect class="box lit" x="300" y="416" width="200" height="44" rx="4"/>
+  <text x="312" y="434">Sections screen  R6 R7</text><text class="sub" x="312" y="450">rows, auto-generate, approve</text>
+  <path class="arrow" d="M500,438 L540,438"/>
+
+  <rect class="box lit" x="540" y="416" width="190" height="44" rx="4"/>
+  <text x="552" y="434">approve  R2 R3</text><text class="sub" x="552" y="450">background · methods · summary…</text>
+  <path class="arrow" d="M635,460 L635,492 L520,492"/>
+
+  <rect class="box tree" x="40" y="492" width="480" height="52" rx="4"/>
+  <text x="52" y="510">render: tree (template ∪ session document config) + overlays</text>
+  <text class="sub" x="52" y="527">abstract · apical_sections · unified_and_bmd (internal_dose) · genomics · references</text>
+  <path class="arrow" d="M150,460 L150,492"/>
+</svg>
+</div>
+<div class="legend"><span class="l">keyed by literal names</span><span class="t">keyed by the tree</span><span>everything else</span></div>
+<figcaption>Everything from readiness onward is keyed by literal names; rendering is keyed by the tree. The seam between them is the catalog that does not exist.</figcaption>
+</figure>
+
+<h2>5. Proposed: one catalog, derived from the tree</h2>
+<p>Add <span class="path">document_model/section_catalog.py</span>. It walks the session's tree once and yields the workflow view of it:</p>
+<pre><code>@dataclass(frozen=True)
+class SectionSpec:
+    key: str                  # "background", "methods", "bm2_&lt;slug&gt;", "genomics_&lt;organ&gt;_&lt;sex&gt;", "internal_dose", ...
+    node_ids: tuple[str, ...] # tree nodes this section feeds
+    kind: Literal["llm", "programmatic", "derived", "authored"]
+    producer: str             # dotted name of the generator or deriver; "" for authored
+    store: str                # file pattern under the session dir
+    approvable: bool
+    unlock: tuple[str, ...]   # () | ("processed",) | ("knowledge_base",) | ("background","results")
+    instance_of: str | None   # family key for instance sections: "bm2", "genomics"</code></pre>
+
+<h3>Where each field comes from</h3>
+<ul>
+  <li><code>key</code>, <code>node_ids</code>, <code>instance_of</code>: from the node's <code>data_key</code>, <code>narrative_key</code>, and <code>platform</code>. Instances expand from data presence exactly as the readiness engine does today, but through the template's platform bindings.</li>
+  <li><code>kind</code>, <code>producer</code>, <code>store</code>, <code>approvable</code>, <code>unlock</code>: declared on the template node under a new <code>workflow:</code> block, with defaults per node type so existing templates keep working. The dead <code>ready_key</code> field is deleted.</li>
+</ul>
+
+<h3>Consumers, in payoff order</h3>
+<ol>
+  <li><strong>R1</strong> readiness takes the catalog instead of its rule dictionary. Instance discovery stays disk-driven, but the family list comes from the catalog.</li>
+  <li><strong>R4</strong> the session payload iterates the catalog's store patterns. Adding a section to the template adds it to the payload.</li>
+  <li><strong>R6, R7</strong> the Sections screen renders one route, <code>GET /api/workflow/{id}/sections</code>, carrying the catalog, readiness, and a content summary per key. It dispatches generate and approve by kind and producer. No front-matter list, no prefix special cases.</li>
+  <li><strong>R2, R3</strong> approve and unapprove validate the type against the catalog and derive the file name from its store.</li>
+  <li><strong>R5</strong> reset iterates the catalog.</li>
+</ol>
+<p>Out of scope because already correct: rendering, numbering, the overlays' content logic, ownership, labels, currency.</p>
+<div class="callout"><p><strong>Acceptance for phase 1.</strong> Internal Dose gains a workflow row, a readiness entry, and a payload field by editing only the template. The 12 existing keys are unchanged. The golden and parity tests stay green.</p></div>
+
+<h2>6. Phase 2: downstream dependencies of the configured document</h2>
+<p>The catalog fixes identity. What each section depends on at generation time is a second graph, and it can only be traversed against a document that contains every implemented section, otherwise paths stay unexercised.</p>
+
+<h3>Input the user provides</h3>
+<p>A session document configuration, built in the Configure step, enabling every node type and binding the catalog supports: all front-matter parts, the abstract, Background, the full Methods sub-tree including the sample-counts table, all seven apical platforms across the three result sections, the BMD summary, both genomics sections for every organ and sex the data has, Summary, References, plus any freeform pages, freeform blocks, and figures. It runs on a session with genomics data and the knowledge base present.</p>
+
+<h3>What phase 2 traces, per catalog entry</h3>
+<ul>
+  <li><strong>Data prerequisites.</strong> Which processing outputs it reads, and what happens when each is absent: skip, placeholder, or error.</li>
+  <li><strong>Section prerequisites.</strong> Approval and content dependencies. Summary reads approved sections; the abstract reads Background and Summary; References reads the genomics caches.</li>
+  <li><strong>Configuration sensitivity.</strong> Which per-session values change the output: document structure, report filters by organ, sex, assay, or gene, views, layout style, front-matter metadata.</li>
+  <li><strong>External resources.</strong> The model endpoint, the knowledge base, the Java bridge, the chart renderer.</li>
+  <li><strong>Invalidation.</strong> Which fingerprint or currency rule re-runs it after a reprocess or a config change.</li>
+</ul>
+
+<h3>Method</h3>
+<p>Run the maximal document through Process, Sections, and Preview with a one-off tracer around the cache reads and the overlays, record the observed reads per section, and diff them against the expected graph. The output is a per-section dependency table plus a list of missed invalidations.</p>
+
+<h2>7. Open questions</h2>
+<ul>
+  <li>Should instance families (<code>bm2</code>, <code>genomics</code>) be declared in the template as a pattern that expands per data, or stay disk-discovered? Proposal: pattern in the template, expansion by data presence.</li>
+  <li>Does the per-session document config become the source for the catalog, so removing a section also removes its workflow row, or does the workflow always use the full template and treat removal as render-only?</li>
+  <li>The BMD summary is derived but also carries a model-written paragraph. One section with two producers, or two sections?</li>
+</ul>
+</div>

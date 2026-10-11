@@ -1,0 +1,120 @@
+{
+ "RR-8": {
+  "facts": [
+   "Triphenyl phosphate (TPHP), study C11042, male Sprague Dawley rats, gavage, 0\u2013881 mg/kg (6 groups, 20 animals). NTP Research Report 8, the first report in the series. GEO GSE121134.",
+   "Package layout: one 'Benchmark Dose Analysis' section mixing apical and genomic files, plus 'Summary Tables' numbered Table 1\u20136 (not NTP I04/PA41 codes); Table 6 is a Top-20 GO BP table.",
+   "Genomics: Affymetrix Rat 230 2.0 microarray (GPL1355, 31,099 probe sets), 20 CEL files, Partek batch correction. BMDExpress 2.20.0148 run 2018-04-12: Williams p<0.05 with 100 permutations, no MTC, fold \u22651.5 \u2192 8 models lowest AIC, BMR factor 1 \u2192 GO BP (plain + deduplicated) and individual-gene categories (p\u22650.1, BMDU/BMDL\u226440). bm2 and JSON agree. Exports include individual PROBE-SET BMDs.",
+   "Apical: modified BMDS v2.7.0, already with high-dose dropping (refits with 0\u20133 top doses removed); Model Parameters workbook (single sheet, 22 datasets \u00d7 models), fit reports (2017-12 .doc appendix and 2018-07 docx). No BMDS code package or ReadMe yet."
+  ],
+  "issues": [
+   "'C11042_Appendix.doc' is actually a .docx.",
+   "Folder/file naming typo 'Microarry_files'."
+  ]
+ },
+ "NIEHS-02": {
+  "facts": [
+   "2-Ethylhexyl diphenyl phosphate (EHDP), study C10674, male Sprague Dawley rats, gavage, 0\u2013978.5 mg/kg (6 groups).",
+   "Genomics: Affymetrix Rat Genome 230 2.0 microarray (GPL1355), 31,099 probe sets, raw CEL files, RMA normalisation with Partek hybridisation-batch removal (before/after PCA images + Partek settings screenshot).",
+   "Published analysis (exported results text + JSON): BMDExpress 2.30.0507 run 2021-11-04 on 19 animals \u2014 Williams trend p<0.05 (10,000 permutations, no MTC), fold filter 1.5 \u2192 BMD with 8 models (Hill, Power, Linear, Poly2, Exp2\u20135), lowest AIC, BMR 1 SD \u2192 GO BP (deduplicated) and individual-gene defined-category analysis (p\u22650.1, BMDU/BMDL\u226440).",
+   "Apical: modified EPA BMDS v2.7.0 (python bmds 0.11 code package, 16 model-selection rules, Model_Parameters workbook = every model fit, model-fit report docx). Body weight, organ weight, clinical chemistry, hormones.",
+   "Extras: Gene description CSV, GO BP description TSV, PCA files, animal/CEL-file metadata, sample list with processing batches."
+  ],
+  "issues": [
+   "The .bm2 and the JSON are DIFFERENT analyses: the .bm2 is BMDExpress 2.20.0151 from 2018-05-01 with 21 animals and only 100 Williams permutations (no fold-change NOTEL test); the JSON and all exported result files are the 2021 re-run on 19 animals. A consumer ingesting the .bm2 gets a superseded analysis."
+  ]
+ },
+ "NIEHS-03": {
+  "facts": [
+   "tert-Butylphenyl diphenyl phosphate (BPDP), study C10978, male Sprague Dawley rats, gavage, 0\u20131032.5 mg/kg (6 groups).",
+   "Same platform and methods as NIEHS-02: Affymetrix GPL1355 microarray, BMDExpress 2.30.0507 run 2021-11-04 on 19 animals, Williams (10,000 perm) + fold 1.5 \u2192 8-model lowest-AIC BMD (1 SD) \u2192 GO BP + gene-level categories. Apical: modified BMDS 2.7."
+  ],
+  "issues": [
+   "The file named 'BMDExpress Project File (JSON format)' is not JSON \u2014 it is a second copy of the Java-serialised .bm2 (same 2021 analysis). There is no JSON export in this package."
+  ]
+ },
+ "NIEHS-04": {
+  "facts": [
+   "Isodecyl diphenyl phosphate (IDDP), study C20299, male Sprague Dawley rats, gavage, 0\u20131054.2 mg/kg (6 groups).",
+   "Affymetrix GPL1355 microarray. Unlike 02/03, the published analysis is the ORIGINAL 2018 one: BMDExpress 2.20.0151 run 2018-05-01 on 20 animals, Williams with only 100 permutations + fold 1.5 \u2192 8-model lowest-AIC BMD \u2192 GO BP (plain and deduplicated) + gene-level categories. bm2, JSON and exported text all agree. Apical: modified BMDS 2.7."
+  ]
+ },
+ "NIEHS-05": {
+  "facts": [
+   "Isopropylated phenol phosphate (IPP), study C10866B, male Sprague Dawley rats, gavage, 0\u2013611 mg/kg (5 groups).",
+   "Same as NIEHS-04: BMDExpress 2.20.0151 run 2018-05-02 on 17 animals, Williams 100 permutations + fold 1.5, 8-model lowest-AIC BMD. bm2/JSON/text consistent. Apical: modified BMDS 2.7."
+  ],
+  "issues": [
+   "'BMDs code package' is published as BMDs_code_package.docx but is actually a zip (the python bmds package); 'Model Parameters' is published as Model_Parameters.docx but is actually an Excel workbook. Both open only after renaming."
+  ]
+ },
+ "NIEHS-06": {
+  "facts": [
+   "Tricresyl phosphate (TCP), study C10277, male Sprague Dawley rats, gavage, 0\u2013994.6 mg/kg (6 groups).",
+   "Same as NIEHS-04/05: BMDExpress 2.20.0151 run 2018-05-01 on 20 animals, Williams 100 permutations + fold 1.5, 8-model lowest-AIC BMD. bm2/JSON/text consistent. Apical: modified BMDS 2.7."
+  ]
+ },
+ "NIEHS-07": {
+  "facts": [
+   "6:1 Fluorotelomer alcohol (6:1 FTOH), study C20027-01, male and female Sprague Dawley rats, gavage, 0\u20131000 mg/kg (9\u201310 groups), liver + kidney. GEO GSE183705 (shared by the four PFAS reports).",
+   "Genomics platform switches to TempO-Seq S1500+ rat (BioSpyder), 2,654 probes, normalised log2 counts (RPM + 1, log2). Expression files BMDExpress 2.30.0485 (2020-11-18).",
+   "The BMDExpress project is ONE shared PFAS project (byte-identical across NIEHS-07, -08, -09 and -10): 16 experiments = 4 chemicals \u00d7 liver/kidney \u00d7 sex, BMDExpress 2.30.0507 run 2021-02-12. Williams p<0.05 (10,000 perm, no MTC) + fold 1.5 \u2192 8-model lowest-AIC BMD, BMR 1 SD \u2192 GENE (p\u22650.1, ratio\u226440, fold change\u22652) and GO BP (deduplicated) categories.",
+   "Apical: modified BMDS v2.7.0, with high-dose dropping up to 5 doses (each endpoint refit with top doses removed; the recommended fit may come from a dropped-dose run). Adds hematology and tissue concentration (PA43, PA48). Per-sex Parameter workbooks and model-fit appendices dated 2021-07-28.",
+   "QC: TempO-Seq sample sheet and per-sample QC with removal reasons (kidney 'overflow plate' effects, PCA outliers); animal\u2194FASTQ table; 2D and 3D PCA figures."
+  ],
+  "issues": [
+   "The bundled GO annotation zips are labelled for Affymetrix GPL1355 (carried over from the microarray-era packages) and contain no S1500 probe IDs \u2014 not the annotation used for this TempO-Seq analysis.",
+   "The shared project contains the other three chemicals; a consumer must filter to this study's experiments."
+  ]
+ },
+ "NIEHS-08": {
+  "facts": [
+   "1,1,2,2-Tetrahydroperfluoro-1-dodecanol (10:2 FTOH), study C04051-01, male and female Sprague Dawley rats, gavage, 0\u2013475 mg/kg (10 groups), liver + kidney.",
+   "Same package generation, methods and shared 16-experiment PFAS project as NIEHS-07 (see there)."
+  ],
+  "issues": [
+   "Same GPL1355 annotation mislabel and shared multi-chemical project as NIEHS-07.",
+   "The Animal and FASTQ Metadata zip contains a stray Word lock file (~$\u2026docx)."
+  ]
+ },
+ "NIEHS-09": {
+  "facts": [
+   "2,3-Benzofluorene, study C20042-01, male and female Sprague Dawley rats, gavage, 0\u20131000 mg/kg (10 groups), liver + kidney.",
+   "Same package generation, methods and shared PFAS project as NIEHS-07 (the project file is named differently here but is byte-identical)."
+  ],
+  "issues": [
+   "Same GPL1355 annotation mislabel and shared multi-chemical project as NIEHS-07."
+  ]
+ },
+ "NIEHS-10": {
+  "facts": [
+   "Perfluorohexanesulfonamide (PFHxSAm), study C20022-01, male and female Sprague Dawley rats, gavage, 0\u2013111 mg/kg (8 groups), liver + kidney. THE reference report for this project.",
+   "Same package generation, methods and shared PFAS project as NIEHS-07. PFHxSAm expression: 2,654 probes \u00d7 44\u201345 animals; the Appendix C PCA figures reproduce exactly from these files (mean-centred PCA).",
+   "Individual animal data workbooks are byte-identical to the ones originally supplied to this project."
+  ],
+  "issues": [
+   "Same GPL1355 annotation mislabel and shared multi-chemical project as NIEHS-07."
+  ]
+ },
+ "NIEHS-12": {
+  "facts": [
+   "1,2-Dichlorobenzene (1,2-DCB), studies 108020006 (rats) / 108020007 (mice): female Sprague Dawley rats (0\u2013500 ppm, 7 groups) and B6D2F1/Crl mice (0\u2013250 ppm, 6 groups), whole-body INHALATION; five tissues (heart, kidney, liver, lung, ovary). DTT study numbering; a 15-page Materials and Methods PDF is in the package.",
+   "Genomics (BMDExpress 3.20.0119, 2025-04/05; documented in Materials_and_Methods.pdf): attenuation-adjusted read counts \u2192 RPM \u2192 log2; probes with a zero count in ANY sample removed ('No0': rat 1,864\u20132,072 probes kept); Williams p<0.05 (10,000 perm, no fold filter) \u2192 curve-fit prefilter (Hill/Power/Linear/Exp3/Exp5, BMR 2 SD) \u2192 ToxicR Laplace model averaging (Hill, Power, Exp3, Exp5), BMR 25% relative deviation, step-function threshold 0.5 \u2192 GO BP + gene categories (R\u00b2\u22650.6, BMD/BMDL\u226410, gene sets 40\u2013500).",
+   "Apical BMDs move into BMDExpress (non-genomic .bm2 per species, 3.20.0119/0129): endpoints pre-screened for a significant trend plus a significant pairwise effect, then ToxicR Laplace model averaging, BMR 1 SD, 'generic' platform, defined-category file of 5-day endpoints. No BMDS workbook.",
+   "New artefacts: attenuation-adjusted raw read counts, TempO-Seq S1500 v1.2 rat and mouse manifests, per-tissue One-way ANOVA / Curve Fit / BMD exports, eFDR synthetic-null analyses (20 null data sets per tissue per species, as .bm2), transcriptomics QC reports, animal-removal workbooks, theoretical inhaled dose. Report tables are PDFs (Top 10 genes/GO per tissue, most potent GO per tissue).",
+   "'Analysis Pipeline Evaluation' (identical in NIEHS-12 and -13; updated February 2026): compares the proposed DTT tBMD method with the US EPA ETAP method across 20 five-day gavage studies (54 chemical\u00d7replicate\u00d7tissue data sets incl. BPAF, triclosan, PFOA, furan, BDCA, TBBPA). DTT method (BMDExpress 3.20.0141, Dec 2025): No0 \u2192 Williams p<0.05 (the 1.25 fold filter removed in the Feb 2026 update) \u2192 curve-fit prefilter at **1.581 SD** \u2192 ToxicR MA, BMR 25% RD \u2192 gene + GO BP; GO BP BMD = 5th-percentile gene BMD; tBMD = lowest GO BP across liver and kidney. EPA method (BMDExpress 2.30.0516): Williams + fold 1.5 \u2192 8 models, BMR 1.349 SD, nested chi-square then lowest AIC \u2192 GO BP. Conclusion: the DTT method performs slightly better and replicates better."
+  ],
+  "issues": [
+   "The rat genomic project's top-level curve-fit prefilter list holds the MOUSE results (mouse_2D_*); the rat BMD results reference their own embedded rat prefilters.",
+   "Mouse genomic experiments are not named '_No0' even though the methods describe the same zero-count filter."
+  ]
+ },
+ "NIEHS-13": {
+  "facts": [
+   "1,4-Dichlorobenzene (1,4-DCB), studies 108020004 (rats) / 108020005 (mice): female Sprague Dawley rats (0\u2013800 ppm, 7 groups) and B6D2F1/Crl mice (0\u2013400 ppm, 6 groups), whole-body inhalation; heart, kidney, liver, lung, ovary. Companion to NIEHS-12 with the same layout and methods (Materials and Methods documents curve-fit BMR 2 SD; BMDExpress 3.20.0119).",
+   "Same artefact set as NIEHS-12: per-species genomic and non-genomic .bm2 (+ JSON), raw counts, manifests, eFDR synthetic null, QC reports, removal workbooks, study tables, PDF report tables. The Analysis Pipeline Evaluation zips are byte-identical to NIEHS-12's."
+  ],
+  "issues": [
+   "The rat raw-read-count archive is published as 'Attenuation-adjusted_Raw_Read_Counts_Rat_Study,zip' (comma, no extension)."
+  ]
+ }
+}
