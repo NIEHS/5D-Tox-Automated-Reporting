@@ -1032,6 +1032,7 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     contents lists.  Runs last, once every study's data is in ``data``."""
     from rendering.report_data import name_report_in_peer_review
     name_report_in_peer_review(data)
+    from rendering.genomics_summary import DATA_KEY, most_potent_gene_sets
     from document_model.document_tree import (
         DOCUMENT_TREE, assign_genomics_figure_numbers, assign_genomics_table_numbers,
         order_tissues, study_tree,
@@ -1041,6 +1042,7 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     if data.get("genomics_sections"):
         data["genomics_sections"] = order_tissues(
             data["genomics_sections"], study_document_facts(dtxsid)["tissue_order"])
+    data[DATA_KEY] = most_potent_gene_sets(data)
     # "Not collected" domains (section-level collapse): the render tree drops the
     # apical table nodes whose data domain this study did not collect, so numbering,
     # the List of Tables and the body stay contiguous.  data["apical_sections"]

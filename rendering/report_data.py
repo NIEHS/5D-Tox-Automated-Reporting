@@ -700,6 +700,8 @@ def marshal_export_data(
     if protection:
         data["protection"] = protection
 
+    from rendering.genomics_summary import DATA_KEY, most_potent_gene_sets
+    data.setdefault(DATA_KEY, most_potent_gene_sets(data))
     name_report_in_peer_review(data)
     return data
 

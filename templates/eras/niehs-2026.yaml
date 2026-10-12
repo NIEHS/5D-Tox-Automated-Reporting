@@ -65,6 +65,14 @@ changes:
     - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
        data_key: gene_set_summary}
     into: gene-sets
+  # The most potent gene set of each tissue, after the per-tissue tables
+  # (NIEHS-12 Table 11, NIEHS-13 Table 12).
+  - insert:
+    - {id: table-most-potent-gene-sets, type: data-table,
+       title: "Most Potent Gene Ontology Biological Process Gene Set per Tissue",
+       data_key: most_potent_gene_sets_matrix}
+    into: gene-sets
+    at: first
   - insert:
     - {id: theoretical-inhaled-dose, type: narrative+tables, title: Theoretical Inhaled Dose,
        narrative_key: theoretical_inhaled_dose}
