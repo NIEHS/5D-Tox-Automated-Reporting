@@ -46,7 +46,8 @@ markers = [
 # unattended invocation of `pytest tests/`.  Opt in explicitly with
 # `pytest -m e2e` or `pytest tests/e2e/ -m e2e`.  See the todo.md entry
 # "E2e test default: skip interactive pauses" for the deeper fix.
-addopts = "--tb=short -q -m 'not e2e'"
+# `wine` (BMDS 2.7 under Wine, minutes) is opt-in too: `pytest -m wine`.
+addopts = "--tb=short -q -m 'not e2e and not wine'"
 
 [tool.uv.sources]
 bmdx-pipe = { path = "../bmdx-pipe", editable = true }

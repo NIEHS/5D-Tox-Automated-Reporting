@@ -1,7 +1,9 @@
 # 0030: The BMDS-era apical engine is NTP's own package, run under Wine
 
 - **Status:** Accepted (2026-10-12). The engine is built and checked against
-  NTP's recorded runs. It runs once Wine is in the image.
+  NTP's recorded runs. Under Wine (8.0, with Wine's own `msvcrt`) it does **not**
+  reproduce them exactly, so its self-check keeps it off (see "Under Wine"). The
+  open choice is recorded there.
 - **Amends:** [ADR-0027](0027-pinned-method-profiles.md) §3 (the implementation
   registry). An implementation can now depend on the machine: it is registered,
   and it runs only where the machine can run it.
@@ -103,6 +105,47 @@ Which endpoints NTP modelled:
 - **Exceptions are explained by groups that were not modelled.** Where an endpoint's
   only significance is in high-dose groups that were not modelled (early deaths),
   it was not modelled.
+
+## Under Wine (measured 2026-10-12, Wine 8.0)
+
+All 8,109 recorded dfiles were run through the executables, and the whole engine
+was run on all 173 recorded datasets:
+
+- **Per model:** 5,757 of 8,109 runs parse to NTP's BMD, BMDL and AIC exactly.
+  - Linear, Power and Exponential-M2 mostly match.
+  - Hill and Exponential M3–M5 often don't.
+  - NIEHS-10's 1,339 runs break down as: 878 identical; 65 different in the last
+    digits; 88 under 1% apart; 269 more than 1% apart; 29 where one side computed
+    a BMD/BMDL and the other failed (−999); 10 with no output.
+- **Per dataset (what a report prints):**
+  - 158 of 173 have the same recommended model and BMD as NTP's;
+  - 3 more are within 2%;
+  - 12 differ materially (for example, NIEHS-02 male absolute liver weight:
+    25.8 against NTP's 60.4).
+
+**Cause.** The cause is not floating-point precision. The executables' own MinGW
+startup sets the x87 control word to 64-bit precision with `fesetenv(FE_DFL_ENV)`
+→ `fninit` (0x037F). It does so on Windows too; winedbg shows 0x027F at the entry
+point and 0x037F by the first `exp`.
+
+The cause is that the executables import `exp`, `log`, `pow`, `sin` and `cos` from
+`msvcrt.dll`. Under Wine these are Wine's reimplementations, not Microsoft's. The
+two differ in the last bits, and the BMDS optimizers amplify that wherever the
+likelihood is flat. One example is Hill on NIEHS-10 female AST. Both fits reach
+the same log-likelihood (−107.726422), but Wine's run leaves `n` off its bound,
+which changes the parameter count and the AIC by 2.
+
+The self-check (`certification.json`) therefore fails on Polynomial-2, Hill and
+Exponential M3/M5, and the engine stays unavailable. Processing substitutes ToxicR
+and states the reason.
+
+**Options:**
+1. **Microsoft's `msvcrt.dll` under Wine.** Run with `WINEDLLOVERRIDES=msvcrt=n,b`,
+   using the 32-bit copy from a Windows machine, ideally the kind NTP ran on.
+   This is the only route to exact reproduction, and it has to be verified.
+2. **Accept Wine's `msvcrt` as a stated deviation.** This matches NTP on 161 of 173
+   datasets, against 20 of 110 published BMDs agreeing for the ToxicR substitute.
+3. **Keep the ToxicR substitute.**
 
 ## Consequences
 
