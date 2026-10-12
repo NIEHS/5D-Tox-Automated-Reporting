@@ -58,6 +58,10 @@ _ADMINISTRATION = {
     "drinking water": ("in drinking water", "Drinking Water Studies"),
 }
 
+# How an inhalation exposure is made (administrationMeans of an inhaled study):
+# the title's "(Whole-body Inhalation Studies)" (NIEHS-12, 13).
+_INHALATION_METHODS = {"whole-body": "Whole-body", "nose-only": "Nose-only"}
+
 # Vehicles that are the medium itself ("in feed") rather than a carrier.
 _MEDIUM_VEHICLES = {"feed", "water", "aerosol", "gas"}
 
@@ -159,12 +163,17 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
     route = one["administrationMeans"] or one["articleRoute"]
     if route == "oral":
         route = None
+    # An inhalation method is how the inhalation was made, not another route.
+    inhalation = route if route in _INHALATION_METHODS else None
+    if inhalation:
+        route = "inhaled"
     facts = {
         "species": one["species"],
         "strain": one["strain"],
         "route": route,
         "vehicle": one["articleVehicle"],
         "duration_days": _duration_days(one["studyDuration"]),
+        "inhalation": inhalation,
         "sexes": sorted(sexes),
         "conflicts": conflicts,
         "fallback": [],
@@ -336,8 +345,12 @@ def caption_fields(facts: dict, compound: str) -> dict:
 
 
 def administration_phrase(facts: dict) -> str:
-    """"by gavage" / "by inhalation" / "in feed" — or "" when unrecorded."""
-    return _ADMINISTRATION.get(facts.get("route") or "", ("", ""))[0]
+    """"by gavage" / "by inhalation" / "by whole-body inhalation" (the method
+    recorded) / "in feed" — or "" when unrecorded."""
+    phrase = _ADMINISTRATION.get(facts.get("route") or "", ("", ""))[0]
+    if phrase and facts.get("route") == "inhaled" and facts.get("inhalation"):
+        phrase = f"by {facts['inhalation']} inhalation"
+    return phrase
 
 
 def vehicle_phrase(facts: dict) -> str:
@@ -350,5 +363,10 @@ def vehicle_phrase(facts: dict) -> str:
 
 
 def study_type_label(facts: dict) -> str:
-    """The title's parenthetical, e.g. "Gavage Studies"; "" when unrecorded."""
-    return _ADMINISTRATION.get(facts.get("route") or "", ("", ""))[1]
+    """The title's parenthetical, e.g. "Gavage Studies", "Whole-body Inhalation
+    Studies" (the inhalation method recorded, NIEHS-12, 13); "" when unrecorded."""
+    label = _ADMINISTRATION.get(facts.get("route") or "", ("", ""))[1]
+    method = _INHALATION_METHODS.get(facts.get("inhalation") or "")
+    if label and facts.get("route") == "inhaled" and method:
+        label = f"{method} {label}"
+    return label

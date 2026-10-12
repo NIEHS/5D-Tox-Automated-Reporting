@@ -64,12 +64,13 @@ BOOK_OWN_FILES = ("*.nxml", "*.jpg", "*.png", "*.gif", "*.tif", "TOC.pdf", "lice
 
 ORAL = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
         "administrationMeans": "gavage", "articleVehicle": "corn oil", "studyDuration": "5d"}
+# NTP's study tables: "Route: Whole-Body Inhalation".
 INHALED = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "inhaled",
-           "studyDuration": "5d"}
+           "administrationMeans": "whole-body", "studyDuration": "5d"}
 HSD = "(Hsd:Sprague Dawley® SD®)"
 HSD_EARLY = "(Hsd: Sprague Dawley SD)"   # RR-8 prints it this way
 INHALED_MICE = {"species": "mouse", "strain": "B6D2F1", "articleRoute": "inhaled",
-                "studyDuration": "5d"}
+                "administrationMeans": "whole-body", "studyDuration": "5d"}
 CRL = "/Crl"                             # "B6D2F1/Crl Mice"
 
 # report: (DTXSID, name, CASRN, short name, genomic project, experiment token,

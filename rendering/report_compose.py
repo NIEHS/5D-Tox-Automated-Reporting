@@ -129,7 +129,7 @@ def composed_design(designs: list[dict]) -> dict:
         return designs[0]
     out = {"species": None, "strain": None, "studies": designs, "fallback": [],
            "conflicts": sorted({c for d in designs for c in d.get("conflicts") or []})}
-    for field in ("route", "vehicle", "duration_days"):
+    for field in ("route", "vehicle", "duration_days", "inhalation"):
         values = {d.get(field) for d in designs}
         out[field] = values.pop() if len(values) == 1 else None
         if len({d.get(field) for d in designs}) > 1:

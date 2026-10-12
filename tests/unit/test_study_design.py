@@ -205,3 +205,17 @@ def test_a_single_sex_study_names_its_sex_in_the_title():
             == "Female Sprague Dawley Rats and B6D2F1 Mice")
     assert (title_subjects({"studies": [rats, {**mice, "sexes": ["male"]}]}, animals)
             == "Female Sprague Dawley Rats and Male B6D2F1 Mice")
+
+
+def test_the_inhalation_method_names_the_study_type():
+    """"Route: Whole-Body Inhalation" (administrationMeans "whole-body") keeps
+    the route inhalation and names the method: "(Whole-body Inhalation
+    Studies)", "by whole-body inhalation" (NIEHS-12, 13).  Unrecorded, the
+    method is not named."""
+    f = study_design_facts(_integrated(species="rat", articleRoute="inhaled",
+                                       administrationMeans="whole-body"))
+    assert (f["route"], f["inhalation"]) == ("inhaled", "whole-body")
+    assert study_type_label(f) == "Whole-body Inhalation Studies"
+    assert administration_phrase(f) == "by whole-body inhalation"
+    plain = study_design_facts(_integrated(species="rat", articleRoute="inhaled"))
+    assert (plain["inhalation"], study_type_label(plain)) == (None, "Inhalation Studies")
