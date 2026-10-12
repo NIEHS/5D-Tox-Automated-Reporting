@@ -209,6 +209,10 @@ class DocNode:
                         stands in sections of its own (the 2026 books' Heart …
                         Ovary, `repeat: genomic_organs`) rather than with the
                         tissue's table.
+        intro_key:      On a genomics-section: the data key of the prose that
+                        opens it, before its tables (the 2026 books'
+                        `gene_set_intro` / `gene_intro`, rendering.
+                        genomics_results); unset, the section's narrative.
         scope_species:  COMPUTED by that expansion: the species a copy (and every
                         node in it) is about; derived file lists keep to it, and
                         in a report over several studies the copy renders from
@@ -247,6 +251,7 @@ class DocNode:
     study_title: str | None = None
     requires_route: str | None = None
     entry_narrative: bool | None = None
+    intro_key: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

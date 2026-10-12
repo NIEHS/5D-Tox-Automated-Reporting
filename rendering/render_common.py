@@ -140,8 +140,9 @@ def scan_pending_markers(text: str) -> list[str]:
 #   - a PARAGRAPH is either a plain ``str`` (the common case, unchanged) OR a
 #     list of INLINE UNITS;
 #   - an inline unit is either a plain ``str`` (a literal run) or a typed dict.
-#     The only type today is ``ext-link`` (projects to BITS <ext-link>/HTML <a>):
+#     ``ext-link`` (projects to BITS <ext-link>/HTML <a>):
 #         {"type": "ext-link", "text": "PubMed", "href": "https://pubmed..."}
+#     ``italic`` / ``sub`` ({"type": "italic", "text": "Spp1"}): BITS <italic>/<sub>.
 #   - a future unit (``xref``, ``sup``, ``emphasis``) is a new ``type`` the
 #     emitters learn; unknown types degrade to their ``text`` (never a hard fail).
 #
@@ -152,12 +153,24 @@ def scan_pending_markers(text: str) -> list[str]:
 # translation is the only place link presentation is decided.
 
 INLINE_EXT_LINK = "ext-link"
+# Italic text (a gene symbol, "Spp1") and a subscript (BMD_L's "L"): BITS
+# <italic> / <sub>, as the books print them (rendering.genomics_results).
+INLINE_ITALIC = "italic"
+INLINE_SUB = "sub"
 
 
 def make_ext_link(text: str, href: str) -> dict:
     """One inline external-link unit (the semantic content: display text + its
     target URI).  Presentation is each surface's business."""
     return {"type": INLINE_EXT_LINK, "text": text, "href": href}
+
+
+def make_italic(text: str) -> dict:
+    return {"type": INLINE_ITALIC, "text": text}
+
+
+def make_sub(text: str) -> dict:
+    return {"type": INLINE_SUB, "text": text}
 
 
 def normalize_inline(paragraph) -> list:
@@ -1423,10 +1436,11 @@ def genomics_role(node: DocNode) -> str:
 def genomics_intro_paragraphs(node: DocNode, data: dict) -> list[str]:
     """
     The top-of-section narrative paragraphs for a genomics section, from
-    data["gene_set_narrative"] / ["gene_narrative"] (a legacy list or a dict
-    with a "paragraphs" list).  [] when absent.
+    data[node.intro_key], else data["gene_set_narrative"] / ["gene_narrative"]
+    (a legacy list or a dict with a "paragraphs" list).  [] when absent.
     """
-    key = "gene_set_narrative" if genomics_role(node) == "gene_set" else "gene_narrative"
+    key = node.intro_key or (
+        "gene_set_narrative" if genomics_role(node) == "gene_set" else "gene_narrative")
     top = data.get(key)
     if isinstance(top, list):
         return top
@@ -1905,7 +1919,9 @@ def node_data(node: DocNode, data: dict) -> dict:
     rendering.report_compose) renders from that study's data, under the
     report's own (front matter, Background, deposit …); one scoped to a tissue
     (``scope_organ``) has that tissue's gene set and gene prose as its
-    ``gene_set_narrative`` / ``gene_narrative``.  Every other node: ``data``.
+    ``gene_set_narrative`` / ``gene_narrative``, and the study's results
+    sentences as its ``gene_set_results`` / ``gene_results``.  Every other
+    node: ``data``.
     The four surfaces apply it where they dispatch a node.
 
     Scoped data keeps the report's (``_REPORT_DATA``), so an unscoped node
@@ -1926,8 +1942,16 @@ def node_data(node: DocNode, data: dict) -> dict:
             if (entry.get("organ") or "").strip().lower() == organ:
                 key = "gene_set_narrative" if entry.get("type") == "gene_set" else "gene_narrative"
                 prose[key] = {"paragraphs": _paragraph_list(entry.get("narrative"))}
+        # The books' results sentences, written over the report's own (combined)
+        # tables per study (rendering.genomics_results): this study's.
+        for entry in root.get("genomics_sections") or []:
+            if (entry.get("organ") or "").strip().lower() == organ:
+                key = "gene_set_results" if entry.get("type") == "gene_set" else "gene_results"
+                prose[key] = {"paragraphs": list((entry.get("results") or {}).get(species or "")
+                                                 or [])}
         out = {**out, "gene_set_narrative": {"paragraphs": []},
-               "gene_narrative": {"paragraphs": []}, **prose}
+               "gene_narrative": {"paragraphs": []}, "gene_set_results": {"paragraphs": []},
+               "gene_results": {"paragraphs": []}, **prose}
     return {**out, _REPORT_DATA: root}
 
 

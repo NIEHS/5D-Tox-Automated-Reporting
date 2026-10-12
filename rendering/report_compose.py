@@ -237,7 +237,7 @@ def _merge_genomics(studies: list[dict]) -> list[dict]:
                 blocks = [{k: v for k, v in entry.items()
                            if k in ("sex", "gene_sets", "top_genes", "narrative")}]
             blocks = [{**{k: copy.deepcopy(v) for k, v in b.items() if k != "narrative"},
-                       "sex": _label(s, b.get("sex"))} for b in blocks]
+                       "sex": _label(s, b.get("sex")), "study": s["key"]} for b in blocks]
             if key not in by_key:
                 out = copy.deepcopy(entry)
                 out["sexes"], out["narrative"] = [], []

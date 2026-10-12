@@ -663,6 +663,12 @@ def load_session_data(
         # the same behavior the scaffold-only CLI invocation produces.
         return data
 
+    # The test article's short name in prose ("1,4-DCB"), when one is recorded
+    # (identity.json, generate_report --compound-name).
+    identity = _load_json(session_dir / "identity.json")
+    if isinstance(identity, dict) and str(identity.get("abbreviation") or "").strip():
+        data["abbreviation"] = str(identity["abbreviation"]).strip()
+
     # ── Background paragraphs + abstract Background sentence ──────────
     bg = _load_json(session_dir / "background.json")
     if isinstance(bg, dict):
@@ -1053,6 +1059,10 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     # helpers the web/marshal path calls, so both surfaces number identically.
     assign_genomics_table_numbers(render_tree, data.get("genomics_sections"), data)
     assign_genomics_figure_numbers(render_tree, data.get("genomics_sections"))
+    # The gene set and gene results as the books write them, over the numbered
+    # tables (a definition binds them, rendering.genomics_results).
+    from rendering.genomics_results import attach_genomics_results
+    attach_genomics_results(data, render_tree)
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

@@ -69,6 +69,8 @@ from rendering.render_common import (
     inline_plain_text,
     paragraph_has_inline,
     INLINE_EXT_LINK,
+    INLINE_ITALIC,
+    INLINE_SUB,
     assert_dispatch_covers,
     walk_emit,
     resolve_protection,
@@ -469,6 +471,9 @@ def _render_inline(paragraph) -> str:
         elif unit.get("type") == INLINE_EXT_LINK:
             href = _html.escape(str(unit.get("href", "")), quote=True)
             out.append(f'<a href="{href}">{_esc(unit.get("text", ""))}</a>')
+        elif unit.get("type") in (INLINE_ITALIC, INLINE_SUB):
+            tag = "i" if unit["type"] == INLINE_ITALIC else "sub"
+            out.append(f'<{tag}>{_esc(unit.get("text", ""))}</{tag}>')
         else:
             out.append(_esc(unit.get("text", "")))
     return "".join(out)

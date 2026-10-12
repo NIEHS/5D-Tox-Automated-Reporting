@@ -702,6 +702,8 @@ def marshal_export_data(
 
     from rendering.genomics_summary import DATA_KEY, most_potent_gene_sets
     data.setdefault(DATA_KEY, most_potent_gene_sets(data))
+    from rendering.genomics_results import attach_genomics_results
+    attach_genomics_results(data, active_tree)
     name_report_in_peer_review(data)
     return data
 

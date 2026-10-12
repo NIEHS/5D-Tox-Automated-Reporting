@@ -211,8 +211,50 @@ inference to review:
 - the hormone table placed after clinical chemistry (no 2026 book has
   hormone data).
 
-The Gene Set Benchmark Dose Summary section has no generator yet. It renders
-as a pending placeholder in every new report until one exists.
+**The genomic results as the books write them** (2026-10-12, the user's
+decision). The 2026 books' gene set and gene prose consists of fixed
+sentences built from the tables. `rendering.genomics_results` writes those
+sentences from the report's numbered tables, with no model:
+
+- the analyses' openings (`gene_set_intro`, `gene_intro`, bound by a genomics
+  section's `intro_key`);
+- each tissue's results per study, reached through `render_common.node_data`
+  as `gene_set_results` / `gene_results`;
+- the Gene Set Benchmark Dose Summary (`gene_set_summary`).
+
+The rules are the books' majority wording:
+
+- An item is "reliably calculated" at or above the lower limit of
+  extrapolation (lowest dose / 3). One below it is stated apart.
+- The gene sets named are the two most potent, plus any tied with the
+  second.
+- Genes are listed upregulated first, then downregulated. The special forms
+  are "One gene, …", "All 10 of …", "Half of …" and "Only eight genes met
+  the criteria".
+- Symbols are in italics (a new `italic` inline unit) and the L of BMDL is a
+  subscript (`sub`).
+- Each gene's name is NCBI Gene's, from a version-controlled cache
+  (`assets/gene_names.json`, `genomics.gene_names`). Filling the cache sends
+  the study's genes to NCBI, so it fails closed unless
+  `BMDX_ALLOW_NCBI_GENE=1`, like Enrichr. A gene without a cached name prints
+  "[Placeholder: gene name]".
+- The test article's short name ("1,4-DCB", `--compound-name`) is recorded
+  in `identity.json` as `abbreviation`.
+
+The 2026 era binds these keys in place of the model-written tissue
+interpretation. The earlier eras still print the interpretation.
+
+**Comparison with the published books.** Of NIEHS-13's 50 genomic-results
+sentences, 38 are identical. Of NIEHS-12's 52, 37 are identical. The rest
+differ for these reasons:
+
+- The books word the same sentence two ways; we use the majority form
+  ("exhibiting an increase in expression" against "upregulated genes with a
+  calculated BMD").
+- NCBI has renamed some genes since publication ("HLF transcription factor,
+  PAR bZIP family", where the book has "hepatic leukemia factor").
+- The books add alias symbols ("Car3/Ca3").
+- NIEHS-12 has a typo ("… and …, and …").
 
 **The deposit's address.** A published book opens its Supplemental Data
 with the deposit's DOI. A new study has no DOI until the publishing package

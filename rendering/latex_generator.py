@@ -87,6 +87,8 @@ from rendering.render_common import (
     inline_plain_text,
     paragraph_has_inline,
     INLINE_EXT_LINK,
+    INLINE_ITALIC,
+    INLINE_SUB,
     assert_dispatch_covers,
     walk_emit,
     resolve_protection,
@@ -308,6 +310,9 @@ def _render_inline(paragraph) -> str:
         elif unit.get("type") == INLINE_EXT_LINK:
             href = unit.get("href", "")
             out.append(rf"\href{{{href}}}{{{_escape_latex(unit.get('text', ''))}}}")
+        elif unit.get("type") in (INLINE_ITALIC, INLINE_SUB):
+            cmd = "textit" if unit["type"] == INLINE_ITALIC else "textsubscript"
+            out.append(rf"\{cmd}{{{_escape_latex(unit.get('text', ''))}}}")
         else:
             out.append(_escape_latex(unit.get("text", "")))
     return "".join(out)

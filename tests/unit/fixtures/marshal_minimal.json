@@ -789,10 +789,30 @@
       ]
     ]
   },
+  "gene_intro": {
+    "paragraphs": [
+      [
+        "The top 10 genes ranked by BMD potency are shown in the liver (Table 11) and kidney (Table 12). As with the GO analysis, the biological or toxicological significance of the changes in gene expression shown in Table 11 and Table 12 should be interpreted with caution. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes that could serve as a conservative surrogate of estimated biological potency, and by extension toxicological potency, when more definitive toxicological data are unavailable."
+      ]
+    ]
+  },
   "gene_narrative": {
     "paragraphs": []
   },
+  "gene_set_intro": {
+    "paragraphs": [
+      [
+        "Chemical-induced alterations in liver and kidney gene transcript expression were examined to determine those gene sets most sensitive to test article exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology [GO] biological process) was conducted to determine the potency of the chemical to elicit gene expression changes in the liver and kidney. This analysis used transcript-level BMD data to assess an aggregate score of gene set potency (median transcript BMD) and enrichment."
+      ],
+      [
+        "The “active” gene sets with the lowest median BMD values are shown in the liver (Table 9) and kidney (Table 10). The gene sets shown in Table 9 and Table 10 should be interpreted with caution from the standpoint of the underlying biological mechanism and any relationship to toxicity or toxic agents referenced in the GO term definitions. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes (i.e., a concerted biological change) that could serve as a surrogate of estimated biological potency and, by extension, toxicological potency when more definitive toxicological data are unavailable."
+      ]
+    ]
+  },
   "gene_set_narrative": {
+    "paragraphs": []
+  },
+  "gene_set_summary": {
     "paragraphs": []
   },
   "genomics_sections": [
@@ -800,6 +820,7 @@
       "caption": "",
       "go_descriptions": [],
       "organ": "liver",
+      "results": {},
       "sexes": [],
       "table_number": 9,
       "type": "gene_set"
@@ -808,6 +829,7 @@
       "caption": "",
       "go_descriptions": [],
       "organ": "kidney",
+      "results": {},
       "sexes": [],
       "table_number": 10,
       "type": "gene_set"
@@ -816,6 +838,7 @@
       "caption": "",
       "gene_descriptions": [],
       "organ": "liver",
+      "results": {},
       "sexes": [],
       "table_number": 11,
       "type": "gene"
@@ -824,6 +847,7 @@
       "caption": "",
       "gene_descriptions": [],
       "organ": "kidney",
+      "results": {},
       "sexes": [],
       "table_number": 12,
       "type": "gene"

@@ -72,6 +72,8 @@ from rendering.render_common import (
     is_protected,
     resolve_protection,
     INLINE_EXT_LINK,
+    INLINE_ITALIC,
+    INLINE_SUB,
     apical_table_plan,
     incidence_table_plan,
     sample_counts_table,
@@ -200,6 +202,8 @@ def _p_inline(paragraph) -> etree._Element:
     for unit in normalize_inline(paragraph):
         if isinstance(unit, dict) and unit.get("type") == INLINE_EXT_LINK:
             _append_ext_link(p, unit)
+        elif isinstance(unit, dict) and unit.get("type") in (INLINE_ITALIC, INLINE_SUB):
+            etree.SubElement(p, unit["type"]).text = str(unit.get("text", ""))
         else:
             _append_run(p, unit if isinstance(unit, str) else str(unit.get("text", "")))
     return p

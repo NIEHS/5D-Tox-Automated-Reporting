@@ -473,6 +473,9 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
             node_type != "genomics-section" or entry["entry_narrative"] not in (True, False)):
         raise ValueError(f"template node {node_id!r}: entry_narrative is true or false, "
                          f"on a genomics-section")
+    if entry.get("intro_key") is not None and node_type != "genomics-section":
+        raise ValueError(f"template node {node_id!r}: intro_key is only valid on a "
+                         f"genomics-section")
     if entry.get("study_title") is not None and repeat != "study_species":
         raise ValueError(f"template node {node_id!r}: study_title is only valid on a "
                          f"`repeat: study_species` node")

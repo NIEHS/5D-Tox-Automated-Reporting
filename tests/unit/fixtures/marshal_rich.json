@@ -701,14 +701,34 @@
   "gene_narrative": {
     "paragraphs": []
   },
+  "gene_set_intro": {
+    "paragraphs": [
+      [
+        "Chemical-induced alterations in liver gene transcript expression were examined to determine those gene sets most sensitive to test article exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology [GO] biological process) was conducted to determine the potency of the chemical to elicit gene expression changes in the liver. This analysis used transcript-level BMD data to assess an aggregate score of gene set potency (median transcript BMD) and enrichment."
+      ],
+      [
+        "The “active” gene sets with the lowest median BMD values are shown in the liver (Table 4). The gene sets shown in Table 4 should be interpreted with caution from the standpoint of the underlying biological mechanism and any relationship to toxicity or toxic agents referenced in the GO term definitions. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes (i.e., a concerted biological change) that could serve as a surrogate of estimated biological potency and, by extension, toxicological potency when more definitive toxicological data are unavailable."
+      ]
+    ]
+  },
   "gene_set_narrative": {
     "paragraphs": [
       "Gene set prose."
     ]
   },
+  "gene_set_summary": {
+    "paragraphs": []
+  },
   "genomics_sections": [
     {
       "organ": "Liver",
+      "results": {
+        "": [
+          [
+            "In animals administered test article, there were no active GO terms (i.e., no gene expression response at the gene set level)."
+          ]
+        ]
+      },
       "sex": "Male",
       "table_number": 4,
       "type": "gene_set"

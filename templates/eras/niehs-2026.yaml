@@ -71,13 +71,17 @@ changes:
   # it has data for.
   - set: bmd-summary
     caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High, for ${subject} ${treatment}"
-  # Each tissue's prose stands under its own heading after the tables (below).
+  # The analyses open with what was examined and where the tables are; each
+  # tissue's results stand under its own heading after the tables (below) —
+  # the books' sentences, built from the tables (rendering.genomics_results).
   - set: gene-sets
     caption_suffix: ", for ${subject} ${treatment}"
     entry_narrative: false
+    intro_key: gene_set_intro
   - set: gene-bmd
     caption_suffix: ", for ${subject} ${treatment}"
     entry_narrative: false
+    intro_key: gene_intro
   - insert:
     - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
        data_key: gene_set_summary}
@@ -156,7 +160,7 @@ changes:
       repeat: genomic_organs
       children:
       - {id: gene-set-tissue-study, type: narrative, title: "", study_title: "${species}",
-         data_key: gene_set_narrative, repeat: study_species}
+         data_key: gene_set_results, repeat: study_species}
     before: gene-set-summary
   - insert:
     - id: gene-tissue
@@ -165,7 +169,7 @@ changes:
       repeat: genomic_organs
       children:
       - {id: gene-tissue-study, type: narrative, title: "", study_title: "${species}",
-         data_key: gene_narrative, repeat: study_species}
+         data_key: gene_results, repeat: study_species}
     into: gene-bmd
 
   # ── Appendices A–G ───────────────────────────────────────────────────────

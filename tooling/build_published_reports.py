@@ -265,7 +265,7 @@ def build_composed(report: str) -> tuple[str, int, str]:
 
         _fresh_session(dtxsid)
         rc = run([py, "-m", "tooling.generate_report", dtxsid, "--studies", *members,
-                  "--name", name, "--casrn", casrn,
+                  "--name", name, "--casrn", casrn, "--compound-name", short,
                   "--deposit", str(BOOKSHELF / report), "--deposit-exclude", *BOOK_OWN_FILES,
                   "--surfaces", "docx,html,jats,bits,pdf", "--out", str(out)])
     return report, rc, str(log)

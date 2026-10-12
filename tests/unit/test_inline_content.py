@@ -119,3 +119,19 @@ def test_foreword_hyperlinks_render_end_to_end():
         "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm",
         "https://pubmed.ncbi.nlm.nih.gov/",
     } <= targets
+
+
+def test_italic_and_subscript_render_on_every_surface():
+    """A gene symbol in italics and BMD_L's subscript L (the books' genomic
+    results, rendering.genomics_results) on each surface."""
+    from rendering.jats_generator import _p_inline
+    from lxml import etree
+    para = [rc.make_italic("Spp1"), " with a BMD (BMD", rc.make_sub("L"), ")"]
+    assert hg._render_inline(para) == "<i>Spp1</i> with a BMD (BMD<sub>L</sub>)"
+    assert lg._render_inline(para) == r"\textit{Spp1} with a BMD (BMD\textsubscript{L})"
+    doc = Document(); p = doc.add_paragraph(); dg._add_inline_runs(p, para)
+    runs = p.runs
+    assert (runs[0].text, runs[0].italic) == ("Spp1", True)
+    assert (runs[2].text, runs[2].font.subscript) == ("L", True)
+    assert etree.tostring(_p_inline(para), encoding="unicode") == (
+        "<p><italic>Spp1</italic> with a BMD (BMD<sub>L</sub>)</p>")

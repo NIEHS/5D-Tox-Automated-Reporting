@@ -327,6 +327,16 @@ def record_studies(dtxsid: str, studies: list[str], args, store) -> None:
     _log(f"  studies: {', '.join(f'{k}={v}' for k, v in members.items())}")
 
 
+def record_abbreviation(dtxsid: str, short: str, store) -> None:
+    """The test article's short name in prose ("1,4-DCB", --compound-name),
+    recorded with its identity (identity.json ``abbreviation``) for the
+    sentences the report writes from its data (rendering.genomics_results)."""
+    identity = dict(store.read_json(dtxsid, "identity.json") or {})
+    if identity.get("abbreviation") != short:
+        identity["abbreviation"] = short
+        store.write_json(dtxsid, "identity.json", identity)
+
+
 def integrate(dtxsid: str, identity: dict, store) -> None:
     from workflow.steps import integrate_step
 
@@ -633,6 +643,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.studies:
         record_studies(dtxsid, args.studies, args, store)
         args.render_only = True
+    if args.compound_name:
+        record_abbreviation(dtxsid, args.compound_name, store)
     if deposit:
         from pipeline.deposit import record_deposit
         manifest = record_deposit(dtxsid, deposit, tuple(args.deposit_exclude))
