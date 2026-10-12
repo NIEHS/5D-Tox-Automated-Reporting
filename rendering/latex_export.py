@@ -1021,6 +1021,8 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     """The study's tree over its finished data, and what follows from it: the
     data-driven genomics table and chart numbers, the protection marks and the
     contents lists.  Runs last, once every study's data is in ``data``."""
+    from rendering.report_data import name_report_in_peer_review
+    name_report_in_peer_review(data)
     from document_model.document_tree import (
         DOCUMENT_TREE, assign_genomics_figure_numbers, assign_genomics_table_numbers,
         order_tissues, study_tree,

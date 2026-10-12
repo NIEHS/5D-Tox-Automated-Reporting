@@ -146,6 +146,14 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     return [_TITLE_HEADER, *_wrap_words(body, max_chars)]
 
 
+def book_title_body(data: dict) -> str:
+    """The NIEHS title after its "NIEHS Report on the" header, unwrapped — how
+    the book names itself in its text ("…the NIEHS Report on the In Vivo …
+    (CASRN …) in Male Sprague Dawley (Hsd:…) Rats (Gavage Studies) was not
+    subjected …", NIEHS-02, 07, 10, 12)."""
+    return " ".join(_niehs_title_lines(data, max_chars=10**6)[1:])
+
+
 def _title_animals(design: dict, designation: str) -> str:
     """One study's animals as the title names them: strain, designation and
     species — "Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats".  A designation

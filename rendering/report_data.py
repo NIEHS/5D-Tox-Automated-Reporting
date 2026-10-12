@@ -279,6 +279,22 @@ def apply_design(data: dict, design: dict) -> None:
                                 for p in pr["paragraphs"]]
 
 
+def name_report_in_peer_review(data: dict) -> None:
+    """The peer-review paragraph names the report by its full book title, as the
+    published books do (NIEHS-02, 07, 10, 12: "…the NIEHS Report on the In Vivo
+    … (CASRN …) in … (Gavage Studies) was not subjected …"), not the short
+    running title it was written with.  Run once the title's facts are final."""
+    from document_model.cover_layouts import book_title_body
+
+    title = data.get("title") or ""
+    pr = data.get("peer_review")
+    if not title or not isinstance(pr, dict) or not pr.get("paragraphs"):
+        return
+    body = book_title_body(data)
+    pr["paragraphs"] = [p.replace(f"Report on the {title} ", f"Report on the {body} ")
+                        if isinstance(p, str) else p for p in pr["paragraphs"]]
+
+
 def marshal_export_data(
     body: dict,
     section_filter: str | None = None,
@@ -684,6 +700,7 @@ def marshal_export_data(
     if protection:
         data["protection"] = protection
 
+    name_report_in_peer_review(data)
     return data
 
 

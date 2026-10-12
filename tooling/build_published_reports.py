@@ -67,7 +67,7 @@ ORAL = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
 INHALED = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "inhaled",
            "studyDuration": "5d"}
 HSD = "(Hsd:Sprague Dawley® SD®)"
-HSD_EARLY = "(Hsd: Sprague Dawley SD)"   # RR-8 and NIEHS-02 print it this way
+HSD_EARLY = "(Hsd: Sprague Dawley SD)"   # RR-8 prints it this way
 INHALED_MICE = {"species": "mouse", "strain": "B6D2F1", "articleRoute": "inhaled",
                 "studyDuration": "5d"}
 CRL = "/Crl"                             # "B6D2F1/Crl Mice"
@@ -79,7 +79,7 @@ STUDIES = {
              "C11042_BMDExpressProjectFile.bm2", None, "mg/kg", ORAL, HSD_EARLY,
              "ntp-5day-2021", []),
     "NIEHS-02": ("DTXSID1025300", "2-Ethylhexyl Diphenyl Phosphate", "1241-94-7", "EHDP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD_EARLY,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
                  "ntp-5day-2021", []),
     "NIEHS-03": ("DTXSID6024701", "tert-Butylphenyl Diphenyl Phosphate", "56803-37-3", "BPDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
@@ -87,7 +87,7 @@ STUDIES = {
     "NIEHS-04": ("DTXSID3025465", "Isodecyl Diphenyl Phosphate", "29761-21-5", "IDDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
                  "ntp-5day-2021", []),
-    "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenyl Phosphate", "68937-41-7", "IPP",
+    "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate",   # as the book names it "68937-41-7", "IPP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
                  "ntp-5day-2021", []),
     "NIEHS-06": ("DTXSID4021391", "Tricresyl Phosphate", "1330-78-5", "TCP",
