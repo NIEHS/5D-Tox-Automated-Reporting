@@ -77,3 +77,12 @@ def test_a_report_over_studies_states_each_summary_under_its_animals():
     text = data["abstract"]["sections"][-1]["text"]
     assert text.startswith("Taken together, in rats, the most sensitive gene set")
     assert " In mice, the most sensitive gene set and apical endpoint" in text
+
+
+def test_an_apical_only_summary_still_names_the_most_sensitive():
+    """NIEHS-05: "Taken together, the most sensitive apical endpoint BMD (BMDL)
+    value that could be reliably determined occurred at 51.3 (27.0) mg/kg." """
+    text = build_abstract_summary(_apical("Male"), {}, DOSES, "mg/kg", "median",
+                                  sexes=["Male"], bmd_decimals=1, design=RATS)
+    assert text == ("Taken together, the most sensitive apical endpoint BMD (BMDL) value "
+                    "that could be reliably determined occurred at 19.1 (12.8) mg/kg.")

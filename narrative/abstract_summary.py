@@ -248,6 +248,9 @@ def build_abstract_summary(
         labels = [p[0] for p in category_phrases]
         values = [p[1] for p in category_phrases]
         plural = len(category_phrases) > 1
+        if not labels[0].startswith("the most sensitive"):
+            # "the most sensitive apical endpoint BMD (BMDL) value" (NIEHS-05)
+            labels[0] = f"the most sensitive {labels[0]}"
         if not genes:
             # "the most sensitive gene set and apical endpoint BMD (BMDL)"
             kinds = [k for k, v in (("gene set", gs), ("apical endpoint", apical)) if v]
