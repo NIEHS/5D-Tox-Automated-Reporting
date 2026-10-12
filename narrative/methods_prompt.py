@@ -380,8 +380,18 @@ _FAMILY_DATA = {
 _ENGINE_TEXT = {
     "toxicr_model_average": ("ToxicR Laplace model averaging of the Hill, Power, "
                              "Exponential 3 and Exponential 5 models with constant variance"),
+    "bmds_2_7_high_dose_drop": (
+        "a modification of the Benchmark Dose Software (BMDS) version 2.7.0, run in batch "
+        "through the Python BMDS interface (version 0.11), with the Linear, Polynomial "
+        "(degree 2 to the number of dose groups minus 1), Power, Hill and Exponential "
+        "(M2 to M5) models and BMDS 2.7.0 model defaults; when no model was recommended, "
+        "the highest dose group was removed and the data set modeled again, until a model "
+        "was recommended or three dose groups remained"),
 }
 _ELIGIBILITY_TEXT = {
+    "trend_or_pairwise": ("Except for body weights, an endpoint was modeled if it showed a "
+                          "significant trend or at least one significant pairwise "
+                          "difference."),
     "trend_and_pairwise": ("Except for body weights, an endpoint was modeled only if it "
                            "showed a significant trend and at least one significant "
                            "pairwise difference."),
@@ -427,12 +437,29 @@ def _bmd_apical_guideline(ctx: MethodsContext) -> str:
     """The apical BMD paragraph, from the study's method profile: eligibility,
     engine, BMR and acceptance criteria are the ones applied."""
     method = _method(ctx)
+    engine = method.get("apical.bmd.engine")
+    if engine == "bmds_2_7_high_dose_drop":
+        # The engine's own rules decide (pipeline.bmds27; Appendix D, Table D-1),
+        # not the profile's acceptance criteria.
+        return (
+            "One paragraph. Apical BMD modeling used dose-group summary data (N, mean, "
+            "standard deviation). "
+            f"{_ELIGIBILITY_TEXT[method.get('apical.bmd.eligibility')]} "
+            f"Modeling used {_ENGINE_TEXT[engine]} and a benchmark response of "
+            f"{_apical_bmr_phrase(ctx)} (relative to control). Each model was placed in a "
+            "bin by the recommendation rules of Appendix D, Table D-1; among the viable models "
+            "(those no rule placed in the warning or failure bin), the one with the lowest "
+            "AIC was recommended when their BMDLs were within 3-fold of each other, else the "
+            "one with the lowest BMDL. An "
+            "endpoint meeting the statistical criteria without a recommended model is "
+            "reported as having no viable model. The genomic BMR in the context does NOT "
+            "apply to apical endpoints.")
     acc = method.acceptance_criteria()
     high = " and BMD <= the highest dose" if acc.max_dose else ""
     return (
         "One paragraph. Apical BMD modeling used nontransformed individual-animal data. "
         f"{_ELIGIBILITY_TEXT[method.get('apical.bmd.eligibility')]} "
-        f"Modeling used {_ENGINE_TEXT[method.get('apical.bmd.engine')]} and a benchmark "
+        f"Modeling used {_ENGINE_TEXT[engine]} and a benchmark "
         f"response of {_apical_bmr_phrase(ctx)}. "
         f"Modeled responses were excluded unless R2 >= {acc.r2_min:g} and BMD/BMDL <= "
         f"{acc.bmd_bmdl_max:g}{high}; an endpoint meeting the "

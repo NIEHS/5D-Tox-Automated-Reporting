@@ -1416,6 +1416,51 @@ def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
     return None
 
 
+def _bmds27_eligible(row, eligibility: str) -> bool:
+    """Whether the study's method models `row` (apical.bmd.eligibility)."""
+    if eligibility == "trend_or_pairwise":
+        return bool(row.trend_marker) or row.loel is not None
+    return bool(row.responsive)  # trend_and_pairwise
+
+
+def _write_rows_from_bmds27(platform_tables: dict[str, dict[str, list]], bmds_results: dict,
+                            bmd_decimals: int | None, method) -> int:
+    """Under the BMDS 2.7 engine (pipeline.bmds27) the engine is the source of
+    record for every apical BMD, not a fill: each row the method models takes
+    its value (viable → BMD/BMDL; no recommended model → NVM), and a row it
+    does not model loses any .bm2 value — that came from BMDExpress, another
+    method.  Returns the number of rows written."""
+    from bmdx_pipe.apical_report import format_bmd
+
+    eligibility = method.get("apical.bmd.eligibility")
+    n = 0
+    for platform, sex_rows in platform_tables.items():
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                res = bmds_results.get(f"{sex}::{row.label}")
+                if res is None or not _bmds27_eligible(row, eligibility):
+                    if _finite_pos_bmd(row.bmd_str) is not None or row.bmd_status:
+                        row.bmd_str = row.bmdl_str = "—"
+                        row.bmd_status = None
+                    continue
+                bmd = _finite_pos_bmd(res.get("bmd")) if res.get("status") == "viable" else None
+                if bmd is not None:
+                    bmdl = _finite_pos_bmd(res.get("bmdl"))
+                    row.bmd_str = format_bmd(bmd, bmd_decimals)
+                    row.bmdl_str = format_bmd(bmdl, bmd_decimals) if bmdl is not None else "—"
+                    row.bmd_status = "viable"
+                else:
+                    row.bmd_str = row.bmdl_str = row.bmd_status = "NVM"
+                row._bmd_fill = {
+                    "source": res.get("source", "bmds27"),
+                    "bmr_config": res.get("bmr_config") or "engine_default",
+                    "bmr": res.get("bmr"),
+                    "model_name": res.get("model_name"),
+                }
+                n += 1
+    return n
+
+
 def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
                           bmds_results: dict | None,
                           bmd_decimals: int | None = None,
@@ -1443,6 +1488,8 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
 
     if not bmds_results:
         return 0
+    if method.get("apical.bmd.engine") == "bmds_2_7_high_dose_drop":
+        return _write_rows_from_bmds27(platform_tables, bmds_results, bmd_decimals, method)
     n = 0
     for platform, sex_rows in platform_tables.items():
         for sex, rows in sex_rows.items():

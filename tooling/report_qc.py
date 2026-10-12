@@ -22,8 +22,9 @@ Checks:
   tables       empty tables; captions without the test article
   duplicates   paragraphs repeated verbatim
   method       the study's pinned method profile asks for an analysis this
-               tool does not implement (e.g. the 2021 profile's modified BMDS
-               2.7 apical engine): the report cannot follow its published method
+               tool does not implement, or cannot run here (the 2021 profile's
+               modified BMDS 2.7 apical engine needs Wine): the report cannot
+               follow its published method
   bmd_summary  BMDL <= BMD, NOEL < LOEL; and, where the published report is
                downloaded, its BMD/LOEL/NOEL summary compared row by row.  A BMD
                more than 2% from the published one is an error whatever the
@@ -412,9 +413,9 @@ def _published_bmd_summary(report: str, study_sexes: set[str],
 
 def _engine_deviations(dtxsid: str) -> list[str]:
     """The apical BMD settings the study's pinned method profile asks for and
-    this tool does not implement (pipeline.method_profile substitutes the
-    default and records it), for the study or, for a report over several
-    studies, each of its members."""
+    this tool does not implement or cannot run here (pipeline.method_profile
+    substitutes the default and records it), for the study or, for a report
+    over several studies, each of its members."""
     from pipeline.method_profile import session_method
     out: list[str] = []
     for d in _members(dtxsid) or [dtxsid]:
@@ -432,8 +433,9 @@ def check_method(qc: ReportQC) -> None:
     deviations = _engine_deviations(qc.dtxsid)
     if deviations:
         qc.add("method", "error",
-               "the study's method profile asks for analyses this tool does not implement; the "
-               "report states results from the substitute, not from the published method",
+               "the study's method profile asks for analyses this tool does not implement or "
+               "cannot run on this machine; the report states results from the substitute, not "
+               "from the published method",
                deviations)
 
 

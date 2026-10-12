@@ -57,8 +57,14 @@ class MethodProfileError(ValueError):
 IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
     "trend_test": {"jonckheere": True},
     "pairwise": {"williams_or_dunnett": True, "shirley_or_dunn": True, "none": True},
+    # bmds_2_7_high_dose_drop runs only where Wine can run BMDS 2.7 (see
+    # _MACHINE_DEPENDENT); False here is "not on every machine".
     "engine": {"toxicr_model_average": True, "bmds_2_7_high_dose_drop": False},
-    "eligibility": {"trend_and_pairwise": True, "all_endpoints": False},
+    # trend_or_pairwise is what NTP's BMDS 2.7 runs modelled (their recorded
+    # datasets, NIEHS-07…10); it is applied by the bmds27 path only and no
+    # profile names it yet (ADR-0030).
+    "eligibility": {"trend_and_pairwise": True, "all_endpoints": False,
+                    "trend_or_pairwise": False},
     "outlier_test": {"dixon_r10": True},
     "below_limit": {"half_limit": True},
     "above_highest_dose": {"nvm": True, "keep": True},
@@ -67,6 +73,24 @@ IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
     "bmd_stat": {s: True for s in ("mean", "median", "minimum", "weighted_mean",
                                    "fifth_pct", "tenth_pct", "lower95", "upper95")},
 }
+
+# Implementations that run only where the machine can run them: (kind, name)
+# → a function returning None when available here, else the reason it is not.
+def _bmds27_unavailable() -> str | None:
+    from pipeline import bmds27
+    return bmds27.unavailable_reason()
+
+
+_MACHINE_DEPENDENT = {("engine", "bmds_2_7_high_dose_drop"): _bmds27_unavailable}
+
+
+def unavailable_reason(kind: str, name: str) -> str | None:
+    """None when implementation `name` of `kind` runs here, else why not."""
+    check = _MACHINE_DEPENDENT.get((kind, name))
+    if check is not None:
+        return check()
+    return None if IMPLEMENTATIONS[kind].get(name, False) else "not implemented"
+
 
 # The bmdx-pipe test families the pairwise names select.
 _FAMILY = {"williams_or_dunnett": "parametric", "shirley_or_dunn": "nonparametric"}
@@ -495,12 +519,19 @@ def _substitute_unimplemented(settings: MethodSettings) -> None:
     _flatten(_builtin_defaults(), SCHEMA, "", defaults, keep_null=True)
     for p, kind in _IMPL_FIELDS.items():
         v = settings.values.get(p)
-        if v is not None and not IMPLEMENTATIONS[kind].get(v, False):
+        why = unavailable_reason(kind, v) if v is not None else None
+        if why == "not implemented":
             settings.deviations.append(
                 f"{p}: {settings.sources[p]} asks for {v!r}, which this tool does not "
                 f"implement; {defaults[p]!r} is used")
             settings.values[p] = defaults[p]
             settings.sources[p] = f"default (not implemented: {v})"
+        elif why:
+            settings.deviations.append(
+                f"{p}: {settings.sources[p]} asks for {v!r}, which cannot run here "
+                f"({why}); {defaults[p]!r} is used")
+            settings.values[p] = defaults[p]
+            settings.sources[p] = f"default (unavailable here: {v})"
 
 
 # ---------------------------------------------------------------------------

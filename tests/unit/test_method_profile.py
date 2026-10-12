@@ -27,12 +27,28 @@ def test_profile_values_carry_their_source():
     assert not s.deviations
 
 
-def test_unimplemented_engine_is_a_stated_deviation_not_a_silent_one():
+def test_engine_unavailable_here_is_a_stated_deviation_not_a_silent_one(monkeypatch):
+    from pipeline import bmds27
+    monkeypatch.setattr(bmds27, "unavailable_reason", lambda: "Wine is not installed")
     s = mp.resolve("ntp-5day-2021")
     assert s.get("apical.bmd.engine") == "toxicr_model_average"
-    assert "not implemented" in s.source("apical.bmd.engine")
-    assert any("bmds_2_7_high_dose_drop" in d for d in s.deviations)
+    assert "unavailable here" in s.source("apical.bmd.engine")
+    assert any("bmds_2_7_high_dose_drop" in d and "Wine is not installed" in d
+               for d in s.deviations)
+    assert any("all_endpoints" in d and "does not implement" in d for d in s.deviations)
     assert s.source("genomics.go_ranking") == "default"                  # "to confirm"
+
+
+def test_engine_available_here_runs_as_the_profile_asks(monkeypatch):
+    from pipeline import bmds27
+    monkeypatch.setattr(bmds27, "unavailable_reason", lambda: None)
+    s = mp.resolve("ntp-5day-2021")
+    assert s.get("apical.bmd.engine") == "bmds_2_7_high_dose_drop"
+    assert s.source("apical.bmd.engine") == "profile:ntp-5day-2021"
+    assert not any(d.startswith("apical.bmd.engine") for d in s.deviations)
+    off = s.signature()
+    monkeypatch.setattr(bmds27, "unavailable_reason", lambda: "Wine is not installed")
+    assert mp.resolve("ntp-5day-2021").signature() != off   # the BMDS cache recomputes
 
 
 def test_overlay_and_request_layers_override_in_order():

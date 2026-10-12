@@ -38,6 +38,7 @@ markers = [
     "unit: Pure function tests, no I/O",
     "integration: TestClient tests with mocked externals",
     "e2e: Full pipeline smoke tests",
+    "wine: runs EPA BMDS 2.7 executables under Wine (skipped without Wine)",
 ]
 # Exclude e2e tests from default runs.  The e2e suite's `_step_impl`
 # helper (tests/e2e/conftest.py) calls page.pause() between every step

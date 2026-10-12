@@ -1029,7 +1029,8 @@ async def _get_sections(ctx):
 
 
 async def _get_bmds(ctx):
-    """Fit apical BMDs via the ToxicR Java engine, or return cached.
+    """Fit apical BMDs with the study's engine, or return cached: NTP's BMDS 2.7
+    package (pipeline.bmds27) for the BMDS-era method, else the ToxicR Java engine.
 
     Each endpoint is fit with the config its .bm2 was run with (parse_bmd_configs);
     config-less apical platforms are inferred per assay family and flagged. The
@@ -1050,10 +1051,28 @@ async def _get_bmds(ctx):
         ctx.bmds_results = {}
         return
 
+    loop = asyncio.get_running_loop()
+    if _method(ctx).get("apical.bmd.engine") == "bmds_2_7_high_dose_drop":
+        # NTP's BMDS 2.7 package under Wine (pipeline.bmds27): the method of the
+        # BMDS-era reports.  Its full record — every model of every high-dose-drop
+        # round — is kept beside the results, as NTP deposited theirs.
+        from pipeline import bmds27
+        from pipeline.bmds27.engine import run_endpoints
+
+        results, record = await loop.run_in_executor(
+            None, functools.partial(run_endpoints, executor=bmds27.executor()), bmds_inputs)
+        path = _session_dir(dtxsid) / "bmds27_runs.json"
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_bytes(orjson.dumps({"bmds_hash": bmds_hash, "endpoints": record},
+                                     option=orjson.OPT_SERIALIZE_NUMPY))
+        tmp.replace(path)
+        _save_cache(dtxsid, "bmds", bmds_hash, results)
+        ctx.bmds_results = results
+        return
+
     # {(sex, platform_token): config} from the .bm2 analysisInfo — matched per endpoint.
     configs = parse_bmd_configs(ctx.integrated)
 
-    loop = asyncio.get_running_loop()
     results = await loop.run_in_executor(
         None, functools.partial(run_bmds_for_endpoints, method=_method(ctx)),
         bmds_inputs, configs,
