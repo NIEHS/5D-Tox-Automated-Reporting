@@ -61,6 +61,21 @@ def test_dtt_workbook_fills_sex_from_key_title(tmp_path):
     assert lines[1] == "108020004,0,1,Female,Core Animals,180.0,SD0,"
 
 
+def test_a_workbook_of_another_study_is_rejected(tmp_path):
+    """The published NIEHS-12 deposit's 108020006 hematology workbook holds
+    study 108020004 (NIEHS-13's): the study it holds decides, not its name."""
+    src = tmp_path / "108020006_Individual_Animal_Hematology_Data.xlsx"
+    _dtt_workbook(src, "5-Day Whole Body Inhalation Toxicity Study of 1,4-Dichlorobenzene "
+                       "in Female Sprague Dawley Rats (HSD:Sprague Dawley SD)")
+    out = tmp_path / "out"
+    out.mkdir()
+    rejected = convert_workbook(str(src), str(out), study="108020006")
+    assert rejected == {"file": src.name, "status": "rejected",
+                        "reason": "the workbook holds study 108020004, not 108020006"}
+    assert not list(out.iterdir())
+    assert convert_workbook(str(src), str(out), study="108020004")["status"] == "ok"
+
+
 def test_dtt_workbook_with_ambiguous_title_is_refused(tmp_path):
     src = tmp_path / "X_Individual_Animal_Body_Weight_Data.xlsx"
     _dtt_workbook(src, "Study in Male and Female Rats")

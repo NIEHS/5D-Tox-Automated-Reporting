@@ -216,10 +216,14 @@ def package_species(filenames: list[str]) -> str | None:
 
 
 def convert_workbook(path: str, out_dir: str, species: str | None = None,
-                     mg_levels: list[float] | None = None) -> dict:
+                     mg_levels: list[float] | None = None, study: str | None = None) -> dict:
     """Write one `<stem>_truth_<sex>.csv` per sex.  Returns a summary dict.
     `species` picks the sheet of a multi-species lab results workbook;
-    `mg_levels` (project_dose_levels) converts molar doses to mg/kg."""
+    `mg_levels` (project_dose_levels) converts molar doses to mg/kg.  A
+    workbook whose own Study Number is not `study` (the study being built) is
+    rejected, whatever its file name says: the published NIEHS-12 deposit's
+    108020006_Individual_Animal_Hematology_Data.xlsx holds study 108020004
+    (NIEHS-13's 1,4-dichlorobenzene rats)."""
     name = os.path.basename(path)
     stem = workbook_stem(name)
     if stem is None:
@@ -260,6 +264,11 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
     rows = [list(r) for r in wb["Data"].iter_rows(values_only=True)]
     header = [_cell(c) for c in rows[0]]
     body = [r for r in rows[1:] if any(c is not None and str(c).strip() for c in r)]
+    if study and header and header[0] in ("Study Number", "NTP Study Number"):
+        held = sorted({_cell(r[0]).strip() for r in body} - {""})
+        if held and held != [study]:
+            return {"file": name, "status": "rejected",
+                    "reason": f"the workbook holds study {', '.join(held)}, not {study}"}
 
     notes = []
     if header and header[0] == "Study Number":
@@ -389,7 +398,7 @@ def main() -> None:
         paths += sorted(glob.glob(os.path.join(a.bundle, pattern)))
     failed = 0
     for path in paths:
-        s = convert_workbook(path, a.out, species, mg_levels)
+        s = convert_workbook(path, a.out, species, mg_levels, a.prefix or None)
         print(json.dumps(s))
         failed += s.get("status") == "error"
         if s.get("status") == "ok":
