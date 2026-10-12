@@ -46,20 +46,18 @@ from common.animal_selection import is_biosampling
 from tables.display_precision import row_decimals
 from tables.table_builder_common import (
     apical_caption,
-    BMD_DEFINITION,
-    significance_explanation,
     js_dose_key,
     format_row_cell,
     load_sidecar,
     build_n_row,
-    legend_footnote,
-    definition_footnote,
     lettered_footnote,
     finalize_footnotes,
     detect_core_animal_availability,
-    build_sample_availability_footnotes,
-    build_attrition_footnote,
     is_reportable_bmd,
+    collect_table_doses,
+    standard_apical_footnotes,
+    availability_footnotes,
+    attach_n_row_marker_refs,
 )
 
 
@@ -106,10 +104,6 @@ def _organ_weight_caption(serialized: dict, compound_name: str,
         return apical_caption(f"Summary of {organs[0]} Weights of {{subject}} {{treatment}}",
                               serialized, compound_name, design)
     return apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design)
-
-FOOTNOTE_DATA_FORMAT = (
-    "Data are displayed as mean \u00b1 standard error of the mean."
-)
 
 # Additional organ-weight-specific footnotes from the NIEHS reference:
 FOOTNOTE_RELATIVE_WEIGHT = (
@@ -241,26 +235,11 @@ def build_organ_weight_table_from_sidecar(
     # tissue not collected, etc.).  Shared with clinical_pathology_table.py;
     # see table_builder_common.  Feeds the sample-availability and attrition
     # footnotes built near the end of this function.
-    (
-        core_n_by_sex_dose,
-        total_core_by_sex_dose,
-        missing_sample_animals,
-    ) = detect_core_animal_availability(sidecar_data)
+    availability = detect_core_animal_availability(sidecar_data)
+    core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
 
-    # Collect all doses for consistent column set
-    all_doses: set[float] = set()
-    for sc in sidecar_data.values():
-        for rec in sc.get("animals", {}).values():
-            all_doses.add(rec["dose"])
-    for sex_rows in ntp_stats.values():
-        for row in sex_rows:
-            vbd = row.get("values_by_dose", {}) if isinstance(row, dict) else getattr(row, "values_by_dose", {})
-            for d_str in vbd.keys():
-                try:
-                    all_doses.add(float(d_str))
-                except (ValueError, TypeError):
-                    pass
-    sorted_doses = sorted(all_doses)
+    # Every dose (sidecars + NTP stats) for a column set shared by both sexes
+    sorted_doses = collect_table_doses(sidecar_data, ntp_stats)
 
     # ── Collect all organ endpoints ───────────────────────────────────────
     # ALL organs in the data appear in the table (not just responsive ones).
@@ -615,17 +594,7 @@ def build_organ_weight_table_from_sidecar(
     # NIEHS Report 10 Table 3, with the reference PDF as the authority.
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for organ weights.
-    from pipeline.method_profile import marker_legend, session_method, statistics_sentence
-    method = method if method is not None else session_method(None)
-    footnotes: list[dict] = [
-        legend_footnote(significance_explanation(dose_unit)),
-        legend_footnote(marker_legend(method)),
-        definition_footnote(BMD_DEFINITION),
-        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
-    ]
-    stat_text = statistics_sentence(method, method.pairwise("Organ Weight"))
-    if stat_text:
-        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+    footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight")
     footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT, "relative_weight"))
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
@@ -633,37 +602,15 @@ def build_organ_weight_table_from_sidecar(
     # table_builder_common.  For most organ-weight sessions these produce
     # nothing (terminal organ weights are recorded for every Core Animal),
     # but they fire correctly when an animal's tissue was not collected.
-    n_row_marker_refs: dict[str, dict[float, str]] = {}
-
-    sa_records, sa_refs = build_sample_availability_footnotes(
-        missing_sample_animals, total_core_by_sex_dose, sorted_doses,
+    avail_records, n_row_marker_refs = availability_footnotes(
+        sidecar_data, availability, sorted_doses, dose_unit, design,
     )
-    footnotes.extend(sa_records)
-
-    attr_record, attr_refs = build_attrition_footnote(
-        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
-        sidecar_data,
-    )
-    if attr_record is not None:
-        footnotes.append(attr_record)
-
-    for sex, dose_refs in sa_refs.items():
-        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
-    for sex, dose_refs in attr_refs.items():
-        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+    footnotes.extend(avail_records)
 
     # Attach the marker refs to each sex's n-row (built earlier in this
     # function), then finalize_footnotes assigns letters and derives the
     # rows' `markers` dicts from `marker_refs`.
-    for sex, rows in serialized.items():
-        sex_refs = n_row_marker_refs.get(sex, {})
-        if sex_refs and rows and rows[0].get("is_n_row"):
-            n_row = rows[0]
-            refs = n_row.get("marker_refs", {})
-            refs.update({
-                js_dose_key(d): fid for d, fid in sex_refs.items()
-            })
-            n_row["marker_refs"] = refs
+    attach_n_row_marker_refs(serialized, n_row_marker_refs)
 
     finalize_footnotes(footnotes, serialized)
 

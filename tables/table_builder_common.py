@@ -515,6 +515,98 @@ def build_attrition_footnote(
 
 
 # ---------------------------------------------------------------------------
+# Shared skeleton of the sidecar + NTP-stats tables (organ weight, clinical
+# pathology).  Body weight computes its own values and footnotes.
+# ---------------------------------------------------------------------------
+
+# The lettered data-format footnote of the organ-weight and clinical-pathology
+# tables [Canonical, NIEHS Report 10].  Body weight's names grams.
+FOOTNOTE_MEAN_SE_FORMAT = "Data are displayed as mean \u00b1 standard error of the mean."
+
+
+def collect_table_doses(sidecar_data: dict[str, dict], ntp_stats: dict[str, list]) -> list[float]:
+    """Every dose of the table's columns, ascending: each sidecar animal's dose
+    plus every dose an NTP stats row has a value for (in case a sidecar is
+    incomplete), so both sexes share one column set."""
+    doses: set[float] = set()
+    for sc in sidecar_data.values():
+        for rec in sc.get("animals", {}).values():
+            doses.add(rec["dose"])
+    for sex_rows in ntp_stats.values():
+        for row in sex_rows:
+            vbd = row.get("values_by_dose", {}) if isinstance(row, dict) else getattr(row, "values_by_dose", {})
+            for d_str in vbd.keys():
+                try:
+                    doses.add(float(d_str))
+                except (ValueError, TypeError):
+                    pass
+    return sorted(doses)
+
+
+def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dict]:
+    """The footnotes every organ-weight / clinical-pathology table opens with,
+    in render order: the significance explanation and */** marker key
+    (legends), the BMD/BMDL definition, (a) the data format and, when the
+    study's method profile names tests for ``platform``, (b) the statistical
+    method.  ``method`` None ⇒ the session's default method profile."""
+    from pipeline.method_profile import marker_legend, session_method, statistics_sentence
+
+    method = method if method is not None else session_method(None)
+    footnotes: list[dict] = [
+        legend_footnote(significance_explanation(dose_unit)),
+        legend_footnote(marker_legend(method)),
+        definition_footnote(BMD_DEFINITION),
+        lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format"),
+    ]
+    stat_text = statistics_sentence(method, method.pairwise(platform))
+    if stat_text:
+        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+    return footnotes
+
+
+def availability_footnotes(
+    sidecar_data: dict[str, dict],
+    availability: tuple,
+    sorted_doses: list[float],
+    dose_unit: str,
+    design: dict | None,
+) -> tuple[list[dict], dict[str, dict[float, str]]]:
+    """The sample-availability footnotes plus the attrition footnote, and the
+    merged ``{sex: {dose: footnote_id}}`` n-row marker bindings of both.
+    ``availability`` is detect_core_animal_availability's result."""
+    core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
+    records, sa_refs = build_sample_availability_footnotes(
+        missing_sample_animals, total_core_by_sex_dose, sorted_doses,
+    )
+    attr_record, attr_refs = build_attrition_footnote(
+        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
+        sidecar_data,
+    )
+    if attr_record is not None:
+        records.append(attr_record)
+    n_row_marker_refs: dict[str, dict[float, str]] = {}
+    for refs in (sa_refs, attr_refs):
+        for sex, dose_refs in refs.items():
+            n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+    return records, n_row_marker_refs
+
+
+def attach_n_row_marker_refs(
+    serialized: dict[str, list[dict]], n_row_marker_refs: dict[str, dict[float, str]],
+) -> None:
+    """Bind each sex's footnote ids to the cells of its n-row (the first row,
+    built before the footnotes existed); finalize_footnotes then turns the
+    ids into letters."""
+    for sex, rows in serialized.items():
+        sex_refs = n_row_marker_refs.get(sex, {})
+        if sex_refs and rows and rows[0].get("is_n_row"):
+            n_row = rows[0]
+            refs = n_row.get("marker_refs", {})
+            refs.update({js_dose_key(d): fid for d, fid in sex_refs.items()})
+            n_row["marker_refs"] = refs
+
+
+# ---------------------------------------------------------------------------
 # Dose key formatting
 # ---------------------------------------------------------------------------
 

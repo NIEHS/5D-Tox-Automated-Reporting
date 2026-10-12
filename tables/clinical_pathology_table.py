@@ -36,20 +36,18 @@ from tables.display_precision import recorded_decimals, row_decimals
 from tables.table_builder_common import (
     apical_caption,
     format_row_cell,
-    BMD_DEFINITION,
-    significance_explanation,
     js_dose_key,
     load_sidecar,
     build_n_row,
     format_dose_label,
-    legend_footnote,
-    definition_footnote,
     lettered_footnote,
     finalize_footnotes,
     detect_core_animal_availability,
-    build_sample_availability_footnotes,
-    build_attrition_footnote,
     is_reportable_bmd,
+    collect_table_doses,
+    standard_apical_footnotes,
+    availability_footnotes,
+    attach_n_row_marker_refs,
 )
 
 
@@ -61,12 +59,6 @@ from tables.table_builder_common import (
 # {compound} is the full chemical name.
 CAPTION_TEMPLATE = (
     "Summary of Select {platform} Data for {subject} {treatment}"
-)
-
-# The data-format footnote differs slightly from body weight — clinical
-# pathology tables say "data" not "body weight data".
-FOOTNOTE_DATA_FORMAT = (
-    "Data are displayed as mean \u00b1 standard error of the mean."
 )
 
 # Clinical pathology uses nonparametric methods (Shirley/Dunn) instead of
@@ -142,31 +134,15 @@ def build_clinical_pathology_table_from_sidecar(
     for sex, sc_path in sidecar_paths.items():
         sidecar_data[sex] = load_sidecar(sc_path)
 
-    # Collect all doses across all sidecars for consistent column set
-    all_doses: set[float] = set()
-    for sc in sidecar_data.values():
-        for rec in sc.get("animals", {}).values():
-            all_doses.add(rec["dose"])
-    # Also collect doses from NTP stats in case sidecar is incomplete
-    for sex_rows in ntp_stats.values():
-        for row in sex_rows:
-            vbd = row.get("values_by_dose", {}) if isinstance(row, dict) else getattr(row, "values_by_dose", {})
-            for d_str in vbd.keys():
-                try:
-                    all_doses.add(float(d_str))
-                except (ValueError, TypeError):
-                    pass
-    sorted_doses = sorted(all_doses)
+    # Every dose (sidecars + NTP stats) for a column set shared by both sexes
+    sorted_doses = collect_table_doses(sidecar_data, ntp_stats)
 
     # ── Detect Core Animal availability per dose (shared helper) ──────────
     # Splits each dose group's Core Animals into "has usable data" vs
     # "all-NA" (sample not received, clotted, etc.).  Shared with
     # organ_weight_table.py — see table_builder_common.
-    (
-        core_n_by_sex_dose,
-        total_core_by_sex_dose,
-        missing_sample_animals,
-    ) = detect_core_animal_availability(sidecar_data)
+    availability = detect_core_animal_availability(sidecar_data)
+    core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
 
     # ── Build rows for ALL endpoints ─────────────────────────────────────
     # The NIEHS reference includes every measured endpoint in the table,
@@ -319,17 +295,7 @@ def build_clinical_pathology_table_from_sidecar(
     #                        block below.
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for this platform.
-    from pipeline.method_profile import marker_legend, session_method, statistics_sentence
-    method = method if method is not None else session_method(None)
-    footnotes: list[dict] = [
-        legend_footnote(significance_explanation(dose_unit)),
-        legend_footnote(marker_legend(method)),
-        definition_footnote(BMD_DEFINITION),
-        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
-    ]
-    stat_text = statistics_sentence(method, method.pairwise(platform))
-    if stat_text:
-        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+    footnotes = standard_apical_footnotes(dose_unit, method, platform)
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # [Canonical] — both anchored in NIEHS Report 10.  The detection and
@@ -343,25 +309,10 @@ def build_clinical_pathology_table_from_sidecar(
     #     here (the sample-availability helper filters whole-group doses out).
     # n_row_marker_refs holds the {sex: {dose: footnote_id}} bindings;
     # finalize_footnotes (called later) turns the ids into displayed letters.
-    n_row_marker_refs: dict[str, dict[float, str]] = {}
-
-    sa_records, sa_refs = build_sample_availability_footnotes(
-        missing_sample_animals, total_core_by_sex_dose, sorted_doses,
+    avail_records, n_row_marker_refs = availability_footnotes(
+        sidecar_data, availability, sorted_doses, dose_unit, design,
     )
-    footnotes.extend(sa_records)
-
-    attr_record, attr_refs = build_attrition_footnote(
-        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
-        sidecar_data,
-    )
-    if attr_record is not None:
-        footnotes.append(attr_record)
-
-    # Merge both helpers' n-row marker refs into one dict.
-    for sex, dose_refs in sa_refs.items():
-        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
-    for sex, dose_refs in attr_refs.items():
-        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+    footnotes.extend(avail_records)
 
     # ── Imputation footnote [Extended-canonical] ──────────────────────────
     # The BMD/BMDL values come from an inferred dataset in which missing
@@ -405,15 +356,7 @@ def build_clinical_pathology_table_from_sidecar(
     # The n-rows were built early (before footnotes existed), so attach each
     # sex's marker_refs to its n-row now.  finalize_footnotes then assigns
     # letters and derives the `markers` dict from marker_refs across all rows.
-    for sex, rows in serialized.items():
-        sex_refs = n_row_marker_refs.get(sex, {})
-        if sex_refs and rows and rows[0].get("is_n_row"):
-            n_row = rows[0]
-            refs = n_row.get("marker_refs", {})
-            refs.update({
-                js_dose_key(d): fid for d, fid in sex_refs.items()
-            })
-            n_row["marker_refs"] = refs
+    attach_n_row_marker_refs(serialized, n_row_marker_refs)
 
     finalize_footnotes(footnotes, serialized)
 
