@@ -332,17 +332,23 @@ that the CLI does not apply a saved view's document tree;
 `generate_report --surfaces latex` does.
 
 **Interactive alternative.** `notebooks/workflow_walkthrough.ipynb` is the
-whole workflow one step per cell, from import to rendered deliverables, then a
-comparison with the published book. Its cells call the step functions of
+whole workflow one step per cell, from the published data package to rendered
+deliverables, then a comparison with the published book. Before each step, an
+explanation gives its purpose, how it is implemented (the functions it calls,
+in order), what it reads and writes, and how it fails; it is the most detailed
+walk through the implementation there is. Its cells call the step functions of
 `tooling/generate_report.py` (`import_files`, `validate`, `integrate`,
 `apply_design`, `method_profile`, `process_async`, `summary`, `render`, …), so it
 can't drift from the command line. Each cell that changes the session prints
 the derived phase. By default it rebuilds NIEHS-10 in a scratch session,
-`DTXSID50469320_nb`, from the reference session's input files and the facts the
-published report states (`build_published_reports.STUDIES`); set `REPORT` for
-another single-study report. The scratch session has no document definition of
-its own, so it renders from the shared template. Edit the builder,
-`notebooks/_build_workflow_notebook.py`, not the `.ipynb`. Open it with
+`DTXSID50469320_nb`: it converts the CEBS package with `tooling.cebs_to_pool`
+(`FROM_PACKAGE = False` copies the reference session's inputs instead) and
+states the facts the published report states (`build_published_reports.STUDIES`);
+set `REPORT` for another single-study report. The scratch session has no
+document definition of its own, so it renders from the shared template. The
+cells are in `notebooks/_nb_cells_data.py` and `notebooks/_nb_cells_report.py`,
+assembled by `notebooks/_build_workflow_notebook.py`; edit those, not the
+`.ipynb`. Open it with
 `.venv/bin/python -m jupyterlab` (the venv's `jupyter` launcher scripts carry a
 stale path), or run it headless:
 
