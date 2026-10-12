@@ -4,7 +4,6 @@ scaffold report (no session needed).
 """
 
 import pytest
-from lxml import etree
 
 from rendering.bits_bundle import outline, parse_book, structure_keys
 from rendering.jats_generator import generate_bits

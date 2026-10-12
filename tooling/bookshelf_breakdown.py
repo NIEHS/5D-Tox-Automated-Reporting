@@ -170,7 +170,8 @@ def _caption(rec: dict) -> str:
 
 
 def table_markdown(t: dict) -> str:
-    esc = lambda s: s.replace("|", "\\|").replace("*", "\\*")
+    def esc(s):
+        return s.replace("|", "\\|").replace("*", "\\*")
     lines = [f"# {_caption(t)}", "",
              f"{t['report']} · {' › '.join([t['part']] + t['section'])} · `{t['source']}`", ""]
     lines += [c for c in t["caption"]] + ([""] if t["caption"] else [])
@@ -451,7 +452,8 @@ def main() -> None:
         reps.append(rep)
         print(f"{r:9} {rep['nbk']:10} parts {len(rep['parts']):2}  tables {len(rep['tables']):3}  "
               f"figures {len(rep['figures']):2}  media {len(rep['media']):3}")
-    key = lambda r: (not r["report"].startswith("RR"), r["report"])
+    def key(r):
+        return (not r["report"].startswith("RR"), r["report"])
     lines = ["# Published NIEHS 5-day reports — Bookshelf breakdown", "",
              "Built by `tooling/bookshelf_breakdown.py` from the litarch bundles in this directory.", "",
              "| report | NBK | DOI | published | parts | tables | figures | catalogue |",

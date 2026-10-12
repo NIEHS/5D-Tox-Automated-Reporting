@@ -76,7 +76,11 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-extend-exclude = ["notebooks", "web_wizard", "wizard-ui", "citegraph_output*", "java", "latex"]
+# pipeline/bmds27/ntp_bmds is NTP's vendored bmds 0.11.0, kept byte-identical to
+# the CEBS deposit (PROVENANCE.md; tests/unit/test_bmds27_vendored.py) — never lint-fix it.
+# output/ holds generated deliverables, not source.
+extend-exclude = ["notebooks", "web_wizard", "wizard-ui", "citegraph_output*", "java", "latex",
+                  "output", "pipeline/bmds27/ntp_bmds"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
@@ -98,3 +102,6 @@ ignore = ["E402", "E702", "E741", "F841"]
 "web_routes/server_state.py" = ["F401"]
 # `find_sidecar_paths` is imported from here by sibling table builders.
 "tables/body_weight_table.py" = ["F401"]
+# One-off CEBS characterization scripts written in a compact one-statement-per-
+# line style (assets/cebs/CHRONOLOGY.md is their output); cosmetic only.
+"assets/cebs/*.py" = ["E401", "E701"]

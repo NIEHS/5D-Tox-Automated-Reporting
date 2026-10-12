@@ -1,5 +1,5 @@
 """Compact human-readable digest of <id>/_characterization.json."""
-import json, sys, re
+import json, sys
 def kb(n): return f"{n/1024:.0f}KB" if n < 1<<20 else f"{n/(1<<20):.1f}MB"
 def keynotes(notes, keys=("Version","Timestamp","Chip","Provider","Log Trans","Data Source","Work Source",
                           "Models fit","BMR","Best Model","p-Value","P-Value","Fold","Filter","Adjust","Test",

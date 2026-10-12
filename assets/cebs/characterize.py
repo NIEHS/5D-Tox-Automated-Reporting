@@ -5,7 +5,7 @@ analysis notes/versions/timestamps, docx/xlsx/pdf metadata dates and headings,
 zip members).  Zips are extracted to <id>/_unzipped/<zipname>/ and their
 members characterized too.
 """
-import sys, os, json, hashlib, zipfile, gzip, re, warnings, datetime
+import sys, os, json, hashlib, zipfile, gzip, warnings, datetime
 warnings.filterwarnings("ignore")
 
 def sha(p):

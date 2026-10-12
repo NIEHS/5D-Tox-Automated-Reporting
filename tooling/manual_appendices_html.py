@@ -8,7 +8,9 @@ appendix entries of the contents rail; the rest of the HTML is untouched.
     python tooling/manual_appendices_html.py docs/headless-report-generation.md \
         docs/headless-report-generation.html
 """
-import html, re, sys
+import html
+import re
+import sys
 
 md_path, html_path = sys.argv[1], sys.argv[2]
 md = open(md_path).read()

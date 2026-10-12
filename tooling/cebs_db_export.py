@@ -78,7 +78,8 @@ def to_key_data(stem: str, header: list[str], rows: list[list]) -> tuple[list[st
     """(Key/Data header, rows, {column: unit}, notes) for one export sheet."""
     lay = _LAYOUTS[stem]
     I = {c: i for i, c in enumerate(header)}
-    cell = lambda r, c: "" if c is None or r[I[c]] is None else str(r[I[c]]).strip()
+    def cell(r, c):
+        return "" if c is None or r[I[c]] is None else str(r[I[c]]).strip()
     animal = _first(I, "ANMLNUM", "ANMLID", "ANIMALID")
     selection = _first(I, "SELECTION", "SELECTION_NAME")
     notes = []
@@ -93,8 +94,11 @@ def to_key_data(stem: str, header: list[str], rows: list[list]) -> tuple[list[st
         rows = kept
 
     base = ["NTP Study Number", "Concentration", "Animal ID", "Sex"]
-    study = lambda r: re.sub(r"^X-", "", cell(r, "DEPOSITOR_STUDY_NUMBER"))
-    lead = lambda r: [study(r), cell(r, "DOSE"), cell(r, animal), cell(r, "SEX")]
+    def study(r):
+        return re.sub(r"^X-", "", cell(r, "DEPOSITOR_STUDY_NUMBER"))
+
+    def lead(r):
+        return [study(r), cell(r, "DOSE"), cell(r, animal), cell(r, "SEX")]
     units: dict[str, str] = {}
 
     if lay["kind"] == "single":

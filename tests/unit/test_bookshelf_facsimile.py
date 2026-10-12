@@ -6,6 +6,7 @@ sections; and it renders a chunked Bookshelf bundle — ours or a published
 book's — the same way.
 """
 
+import collections
 import functools
 import re
 from pathlib import Path
@@ -232,8 +233,7 @@ def test_published_part_page_matches_the_real_bookshelf_page(real_page):
     assert _part_page_facts(ours[0]) == _part_page_facts(real)
 
 
-def _words(text: str) -> "collections.Counter":
-    import collections
+def _words(text: str) -> collections.Counter:
     return collections.Counter(re.findall(r"\w+", text.replace(" ", " ")))
 
 

@@ -43,7 +43,7 @@ from pipeline.session_store import (
 from pipeline.pool_orchestrator import (
     fingerprint_and_store, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
-    load_integrated, save_integrated,
+    load_integrated,
 )
 from web_routes.server_state import (
     get_bm2_uploads,
