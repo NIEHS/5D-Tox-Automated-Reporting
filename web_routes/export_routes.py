@@ -953,6 +953,10 @@ async def api_save_document_config_default(request: Request):
     except Exception as e:
         logger.exception("Failed to save default document config")
         return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    # The served tree (GET /api/document-tree) is a singleton computed at app
+    # start; recompute it from the rebuilt global tree.
+    from web_routes.background_server import refresh_serialized_tree
+    refresh_serialized_tree()
     return JSONResponse({"saved": True})
 
 

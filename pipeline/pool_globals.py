@@ -86,9 +86,16 @@ _integrated_pool: dict[str, dict] = {}
 # Maps file_id (UUID string) -> {filename, temp_path, type} for raw
 # dose-response experimental data (.csv, .txt, .xlsx) extracted from
 # uploaded zip archives.  These are BMDExpress-importable input data,
-# distinct from .bm2 (which are stored in server_state.bm2_uploads) and
+# distinct from .bm2 (which are stored in _bm2_uploads below) and
 # from gene-level BMD CSVs.
 _data_uploads: dict[str, dict] = {}
+
+# Maps bm2_id (UUID string) -> {filename, temp_path, table_data, bm2_json,
+# narrative} for uploaded .bm2 files.  Populated by upload-bm2 / upload-zip;
+# consumed by the pool code here and, through web_routes.server_state (which
+# re-exports this same dict), by the routes.  It lives in pipeline/ so the pool
+# code needs no import of the HTTP layer.
+_bm2_uploads: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -106,15 +113,8 @@ def _session_dir(dtxsid: str) -> Path:
 
 
 def _get_bm2_uploads() -> dict[str, dict]:
-    """Return the live bm2 uploads dict from server_state.
-
-    Implemented as a lazy import because server_state imports from
-    pool_orchestrator (and therefore transitively from us).  Taking the
-    import inside the function body defers it until first call, by which
-    time both modules have finished loading and the cycle is harmless.
-    """
-    from web_routes.server_state import get_bm2_uploads
-    return get_bm2_uploads()
+    """Return the live bm2 uploads dict (bm2_id -> upload info)."""
+    return _bm2_uploads
 
 
 # ---------------------------------------------------------------------------

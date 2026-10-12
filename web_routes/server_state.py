@@ -27,14 +27,15 @@ from pipeline.pool_orchestrator import (
     get_integrated_pool,
 )
 
-
 # ---------------------------------------------------------------------------
 # .bm2 upload store
 # ---------------------------------------------------------------------------
 # Maps bm2_id (UUID string) → dict with filename, temp_path, and table_data
 # (table_data is populated after /api/process-bm2 is called).
 # This is an in-memory store; files live in a temp directory per upload.
-_bm2_uploads: dict[str, dict] = {}
+# Owned by pipeline.pool_globals (the pool code reads it too); this is the same
+# dict object, so `server_state._bm2_uploads.clear()` still empties it.
+from pipeline.pool_globals import _bm2_uploads
 
 
 # ---------------------------------------------------------------------------

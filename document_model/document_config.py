@@ -433,8 +433,8 @@ def save_default_document_yaml(text: str) -> None:
          the author reviews the git diff before committing.)
       3. rebuild_document_tree() — re-instantiate the in-process global tree in
          place so renderers/nav/preview reflect the edit with no restart.
-      4. Refresh the served serialized-tree singleton + regenerate the golden
-         fixture so the browser and the dev guard both track the new default.
+      4. Regenerate the golden fixture so the dev guard tracks the new default.
+         (The caller refreshes the server's served serialized tree.)
     """
     document = _parse_document_yaml(text)
     _tree_from_document_list(document)  # validate; raises on failure
@@ -449,16 +449,11 @@ def save_default_document_yaml(text: str) -> None:
         new_text = yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
     path.write_text(new_text, encoding="utf-8")
 
-    # Apply live + keep the browser and the golden guard in sync.
+    # Apply live + keep the golden guard in sync.  The HTTP layer's served copy
+    # of the tree is refreshed by the route that called this (export_routes),
+    # so this module never imports web_routes.
     from document_model.document_tree import rebuild_document_tree
     rebuild_document_tree()
-    try:
-        import web_routes.background_server as background_server
-        background_server.refresh_serialized_tree()
-    except Exception:
-        # The served singleton refresh is best-effort (e.g. background_server not
-        # imported in a unit-test context); the tree rebuild above is what matters.
-        pass
     _regenerate_golden_fixture()
 
 
