@@ -107,6 +107,7 @@ def overlay_abstract(
     bmd_stat=None,
     methods_context: dict | None = None,
     sexes: list[str] | None = None,
+    genes: bool = True,
 ) -> None:
     """
     Assemble data["abstract"]["sections"] (Background / Methods / Results /
@@ -122,7 +123,9 @@ def overlay_abstract(
     the study-purpose sentence; it is absent for a session with no methods
     cache, in which case those parts are simply skipped.  endpoints come from
     data["bmd_summary"] if present, else the explicit bmd_endpoints.  Empty
-    sections are left untouched, so a partial abstract is fine.
+    sections are left untouched, so a partial abstract is fine.  ``genes``:
+    whether Results and Summary name individual genes (the definition's
+    ``abstract_genes``).
     """
     abstract_updates: dict[str, str] = {}
 
@@ -173,6 +176,7 @@ def overlay_abstract(
                 methods_ctx=methods_context,
                 sexes=sexes,
                 design=data.get("study_design"),
+                genes=genes,
             )
             if results_text:
                 abstract_updates["Results"] = results_text
@@ -184,6 +188,7 @@ def overlay_abstract(
                 bmd_stat=bmd_stat,
                 sexes=sexes,
                 design=data.get("study_design"),
+                genes=genes,
             )
             if summary_text:
                 abstract_updates["Summary"] = summary_text

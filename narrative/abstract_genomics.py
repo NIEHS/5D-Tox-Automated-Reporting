@@ -132,9 +132,12 @@ def build_abstract_results_genomics(
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
     design: dict | None = None,
+    genes: bool = True,
 ) -> str:
     """
-    Build the genomics portion of the Abstract → Results paragraph.
+    Build the genomics portion of the Abstract → Results paragraph.  With
+    ``genes`` false (the 2026 books) it names gene sets only: no up/down
+    gene sentences, and the extrapolation sentence counts gene sets alone.
 
     For each organ (alphabetical order, matching reference convention),
     emits:
@@ -238,7 +241,22 @@ def build_abstract_results_genomics(
                     pass
 
         sex_phrase = " and ".join(s.lower() for s in sexes) + f" {animals}"
-        if below_lle_sets == 0 and below_lle_genes == 0:
+        if not genes:
+            below_lle_genes = 0
+            if below_lle_sets == 0:
+                sentences.append(
+                    f"In the {organ} of {sex_phrase}, no Gene Ontology "
+                    f"biological process had BMD values below the lower limit of "
+                    f"extrapolation (<{lle_str} {dose_unit})."
+                )
+            else:
+                sets_word = "gene set" if below_lle_sets == 1 else "gene sets"
+                sentences.append(
+                    f"In the {organ} of {sex_phrase}, {below_lle_sets} Gene Ontology "
+                    f"biological process {sets_word} had BMD values below the lower "
+                    f"limit of extrapolation (<{lle_str} {dose_unit})."
+                )
+        elif below_lle_sets == 0 and below_lle_genes == 0:
             sentences.append(
                 f"In the {organ} of {sex_phrase}, no Gene Ontology "
                 f"biological process or individual genes had BMD "
@@ -271,6 +289,8 @@ def build_abstract_results_genomics(
             if sets_sentence:
                 sentences.append(sets_sentence)
 
+            if not genes:
+                continue
             # Top up-regulated and down-regulated genes
             top_genes = sec.get("top_genes", [])
             up_genes = [g for g in top_genes if str(g.get("direction", "")).lower() == "up"]

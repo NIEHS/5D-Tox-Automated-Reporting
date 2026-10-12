@@ -613,15 +613,23 @@ def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
     return out
 
 
+def _abstract_genes(dtxsid: str) -> bool:
+    from document_model.view_config import study_document_facts
+    return study_document_facts(dtxsid)["abstract_genes"]
+
+
 def load_session_data(
     dtxsid: str,
     chemical_name: str = "Test Article",
     casrn: str = "000-00-0",
     view: str | None = None,
+    definition_of: str | None = None,
 ) -> dict:
     """
     Build a report data dict by overlaying a session's cached state onto
-    the canonical scaffold.
+    the canonical scaffold.  ``definition_of``: the session whose document
+    definition the data is written for (a member study's data is written for
+    its report's); by default this one.
 
     What gets overlaid (when the corresponding cache file exists):
 
@@ -981,6 +989,7 @@ def load_session_data(
         # Sexes come from the .bm2 metadata (single source of truth): a sex-less
         # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
         sexes=derive_study_sexes(_integ),
+        genes=_abstract_genes(definition_of or dtxsid),
     )
 
     # ── User-owned content overrides (ADR-0005 round-trip) ────────────

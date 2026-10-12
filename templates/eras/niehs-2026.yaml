@@ -13,6 +13,8 @@
 extends: eras/niehs-2023
 # The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
 tissue_order: []
+# The abstract names gene sets, not individual genes (NIEHS-12, 13).
+abstract_genes: false
 
 changes:
   # ── Materials and Methods: Chemistry first, with the test article's

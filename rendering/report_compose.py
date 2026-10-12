@@ -74,7 +74,7 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
 
     studies = []
     for key, member in members:
-        mdata = load_session_data(member, chemical_name, casrn, view)
+        mdata = load_session_data(member, chemical_name, casrn, view, definition_of=dtxsid)
         sdata = {k: mdata[k] for k in STUDY_KEYS if k in mdata}
         # The study's strain designation (its front matter) goes with its design.
         if isinstance(sdata.get("study_design"), dict) and mdata.get("strain"):
@@ -322,11 +322,15 @@ def _merge_abstract(data: dict, studies: list[dict]) -> None:
     its Background is the report's."""
     sections = list((data.get("abstract") or {}).get("sections") or [])
     for label in ("Methods", "Results", "Summary"):
-        texts = [sec.get("text") for s in studies
+        pairs = [(s, sec.get("text")) for s in studies
                  for sec in (s.get("abstract") or {}).get("sections") or []
                  if sec.get("label", "").lower() == label.lower() and (sec.get("text") or "").strip()]
-        if not texts:
+        if not pairs:
             continue
+        texts = [t for _, t in pairs]
+        if label == "Summary" and len(pairs) > 1:
+            # "Taken together, in rats, …  In mice, …" (NIEHS-12, 13).
+            texts = [_name_study(t, s["title"], i == 0) for i, (s, t) in enumerate(pairs)]
         text = " ".join(texts)
         for sec in sections:
             if sec.get("label", "").lower() == label.lower():
@@ -335,6 +339,21 @@ def _merge_abstract(data: dict, studies: list[dict]) -> None:
         else:
             sections.append({"label": label, "text": text})
     data["abstract"] = {"sections": sections}
+
+
+_TAKEN_TOGETHER = "Taken together, "
+
+
+def _name_study(text: str, title: str, first: bool) -> str:
+    """A study's Summary under the study's animals: the first "Taken together,
+    in rats, …", the next "In mice, …".  A Summary already naming its animals
+    (a study of both sexes: "in male rats") is left as it is."""
+    if not text.startswith(_TAKEN_TOGETHER) or text[len(_TAKEN_TOGETHER):].startswith("in "):
+        return text
+    rest = text[len(_TAKEN_TOGETHER):]
+    animals = title.lower()
+    return (f"{_TAKEN_TOGETHER}in {animals}, {rest}" if first
+            else f"In {animals}, {rest}")
 
 
 def _renumber_references(data: dict, studies: list[dict]) -> None:

@@ -867,6 +867,17 @@ def load_tissue_order(name: str) -> list[str]:
     return [t.strip().lower() for t in order]
 
 
+def load_abstract_genes(name: str) -> bool:
+    """Whether the abstract names individual genes (ADR-0029): the 2023 books
+    do, the 2026 books name gene sets only.  True when the template says
+    nothing."""
+    raw = _load_raw(name)
+    genes = raw.get("abstract_genes", True) if isinstance(raw, dict) else True
+    if not isinstance(genes, bool):
+        raise ValueError(f"template {name!r}: abstract_genes is true or false, got {genes!r}")
+    return genes
+
+
 def load_packaging(name: str) -> str:
     """How the report's BITS is packaged (ADR-0029): ``chunked`` (a TOC.nxml and
     one file per part, NIEHS-07 on) unless the definition says ``single-file``

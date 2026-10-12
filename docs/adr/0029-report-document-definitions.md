@@ -115,6 +115,10 @@ decided the form: **an era base, plus alterations to it and additions to it.**
      (`render_common.node_data`, applied where each of the four surfaces
      dispatches a node).
    - A definition states the order of the genomic tissues (`tissue_order`).
+   - A definition states whether the abstract names individual genes
+     (`abstract_genes`; the 2026 books name gene sets only). A member study's
+     abstract is written for its report's definition
+     (`load_session_data(..., definition_of=)`).
      The tissues it names come first and the rest follow alphabetically:
      Liver then Kidney in 2023, all alphabetical in 2026. Genomic tables are
      numbered where their section stands, and the tables after them follow.

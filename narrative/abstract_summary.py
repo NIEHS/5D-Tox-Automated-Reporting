@@ -61,9 +61,16 @@ def build_abstract_summary(
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
     design: dict | None = None,
+    genes: bool = True,
 ) -> str:
     """
     Build the Abstract → Summary paragraph.
+
+    A study of one sex names no sex ("Taken together, the most sensitive …",
+    NIEHS-02 … 06); a study of both names each ("in male rats").  With
+    ``genes`` false (the 2026 books) no individual gene is named, and the
+    categories share one "BMD (BMDL)": "the most sensitive gene set and apical
+    endpoint BMD (BMDL) values … occurred at …" (NIEHS-12, 13).
 
     Reference pattern (NIEHS Report 10):
       "Taken together, in male rats, the most sensitive gene set BMD
@@ -113,6 +120,7 @@ def build_abstract_summary(
     else:
         _tokens = sorted({k.rsplit("_", 1)[-1] for k in (genomics_sections or {}) if "_" in k})
         tracks = [(None, tok) for tok in _tokens]  # sexless: label None → neutral prose
+    named = len(sexes) > 1                        # one sex: the sentences name none
 
     # Lower limit of extrapolation (LLE) — reuse same convention as Results
     nonzero_doses = [d for d in (dose_groups or []) if d and d > 0]
@@ -198,7 +206,7 @@ def build_abstract_summary(
 
     for sex_label, sex_token in tracks:
         gs = _lowest_geneset(sex_token)
-        gene = _lowest_gene(sex_token)
+        gene = _lowest_gene(sex_token) if genes else None
         apical = _lowest_apical(sex_label)
 
         # Build the (label, value_string) pairs in NIEHS reference order:
@@ -222,8 +230,9 @@ def build_abstract_summary(
                 f"{apical['bmd']} ({apical['bmdl']})",
             ))
 
-        # Sex-neutral phrasing when the study has no sex dimension (sex_label None).
-        in_sex = f" in {sex_label.lower()} {animals}" if sex_label else ""
+        # Sex-neutral phrasing when the study has no sex dimension (sex_label
+        # None) or one sex only.
+        in_sex = f" in {sex_label.lower()} {animals}" if sex_label and named else ""
 
         if not category_phrases:
             # Nothing reliable for this track — emit the apical-missing fallback
@@ -239,11 +248,15 @@ def build_abstract_summary(
         labels = [p[0] for p in category_phrases]
         values = [p[1] for p in category_phrases]
         plural = len(category_phrases) > 1
+        if not genes:
+            # "the most sensitive gene set and apical endpoint BMD (BMDL)"
+            kinds = [k for k, v in (("gene set", gs), ("apical endpoint", apical)) if v]
+            labels = [f"the most sensitive {_join_oxford(kinds)} BMD (BMDL)"]
 
         # Sentence start: the very first sentence carries the "Taken together,"
         # connective; later ones stand alone. Real sex → "in {sex} rats,"; no sex
         # dimension → sex-neutral.
-        if sex_label:
+        if sex_label and named:
             opener = (f"Taken together, in {sex_label.lower()} {animals},"
                       if not sentences else f"In {sex_label.lower()} {animals},")
         else:
@@ -280,9 +293,11 @@ def build_abstract_results(
     methods_ctx: dict | None = None,
     bmd_decimals: int | None = None,
     design: dict | None = None,
+    genes: bool = True,
 ) -> str:
     """
-    Build the full Abstract → Results paragraph.
+    Build the full Abstract → Results paragraph (``genes`` false: no
+    individual-gene sentences, as the 2026 books).
 
     Combines, in NIEHS Report 10 order:
       1. Apical findings per sex (build_abstract_results_apical)
@@ -337,6 +352,7 @@ def build_abstract_results(
             sexes=sexes,
             bmd_decimals=bmd_decimals,
             design=design,
+            genes=genes,
         )
         if gn:
             parts.append(gn)
