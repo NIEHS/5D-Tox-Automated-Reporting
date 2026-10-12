@@ -111,7 +111,9 @@ VOCABULARIES = {
     "subjectType": ["in vivo", "in vitro", "in silico"],
     "articleRoute": ["gavage", "oral", "inhaled", "transdermal"],
     "articleVehicle": ["corn oil", "feed", "water", "aerosol", "gas"],
-    "administrationMeans": ["gavage", "drinking water", "dietary"],
+    # How the article was given: oral means, or how an inhalation exposure was
+    # made ("Route: Whole-Body Inhalation" in the NTP study tables).
+    "administrationMeans": ["gavage", "drinking water", "dietary", "whole-body", "nose-only"],
     "studyDuration": [
         "5d", "28d",
         "3h", "6h", "9h", "24h",
@@ -287,6 +289,7 @@ Examples of synonym mapping:
   - "M", "mal", "♂" → "male"
   - "Sprague Dawley", "SD" → "Sprague-Dawley"
   - "oral gavage" → articleRoute: "oral", administrationMeans: "gavage"
+  - "whole-body inhalation" → articleRoute: "inhaled", administrationMeans: "whole-body"
   - "BW", "body wt" → platform: "Body Weight"
   - "clin chem", "clinical chemistry", "serum chemistry" → platform: "Clinical Chemistry"
   - "heme", "CBC" → platform: "Hematology"
