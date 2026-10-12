@@ -88,7 +88,8 @@ STUDIES = {
     "NIEHS-04": ("DTXSID3025465", "Isodecyl Diphenyl Phosphate", "29761-21-5", "IDDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
                  "ntp-5day-2021", []),
-    "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate",   # as the book names it "68937-41-7", "IPP",
+    # "Phenol", as the book names it (the CEBS study page also says "Phenyl").
+    "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate", "68937-41-7", "IPP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
                  "ntp-5day-2021", []),
     "NIEHS-06": ("DTXSID4021391", "Tricresyl Phosphate", "1330-78-5", "TCP",
