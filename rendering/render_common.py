@@ -2115,6 +2115,7 @@ class SuppliedFile:
     file: str
     mime_subtype: str = ""
     size: int | None = None
+    url: str = ""                  # its local url, until the deposit has a DOI
 
 
 def supplied_files(node: DocNode, data: dict) -> list[SuppliedFile]:
@@ -2125,15 +2126,21 @@ def supplied_files(node: DocNode, data: dict) -> list[SuppliedFile]:
         return [SuppliedFile(node.title or "", node.content_file or "")]
     from pipeline.deposit import deposit_files
     return [SuppliedFile(f.get("caption") or f["file"], f["file"], f.get("mime_subtype") or "",
-                         f.get("size"))
+                         f.get("size"), f.get("url") or "")
             for f in deposit_files(data.get("deposit"), node.deposit_group, node.scope_species)]
 
 
 def supplied_files_pending(node: DocNode, data: dict) -> str | None:
-    """The visible note a derived list shows instead of entries: no deposit has
-    been recorded for the study, or it holds no file of this kind."""
+    """The visible note a derived list shows instead of entries: no deposit is
+    known for the study; its local supplemental folder (a deposit not yet
+    made, pipeline.deposit.load_deposit) holds no file of this kind; or the
+    recorded deposit holds none."""
     if node.binding != "derived" or supplied_files(node, data):
         return None
-    if not data.get("deposit"):
+    deposit = data.get("deposit")
+    if not deposit:
         return "[Supplemental files pending: no data deposit has been recorded for this study.]"
+    if deposit.get("local"):
+        return ("[Supplemental files pending: listed from the deposit when the publishing "
+                "package is created.]")
     return "No files of this kind were deposited for this study."

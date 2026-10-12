@@ -1676,7 +1676,9 @@ def _render_supplementary_material(doc: Document, node: DocNode, data: dict) -> 
     file_style = _pstyle_or_default(doc, data, "supplementary_material_filename")
     for f in supplied_files(node, data):
         doc.add_paragraph(_clean(f.caption), style=title_style or None)
-        if f.file:
+        if f.file and f.url:
+            _add_hyperlink(doc.add_paragraph(style=file_style or None), _clean(f.file), f.url)
+        elif f.file:
             doc.add_paragraph(_clean(f.file), style=file_style or None)
 
 

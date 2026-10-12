@@ -185,13 +185,10 @@ state only for that reason follows the study's data, not the era:
   - Appendix A (Chemical Characterization and Generation of Chamber
     Concentrations);
   - the Theoretical Inhaled Dose section and its Supplemental Data files.
-- **Dose words.** `${dose_term}` and `${internal_dose_term}`
-  (`study_design.heading_terms`) give "Exposure Concentration Selection
-  Rationale" and "Internal Concentration Assessment" for an inhaled study
-  (NIEHS-12, 13). An oral study gets "Dose Selection Rationale" and "Internal
-  Dose Assessment" (NIEHS-07 … 10). The books never use the concentration
-  words for an oral study or the dose words for an inhaled one. So the words
-  are inferred from the route, not stated for an oral study by any 2026 book.
+- **Dose words.** The headings name the dose as the 2026 books do, whatever
+  the route: "Exposure Concentration Selection Rationale" and "Internal
+  Concentration Assessment". This was the user's decision (2026-10-12), over
+  the oral books' "Dose Selection Rationale" / "Internal Dose Assessment".
 - **A single study.** `study_title` is the title of each study's copy when a
   report covers several studies ("Study Design for ${species}", "${species}").
   A single study's copy keeps the node's own `title`. For "Study Design" that
@@ -210,11 +207,25 @@ What the 2026 books cannot settle for a new study, because both are
 two-species inhalation studies, comes from the data. Each item below is an
 inference to review:
 
-- the oral dose words;
 - a single study without per-species sub-sections;
 - the hormone table placed after clinical chemistry (no 2026 book has
   hormone data).
 
 The Gene Set Benchmark Dose Summary section has no generator yet. It renders
 as a pending placeholder in every new report until one exists.
+
+**The deposit's address.** A published book opens its Supplemental Data
+with the deposit's DOI. A new study has no DOI until the publishing package
+is created. Until then the appendix names a LOCAL url, the study's
+supplemental folder `sessions/<id>/supplemental/`. The app serves that
+folder (`web_routes.supplemental_routes`; `BMDX_LOCAL_URL` overrides the
+`http://127.0.0.1:9000` server address).
+
+- With no recorded deposit, the lists are the folder's files, each linked to
+  its own local url.
+- A list with no file of its kind says it is filled from the deposit when
+  the package is created.
+- When the study states its DOI (`deposit.yaml: doi`), every local url is
+  replaced (`pipeline.deposit.load_deposit` / `deposit_address`). The
+  package's file references are the files' own names.
 

@@ -452,8 +452,9 @@ def study_tree(base, collected, authored=None, facts=None):
        keeps its heading but its subtree is dropped and it states the fact
        (`not_collected_text`).
     3. Study-bound authored content (`session_content`): freeform nodes take THIS
-       study's text (`authored`), else their `deposit_text` when the study's
-       deposit has a DOI and files, else `missing_content_text`, else pending.
+       study's text (`authored`), else their `deposit_text` naming where the
+       deposit is (its DOI, else its local url), else `missing_content_text`,
+       else pending.
     4. Study facts in titles and captions: `${chemical_name}` (TITLE_FIELDS)
        from `facts` (the report data), and the animals and treatment
        `${subject}` / `${treatment}` (caption_values; in a per-study copy, that
@@ -478,19 +479,18 @@ def study_tree(base, collected, authored=None, facts=None):
         if nodes is base:
             import copy
             nodes = copy.deepcopy(base)
+        from pipeline.deposit import deposit_address
         _resolve_study_bound(nodes, authored or {},
                              set(collected) if collected is not None else None,
-                             _deposit_doi((facts or {}).get("deposit")))
+                             deposit_address((facts or {}).get("deposit")))
     if _has_repeats(nodes):
         if nodes is base:
             import copy
             nodes = copy.deepcopy(base)
         nodes = _expand_repeats(nodes, repeat_items(facts))
         _take_in_untitled(nodes)
-    from pipeline.study_design import heading_terms
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     values.update(caption_values(facts))
-    values.update(heading_terms(design))
     if values and _has_title_fields(nodes):
         if nodes is base:
             import copy
@@ -545,16 +545,11 @@ def _statement_markup(text: str) -> dict:
     return {"html": f"<p>{_html.escape(text)}</p>", "latex": tex}
 
 
-def _deposit_doi(deposit: dict | None) -> str | None:
-    """The data deposit's DOI, when it has one and files to list."""
-    deposit = deposit or {}
-    return deposit.get("doi") if deposit.get("doi") and deposit.get("files") else None
-
-
-def _deposit_markup(text: str, doi: str) -> dict:
-    """{html, latex} for a `deposit_text`, its "{doi}" the DOI's link."""
+def _deposit_markup(text: str, url: str) -> dict:
+    """{html, latex} for a `deposit_text`, its "{doi}" the deposit's address:
+    the DOI's link, or the local url until there is one
+    (pipeline.deposit.deposit_address)."""
     import html as _html
-    url = f"https://doi.org/{doi}"
     before, _, after = text.partition("{doi}")
     tex = [_statement_markup(x)["latex"] for x in (before, after)]
     return {"html": f'<p>{_html.escape(before)}<a href="{_html.escape(url)}">'
@@ -563,7 +558,7 @@ def _deposit_markup(text: str, doi: str) -> dict:
 
 
 def _resolve_study_bound(nodes, authored: dict, collected: "set | None",
-                         doi: str | None = None) -> None:
+                         address: str | None = None) -> None:
     for n in nodes:
         if platform_gate_closed(n, collected):
             # One statement stands for the whole gated section: drop its subtree
@@ -582,14 +577,14 @@ def _resolve_study_bound(nodes, authored: dict, collected: "set | None",
             content = authored.get(n.session_content)
             if content:
                 n.resolved_content = dict(content)
-            elif n.deposit_text and doi:
-                n.resolved_content = _deposit_markup(n.deposit_text, doi)
+            elif n.deposit_text and address:
+                n.resolved_content = _deposit_markup(n.deposit_text, address)
             elif n.missing_content_text:
                 n.resolved_content = _statement_markup(n.missing_content_text)
             else:
                 n.resolved_content = None  # required, not yet authored → pending
         if n.children:
-            _resolve_study_bound(n.children, authored, collected, doi)
+            _resolve_study_bound(n.children, authored, collected, address)
 
 
 def _genomics_role(node: DocNode) -> str | None:

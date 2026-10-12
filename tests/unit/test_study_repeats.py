@@ -203,22 +203,18 @@ def _route_tree():
             {"id": "vapor", "type": "narrative", "title": "Vapor Generation",
              "data_key": "methods", "methods_key": "vapor_generation",
              "requires_route": "inhaled"},
-            {"id": "rationale", "type": "narrative", "title": "${dose_term} Selection Rationale",
-             "data_key": "methods", "methods_key": "dose_rationale"},
-            {"id": "internal", "type": "narrative", "title": "${internal_dose_term} Assessment",
-             "data_key": "methods", "methods_key": "internal_dose"}]}]}])
+            {"id": "rationale", "type": "narrative",
+             "title": "Exposure Concentration Selection Rationale",
+             "data_key": "methods", "methods_key": "dose_rationale"}]}]}])
 
 
 def test_inhalation_sections_follow_the_route():
-    """The inhalation books' vapor sections and dose words (NIEHS-12, 13) are
-    an inhaled study's; an oral study has the oral books' (NIEHS-07 … 10)."""
+    """The inhalation books' vapor sections (NIEHS-12, 13) are an inhaled
+    study's only; an oral study has none."""
     (mm,) = study_tree(_route_tree(), None, None, {"study_design": {"route": "inhaled"}})
-    assert [c.title for c in mm.children] == [
-        "Vapor Generation", "Exposure Concentration Selection Rationale",
-        "Internal Concentration Assessment"]
+    assert [c.id for c in mm.children] == ["vapor", "rationale"]
     (mm,) = study_tree(_route_tree(), None, None, {"study_design": {"route": "gavage"}})
-    assert [c.title for c in mm.children] == [
-        "Dose Selection Rationale", "Internal Dose Assessment"]
+    assert [c.id for c in mm.children] == ["rationale"]
 
 
 def test_a_route_gate_names_a_known_route():

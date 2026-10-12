@@ -15,10 +15,12 @@
 # definition of its own (document_definition.DEFAULT_DEFINITION).  So what the
 # two books state only because they are inhalation studies is gated on the
 # route (`requires_route: inhaled`: the vapor and chamber sections, the
-# theoretical inhaled dose), headings that name the dose follow it
-# (${dose_term}: "Exposure Concentration" / "Dose"), and a single study's
+# theoretical inhaled dose), and a single study's
 # per-study sections are no sub-sections (`study_title`: "Study Design", the
 # prose straight under "Animal Condition …", as single-study books print it).
+# The dose is an "exposure concentration" ("Exposure Concentration Selection
+# Rationale", "Internal Concentration Assessment") whatever the route: these
+# books' words, the user's decision (2026-10-12).
 extends: eras/niehs-2023
 # The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
 tissue_order: []
@@ -48,9 +50,9 @@ changes:
     study_title: "Study Design for ${species}"
     repeat: study_species
   - set: mm-dose-rationale
-    title: "${dose_term} Selection Rationale"
+    title: Exposure Concentration Selection Rationale
   - set: mm-internal-dose
-    title: "${internal_dose_term} Assessment"
+    title: Internal Concentration Assessment
 
   # ── Results: the apical results grouped; a summary closing the gene set
   # analysis; the theoretical inhaled dose, then the internal concentrations.
@@ -95,7 +97,7 @@ changes:
   - move: internal-dose
     after: theoretical-inhaled-dose
   - set: internal-dose
-    title: "${internal_dose_term} Assessment"
+    title: Internal Concentration Assessment
 
   # ── Each study's results under the tables the studies share; each study's
   # internal concentrations (its own table); each tissue's gene set and gene
@@ -208,7 +210,7 @@ changes:
   # B: the internal concentration method (the study's appendix-a content, with
   # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
   - set: appendix-a
-    title: "${internal_dose_term} Assessment"
+    title: Internal Concentration Assessment
   - move: appendix-a-body
     into: appendix-a
   - remove: appendix-a-quantitation

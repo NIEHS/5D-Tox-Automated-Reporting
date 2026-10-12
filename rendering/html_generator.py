@@ -1301,6 +1301,8 @@ def _render_supplementary_material(node: DocNode, data: dict) -> str:
     for f in supplied_files(node, data):
         title = f'<span class="supp-title">{_esc(f.caption)}</span>'
         file_html = f' <code class="supp-file">{_esc(f.file)}</code>' if f.file else ""
+        if f.file and f.url:
+            file_html = f' <a class="supp-link" href="{_esc(f.url)}">{file_html.strip()}</a>'
         out.append(f'<p class="supplementary-material">{title}{file_html}</p>')
     return "".join(out)
 

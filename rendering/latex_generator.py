@@ -1461,7 +1461,9 @@ def _render_supplementary_material(node: DocNode, data: dict) -> str:
         lines = [f"\\noindent\\textbf{{{_escape_latex(f.caption)}}}"]
         if f.file:
             lines[0] += "\\\\"
-            lines.append(f"\\texttt{{{_escape_latex(f.file)}}}")
+            name = f"\\texttt{{{_escape_latex(f.file)}}}"
+            url = f.url.replace("%", r"\%").replace("#", r"\#")   # hyperref's escapes
+            lines.append(f"\\href{{{url}}}{{{name}}}" if f.url else name)
         lines.append("\\par\\medskip")
         out.append("\n".join(lines))
     return "\n".join(out)

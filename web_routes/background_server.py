@@ -305,6 +305,11 @@ app.include_router(bookshelf_routes.router)
 import web_routes.compare_routes as compare_routes
 app.include_router(compare_routes.router)
 
+# A study's supplemental folder, the local url its Supplemental Data appendix
+# names until the deposit has a DOI: GET /api/sessions/{dtxsid}/supplemental/…
+import web_routes.supplemental_routes as supplemental_routes
+app.include_router(supplemental_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI

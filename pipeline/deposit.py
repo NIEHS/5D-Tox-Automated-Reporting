@@ -23,6 +23,14 @@ Kinds (the groups the published books use, NIEHS-02 … 13):
     inhaled-dose  Theoretical Inhaled Dose (2026)
     software      Analysis Pipeline Evaluation (2026)
 
+Where the files are (the deposit's ADDRESS, deposit_address): the deposit's
+DOI once the study states one (``deposit.yaml: doi``, known when the
+publishing package is created); until then a LOCAL url, the study's
+supplemental folder on this server (``sessions/<id>/supplemental/``,
+local_url).  A study with no recorded deposit lists that folder's files
+(load_deposit), so a new report names where its supplemental data will be and
+every url is replaced by the DOI's when the package is made.
+
 The kind is read from the file NAME: deposited files are opaque (PDF, Word, zip),
 and their names follow the depositors' convention.  The rules reproduce the
 grouping of all 672 files the 11 published deposits list
@@ -45,6 +53,11 @@ import yaml
 from common.dtxsid import validate_dtxsid
 
 DEPOSIT_FILE = "deposit.json"
+# A study's supplemental files gathered locally, before they are deposited.
+LOCAL_DIR = "supplemental"
+# The local server the url of a study's supplemental folder is on
+# (web_routes.background_server's default address).
+LOCAL_BASE_URL = "http://127.0.0.1:9000"
 KINDS = ("apical", "genomic", "study-tables", "animal-data", "methods",
          "inhaled-dose", "software")
 
@@ -200,28 +213,62 @@ def record_deposit(dtxsid: str, directory: Path, exclude: tuple[str, ...] = ()) 
     return manifest
 
 
+def local_url(dtxsid: str, name: str = "") -> str:
+    """The local url of the study's supplemental folder (or of one file in it),
+    served by web_routes.supplemental_routes; ``BMDX_LOCAL_URL`` overrides the
+    server address."""
+    import os
+    from urllib.parse import quote
+    base = (os.environ.get("BMDX_LOCAL_URL") or LOCAL_BASE_URL).rstrip("/")
+    return f"{base}/api/sessions/{validate_dtxsid(dtxsid)}/{LOCAL_DIR}/{quote(name)}"
+
+
 def load_deposit(dtxsid: str | None) -> dict | None:
-    """The session's deposit manifest, with the study's caption wording and its
-    data DOI (``doi``, the deposit's citable address) applied, so an edit needs
-    no re-recording; None when none was recorded."""
+    """The study's deposit manifest: the recorded one (deposit.json), else the
+    files of its local supplemental folder (none while it is empty or absent),
+    marked ``local``.  The study's caption wording and data DOI (``doi``) are
+    applied, so an edit needs no re-recording; until there is a DOI each file
+    carries its local ``url`` and the deposit the folder's.  None for an
+    invalid session id or one with no session."""
     if not dtxsid:
         return None
     from pipeline.session_store import session_path
     try:
-        path = session_path(dtxsid) / DEPOSIT_FILE
+        folder = session_path(dtxsid)
     except ValueError:
         return None
-    if not path.exists():
+    if not folder.is_dir():
         return None
-    manifest = json.loads(path.read_text(encoding="utf-8"))
+    path = folder / DEPOSIT_FILE
     stated = _study_statements(dtxsid)
+    if path.exists():
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        local = folder / LOCAL_DIR
+        listing = deposit_listing(local) if local.is_dir() else []
+        manifest = build_manifest(listing, stated.get("kinds"), stated.get("captions"))
+        manifest["local"] = True
     if stated.get("doi"):
         manifest["doi"] = str(stated["doi"])
+    else:
+        manifest["url"] = local_url(dtxsid)
+        for f in manifest.get("files") or []:
+            f["url"] = local_url(dtxsid, f["file"])
     captions = stated.get("captions") or {}
     for f in manifest.get("files") or []:
         if f["file"] in captions:
             f["caption"] = captions[f["file"]]
     return manifest
+
+
+def deposit_address(deposit: dict | None) -> str | None:
+    """Where the deposit's files are: its DOI's link when it has a DOI and
+    files, else its local url (until the publishing package states the DOI);
+    None when neither."""
+    deposit = deposit or {}
+    if deposit.get("doi") and deposit.get("files"):
+        return f"https://doi.org/{deposit['doi']}"
+    return deposit.get("url") or None
 
 
 def deposit_files(deposit: dict | None, kind: str, species: str | None = None) -> list[dict]:

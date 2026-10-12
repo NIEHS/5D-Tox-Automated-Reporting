@@ -224,3 +224,65 @@ def test_supplemental_data_opens_with_the_deposit_doi():
         "html"] == "<p>Own.</p>"
     for facts in ({"deposit": {**deposit, "files": []}}, {"deposit": None}, None):
         assert "not available" in study_tree([node()], None, {}, facts)[0].resolved_content["html"]
+
+
+def test_a_new_study_names_its_local_supplemental_folder(study, monkeypatch):
+    """Before the deposit is made (its DOI known when the publishing package
+    is created), the Supplemental Data appendix names the study's local
+    supplemental folder and lists its files, each at its local url; a stated
+    DOI replaces every local url."""
+    from document_model.document_node import DocNode
+    from document_model.document_tree import study_tree
+    monkeypatch.delenv("BMDX_LOCAL_URL", raising=False)
+    folder_url = "http://127.0.0.1:9000/api/sessions/DTXSID0000001/supplemental/"
+    empty = dep.load_deposit("DTXSID0000001")
+    assert (empty["local"], empty["files"], empty["url"]) == (True, [], folder_url)
+    assert dep.deposit_address(empty) == folder_url
+
+    local = study / "sessions" / "DTXSID0000001" / "supplemental"
+    local.mkdir()
+    (local / "C20022-01_PA41_Summary.pdf").write_bytes(b"x" * 10)
+    loaded = dep.load_deposit("DTXSID0000001")
+    assert [(f["file"], f["kind"], f["url"]) for f in loaded["files"]] == [
+        ("C20022-01_PA41_Summary.pdf", "study-tables", folder_url + "C20022-01_PA41_Summary.pdf")]
+
+    body = DocNode(id="f-body", node_type="freeform-block", title="",
+                   session_content="appendix-f",
+                   deposit_text="The following supplemental files are available at {doi}.",
+                   missing_content_text="Supplemental data files are not available.")
+    got = study_tree([body], None, {}, {"deposit": loaded})[0].resolved_content
+    assert f'<a href="{folder_url}">{folder_url}</a>' in got["html"]
+
+    (study / "templates/studies/DTXSID0000001/deposit.yaml").write_text(
+        "doi: 10.22427/NIEHS-DATA-NIEHS-99\n")
+    published = dep.load_deposit("DTXSID0000001")
+    assert "url" not in published and not any("url" in f for f in published["files"])
+    assert dep.deposit_address(published) == "https://doi.org/10.22427/NIEHS-DATA-NIEHS-99"
+
+
+def test_an_empty_local_list_is_filled_at_packaging():
+    from document_model.document_node import DocNode
+    from rendering.render_common import supplied_files_pending
+    node = DocNode(id="f-apical", node_type="supplementary-material", title="",
+                   binding="derived", deposit_group="apical")
+    assert "publishing package" in supplied_files_pending(node, {"deposit": {"local": True,
+                                                                             "files": []}})
+    assert supplied_files_pending(node, {"deposit": {"files": []}}) == (
+        "No files of this kind were deposited for this study.")
+
+
+def test_the_local_supplemental_folder_is_served(study):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from web_routes import supplemental_routes
+    app = FastAPI()
+    app.include_router(supplemental_routes.router)
+    local = study / "sessions" / "DTXSID0000001" / "supplemental"
+    local.mkdir()
+    (local / "a b.pdf").write_bytes(b"pdf")
+    client = TestClient(app)
+    listing = client.get("/api/sessions/DTXSID0000001/supplemental/")
+    assert listing.status_code == 200 and 'href="a%20b.pdf"' in listing.text
+    assert client.get("/api/sessions/DTXSID0000001/supplemental/a%20b.pdf").content == b"pdf"
+    assert client.get("/api/sessions/DTXSID0000001/supplemental/nope.pdf").status_code == 404
+    assert client.get("/api/sessions/DTXSID0000001/supplemental/..%2Fmeta.json").status_code == 404
