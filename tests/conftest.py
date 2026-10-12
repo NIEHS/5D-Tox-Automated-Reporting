@@ -292,8 +292,10 @@ def mock_bmdx_pipe():
         "bm2_cache_upload": patch(
             "web_routes.upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
+        # session_store.cached_bm2_jsons — the methods-context read shared by
+        # llm_routes and process_integrated.
         "bm2_cache_llm": patch(
-            "web_routes.llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "pipeline.session_store.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
     }
 

@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 from common.paths import SESSIONS_DIR  # noqa: F401  (re-export)
 from common.dtxsid import validate_dtxsid
 from common.clock import now_iso  # noqa: F401  (re-export)
+from common.session_files import read_json_file
+from bmdx_pipe import bm2_cache
 
 # Cause-tagged version-event manifest (Phase 4, dual-cause versioned snapshots).
 # Append-only JSONL log, one file per section, colocated with that section's
@@ -89,6 +91,53 @@ def session_path(dtxsid: str) -> Path:
     A render or lookup for a study that has no session must not leave an empty
     session directory behind (it would list as a session)."""
     return SESSIONS_DIR / validate_dtxsid(dtxsid)
+
+
+# The ADR-0005 human-edit store for the genomics narratives: the paragraphs a
+# user locked, per organ, which win over generated prose on render.
+NARRATIVE_OVERRIDES_FILE = "genomics_narrative_overrides.json"
+
+
+def read_narrative_overrides(session: Path) -> dict:
+    """The session's locked genomics-narrative edits as
+    ``{"gene_set": {organ: [...]}, "gene_bmd": {organ: [...]}}`` — empty buckets
+    when the store does not exist yet.
+
+    An unreadable store raises UnreadableSessionFile instead of reading as "no
+    edits": the Lock endpoint read-modify-writes this file, so treating a
+    corrupt one as empty would overwrite every other organ's locked text."""
+    raw = read_json_file(Path(session) / NARRATIVE_OVERRIDES_FILE) or {}
+    return {
+        "gene_set": raw.get("gene_set", {}) or {},
+        "gene_bmd": raw.get("gene_bmd", {}) or {},
+    }
+
+
+def latest_session_cache(session: Path, glob_pattern: str) -> Path | None:
+    """The NEWEST file in the session dir matching ``glob_pattern``, or None.
+
+    A session accumulates one cache file per content hash (e.g. several
+    ``_cache_genomics_<hash>.json`` as the inputs change), so "the current one"
+    is the most recently written, not the lexically first. Every reader of a
+    hashed cache resolves it here so the session load, the preview and the
+    export all show the same one."""
+    candidates = sorted(Path(session).glob(glob_pattern), key=lambda p: p.stat().st_mtime)
+    return candidates[-1] if candidates else None
+
+
+def cached_bm2_jsons(session: Path) -> dict[str, dict]:
+    """The deserialized BMDProject of every uploaded .bm2 in the session's
+    files/, keyed by file stem, from the bm2 cache (the BMDExpress / BMDS
+    versions, models and BMR the Methods text reports). A .bm2 not in the cache
+    is left out; bm2_cache.get_json logs a failed read itself."""
+    out: dict[str, dict] = {}
+    files_dir = Path(session) / "files"
+    if files_dir.exists():
+        for bm2_path in files_dir.glob("*.bm2"):
+            cached = bm2_cache.get_json(str(bm2_path))
+            if cached:
+                out[bm2_path.stem] = cached
+    return out
 
 
 def bm2_slug(filename: str) -> str:

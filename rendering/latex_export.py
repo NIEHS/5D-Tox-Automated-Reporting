@@ -58,6 +58,8 @@ import shutil
 import zipfile
 from pathlib import Path
 
+from common.session_files import read_json_file
+from pipeline.session_store import latest_session_cache
 from rendering.latex_generator import generate_main_tex, generate_report_body
 
 
@@ -353,27 +355,11 @@ def _resolve_charts(dtxsid: str, view: str | None):
     return resolve_view_filters(dtxsid, view or DEFAULT_VIEW).get("charts")
 
 
-def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
-    """
-    Return the most recently modified file matching the glob, or None.
-
-    Session caches are keyed on a hash of the input fingerprints; when
-    the inputs change a new cache file appears alongside the old one.
-    Picking the newest mtime is the right heuristic for "the active
-    cache" in the absence of a manifest.
-    """
-    candidates = sorted(session_dir.glob(glob_pattern), key=lambda p: p.stat().st_mtime)
-    return candidates[-1] if candidates else None
-
-
 def _load_json(path: Path | None) -> dict | list | None:
-    """Read a JSON file or return None if absent / unreadable."""
-    if path is None or not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text())
-    except Exception:
-        return None
+    """Read a session JSON file, or None if absent. An unreadable one raises
+    UnreadableSessionFile: the export must not quietly drop a section whose
+    cache is corrupt."""
+    return None if path is None else read_json_file(path)
 
 
 def _normalize_apical_section(sec: dict) -> dict:
@@ -411,7 +397,7 @@ def _load_genomics_interpretations(
         organ_k = organ_k.lower()
         sex_k = sex_k.lower()
         prefix = interpretation_cache_prefix(organ_k, sex_k)
-        latest = _latest(session_dir, f"{prefix}*.json")
+        latest = latest_session_cache(session_dir, f"{prefix}*.json")
         interp = _load_json(latest)
         if not isinstance(interp, dict):
             continue
@@ -717,7 +703,7 @@ def load_session_data(
         overlay_front_matter(data, front_matter)
 
     # ── BMD summary endpoints ─────────────────────────────────────────
-    bmd_path = _latest(session_dir, "_cache_bmd_summary_*.json")
+    bmd_path = latest_session_cache(session_dir, "_cache_bmd_summary_*.json")
     bmd_cache = _load_json(bmd_path)
     # A processed session with NO summary endpoints replaces the scaffold's
     # placeholder row too (the section then shows its prose only).
@@ -751,11 +737,11 @@ def load_session_data(
     _vf = _resolve_apical_filters(dtxsid, view)
     # The session's dose unit as Process resolved it (stated > recorded > mg/kg),
     # carried by the Methods context; every table header and caption uses it.
-    _mc = _load_json(_latest(session_dir, "_cache_methods_*.json"))
+    _mc = _load_json(latest_session_cache(session_dir, "_cache_methods_*.json"))
     session_dose_unit = (((_mc or {}).get("context") or {}).get("dose_unit")
                          if isinstance(_mc, dict) else None) or "mg/kg"
     data["dose_unit"] = session_dose_unit
-    sections_path = _latest(session_dir, "_cache_sections_*.json")
+    sections_path = latest_session_cache(session_dir, "_cache_sections_*.json")
     sections_cache = _load_json(sections_path)
     if isinstance(sections_cache, dict):
         raw_sections = sections_cache.get("sections", []) or []
@@ -804,7 +790,7 @@ def load_session_data(
     # key.  scaffold_report_data already seeds the heading-only M&M tree; this
     # replaces the empty `sections` with the cached prose (mirrors the HTML
     # path at report_data.py).  Omitted ⇒ subsections stay "[Section pending]".
-    methods_cache = _load_json(_latest(session_dir, "_cache_methods_*.json"))
+    methods_cache = _load_json(latest_session_cache(session_dir, "_cache_methods_*.json"))
     if isinstance(methods_cache, dict) and methods_cache.get("sections"):
         data["methods"] = {"sections": methods_cache["sections"]}
 
@@ -827,7 +813,7 @@ def load_session_data(
     # genomics allowlists HERE — the SAME filter_genomics_sections the web path
     # uses — so the Overleaf bundle and the HTML preview render the identical
     # set.  (Loaded from the active template; {} / [] ⇒ no filtering.)
-    genomics_path = _latest(session_dir, "_cache_genomics_*.json")
+    genomics_path = latest_session_cache(session_dir, "_cache_genomics_*.json")
     genomics_cache = _load_json(genomics_path)
     if isinstance(genomics_cache, dict) and genomics_cache:
         from document_model.filters import filter_genomics_sections
@@ -911,7 +897,7 @@ def load_session_data(
     # The view's `charts:` allowlist decides WHICH chart types render (None ⇒
     # all; [] ⇒ none), falling back to the global template — honored here so the
     # Overleaf bundle and the HTML preview show the identical set of figures.
-    charts_path = _latest(session_dir, "_cache_charts_*.json")
+    charts_path = latest_session_cache(session_dir, "_cache_charts_*.json")
     charts_cache = _load_json(charts_path)
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
         _attach_genomics_charts(

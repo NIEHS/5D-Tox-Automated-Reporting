@@ -25,8 +25,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from web_routes.dtxsid_param import Dtxsid
 
-from bmdx_pipe import bm2_cache
-from pipeline.session_store import SESSIONS_DIR
+from pipeline.session_store import SESSIONS_DIR, cached_bm2_jsons
+from common.session_files import read_session_json
 from common.dtxsid import validate_dtxsid
 from styling_export.llm_helpers import llm_generate_json_async
 from narrative.chem_resolver import ChemicalIdentity
@@ -326,26 +326,11 @@ async def api_generate_methods(request: Request):
     # --- Collect .bm2 JSON caches for BMDExpress metadata extraction ---
     # Each .bm2 file's analysisInfo.notes contains the BMDExpress version,
     # BMDS version, models fit, BMR type, etc.
-    bm2_jsons = {}
-    if dtxsid:
-        session_files_dir = SESSIONS_DIR / validate_dtxsid(dtxsid) / "files"
-        if session_files_dir.exists():
-            for bm2_path in session_files_dir.glob("*.bm2"):
-                try:
-                    cached = bm2_cache.get_json(str(bm2_path))
-                    if cached:
-                        bm2_jsons[bm2_path.stem] = cached
-                except Exception:
-                    pass
+    bm2_jsons = cached_bm2_jsons(SESSIONS_DIR / validate_dtxsid(dtxsid)) if dtxsid else {}
 
     # --- Load animal report from session if not provided in request ---
     if not animal_report_data and dtxsid:
-        ar_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "animal_report.json"
-        if ar_path.exists():
-            try:
-                animal_report_data = json.loads(ar_path.read_text())
-            except Exception:
-                pass
+        animal_report_data = read_session_json(dtxsid, "animal_report.json")
 
     # --- Load integrated data for genomics assay identification ---
     # Route through the schema-validating loader (ADR-0001).  If the
@@ -464,35 +449,10 @@ async def api_methods_context(dtxsid: Dtxsid):
             else:
                 fingerprints[fid] = fp
 
-    # --- Collect .bm2 JSON caches ---
-    bm2_jsons = {}
-    session_files_dir = SESSIONS_DIR / validate_dtxsid(dtxsid) / "files"
-    if session_files_dir.exists():
-        for bm2_path in session_files_dir.glob("*.bm2"):
-            try:
-                cached = bm2_cache.get_json(str(bm2_path))
-                if cached:
-                    bm2_jsons[bm2_path.stem] = cached
-            except Exception:
-                pass
-
-    # --- Load animal report ---
-    animal_report_data = None
-    ar_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "animal_report.json"
-    if ar_path.exists():
-        try:
-            animal_report_data = json.loads(ar_path.read_text())
-        except Exception:
-            pass
-
-    # --- Load identity ---
-    identity = {}
-    id_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "identity.json"
-    if id_path.exists():
-        try:
-            identity = json.loads(id_path.read_text())
-        except Exception:
-            pass
+    # --- .bm2 caches, animal report, identity (absent → empty; unreadable raises) ---
+    bm2_jsons = cached_bm2_jsons(SESSIONS_DIR / validate_dtxsid(dtxsid))
+    animal_report_data = read_session_json(dtxsid, "animal_report.json")
+    identity = read_session_json(dtxsid, "identity.json") or {}
 
     # --- Extract context ---
     ctx = extract_methods_context(
@@ -765,15 +725,9 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
         )
 
     # Chemical name for the prompt's phrasing; fall back gracefully.
-    compound = "the test article"
-    identity_path = session_dir / "identity.json"
-    if identity_path.exists():
-        try:
-            compound = json.loads(identity_path.read_text()).get(
-                "name", compound
-            )
-        except Exception:
-            pass
+    compound = (read_session_json(dtxsid, "identity.json") or {}).get(
+        "name", "the test article"
+    )
 
     # Pick the primary BMD stat the same way the chart/narrative paths do —
     # the first key of any entry's gene_sets_by_stat (defaults to "median").

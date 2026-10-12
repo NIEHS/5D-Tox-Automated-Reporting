@@ -50,6 +50,7 @@ _BARE_NUM_RE = re.compile(r"\[\d+(?:\s*[,\-–]\s*\d+)*\]")
 logger = logging.getLogger(__name__)
 
 from narrative.citation_check import find_unresolved_tokens  # noqa: E402
+from pipeline.session_store import read_narrative_overrides  # noqa: E402
 
 
 def build_reference_pool_for_genes(
@@ -489,26 +490,6 @@ def load_persisted_references(session_dir) -> list[str]:
     return paras if isinstance(paras, list) and paras else []
 
 
-def _load_narrative_overrides(session_dir) -> dict:
-    """Read genomics_narrative_overrides.json (the ADR-0005 human-edit store).
-    Returns ``{"gene_set": {...}, "gene_bmd": {...}}`` — empty buckets when the
-    file is absent/unreadable, so callers need no guards."""
-    import json
-    from pathlib import Path
-
-    path = Path(session_dir) / "genomics_narrative_overrides.json"
-    if not path.exists():
-        return {"gene_set": {}, "gene_bmd": {}}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"gene_set": {}, "gene_bmd": {}}
-    return {
-        "gene_set": raw.get("gene_set", {}) or {},
-        "gene_bmd": raw.get("gene_bmd", {}) or {},
-    }
-
-
 def background_reference_count(session_dir) -> int:
     """How many numbered references the session's Background cites ([1]..[B]);
     the genomics references are numbered after them."""
@@ -569,7 +550,7 @@ def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = ""
         )
     # ... plus human-edit hazards (override store) as before.
     hazards = detect_override_citation_hazards(
-        _load_narrative_overrides(session_dir), pools_by_organ,
+        read_narrative_overrides(session_dir), pools_by_organ,
     )
     for w in hazards:
         logger.warning(

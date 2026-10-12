@@ -69,6 +69,7 @@ app = FastAPI(
 
 from pipeline.bmd_project_schema import BMDProjectValidationError
 from common.dtxsid import InvalidDtxsid
+from common.session_files import UnreadableSessionFile
 
 
 @app.exception_handler(InvalidDtxsid)
@@ -81,6 +82,17 @@ async def invalid_dtxsid_handler(request: Request, exc: InvalidDtxsid):
     session_dir() / shutil.rmtree.
     """
     return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.exception_handler(UnreadableSessionFile)
+async def unreadable_session_file_handler(request: Request, exc: UnreadableSessionFile):
+    """
+    A session JSON document that exists but cannot be parsed (truncated write,
+    hand edit) — 422 naming the file, rather than a bare 500 or, as the readers
+    used to do, carrying on as if the file were empty.
+    """
+    logger.error("Unreadable session file: %s", exc)
+    return JSONResponse({"error": str(exc)}, status_code=422)
 
 
 @app.exception_handler(BMDProjectValidationError)

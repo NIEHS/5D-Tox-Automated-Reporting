@@ -58,7 +58,9 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
+from common.session_files import read_session_json
 from pipeline.pool_globals import _session_dir
+from pipeline.session_store import cached_bm2_jsons, read_narrative_overrides
 from pipeline.section_serializers import _build_clinical_obs_section
 from pipeline.content_registry import register_content_kind, run_content_plan
 from pipeline.cache_plumbing import (
@@ -424,29 +426,13 @@ async def _build_genomics_llm_narratives(ctx):
             # Load identity from session for chemical name — used in
             # the LLM prompt's "{compound} exposure" phrasing.  Falls
             # back to the request's compound_name if identity is missing.
-            _identity = {}
-            _identity_path = _session_dir(dtxsid) / "identity.json"
-            if _identity_path.exists():
-                try:
-                    _identity = json.loads(_identity_path.read_text())
-                except Exception:
-                    pass
+            _identity = read_session_json(dtxsid, "identity.json") or {}
             _llm_compound = _identity.get("name", compound_name)
 
             # Override file: user's Lock/Unlock edits persist here and
             # WIN over any freshly generated LLM output for the same
             # organ×kind pair.  Load once; pass into the merge below.
-            _overrides = {"gene_set": {}, "gene_bmd": {}}
-            _overrides_path = (
-                _session_dir(dtxsid) / "genomics_narrative_overrides.json"
-            )
-            if _overrides_path.exists():
-                try:
-                    raw = json.loads(_overrides_path.read_text())
-                    _overrides["gene_set"] = raw.get("gene_set", {}) or {}
-                    _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
-                except Exception:
-                    pass
+            _overrides = read_narrative_overrides(_session_dir(dtxsid))
 
             from pipeline.study_design import study_design_facts, subject_phrase
             _subject = subject_phrase(study_design_facts(ctx.integrated, ctx.dose_unit))
@@ -1165,37 +1151,14 @@ async def _get_methods(ctx):
         build_sample_counts_table,
         extract_methods_context,
     )
-    from bmdx_pipe import bm2_cache as _bm2_cache
 
-    # Load identity from session (chemical name, casrn, dtxsid)
-    identity = {"dtxsid": dtxsid}
-    identity_path = _session_dir(dtxsid) / "identity.json"
-    if identity_path.exists():
-        try:
-            identity = json.loads(identity_path.read_text())
-        except Exception:
-            pass
-
-    # Collect .bm2 JSON caches for BMDExpress metadata extraction
-    bm2_jsons = {}
-    session_files_dir = _session_dir(dtxsid) / "files"
-    if session_files_dir.exists():
-        for bm2_path in session_files_dir.glob("*.bm2"):
-            try:
-                cached = _bm2_cache.get_json(str(bm2_path))
-                if cached:
-                    bm2_jsons[bm2_path.stem] = cached
-            except Exception:
-                pass
-
-    # Load animal report from session
-    animal_report_data = None
-    ar_path = _session_dir(dtxsid) / "animal_report.json"
-    if ar_path.exists():
-        try:
-            animal_report_data = json.loads(ar_path.read_text())
-        except Exception:
-            pass
+    # Identity (chemical name, casrn, dtxsid), the .bm2 caches (BMDExpress
+    # metadata) and the animal report. A missing file is "not available"; an
+    # unreadable one raises UnreadableSessionFile rather than writing Methods
+    # without the chemical or the animal counts.
+    identity = read_session_json(dtxsid, "identity.json") or {"dtxsid": dtxsid}
+    bm2_jsons = cached_bm2_jsons(_session_dir(dtxsid))
+    animal_report_data = read_session_json(dtxsid, "animal_report.json")
 
     # No protocol defaults: species, strain, route and vehicle come from the
     # study's recorded metadata (extract_methods_context → pipeline.study_design).
@@ -1593,17 +1556,10 @@ def _resolve_compound_name(dtxsid: str) -> str:
     The single fallback when a caller omits `compound_name`. Mirrors the identity
     read already used for the LLM prompt (and rendering/preview_surface._identity):
     identity.json is authored at integration, so a processable session has it.
-    Fail-soft — an unreadable/absent identity falls back to the scaffold default
-    rather than raising."""
-    try:
-        p = _session_dir(dtxsid) / "identity.json"
-        if p.exists():
-            name = (json.loads(p.read_text()).get("name") or "").strip()
-            if name:
-                return name
-    except Exception:
-        pass
-    return "Test Compound"
+    An absent identity (or one without a name) falls back to the scaffold
+    default; an unreadable one raises UnreadableSessionFile."""
+    name = ((read_session_json(dtxsid, "identity.json") or {}).get("name") or "").strip()
+    return name or "Test Compound"
 
 
 def _method(ctx):

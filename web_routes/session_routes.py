@@ -39,7 +39,9 @@ from web_routes.dtxsid_param import Dtxsid
 from bmdx_pipe import bm2_cache  # noqa: F401
 from pipeline.session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, save_section, delete_section, _VERSION_EVENT_KEY,
+    NARRATIVE_OVERRIDES_FILE, read_narrative_overrides, latest_session_cache,
 )
+from common.session_files import read_json_file
 from pipeline.pool_orchestrator import (
     fingerprint_and_store, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
@@ -431,20 +433,15 @@ async def api_session_load(dtxsid: Dtxsid):
     # the narrative assembler and (Bug C fallback) by the client when
     # no approved `genomics_*.json` files exist for this session.
     genomics_cache = None
-    genomics_cache_path = None
-    try:
-        for gc in sorted(d.glob("_cache_genomics_*.json")):
-            _t0 = _time.monotonic()
-            _text = gc.read_text(encoding="utf-8")
-            genomics_cache = json.loads(_text)
-            genomics_cache_path = gc
-            provenance.record(
-                "disk_read", dtxsid=dtxsid, unit="_cache_genomics", bytes=len(_text),
-                ms=round((_time.monotonic() - _t0) * 1000, 1),
-            )
-            break
-    except Exception:
-        pass
+    genomics_cache_path = latest_session_cache(d, "_cache_genomics_*.json")
+    if genomics_cache_path is not None:
+        _t0 = _time.monotonic()
+        genomics_cache = read_json_file(genomics_cache_path)
+        provenance.record(
+            "disk_read", dtxsid=dtxsid, unit="_cache_genomics",
+            bytes=genomics_cache_path.stat().st_size,
+            ms=round((_time.monotonic() - _t0) * 1000, 1),
+        )
 
     # Load cached chart images (PNG + SVG per organ × sex).  These are
     # the same figures the PDF uses — the HTML in-app view embeds the
@@ -458,20 +455,15 @@ async def api_session_load(dtxsid: Dtxsid):
     # helpers in genomics_viz keep this in lockstep with the
     # pool_orchestrator path.
     chart_images = None
-    chart_cache_path = None
-    try:
-        for cc in sorted(d.glob("_cache_charts_*.json")):
-            _t0 = _time.monotonic()
-            _text = cc.read_text(encoding="utf-8")
-            chart_images = json.loads(_text)
-            chart_cache_path = cc
-            provenance.record(
-                "disk_read", dtxsid=dtxsid, unit="_cache_charts", bytes=len(_text),
-                ms=round((_time.monotonic() - _t0) * 1000, 1),
-            )
-            break
-    except Exception:
-        pass
+    chart_cache_path = latest_session_cache(d, "_cache_charts_*.json")
+    if chart_cache_path is not None:
+        _t0 = _time.monotonic()
+        chart_images = read_json_file(chart_cache_path)
+        provenance.record(
+            "disk_read", dtxsid=dtxsid, unit="_cache_charts",
+            bytes=chart_cache_path.stat().st_size,
+            ms=round((_time.monotonic() - _t0) * 1000, 1),
+        )
 
     if chart_images and genomics_cache and chart_cache_path:
         try:
@@ -530,10 +522,9 @@ async def api_session_load(dtxsid: Dtxsid):
             # --- Deterministic tier ---
             methods_ctx = None
             chem_name = None
-            for mc in sorted(d.glob("_cache_methods_*.json")):
-                methods_payload = json.loads(mc.read_text(encoding="utf-8"))
-                methods_ctx = methods_payload.get("context")
-                break
+            methods_cache = latest_session_cache(d, "_cache_methods_*.json")
+            if methods_cache is not None:
+                methods_ctx = (read_json_file(methods_cache) or {}).get("context")
             identity = _read_json("identity.json")
             if identity:
                 chem_name = identity.get("name") or identity.get("chemical_name")
@@ -569,37 +560,17 @@ async def api_session_load(dtxsid: Dtxsid):
                 # so this reload path can't drift from the writer's naming.
                 from genomics.genomics_narratives import interpretation_cache_prefix
                 prefix = interpretation_cache_prefix(organ_k, sex_k)
-                latest = None
-                latest_mtime = -1.0
-                for cf in d.glob(f"{prefix}*.json"):
-                    try:
-                        mt = cf.stat().st_mtime
-                        if mt > latest_mtime:
-                            latest_mtime = mt
-                            latest = cf
-                    except Exception:
-                        continue
+                latest = latest_session_cache(d, f"{prefix}*.json")
                 if latest is None:
                     continue
-                try:
-                    interp = json.loads(latest.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
+                interp = read_json_file(latest)
                 per_organ_bundles.setdefault(organ_k, {})[sex_k] = {
                     "gs": interp.get("gene_set_narrative") or [],
                     "gn": interp.get("gene_narrative") or [],
                 }
 
             # --- User override tier ---
-            _overrides = {"gene_set": {}, "gene_bmd": {}}
-            overrides_path = d / "genomics_narrative_overrides.json"
-            if overrides_path.exists():
-                try:
-                    raw = json.loads(overrides_path.read_text())
-                    _overrides["gene_set"] = raw.get("gene_set", {}) or {}
-                    _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
-                except Exception:
-                    pass
+            _overrides = read_narrative_overrides(d)
 
             from genomics.genomics_narratives import aggregate_organ_llm_narratives
             llm_gs, llm_gn = aggregate_organ_llm_narratives(
@@ -613,10 +584,11 @@ async def api_session_load(dtxsid: Dtxsid):
             if gene_narrative is not None:
                 gene_narrative["by_organ_llm"] = llm_gn
     except Exception:
-        # Non-fatal — falls back to empty on the client.  The user can
-        # re-run process-integrated to populate them; the PDF export
-        # still auto-populates on its own.
-        pass
+        # Non-fatal for the session load — the client falls back to empty and
+        # the user can re-run process-integrated; the PDF export assembles the
+        # narratives on its own.  Logged: a failure here is a bug or a broken
+        # cache, not an expected state.
+        logger.exception("Session load %s: genomics narratives not assembled", dtxsid)
 
     # Load cached validation report and precedence decisions if they exist.
     # These are generated by POST /api/pool/validate/{dtxsid} and
@@ -650,9 +622,9 @@ async def api_session_load(dtxsid: Dtxsid):
         from rendering.report_data_overlays import load_group_narratives
         group_narratives = load_group_narratives(d)
     except Exception:
-        # Best-effort — an unreadable/absent cache leaves the rows as "not
-        # generated" (the prior behavior), never fails the whole session load.
-        pass
+        # Best-effort — an unreadable cache leaves the rows as "not generated"
+        # and never fails the whole session load; logged, as it is not expected.
+        logger.exception("Session load %s: group narratives not read", dtxsid)
 
     # Front-matter section STATUS for the Sections screen. The 7 authored/boilerplate
     # front-matter sections (foreword, authors, contributors, peer_review,
@@ -682,7 +654,7 @@ async def api_session_load(dtxsid: Dtxsid):
                 "has_content": _st["has_content"],
             }
     except Exception:
-        pass
+        logger.exception("Session load %s: front-matter status not resolved", dtxsid)
 
     return JSONResponse({
         "exists": True,
@@ -773,18 +745,11 @@ async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
             {"error": f"Session {dtxsid} not found"}, status_code=404,
         )
 
-    overrides_path = session_dir / "genomics_narrative_overrides.json"
-    # Read-modify-write — defensive against partial writes by other
-    # endpoints.  No locking because this is a single-user app and
-    # override edits happen on explicit user action (Lock click).
-    existing = {"gene_set": {}, "gene_bmd": {}}
-    if overrides_path.exists():
-        try:
-            raw = json.loads(overrides_path.read_text(encoding="utf-8"))
-            existing["gene_set"] = raw.get("gene_set", {}) or {}
-            existing["gene_bmd"] = raw.get("gene_bmd", {}) or {}
-        except Exception:
-            pass
+    overrides_path = session_dir / NARRATIVE_OVERRIDES_FILE
+    # Read-modify-write.  No locking because this is a single-user app and
+    # override edits happen on explicit user action (Lock click).  An
+    # unreadable store raises (422) instead of being replaced by this one edit.
+    existing = read_narrative_overrides(session_dir)
 
     if paragraphs:
         existing[kind][organ] = [str(p) for p in paragraphs]

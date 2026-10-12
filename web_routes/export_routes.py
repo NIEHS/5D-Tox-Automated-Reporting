@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from web_routes.dtxsid_param import Dtxsid
 from common.dtxsid import validate_dtxsid
 
+from common.session_files import read_json_file
 from pipeline.session_store import safe_filename
 from web_routes.server_state import get_bm2_uploads
 from pipeline.pool_orchestrator import load_integrated
@@ -770,18 +771,11 @@ async def api_export_bm2(dtxsid: Dtxsid):
             )
 
     # Derive a human-readable filename from the session identity
-    identity_path = sess_path / "identity.json"
-    filename = f"{dtxsid}_integrated.bm2"
-    if identity_path.exists():
-        try:
-            import json
-            identity = json.loads(identity_path.read_text(encoding="utf-8"))
-            chem_name = identity.get("preferredName", "")
-            if chem_name:
-                safe_name = safe_filename(chem_name)
-                filename = f"{safe_name}_integrated.bm2"
-        except Exception:
-            pass
+    # identity.json records the chemical as `name` (preferredName is the CompTox
+    # field it was resolved from; older sessions may carry that instead).
+    identity = read_json_file(sess_path / "identity.json") or {}
+    chem_name = identity.get("name") or identity.get("preferredName") or ""
+    filename = f"{safe_filename(chem_name) if chem_name else dtxsid}_integrated.bm2"
 
     return FileResponse(
         str(bm2_path),

@@ -20,6 +20,8 @@ those two helpers at call time.
 import logging
 from pathlib import Path
 
+from common.session_files import read_json_file, read_session_json
+from pipeline.session_store import latest_session_cache, session_path
 from tables.table_builder_common import lettered_footnote, finalize_footnotes
 
 
@@ -61,7 +63,7 @@ def load_group_narratives(session_dir: Path) -> dict[str, dict]:
     import json
 
     out: dict[str, dict] = {}
-    cache_path = _latest_session_cache(session_dir, "_cache_sections_*.json")
+    cache_path = latest_session_cache(session_dir, "_cache_sections_*.json")
     if cache_path is None:
         return out
     try:
@@ -78,22 +80,6 @@ def load_group_narratives(session_dir: Path) -> dict[str, dict]:
             "paragraphs": paras, "title": title,
         }
     return out
-
-def _latest_session_cache(session_dir: Path, glob_pattern: str):
-    """
-    Return the NEWEST session cache file matching `glob_pattern`, or None.
-
-    A session accumulates one cache file per content hash (e.g. several
-    `_cache_genomics_<hash>.json` as the gene set is re-analysed), so "the
-    current one" is the most recently written — not the lexically-first.
-    Selecting by modification time matches the convention the session-export
-    path uses (latex_export._latest); this is the web/preview path's copy so
-    both surfaces resolve the same file from a multi-hash session.
-
-    Returns a pathlib.Path or None when nothing matches.
-    """
-    candidates = sorted(session_dir.glob(glob_pattern), key=lambda p: p.stat().st_mtime)
-    return candidates[-1] if candidates else None
 
 
 def overlay_abstract(
@@ -129,30 +115,24 @@ def overlay_abstract(
     """
     abstract_updates: dict[str, str] = {}
 
-    # Abstract → Methods (deterministic from the extracted study facts).
-    if methods_context:
-        try:
-            from narrative.methods_report import MethodsContext, build_abstract_methods
-            abstract_updates["Methods"] = build_abstract_methods(
-                MethodsContext.from_dict(methods_context)
-            )
-        except Exception:
-            pass
+    # The abstract builders are deterministic over the inputs, so an exception
+    # here is a bug: it propagates rather than silently leaving the scaffold's
+    # placeholder in a section of the published abstract.
 
-    # Deterministic study-purpose sentence appended to the LLM background.
+    # Abstract → Methods (deterministic from the extracted study facts).
     study_purpose_sentence = ""
     if methods_context:
-        try:
-            from narrative.methods_report import MethodsContext as _MC
-            _ctx = _MC.from_dict(methods_context)
-            ta = _ctx.chemical_name or "the test article"
-            descriptor = "transcriptomic" if _ctx.has_gene_expression else "toxicological"
-            study_purpose_sentence = (
-                f"A short-term, in vivo {descriptor} study was used to "
-                f"assess the biological potency of {ta}."
-            )
-        except Exception:
-            pass
+        from narrative.methods_report import MethodsContext, build_abstract_methods
+        _ctx = MethodsContext.from_dict(methods_context)
+        abstract_updates["Methods"] = build_abstract_methods(_ctx)
+
+        # Deterministic study-purpose sentence appended to the LLM background.
+        ta = _ctx.chemical_name or "the test article"
+        descriptor = "transcriptomic" if _ctx.has_gene_expression else "toxicological"
+        study_purpose_sentence = (
+            f"A short-term, in vivo {descriptor} study was used to "
+            f"assess the biological potency of {ta}."
+        )
 
     abstract_bg_text = (abstract_background or "").strip()
     if abstract_bg_text or study_purpose_sentence:
@@ -165,35 +145,32 @@ def overlay_abstract(
     dose_groups = dose_groups or []
 
     if endpoints or genomics_cache or methods_context:
-        try:
-            from narrative.methods_report import build_abstract_results, build_abstract_summary
-            results_text = build_abstract_results(
-                apical_bmd_summary=endpoints,
-                genomics_sections=genomics_cache,
-                dose_groups=dose_groups,
-                dose_unit=dose_unit,
-                bmd_stat=bmd_stat,
-                methods_ctx=methods_context,
-                sexes=sexes,
-                design=data.get("study_design"),
-                genes=genes,
-            )
-            if results_text:
-                abstract_updates["Results"] = results_text
-            summary_text = build_abstract_summary(
-                apical_bmd_summary=endpoints,
-                genomics_sections=genomics_cache,
-                dose_groups=dose_groups,
-                dose_unit=dose_unit,
-                bmd_stat=bmd_stat,
-                sexes=sexes,
-                design=data.get("study_design"),
-                genes=genes,
-            )
-            if summary_text:
-                abstract_updates["Summary"] = summary_text
-        except Exception:
-            pass
+        from narrative.methods_report import build_abstract_results, build_abstract_summary
+        results_text = build_abstract_results(
+            apical_bmd_summary=endpoints,
+            genomics_sections=genomics_cache,
+            dose_groups=dose_groups,
+            dose_unit=dose_unit,
+            bmd_stat=bmd_stat,
+            methods_ctx=methods_context,
+            sexes=sexes,
+            design=data.get("study_design"),
+            genes=genes,
+        )
+        if results_text:
+            abstract_updates["Results"] = results_text
+        summary_text = build_abstract_summary(
+            apical_bmd_summary=endpoints,
+            genomics_sections=genomics_cache,
+            dose_groups=dose_groups,
+            dose_unit=dose_unit,
+            bmd_stat=bmd_stat,
+            sexes=sexes,
+            design=data.get("study_design"),
+            genes=genes,
+        )
+        if summary_text:
+            abstract_updates["Summary"] = summary_text
 
     # Apply updates to data["abstract"]["sections"], preserving order/labels.
     if abstract_updates:
@@ -239,23 +216,14 @@ def _overlay_abstract(data: dict, body: dict) -> None:
     study_sexes: list[str] | None = None
     dtxsid = body.get("dtxsid", "")
     if dtxsid:
-        try:
-            session_dir = Path("sessions") / dtxsid
-            cache = _latest_session_cache(session_dir, "_cache_genomics_*.json")
-            if cache is not None:
-                import orjson
-                genomics_cache = orjson.loads(cache.read_bytes())
-        except Exception:
-            pass
+        cache = latest_session_cache(session_path(dtxsid), "_cache_genomics_*.json")
+        if cache is not None:
+            genomics_cache = read_json_file(cache)
         # Sexes from the .bm2 metadata (single source of truth) — sex-less study → [].
-        try:
-            import json as _json_sx
+        integrated = read_session_json(dtxsid, "integrated.json")
+        if integrated is not None:
             from rendering.render_common import derive_study_sexes
-            _ip = Path("sessions") / dtxsid / "integrated.json"
-            if _ip.exists():
-                study_sexes = derive_study_sexes(_json_sx.loads(_ip.read_text(encoding="utf-8")))
-        except Exception:
-            study_sexes = None
+            study_sexes = derive_study_sexes(integrated)
 
     overlay_abstract(
         data,
@@ -470,14 +438,11 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
                 if methods_data and methods_data.get("context") else "mg/kg"
             )
             _table_num = None
-            try:
-                from document_model.document_tree import find_node, compute_table_numbers
-                compute_table_numbers()
-                _bmd_node = find_node("bmd-summary")
-                if _bmd_node and _bmd_node.table_number is not None:
-                    _table_num = _bmd_node.table_number
-            except Exception:
-                pass
+            from document_model.document_tree import find_node, compute_table_numbers
+            compute_table_numbers()
+            _bmd_node = find_node("bmd-summary")
+            if _bmd_node and _bmd_node.table_number is not None:
+                _table_num = _bmd_node.table_number
             _table_ref = f"Table {_table_num}" if _table_num is not None else "the table below"
             all_paras.append(
                 f"A summary of the calculated BMDs for each toxicological "
@@ -507,7 +472,7 @@ def _overlay_genomics(data: dict, body: dict) -> None:
 
     methods_data = body.get("methods_data")
     _dtxsid = body.get("dtxsid", "")
-    _session_dir_path = Path("sessions") / _dtxsid if _dtxsid else None
+    _session_dir_path = session_path(_dtxsid) if _dtxsid else None
     # Genomics
     genomics = body.get("genomics_sections", [])
     if genomics:
@@ -522,7 +487,7 @@ def _overlay_genomics(data: dict, body: dict) -> None:
         # is what both renderers read; that replaces the old, dead
         # data["genomics_charts"] key (no node type ever consumed it).
         if _session_dir_path and _session_dir_path.exists():
-            _charts = _latest_session_cache(_session_dir_path, "_cache_charts_*.json")
+            _charts = latest_session_cache(_session_dir_path, "_cache_charts_*.json")
             if _charts is not None:
                 try:
                     import orjson
@@ -559,13 +524,9 @@ def _overlay_genomics(data: dict, body: dict) -> None:
     # function (the charts attach also needs them) — reuse them here.
     _genomics_cache = None
     if _session_dir_path and genomics:
-        try:
-            _gcache = _latest_session_cache(_session_dir_path, "_cache_genomics_*.json")
-            if _gcache is not None:
-                import orjson
-                _genomics_cache = orjson.loads(_gcache.read_bytes())
-        except Exception:
-            pass
+        _gcache = latest_session_cache(_session_dir_path, "_cache_genomics_*.json")
+        if _gcache is not None:
+            _genomics_cache = read_json_file(_gcache)
 
     if _genomics_cache:
         try:
