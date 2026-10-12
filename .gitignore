@@ -113,3 +113,6 @@ assets/cebs-niehs-10/*
 !assets/cebs-niehs-10/MANIFEST.md
 assets/given-2026/*
 !assets/given-2026/MANIFEST.md
+# Microsoft's msvcrt.dll for BMDS 2.7 under Wine (pipeline/bmds27) — a Windows
+# system file, never committed.
+assets/windows/

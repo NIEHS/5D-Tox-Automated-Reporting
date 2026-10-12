@@ -115,3 +115,71 @@ def bin_dir() -> Path:
             f"(e.g. NIEHS-10/C20022-01_bmds.zip) under {CEBS_DIR}")
     extract(zips[0], cached)
     return cached
+
+
+# ---------------------------------------------------------------------------
+# Microsoft's msvcrt.dll (optional)
+# ---------------------------------------------------------------------------
+# The executables take exp/log/pow from msvcrt.dll. Wine's own msvcrt differs
+# from Microsoft's in the last bits, enough to change some fits (ADR-0030,
+# "Under Wine"); with Microsoft's 32-bit msvcrt.dll beside the executables and
+# WINEDLLOVERRIDES=msvcrt=n,b, Wine loads that instead. It is a Windows system
+# file: supplied by the user, never committed.
+
+MSVCRT_DEFAULT = REPO_ROOT / "assets" / "windows" / "msvcrt.dll"
+
+
+def _pe_i386_dll(path: Path) -> str | None:
+    """None when `path` is a 32-bit (i386) Windows DLL, else what it is not."""
+    import struct
+
+    data = path.read_bytes()[:4096]
+    if data[:2] != b"MZ" or len(data) < 64:
+        return "not a Windows executable file"
+    off = struct.unpack_from("<I", data, 0x3C)[0]
+    if data[off:off + 4] != b"PE\0\0":
+        return "not a PE file"
+    machine, = struct.unpack_from("<H", data, off + 4)
+    characteristics, = struct.unpack_from("<H", data, off + 22)
+    if machine != 0x14C:
+        return "not 32-bit (take C:\\Windows\\SysWOW64\\msvcrt.dll, not System32's)"
+    if not characteristics & 0x2000:
+        return "not a DLL"
+    return None
+
+
+def msvcrt_path() -> Path | None:
+    """Microsoft's msvcrt.dll to run with: BMDS27_MSVCRT, else
+    assets/windows/msvcrt.dll if present; None for Wine's own.
+    Raises BinariesUnavailable when the named file is not a 32-bit DLL."""
+    env = os.environ.get("BMDS27_MSVCRT")
+    path = Path(env) if env else MSVCRT_DEFAULT
+    if not path.is_file():
+        if env:
+            raise BinariesUnavailable(f"BMDS27_MSVCRT={env}: no such file")
+        return None
+    problem = _pe_i386_dll(path)
+    if problem:
+        raise BinariesUnavailable(f"{path}: {problem}")
+    return path
+
+
+def with_msvcrt(directory: Path, msvcrt: Path) -> Path:
+    """A bin directory with the executables and `msvcrt` side by side (the
+    application directory is where Wine looks for a native override)."""
+    digest = _sha256(msvcrt)
+    dest = directory.parent / f"{directory.name}-msvcrt-{digest[:12]}"
+    if not (dest.is_dir() and not verify(dest) and (dest / "msvcrt.dll").is_file()
+            and _sha256(dest / "msvcrt.dll") == digest):
+        tmp = Path(tempfile.mkdtemp(prefix=".bmds270-msvcrt-", dir=directory.parent))
+        try:
+            for name in FILES:
+                shutil.copy2(directory / name, tmp / name)
+            shutil.copy2(msvcrt, tmp / "msvcrt.dll")
+            if dest.exists():
+                shutil.rmtree(dest)
+            tmp.rename(dest)
+        finally:
+            if tmp.exists():
+                shutil.rmtree(tmp, ignore_errors=True)
+    return dest

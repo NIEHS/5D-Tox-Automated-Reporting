@@ -147,6 +147,18 @@ and states the reason.
    datasets, against 20 of 110 published BMDs agreeing for the ToxicR substitute.
 3. **Keep the ToxicR substitute.**
 
+**Chosen (2026-10-12): option 1.**
+- **Where the DLL goes:** Microsoft's 32-bit `msvcrt.dll` (from
+  `C:\Windows\SysWOW64\`) is read from `BMDS27_MSVCRT`, or from
+  `assets/windows/msvcrt.dll`, which is gitignored and never committed.
+- **How it is loaded:** it is copied beside the executables, and Wine runs with
+  `msvcrt=n,b`.
+- **The self-check requires Wine to report it loaded as native,** so a silent
+  fall-back to Wine's copy cannot pass. It then re-runs the certification fits
+  as before.
+- **`python -m tooling.bmds27_wine_check` measures the whole oracle** on this
+  machine's runtime.
+
 ## Consequences
 
 - **On a machine with Wine,** the BMDS-era reports' apical BMDs come from the method

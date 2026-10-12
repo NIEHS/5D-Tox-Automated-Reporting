@@ -241,3 +241,56 @@ def test_methods_guidance_describes_the_engine_that_ran(monkeypatch):
     assert "highest dose group was removed" in text
     assert "Table D-1" in text and "R2 >=" not in text
     assert "1 standard deviation" in text
+
+
+# ── Microsoft's msvcrt.dll (binaries.msvcrt_path / with_msvcrt) ──────────────
+
+def _pe(machine=0x14C, dll=True) -> bytes:
+    import struct
+    head = bytearray(0x200)
+    head[:2] = b"MZ"
+    struct.pack_into("<I", head, 0x3C, 0x80)
+    head[0x80:0x84] = b"PE\0\0"
+    struct.pack_into("<H", head, 0x84, machine)
+    struct.pack_into("<H", head, 0x80 + 22, 0x2000 if dll else 0x0102)
+    return bytes(head)
+
+
+def test_msvcrt_must_be_a_32_bit_dll(tmp_path, monkeypatch):
+    for name, data, problem in [("x64.dll", _pe(machine=0x8664), "not 32-bit"),
+                                ("exe.dll", _pe(dll=False), "not a DLL"),
+                                ("text.dll", b"hello", "not a Windows")]:
+        (tmp_path / name).write_bytes(data)
+        monkeypatch.setenv("BMDS27_MSVCRT", str(tmp_path / name))
+        with pytest.raises(binaries.BinariesUnavailable, match=problem):
+            binaries.msvcrt_path()
+    (tmp_path / "ok.dll").write_bytes(_pe())
+    monkeypatch.setenv("BMDS27_MSVCRT", str(tmp_path / "ok.dll"))
+    assert binaries.msvcrt_path() == tmp_path / "ok.dll"
+    monkeypatch.setenv("BMDS27_MSVCRT", str(tmp_path / "missing.dll"))
+    with pytest.raises(binaries.BinariesUnavailable, match="no such file"):
+        binaries.msvcrt_path()
+    monkeypatch.delenv("BMDS27_MSVCRT")
+    monkeypatch.setattr(binaries, "MSVCRT_DEFAULT", tmp_path / "absent.dll")
+    assert binaries.msvcrt_path() is None                 # Wine's own msvcrt
+
+
+def test_with_msvcrt_puts_the_dll_beside_the_executables(tmp_path, monkeypatch):
+    src = tmp_path / "bin"
+    src.mkdir()
+    for name in binaries.FILES:
+        (src / name).write_bytes(name.encode())
+    monkeypatch.setattr(binaries, "FILES", {n: binaries._sha256(src / n) for n in binaries.FILES})
+    (tmp_path / "msvcrt.dll").write_bytes(_pe())
+    out = binaries.with_msvcrt(src, tmp_path / "msvcrt.dll")
+    assert sorted(p.name for p in out.iterdir()) == sorted([*binaries.FILES, "msvcrt.dll"])
+    assert binaries.with_msvcrt(src, tmp_path / "msvcrt.dll") == out      # reused
+
+
+def test_wine_executor_asks_wine_for_the_native_msvcrt(tmp_path, monkeypatch):
+    wine = tmp_path / "wine"
+    wine.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("WINEDLLOVERRIDES", "mscoree,mshtml=")
+    assert WineExecutor(tmp_path, wine=str(wine))._env()["WINEDLLOVERRIDES"] == "mscoree,mshtml="
+    assert WineExecutor(tmp_path, wine=str(wine), native_msvcrt=True)._env()["WINEDLLOVERRIDES"] \
+        == "mscoree,mshtml=;msvcrt=n,b"

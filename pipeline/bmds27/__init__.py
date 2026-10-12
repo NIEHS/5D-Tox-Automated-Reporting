@@ -55,22 +55,41 @@ def certify(executor) -> list[str]:
     return problems
 
 
+def _wine_executor():
+    """(executor, description) for this machine's BMDS 2.7 under Wine — with
+    Microsoft's msvcrt.dll when one is supplied (binaries.msvcrt_path).
+    Raises BinariesUnavailable."""
+    from pipeline.bmds27.binaries import bin_dir, msvcrt_path, with_msvcrt
+    from pipeline.bmds27.runner import WineExecutor
+
+    directory, msvcrt = bin_dir(), msvcrt_path()
+    if msvcrt is None:
+        return WineExecutor(directory), "Wine's msvcrt"
+    return WineExecutor(with_msvcrt(directory, msvcrt), native_msvcrt=True), f"Microsoft's msvcrt ({msvcrt})"
+
+
 @functools.lru_cache(maxsize=1)
 def _status() -> tuple[bool, str]:
-    from pipeline.bmds27.binaries import BinariesUnavailable, bin_dir
-    from pipeline.bmds27.runner import WineExecutor
+    from pipeline.bmds27.binaries import BinariesUnavailable
 
     if not shutil.which("wine"):
         return False, "Wine is not installed (BMDS 2.7 is 32-bit Windows software)"
     try:
-        directory = bin_dir()
+        ex, runtime = _wine_executor()
     except BinariesUnavailable as e:
         return False, str(e)
-    problems = certify(WineExecutor(directory))
+    if ex.native_msvcrt:
+        dfile = json.loads(_CERTIFICATION.read_text())[0]["dfile"]
+        loaded = ex.msvcrt_loaded_as(dfile)
+        if loaded != "native":
+            return False, (f"{runtime} was supplied but Wine loaded msvcrt.dll as {loaded or 'unknown'}, "
+                           "not native")
+    problems = certify(ex)
     if problems:
-        return False, "BMDS 2.7 under Wine does not reproduce NTP's recorded runs: " + "; ".join(problems)
-    logger.info("BMDS 2.7 certified under Wine (%s)", directory)
-    return True, f"certified ({directory})"
+        return False, (f"BMDS 2.7 under Wine with {runtime} does not reproduce NTP's recorded "
+                       "runs: " + "; ".join(problems))
+    logger.info("BMDS 2.7 certified under Wine with %s (%s)", runtime, ex.bin_dir)
+    return True, f"certified with {runtime} ({ex.bin_dir})"
 
 
 def available() -> bool:
@@ -84,10 +103,7 @@ def unavailable_reason() -> str | None:
 
 def executor():
     """The certified Wine executor. Raises RuntimeError when unavailable."""
-    from pipeline.bmds27.binaries import bin_dir
-    from pipeline.bmds27.runner import WineExecutor
-
     ok, why = _status()
     if not ok:
         raise RuntimeError(why)
-    return WineExecutor(bin_dir())
+    return _wine_executor()[0]

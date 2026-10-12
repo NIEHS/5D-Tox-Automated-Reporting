@@ -50,16 +50,35 @@ def _out_prefix(model) -> str:
 class WineExecutor:
     """Run BMDS 2.7 executables under Wine, as NTP ran them on Windows."""
 
-    def __init__(self, bin_dir: Path, wine: str | None = None):
+    def __init__(self, bin_dir: Path, wine: str | None = None, native_msvcrt: bool = False):
+        """`native_msvcrt`: `bin_dir` holds Microsoft's msvcrt.dll beside the
+        executables (binaries.with_msvcrt), and Wine is told to load it."""
         self.bin_dir = Path(bin_dir)
+        self.native_msvcrt = native_msvcrt
         self.wine = wine or shutil.which("wine")
         if not self.wine:
             raise FileNotFoundError("wine is not installed")
 
-    @staticmethod
-    def _env() -> dict:
-        return {**os.environ, "WINEDEBUG": os.environ.get("WINEDEBUG", "-all"),
-                "WINEDLLOVERRIDES": os.environ.get("WINEDLLOVERRIDES", "mscoree,mshtml=")}
+    def _env(self, winedebug: str | None = None) -> dict:
+        overrides = os.environ.get("WINEDLLOVERRIDES", "mscoree,mshtml=")
+        if self.native_msvcrt:
+            overrides = ";".join(filter(None, [overrides, "msvcrt=n,b"]))
+        return {**os.environ, "WINEDEBUG": winedebug or os.environ.get("WINEDEBUG", "-all"),
+                "WINEDLLOVERRIDES": overrides}
+
+    def msvcrt_loaded_as(self, dfile: str) -> str | None:
+        """How Wine loads msvcrt.dll for poly.exe: "native" (a Windows DLL),
+        "builtin" (Wine's own), or None if the trace does not say."""
+        with tempfile.TemporaryDirectory(prefix="bmds27-") as tmp:
+            with open(Path(tmp) / _DFILE, "w", newline="\r\n") as f:
+                f.write(dfile)
+            proc = subprocess.run([self.wine, str(self.bin_dir / "poly.exe"), _DFILE], cwd=tmp,
+                                  env=self._env("+loaddll"), capture_output=True,
+                                  timeout=TIMEOUT_SECONDS)
+        for line in proc.stderr.decode(errors="replace").splitlines():
+            if "msvcrt.dll" in line.lower() and "loaded" in line.lower():
+                return line.rsplit(":", 1)[-1].strip()
+        return None
 
     def run(self, exe: str, dfile: str, out_prefix: str) -> dict:
         with tempfile.TemporaryDirectory(prefix="bmds27-") as tmp:
