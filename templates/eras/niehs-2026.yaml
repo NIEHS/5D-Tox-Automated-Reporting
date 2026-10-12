@@ -10,6 +10,15 @@
 # it; each study's internal concentrations; and Heart … Ovary under the gene
 # set and gene analyses, each with its studies.  Which studies and tissues
 # there are is the report's data; that they are written this way is this file.
+#
+# This generation is also the definition of a NEW study, one without a
+# definition of its own (document_definition.DEFAULT_DEFINITION).  So what the
+# two books state only because they are inhalation studies is gated on the
+# route (`requires_route: inhaled`: the vapor and chamber sections, the
+# theoretical inhaled dose), headings that name the dose follow it
+# (${dose_term}: "Exposure Concentration" / "Dose"), and a single study's
+# per-study sections are no sub-sections (`study_title`: "Study Design", the
+# prose straight under "Animal Condition …", as single-study books print it).
 extends: eras/niehs-2023
 # The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
 tissue_order: []
@@ -26,19 +35,22 @@ changes:
        title: "Procurement and Characterization of ${chemical_name}",
        methods_key: chemistry_procurement}
     - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
-       title: Vapor Generation and Exposure System, methods_key: vapor_generation}
+       title: Vapor Generation and Exposure System, methods_key: vapor_generation,
+       requires_route: inhaled}
     - {id: mm-chem-vapor-monitoring, type: narrative, data_key: methods,
-       title: Vapor Concentration Monitoring, methods_key: vapor_monitoring}
+       title: Vapor Concentration Monitoring, methods_key: vapor_monitoring,
+       requires_route: inhaled}
     - {id: mm-chem-chamber, type: narrative, data_key: methods,
-       title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere}
+       title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere,
+       requires_route: inhaled}
     into: mm-chemistry
   - set: mm-study-design
-    title: "Study Design for ${species}"
+    study_title: "Study Design for ${species}"
     repeat: study_species
   - set: mm-dose-rationale
-    title: Exposure Concentration Selection Rationale
+    title: "${dose_term} Selection Rationale"
   - set: mm-internal-dose
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
 
   # ── Results: the apical results grouped; a summary closing the gene set
   # analysis; the theoretical inhaled dose, then the internal concentrations.
@@ -57,10 +69,13 @@ changes:
   # it has data for.
   - set: bmd-summary
     caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High, for ${subject} ${treatment}"
+  # Each tissue's prose stands under its own heading after the tables (below).
   - set: gene-sets
     caption_suffix: ", for ${subject} ${treatment}"
+    entry_narrative: false
   - set: gene-bmd
     caption_suffix: ", for ${subject} ${treatment}"
+    entry_narrative: false
   - insert:
     - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
        data_key: gene_set_summary}
@@ -75,12 +90,12 @@ changes:
     at: first
   - insert:
     - {id: theoretical-inhaled-dose, type: narrative+tables, title: Theoretical Inhaled Dose,
-       narrative_key: theoretical_inhaled_dose}
+       narrative_key: theoretical_inhaled_dose, requires_route: inhaled}
     after: gene-bmd
   - move: internal-dose
     after: theoretical-inhaled-dose
   - set: internal-dose
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
 
   # ── Each study's results under the tables the studies share; each study's
   # internal concentrations (its own table); each tissue's gene set and gene
@@ -89,7 +104,7 @@ changes:
     type: heading-only
     narrative_key: null
   - insert:
-    - {id: animal-condition-study, type: narrative+tables, title: "${species}",
+    - {id: animal-condition-study, type: narrative+tables, title: "", study_title: "${species}",
        narrative_key: animal_condition, repeat: study_species}
     into: animal-condition
   # The tables the studies share stand under the first study's heading, after
@@ -108,22 +123,26 @@ changes:
     type: heading-only
     narrative_key: null
   - insert:
-    - {id: clinical-path-study, type: narrative+tables, title: "${species}",
+    - {id: clinical-path-study, type: narrative+tables, title: "", study_title: "${species}",
        narrative_key: clinical_pathology, repeat: study_species}
     into: clinical-path
   - move: table-hematology
     into: clinical-path-study
   - move: table-clin-chem
     into: clinical-path-study
+  - move: table-hormones            # none in these books; after clinical chemistry, as in the base
+    into: clinical-path-study
   - set: table-hematology
     first_copy: true
   - set: table-clin-chem
+    first_copy: true
+  - set: table-hormones
     first_copy: true
   - set: internal-dose
     type: heading-only
     narrative_key: null
   - insert:
-    - {id: internal-dose-study, type: narrative+tables, title: "${species}",
+    - {id: internal-dose-study, type: narrative+tables, title: "", study_title: "${species}",
        narrative_key: internal_dose, repeat: study_species}
     into: internal-dose
   - move: table-tissue-conc
@@ -134,7 +153,7 @@ changes:
       title: "${organ}"
       repeat: genomic_organs
       children:
-      - {id: gene-set-tissue-study, type: narrative, title: "${species}",
+      - {id: gene-set-tissue-study, type: narrative, title: "", study_title: "${species}",
          data_key: gene_set_narrative, repeat: study_species}
     before: gene-set-summary
   - insert:
@@ -143,7 +162,7 @@ changes:
       title: "${organ}"
       repeat: genomic_organs
       children:
-      - {id: gene-tissue-study, type: narrative, title: "${species}",
+      - {id: gene-tissue-study, type: narrative, title: "", study_title: "${species}",
          data_key: gene_narrative, repeat: study_species}
     into: gene-bmd
 
@@ -152,6 +171,7 @@ changes:
   - insert:
     - id: appendix-chamber
       type: appendix
+      requires_route: inhaled
       element: book-app
       book_part_type: appendix
       title: Chemical Characterization and Generation of Chamber Concentrations
@@ -188,7 +208,7 @@ changes:
   # B: the internal concentration method (the study's appendix-a content, with
   # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
   - set: appendix-a
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
   - move: appendix-a-body
     into: appendix-a
   - remove: appendix-a-quantitation
@@ -223,6 +243,7 @@ changes:
          title: "", deposit_group: methods}
     - id: appendix-f-inhaled-dose
       type: heading-only
+      requires_route: inhaled
       title: Theoretical Inhaled Dose
       children:
       - {id: appendix-f-inhaled-dose-files, type: supplementary-material, binding: derived,

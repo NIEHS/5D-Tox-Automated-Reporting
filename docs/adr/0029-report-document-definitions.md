@@ -46,14 +46,17 @@ decided the form: **an era base, plus alterations to it and additions to it.**
    validator checks the composed document as it would an authored one. An unknown
    id, an unknown key or an `extends` cycle is an error.
 2. **Three levels, one mechanism:**
-   - `niehs-5day-report` is the definition of a new (unpublished) study, unchanged;
+   - `niehs-5day-report` is the shared base grammar the eras extend;
    - `eras/<era>` reproduce the published generations;
    - `studies/<DTXSID>/document` extends its era for a published study.
+   - A new (unpublished) study, one with no definition of its own, is written
+     to the latest generation, `eras/niehs-2026`
+     (`document_definition.DEFAULT_DEFINITION`; amended 2026-10-12, §10).
 3. **Resolution.** A study's tree comes from the first of these that exists:
    1. the session view's `document`;
    2. the legacy session `document.yaml`;
    3. the study's definition;
-   4. the shared template.
+   4. the definition of a new study (`eras/niehs-2026`).
 
    The same layer gives the study's `book_meta`, `packaging` and
    `object_position`.
@@ -127,8 +130,8 @@ decided the form: **an era base, plus alterations to it and additions to it.**
 
 - Making a published report structurally right is an edit to YAML, reviewed as a
   diff against its era.
-- A new study is unaffected: it has no study definition, so it uses the shared
-  template.
+- A new study has no study definition, so it uses the definition of a new
+  study: the shared template until 2026-10-12, the 2026 generation since (§10).
 - The single-file packaging (2018, 2022) needs the emitter, the bundle writer and
   the facsimile to handle the whole-book `book-part` shape.
   `render_capabilities.PACKAGING_PART_ELEMENTS` names the part elements each
@@ -163,3 +166,55 @@ decided the form: **an era base, plus alterations to it and additions to it.**
   - Appendix E's "E.1";
   - NIEHS-10's "A.1 Quantitation of … in Plasma".
   Their labels follow the appendix letter.
+
+## 10. Amendment (2026-10-12): new studies are written to the 2026 generation
+
+The user decided that new reports follow the latest published conventions,
+those of NIEHS-12 and 13 (April 2026). A study with no definition of its own
+now renders from `eras/niehs-2026` (`document_definition.definition_name`),
+in `view_config.build_view_tree` and `study_document_facts`. The shared
+template stays the base grammar the eras extend, and the editor's default.
+
+Both 2026 books are whole-body inhalation studies of two species. What they
+state only for that reason follows the study's data, not the era:
+
+- **Route gate.** `requires_route: inhaled` keeps a node only for a study
+  whose design states that route (`pipeline.study_design`, after its
+  sanctioned fallback). The gated nodes are:
+  - the vapor generation, vapor monitoring and chamber atmosphere sections;
+  - Appendix A (Chemical Characterization and Generation of Chamber
+    Concentrations);
+  - the Theoretical Inhaled Dose section and its Supplemental Data files.
+- **Dose words.** `${dose_term}` and `${internal_dose_term}`
+  (`study_design.heading_terms`) give "Exposure Concentration Selection
+  Rationale" and "Internal Concentration Assessment" for an inhaled study
+  (NIEHS-12, 13). An oral study gets "Dose Selection Rationale" and "Internal
+  Dose Assessment" (NIEHS-07 … 10). The books never use the concentration
+  words for an oral study or the dose words for an inhaled one. So the words
+  are inferred from the route, not stated for an oral study by any 2026 book.
+- **A single study.** `study_title` is the title of each study's copy when a
+  report covers several studies ("Study Design for ${species}", "${species}").
+  A single study's copy keeps the node's own `title`. For "Study Design" that
+  is the base title. For an empty title, the parent heading takes in the
+  copy's content when the copy is its only child and the parent says nothing
+  itself (`document_tree._take_in_untitled`). The prose then stands directly
+  under "Animal Condition …", as in every single-study book.
+- **Tissue prose.** On a genomics section, `entry_narrative: false` keeps each
+  tissue's prose out of the tables block. It stands under the tissue's own
+  heading after the tables, in the 2026 order.
+
+The published 2026 studies render unchanged: NIEHS-12 and 13 give
+byte-identical text.
+
+What the 2026 books cannot settle for a new study, because both are
+two-species inhalation studies, comes from the data. Each item below is an
+inference to review:
+
+- the oral dose words;
+- a single study without per-species sub-sections;
+- the hormone table placed after clinical chemistry (no 2026 book has
+  hormone data).
+
+The Gene Set Benchmark Dose Summary section has no generator yet. It renders
+as a pending placeholder in every new report until one exists.
+

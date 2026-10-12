@@ -194,6 +194,21 @@ class DocNode:
                         is one unscoped copy; with no deposit species the
                         section's children stand in its place, with no tissues
                         it is left out.
+        study_title:    On a `study_species` section: the title each study's
+                        copy takes in a report over several studies ("Study
+                        Design for ${species}", "${species}").  A single study's
+                        copy keeps `title`; with an empty one its content stands
+                        in its parent heading's place, as single-study books
+                        print it (document_tree._expand_repeats).
+        requires_route: Route gate: the node and its subtree are kept only for a
+                        study of this route of administration ("inhaled": the
+                        vapor generation, chamber and theoretical inhaled dose
+                        sections of the inhalation books), the route the study's
+                        design states (pipeline.study_design).
+        entry_narrative: On a genomics-section: false when each tissue's prose
+                        stands in sections of its own (the 2026 books' Heart …
+                        Ovary, `repeat: genomic_organs`) rather than with the
+                        tissue's table.
         scope_species:  COMPUTED by that expansion: the species a copy (and every
                         node in it) is about; derived file lists keep to it, and
                         in a report over several studies the copy renders from
@@ -229,6 +244,9 @@ class DocNode:
     deposit_text: str | None = None
     caption_suffix: str | None = None
     first_copy: bool = False
+    study_title: str | None = None
+    requires_route: str | None = None
+    entry_narrative: bool | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

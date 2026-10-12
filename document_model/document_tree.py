@@ -242,6 +242,23 @@ def prune_uncollected_tables(tree, collected):
     return _prune(copy.deepcopy(tree))
 
 
+def _has_route_gates(nodes) -> bool:
+    return any(n.requires_route or _has_route_gates(n.children or []) for n in nodes)
+
+
+def _gate_routes(nodes: list, route: str | None) -> list:
+    """Leave out the nodes (with their subtrees) gated on a route
+    (`requires_route`) other than the study's.  Mutates the (already copied)
+    nodes; returns the kept list."""
+    out = []
+    for node in nodes:
+        if node.requires_route and node.requires_route != route:
+            continue
+        node.children = _gate_routes(node.children or [], route)
+        out.append(node)
+    return out
+
+
 # The study facts a node title may name (ADR-0029: "Procurement and
 # Characterization of ${chemical_name}"), filled per study by study_tree.
 TITLE_FIELDS = ("chemical_name",)
@@ -366,19 +383,61 @@ def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
             # No deposit species: the files are listed without them.  No tissues:
             # there is nothing to say per tissue.
             if repeat == "deposit_species":
+                _raise_levels(node.children)
                 out.extend(node.children)
             continue
         variable = _REPEAT_VARIABLE[repeat]
+        several = repeat == "study_species" and found[0]["key"] is not None
         for i, item in enumerate(found):
             clone = copy.deepcopy(node)
             if i:
                 _drop_first_copy(clone)
-            if "${" not in (clone.title or ""):
+            if several and clone.study_title is not None:
+                clone.title = clone.study_title
+            elif repeat == "study_species" and clone.study_title is not None:
+                pass                         # a single study: the title as written
+            elif "${" not in (clone.title or ""):
                 clone.title = item["title"]
             _scope(clone, _REPEAT_SCOPE[repeat], item["key"], variable, item["title"],
                    item.get("fields"))
             out.append(clone)
     return out
+
+
+# A node's own fields, which a heading taking in a single study's untitled
+# section keeps (everything else — what the section says and from what — is
+# the section's).
+_OWN_FIELDS = frozenset({"id", "title", "level", "children", "repeat", "region",
+                         "first_copy", "scope_species", "scope_organ", "study_title",
+                         "requires_route", "sec_label", "appendix_letter", "appendix_scope"})
+
+
+def _take_in_untitled(nodes: list) -> None:
+    """A single study's untitled section (a `study_title` section with an empty
+    `title`, see _expand_repeats) is no sub-section: a heading that has it as
+    its only child and says nothing itself takes in its content (type,
+    bindings, children), as single-study books print the prose directly under
+    the heading.  Anywhere else the section keeps its place, untitled."""
+    from dataclasses import fields
+    for node in nodes:
+        _take_in_untitled(node.children or [])
+        if not (node.node_type == "heading-only" and len(node.children or []) == 1):
+            continue
+        (child,) = node.children
+        if child.title or child.study_title is None or child.scope_species:
+            continue
+        for f in fields(child):
+            if f.name not in _OWN_FIELDS:
+                setattr(node, f.name, getattr(child, f.name))
+        node.children = child.children
+        _raise_levels(node.children)
+
+
+def _raise_levels(nodes) -> None:
+    for n in nodes:
+        if n.level:
+            n.level -= 1
+        _raise_levels(n.children or [])
 
 
 def study_tree(base, collected, authored=None, facts=None):
@@ -409,6 +468,12 @@ def study_tree(base, collected, authored=None, facts=None):
     nodes = base
     if collected:
         nodes = prune_uncollected_tables(base, collected)
+    design = (facts or {}).get("study_design") or {}
+    if _has_route_gates(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        nodes = _gate_routes(nodes, design.get("route"))
     if _has_study_bound(nodes):
         if nodes is base:
             import copy
@@ -421,8 +486,11 @@ def study_tree(base, collected, authored=None, facts=None):
             import copy
             nodes = copy.deepcopy(base)
         nodes = _expand_repeats(nodes, repeat_items(facts))
+        _take_in_untitled(nodes)
+    from pipeline.study_design import heading_terms
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     values.update(caption_values(facts))
+    values.update(heading_terms(design))
     if values and _has_title_fields(nodes):
         if nodes is base:
             import copy

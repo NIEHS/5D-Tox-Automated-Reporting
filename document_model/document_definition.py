@@ -23,9 +23,11 @@ Composition happens on the raw YAML entries, before instantiation, so the
 template validator checks the composed document exactly as it checks an
 authored one.  An unknown id, a cycle or an unknown key fails loudly.
 
-The levels (ADR-0029): ``niehs-5day-report`` is the definition of a new study;
+The levels (ADR-0029): ``niehs-5day-report`` is the shared base grammar;
 ``eras/<era>`` reproduce the published report generations; a published
-study's ``studies/<DTXSID>/document`` extends its era.
+study's ``studies/<DTXSID>/document`` extends its era.  A new study — one with
+no definition of its own — is written to the latest generation's
+(DEFAULT_DEFINITION, the 2026 books).
 
 Import graph: document_template and this module import each other lazily
 (inside functions), so neither import-time order matters.
@@ -199,10 +201,20 @@ def apply_change(document: list, change: dict) -> None:
 # A study's definition
 # ---------------------------------------------------------------------------
 
+# The definition of a study with none of its own: the latest published
+# generation (NIEHS-12, 13, April 2026).
+DEFAULT_DEFINITION = "eras/niehs-2026"
+
+
 def study_definition_name(dtxsid: str) -> str | None:
     """``studies/<DTXSID>/document`` when the study has its own definition."""
     name = f"studies/{validate_dtxsid(dtxsid)}/document"
     return name if (_templates_dir() / f"{name}.yaml").exists() else None
+
+
+def definition_name(dtxsid: str) -> str:
+    """The definition a study renders from: its own, else DEFAULT_DEFINITION."""
+    return study_definition_name(dtxsid) or DEFAULT_DEFINITION
 
 
 def packaging_of(raw) -> str:

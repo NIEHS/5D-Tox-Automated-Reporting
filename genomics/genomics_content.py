@@ -39,7 +39,7 @@ def _entry_base_id(entry: dict) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
-def genomics_content_plan(entry: dict, role: str) -> list[dict]:
+def genomics_content_plan(entry: dict, role: str, narrative: bool = True) -> list[dict]:
     """
     The ordered content items for one (organ, sex) genomics entry.
 
@@ -53,11 +53,14 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
     item_ids are scoped to the (organ, sex) block, so the full overlay key for
     a content item is "<component-id>::<item_id>" (see
     render_capabilities.content_item_landscape_requested).
+
+    `narrative` False leaves the prose out: the section's tissues have
+    sections of their own for it (DocNode.entry_narrative, the 2026 books).
     """
     base = _entry_base_id(entry)
     plan: list[dict] = []
 
-    if entry.get("narrative"):
+    if narrative and entry.get("narrative"):
         plan.append(
             {"item_id": f"{base}-narrative", "kind": "text",
              "part": "narrative", "orientable": False, "breakable": False}

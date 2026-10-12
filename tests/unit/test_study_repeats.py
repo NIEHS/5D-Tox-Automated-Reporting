@@ -165,3 +165,69 @@ def test_a_shared_table_stands_in_the_first_copy_only():
     assert [(c.id, c.scope_species) for c in rats.children] == [("bw", None)]
     assert mice.children == []
     assert node_data(rats.children[0], DATA) is DATA
+
+
+def _study_sections():
+    return instantiate([{"region": "body", "children": [
+        {"id": "mm-design", "type": "narrative", "title": "Study Design",
+         "study_title": "Study Design for ${species}", "data_key": "methods",
+         "methods_key": "study_design", "repeat": "study_species"},
+        {"id": "ac", "type": "heading-only", "title": "Animal Condition", "children": [
+            {"id": "ac-study", "type": "narrative+tables", "title": "", "study_title": "${species}",
+             "narrative_key": "animal_condition", "repeat": "study_species", "children": [
+                 {"id": "bw", "type": "table", "title": "Body Weights",
+                  "platform": "Body Weight", "first_copy": True}]}]}]}])
+
+
+def test_several_studies_title_their_copies_with_study_title():
+    nodes = study_tree(_study_sections(), None, None, DATA)
+    assert [n.title for n in nodes[:2]] == ["Study Design for Rats", "Study Design for Mice"]
+    assert [(c.title, c.node_type) for c in nodes[2].children] == [
+        ("Rats", "narrative+tables"), ("Mice", "narrative+tables")]
+
+
+def test_a_single_study_has_no_per_study_sub_sections():
+    """Single-study books print "Study Design" and the animal condition prose
+    straight under its heading, its tables with it (NIEHS-07 … 10)."""
+    data = {"study_design": {"species": "rat", "route": "gavage"}}
+    design, ac = study_tree(_study_sections(), None, None, data)
+    assert (design.id, design.title) == ("mm-design", "Study Design")
+    assert (ac.id, ac.title, ac.node_type, ac.narrative_key, ac.level) == (
+        "ac", "Animal Condition", "narrative+tables", "animal_condition", 1)
+    assert [(c.id, c.level) for c in ac.children] == [("bw", 0)]
+
+
+def _route_tree():
+    return instantiate([{"region": "body", "children": [
+        {"id": "mm", "type": "heading-only", "title": "Materials and Methods", "children": [
+            {"id": "vapor", "type": "narrative", "title": "Vapor Generation",
+             "data_key": "methods", "methods_key": "vapor_generation",
+             "requires_route": "inhaled"},
+            {"id": "rationale", "type": "narrative", "title": "${dose_term} Selection Rationale",
+             "data_key": "methods", "methods_key": "dose_rationale"},
+            {"id": "internal", "type": "narrative", "title": "${internal_dose_term} Assessment",
+             "data_key": "methods", "methods_key": "internal_dose"}]}]}])
+
+
+def test_inhalation_sections_follow_the_route():
+    """The inhalation books' vapor sections and dose words (NIEHS-12, 13) are
+    an inhaled study's; an oral study has the oral books' (NIEHS-07 … 10)."""
+    (mm,) = study_tree(_route_tree(), None, None, {"study_design": {"route": "inhaled"}})
+    assert [c.title for c in mm.children] == [
+        "Vapor Generation", "Exposure Concentration Selection Rationale",
+        "Internal Concentration Assessment"]
+    (mm,) = study_tree(_route_tree(), None, None, {"study_design": {"route": "gavage"}})
+    assert [c.title for c in mm.children] == [
+        "Dose Selection Rationale", "Internal Dose Assessment"]
+
+
+def test_a_route_gate_names_a_known_route():
+    import pytest
+    with pytest.raises(ValueError, match="requires_route"):
+        instantiate([{"region": "body", "children": [
+            {"id": "x", "type": "narrative", "title": "X", "data_key": "x",
+             "requires_route": "inhalation"}]}])
+    with pytest.raises(ValueError, match="study_title"):
+        instantiate([{"region": "body", "children": [
+            {"id": "x", "type": "narrative", "title": "X", "data_key": "x",
+             "study_title": "X for ${species}"}]}])

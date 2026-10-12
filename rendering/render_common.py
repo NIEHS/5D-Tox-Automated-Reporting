@@ -1522,7 +1522,7 @@ def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentIte
     if node.node_type == "genomics-section":
         role = genomics_role(node)
         for entry in genomics_entries(node, data):
-            for item in genomics_content_plan(entry, role):
+            for item in genomics_content_plan(entry, role, node.entry_narrative is not False):
                 resolved.append(ResolvedContentItem(
                     component_id=node.id,
                     item_id=item["item_id"],

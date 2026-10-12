@@ -58,13 +58,15 @@ PUBLISHED_ISSN = {
     "NIEHS-10": "2768-5632", "NIEHS-12": "2768-5632", "NIEHS-13": "2768-5632",
 }
 
-# The 2026 books report a rat study and a mouse study (ADR-0029 §9): the
-# report's data names its studies and the tissues of their genomic analyses,
-# which the definition repeats sections over.
+# The 2026 books report a rat study and a mouse study (ADR-0029 §9) of
+# whole-body inhalation: the report's data names its studies, their route
+# (which the inhalation sections are gated on) and the tissues of their
+# genomic analyses, which the definition repeats sections over.
 _STUDIES = [{"key": "rat", "title": "Rats", "data": {}},
             {"key": "mouse", "title": "Mice", "data": {}}]
 _TISSUES = ("heart", "kidney", "liver", "lung", "ovary")
 STUDY_DATA = {r: {"studies": _STUDIES,
+                  "study_design": {"route": "inhaled", "inhalation": "whole-body"},
                   "genomics_sections": [{"type": t, "organ": o} for o in _TISSUES
                                         for t in ("gene_set", "gene")]}
               for r in ("NIEHS-12", "NIEHS-13")}

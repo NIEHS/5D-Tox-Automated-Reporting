@@ -469,6 +469,19 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
     if entry.get("caption_suffix") is not None and node_type != "genomics-section":
         raise ValueError(f"template node {node_id!r}: caption_suffix is only valid on a "
                          f"genomics-section")
+    if entry.get("entry_narrative") is not None and (
+            node_type != "genomics-section" or entry["entry_narrative"] not in (True, False)):
+        raise ValueError(f"template node {node_id!r}: entry_narrative is true or false, "
+                         f"on a genomics-section")
+    if entry.get("study_title") is not None and repeat != "study_species":
+        raise ValueError(f"template node {node_id!r}: study_title is only valid on a "
+                         f"`repeat: study_species` node")
+    route = entry.get("requires_route")
+    if route is not None:
+        from pipeline.study_design import ROUTES
+        if route not in ROUTES:
+            raise ValueError(f"template node {node_id!r}: requires_route must be one of "
+                             f"{list(ROUTES)}, got {route!r}")
 
 
 def _validate_file_only_entry(entry: dict, node_id: str, node_type: str) -> None:

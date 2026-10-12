@@ -227,8 +227,8 @@ def build_view_tree(dtxsid: str, name: str):
     """
     The DocNode tree for a view: its own ``document`` structure if present,
     else the session's legacy document.yaml (document_config), else the study's
-    document definition (ADR-0029), else None so the caller uses the global
-    DOCUMENT_TREE.
+    document definition (ADR-0029) — its own, else the definition of a new
+    study (document_definition.DEFAULT_DEFINITION).
     """
     view = load_view(dtxsid, name) if name else {}
     document = view.get("document")
@@ -241,12 +241,10 @@ def build_view_tree(dtxsid: str, name: str):
     tree = build_session_tree(dtxsid)
     if tree is not None:
         return tree
-    name = study_definition_name(dtxsid)
-    if name is None:
-        return None
     from document_model.document_config import _tree_from_document_list
+    from document_model.document_definition import definition_name
     from document_model.document_template import load_template
-    return _tree_from_document_list(load_template(name))
+    return _tree_from_document_list(load_template(definition_name(dtxsid)))
 
 
 def study_definition_name(dtxsid: str) -> str | None:
@@ -260,13 +258,13 @@ def study_document_facts(dtxsid: str) -> dict:
     """The study-level facts of the definition a study renders from (ADR-0029):
     ``book_meta`` (the series, publisher, permissions), ``packaging``,
     ``object_position``, ``tissue_order`` and ``abstract_genes``, from the study's definition,
-    else the shared template."""
+    else the definition of a new study (DEFAULT_DEFINITION)."""
+    from document_model.document_definition import definition_name
     from document_model.document_template import (
         load_abstract_genes, load_book_meta, load_object_position, load_packaging,
         load_tissue_order,
     )
-    from document_model.document_tree import ACTIVE_TEMPLATE
-    name = study_definition_name(dtxsid) or ACTIVE_TEMPLATE
+    name = definition_name(dtxsid)
     return {"book_meta": load_book_meta(name), "packaging": load_packaging(name),
             "object_position": load_object_position(name),
             "tissue_order": load_tissue_order(name),

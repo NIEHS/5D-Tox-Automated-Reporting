@@ -58,6 +58,9 @@ _ADMINISTRATION = {
     "drinking water": ("in drinking water", "Drinking Water Studies"),
 }
 
+# The routes a study's design states (a document node may be gated on one).
+ROUTES = tuple(_ADMINISTRATION)
+
 # How an inhalation exposure is made (administrationMeans of an inhaled study):
 # the title's "(Whole-body Inhalation Studies)" (NIEHS-12, 13).
 _INHALATION_METHODS = {"whole-body": "Whole-body", "nose-only": "Nose-only"}
@@ -342,6 +345,18 @@ def caption_fields(facts: dict, compound: str) -> dict:
     and Mice") and ``treatment`` ("Exposed to 1,4-Dichlorobenzene for Five
     Days"), as a definition writes them (``${subject} ${treatment}``)."""
     return {"subject": caption_subject(facts), "treatment": caption_treatment(facts, compound)}
+
+
+def heading_terms(facts: dict) -> dict:
+    """The words a section heading names the dose by, as a definition writes
+    them: ``dose_term`` "Exposure Concentration" / "Dose" ("${dose_term}
+    Selection Rationale") and ``internal_dose_term`` "Internal Concentration"
+    / "Internal Dose" ("${internal_dose_term} Assessment").  The concentration
+    words are the inhalation books' (NIEHS-12, 13), the dose words the oral
+    books' (NIEHS-07 … 10); a study of no recorded route takes the dose words."""
+    inhaled = facts.get("route") == "inhaled"
+    return {"dose_term": "Exposure Concentration" if inhaled else "Dose",
+            "internal_dose_term": "Internal Concentration" if inhaled else "Internal Dose"}
 
 
 def administration_phrase(facts: dict) -> str:

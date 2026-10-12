@@ -184,3 +184,9 @@ def test_a_title_names_the_study_chemical():
     assert ours[0].title == "Quantitation of PFHxSAm in Plasma"
     assert base[0].title == "Quantitation of ${chemical_name} in Plasma"
     assert study_tree(base, None, None, {})[0].title == base[0].title
+
+
+def test_a_study_without_a_definition_is_written_to_the_latest_generation():
+    from document_model.document_definition import DEFAULT_DEFINITION, definition_name
+    assert DEFAULT_DEFINITION == "eras/niehs-2026"
+    assert definition_name("DTXSID0000002") == DEFAULT_DEFINITION
