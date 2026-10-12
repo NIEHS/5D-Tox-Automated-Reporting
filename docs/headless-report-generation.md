@@ -148,12 +148,25 @@ kept. `tooling/report_qc.py` then checks the rendered deliverables, including
 against the published tables and the published book's structure, and writes
 `output/QC/qc-report.md`. `tooling/bits_structure.py` prints the structure
 diff alone (`-` published only, `+` ours only), and `tooling/bookshelf_preview.py`
-renders a published bundle through our Bookshelf facsimile for a side-by-side
-read:
+renders a published bundle through our Bookshelf facsimile.
+
+To read a report against the published one by eye, `tooling/report_compare.py`
+aligns the published book and ours section by section and block by block
+(`rendering/bits_compare.py`). It writes one page per report to
+`output/QC/compare/`: side by side or unified, switched on the page, with
+changed words marked, tables compared cell for cell (columns paired by heading,
+rows by group and label, however each book lays them out) and the sections that
+differ most listed first. Next to each page are a conventional unified diff of
+the two books' flat text (`<REPORT>.diff`, one hunk run per section, for any
+diff tool) and the two flat texts it is taken over. `--fresh` renders ours from
+the session instead of reading `output/`. The running server serves the same
+comparison at `/Compare/<dtxsid>`, rendered from the session, and the Bookshelf
+facsimile links to it:
 
 ```bash
 python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
 python -m tooling.report_qc                             # every report on the shelf
+python -m tooling.report_compare                        # every report vs its published book
 python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
 python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html
 ```
@@ -318,8 +331,30 @@ For the LaTeX bundle and PDF, `rendering.latex_export` provides
 that the CLI does not apply a saved view's document tree;
 `generate_report --surfaces latex` does.
 
-**Interactive alternative.** `notebooks/workflow_walkthrough.ipynb` runs steps
-2–7 one cell per step and prints the derived phase after each one.
+**Interactive alternative.** `notebooks/workflow_walkthrough.ipynb` is the
+whole workflow one step per cell, from import to rendered deliverables, then a
+comparison with the published book. Its cells call the step functions of
+`tooling/generate_report.py` (`import_files`, `validate`, `integrate`,
+`apply_design`, `method_profile`, `process_async`, `summary`, `render`, …), so it
+can't drift from the command line. Each cell that changes the session prints
+the derived phase. By default it rebuilds NIEHS-10 in a scratch session,
+`DTXSID50469320_nb`, from the reference session's input files and the facts the
+published report states (`build_published_reports.STUDIES`); set `REPORT` for
+another single-study report. The scratch session has no document definition of
+its own, so it renders from the shared template. Edit the builder,
+`notebooks/_build_workflow_notebook.py`, not the `.ipynb`. Open it with
+`.venv/bin/python -m jupyterlab` (the venv's `jupyter` launcher scripts carry a
+stale path), or run it headless:
+
+```bash
+.venv/bin/python -m nbconvert --to notebook --execute --inplace \
+    --ExecutePreprocessor.timeout=3600 notebooks/workflow_walkthrough.ipynb
+```
+
+From a notebook or any running event loop, call `process_async` (awaitable)
+rather than `process`, which starts its own loop. The helpers that take a stated
+input (`confirm_metadata`, `apply_design`, `apply_experiment_metadata`,
+`apply_front_matter`) accept the object itself as well as a JSON file.
 
 ---
 
@@ -643,28 +678,60 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
 ## 10. Known gaps
 
-These hold as of 2026-10-05. Appendix B.4 lists every place the report still
+These hold as of 2026-10-12. Appendix B.4 lists every place the report still
 lacks data, with what would close it.
 
-- **About This Report** (authors, contributors) is human-set front matter
-  (`front_matter.json`, §5.3); nothing in the data supplies it.
-- **Background** needs ATSDR and IRIS. Where either is unreachable (the sandbox
-  firewall), `--background` saves nothing and says so, rather than writing a
-  Background that reports the unreachable sources as data gaps.
-- **The report's Appendix C.2 (empirical FDR)** needs the study's synthetic-null analysis,
-  which is not ingested; its figure stays pending.
+**What only the browser (or its HTTP API) does.** Producing a report needs none
+of these, but reviewing and revising one does:
+
+- **Section review.** Approving or reopening a section has no command-line flag.
+  From Python call `accept_section_step` / `release_section_step` (§7); over HTTP,
+  `POST /api/session/approve` / `unapprove`. Editing a section's text, its version
+  history and restore (`/api/session/save-section`, `…/history/…`, `…/restore`),
+  and the genomics narrative override are HTTP and browser only.
+- **The prompt workshop** (the Summary's versioned prompt template, model
+  comparison, critique threads: `/api/prompts/…`) and the **session chat**
+  (ADR-0022) have no command-line form.
+- **Document structure.** The command line renders a saved view (`--view`) but
+  can't edit the structure; the Configure screen and `/api/document-structure/…`
+  do. A session's own `document.yaml` can't extend a study definition, which is
+  why the notebook's scratch session renders from the shared template.
+
+**What only the command line does.** LaTeX over HTTP: `POST
+/api/export-overleaf-bundle` and `POST /api/compile-pdf` take a full report body
+assembled by the legacy UI, not a session id, and the preview's `latex` surface
+returns 501. Use Route A for LaTeX.
+
+**Workflow**
+
+- **Import isn't a workflow step.** There is no `import_step`: Route A and the
+  notebook copy files into `sessions/<id>/files/` themselves
+  (`generate_report.import_files`), and Route B uploads them. This is the last
+  piece of the import → process arc not in `workflow.steps` (ADR-0014).
+- **Experiment metadata** (species, sex and organ per experiment) can be stated
+  in Route A (`--experiment-metadata`) and the notebook. Route B's script has no
+  step for it: call `GET`/`POST /api/experiment-metadata/{id}` after integrate.
 - **Materials & Methods** in the deliverable comes from Process
   (`_cache_methods_*`). The browser's separate *Generate M&M* button saves
-  `methods.json`, which the renderer does not read. Headless runs get M&M from
-  Process automatically.
-- **LaTeX over HTTP.** `POST /api/export-overleaf-bundle` and
-  `POST /api/compile-pdf` take a full report body assembled by the legacy UI,
-  not a session id. There is no "LaTeX for session X" endpoint, and the
-  preview's `latex` surface returns 501. Use Route A for LaTeX.
-- **Experiment metadata review** (`GET`/`POST /api/experiment-metadata/{id}`:
-  species, sex and organ per experiment, written back into `integrated.json`)
-  is not a step in either script. Call it after integrate if you need to
-  correct experiment descriptions.
+  `methods.json`, which the renderer doesn't read.
+
+**Content**
+
+- **Front matter**: the Authors and Contributors parts and the publication
+  details are human-set (`--front-matter`, the Configure screen). Nothing in the
+  data supplies them.
+- **Background** needs ATSDR and IRIS. Where either can't be reached,
+  `--background` saves nothing and says so, rather than writing a Background that
+  reports the unreachable sources as data gaps. IRIS has been reachable from the
+  sandbox since 2026-10-09; ATSDR comes and goes.
+- **The report's Appendix C.2 (empirical FDR)** needs the study's synthetic-null
+  analysis, which isn't ingested; its sections stand with their content pending.
+- **The 2021 profile's apical engine (BMDS 2.7)** is built (`pipeline/bmds27`,
+  ADR-0030) but certifies itself before use. Under Wine with Wine's own `msvcrt`
+  it gives NTP's recommended model and BMD on 158 of 173 datasets, and 12 differ
+  materially, so it stays off and the ToxicR substitute runs, listed as a
+  deviation. The chosen route to an exact match, Microsoft's 32-bit `msvcrt.dll`
+  supplied as `BMDS27_MSVCRT`, is still to be verified.
 
 ---
 
@@ -890,7 +957,7 @@ doesn't yet project emits a visible `<!-- TODO -->` in the XML, never nothing.
 This appendix sets out everything in a report that is driven by the data:
 the rules (B.1), how each fact is worked out from the files (B.2), where each
 part of the report comes from (B.3), and where it still falls short (B.4). It
-holds as of 2026-10-07.
+holds as of 2026-10-07; the gap analysis (B.4) as of 2026-10-12.
 
 ### B.1 The rules
 
@@ -1306,13 +1373,12 @@ names the files that also shape its content (see the labels in B.2).
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G7 | Experiment metadata (organ, sex, species) | Inferred from experiment names (LLM) unless approved; the source-of-truth `.xlsx` is primary only for classification | Read the workbook's Key and Data sheets first (ADR-0017/0019) |
-| G8 | Multi-species studies (NIEHS-13: rats and mice) | One gene-expression `.bm2` per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only | Key genomics by species and keep every expression project |
-| G9 | Animal report counts NIEHS-13's biosample animals as Core | The animal report's Core count is too high; the tables use the right cohort | Use the cohort rule the tables use |
+| G7 | Experiment metadata (organ, sex, species) | Inferred from experiment names (LLM) unless approved or stated (`--experiment-metadata`); the source-of-truth `.xlsx` is primary only for classification | Read the workbook's Key and Data sheets first (ADR-0017/0019) |
+| G9 | The animal report counts biosample animals as Core | NIEHS-12/13's rat and mouse studies show biosampling 0 (e.g. NIEHS-13 rats: 252 core); the tables use the right cohort | Use the cohort rule the tables use |
 | G10 | The UI's Process step sends `mg/kg` when no unit is set, and a few render helpers (the report's Appendix B dose header, the genomics table labels) fall back to `mg/kg` when no unit is passed | Hides the recorded unit and the logged fallback | Send nothing and let the server resolve it; pass the resolved unit everywhere |
 | G11 | A text or CSV file's platform is read from its file name | A file not named to NTP conventions is unassigned or misclassified until overridden | Classify by content (endpoint names), as `.bm2` files are |
 | G12 | Apical outlier exclusion (NIEHS staff judgement) | Not represented; the profile says `outliers: null` | A per-study exclusion list in the overlay |
-| G13 | NIEHS-10's apical engine (BMDS 2.7) and `all_endpoints` | Listed as profile deviations; the substitute runs | Implement, or accept as recorded |
+| G13 | The 2021 profile's apical engine (BMDS 2.7) and its `all_endpoints` eligibility | The engine is built (`pipeline/bmds27`, ADR-0030) but its self-check keeps it off: under Wine's own `msvcrt` it gives NTP's result on 158 of 173 datasets. The ToxicR substitute runs, listed as a deviation. NTP's own runs show eligibility was trend OR pairwise, not `all_endpoints` | Verify Microsoft's `msvcrt.dll` under Wine (`BMDS27_MSVCRT`); a new profile for the eligibility rule |
 
 **Text gaps**
 
@@ -1320,21 +1386,29 @@ names the files that also shape its content (see the labels in B.2).
 |---|---|---|---|
 | G14 | Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text | The LLM writes plausible, older-era protocol text | Move the guides into the profile, or build them from data |
 | G15 | The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes" | Can disagree with the profile's GO ranking | Generate from the profile, as the statistics guide is |
-| G16 | The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text | Generate from the profile and the recorded configuration |
+| G16 | The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text in the shared template. The published eras' definitions replace Appendix D with the rules table and two flowcharts, which aren't produced | Generate from the profile and the recorded configuration; produce the flowcharts |
 | G17 | The report's Appendix E describes liver, kidney and heart whatever was weighed | Can describe organs the study didn't weigh, and miss ones it did | Select descriptions by the organs in the data |
 | G18 | The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10) | Fixed in code, not the profile | Read them from the profile, as the acceptance criteria are |
 | G19 | BMD precision (1 or 3 decimals) is inferred from whether the `.bm2` has gene-level analyses | A data heuristic standing in for a method setting | A profile setting |
-| G20 | The transcriptomics Methods guides name TempO-Seq and the S1500+ platform | Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip | Build the guides from the detected assay |
+| G20 | The transcriptomics Methods subsection headings name sequencing ("RNA Isolation, Library Creation, and Sequencing", "Sequencing Quality Checks …") | The guides now follow the assay the chip names (TempO-Seq, Affymetrix), but the headings are fixed in `SUBSECTION_SKELETON`, so an array study's Methods heads its sections as sequencing | Title the subsections from the detected assay |
 | G21 | The set of Methods subsections, and when each applies, is fixed in code (`narrative/methods_models.SUBSECTION_SKELETON`) | A template node can place or retitle a subsection but not add one the LLM writes | Derive the list from the template's `methods_key` nodes |
 | G22 | Peer Review says the design and methods are identical to those reviewed | Not checked | Compare the pinned profile with the reviewed one |
-| G23 | The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type | Both are built from the design facts but drop these parts | Build both from the cover title, with the sexes in the data |
+| G23 | Peer Review names the study by its short title, without the CASRN, strain designation and study type the published books print | Built from the design facts, which drop these parts | Build it from the cover title |
 
 **Structure gaps**
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G24 | NIEHS-13's "most potent GO per tissue" table, the report's Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
-| G25 | Genomics organs are ordered liver, kidney, then alphabetical | NIEHS-10's order, fixed in code; another study's published order may differ | Order by the template or the study overlay |
+| G24 | The 2026 books' "most potent GO per tissue" table (NIEHS-13 Table 12) and gene-set definitions (Appendix E) | Not produced; the 2026 era definition places them | Build the tables from the genomics results |
+
+**Closed since 2026-10-05**
+
+| # | Gap | How it was closed |
+|---|---|---|
+| G8 | Multi-species studies (NIEHS-12/13: rats and mice) | A report over several studies (ADR-0029 §9, 2026-10-11): each species' study is its own session, run through the unchanged pipeline, and the report session composes them (`--studies`) |
+| G23 (title) | The title didn't name the sex of a one-sex study | The title names it from the design facts' sexes (2026-10-11); the Peer Review part stays open |
+| G24 (order) | NIEHS-13's appendix order | The 2026 era definition orders the appendices as the books do (ADR-0029) |
+| G25 | Genomics organs ordered liver, kidney, then alphabetical, fixed in code | A definition's `tissue_order` (the shared template: liver, kidney; the 2026 era: alphabetical) |
 
 ---
 
@@ -1613,8 +1687,9 @@ These are fixed in code; Appendix B.4 tracks each one:
 
 - the boilerplate text: Foreword, Peer Review, Acknowledgments;
 - the set of Methods subsections and their LLM instructions;
-- table captions and the wording of the prose built from the data;
+- the wording of the prose built from the data (table captions are YAML: a
+  table's `caption`, a genomics section's `caption_suffix`, with `${subject}`
+  and `${treatment}`);
 - endpoint decimals;
 - the "most sensitive" lower limit and anomaly ratio;
-- BMD precision;
-- the genomics organ order.
+- BMD precision.

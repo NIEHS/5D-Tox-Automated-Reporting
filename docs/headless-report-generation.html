@@ -337,9 +337,11 @@ WorkflowEngine("DTXSID50469320").state().to_dict()</pre></div>
     --bundle assets/cebs/_bookshelf/NIEHS-13</pre></div>
 <p><code>--bundle</code> also converts the workbooks of the report's Bookshelf bundle. NIEHS-12 and -13 publish their blood and tissue concentrations only there, as the lab's results workbook. The sheet for the package's species is the one converted.</p>
 <p><code>--mg-per-kg-from PROJECT.json</code> handles RR-8 and NIEHS-02 … 06, which record apical doses in mmol/kg. It converts each dose to the genomic project's mg/kg level, provided the levels share one ratio (the molecular weight). The converter exits non-zero if any workbook fails.</p>
-<p><b>Every downloaded study at once.</b> <code>tooling/build_published_reports.py</code> builds a report for each published package (RR-8, NIEHS-02 … 10, 12, 13) into <code>sessions/&lt;DTXSID&gt;</code> and <code>output/&lt;DTXSID&gt;</code>, so each one is on the Bookshelf. It uses the design, strain designation, genomic tissue/sex and method profile the published report states. NIEHS-12 and 13 report a rat study and a mouse study: each study is built in its own session (<code>&lt;DTXSID&gt;_rat</code>, <code>&lt;DTXSID&gt;_mouse</code>), and the report session lists them (<code>--studies</code>, below). Each build starts from a fresh session: the old one moves to <code>output/_session_backups/</code> and a Background written on the host is kept. <code>tooling/report_qc.py</code> then checks the rendered deliverables, including against the published tables and the published book&rsquo;s structure, and writes <code>output/QC/qc-report.md</code>. <code>tooling/bits_structure.py</code> prints the structure diff alone (<code>-</code> published only, <code>+</code> ours only), and <code>tooling/bookshelf_preview.py</code> renders a published bundle through our Bookshelf facsimile for a side-by-side read:</p>
+<p><b>Every downloaded study at once.</b> <code>tooling/build_published_reports.py</code> builds a report for each published package (RR-8, NIEHS-02 … 10, 12, 13) into <code>sessions/&lt;DTXSID&gt;</code> and <code>output/&lt;DTXSID&gt;</code>, so each one is on the Bookshelf. It uses the design, strain designation, genomic tissue/sex and method profile the published report states. NIEHS-12 and 13 report a rat study and a mouse study: each study is built in its own session (<code>&lt;DTXSID&gt;_rat</code>, <code>&lt;DTXSID&gt;_mouse</code>), and the report session lists them (<code>--studies</code>, below). Each build starts from a fresh session: the old one moves to <code>output/_session_backups/</code> and a Background written on the host is kept. <code>tooling/report_qc.py</code> then checks the rendered deliverables, including against the published tables and the published book&rsquo;s structure, and writes <code>output/QC/qc-report.md</code>. <code>tooling/bits_structure.py</code> prints the structure diff alone (<code>-</code> published only, <code>+</code> ours only), and <code>tooling/bookshelf_preview.py</code> renders a published bundle through our Bookshelf facsimile.</p>
+<p>To read a report against the published one by eye, <code>tooling/report_compare.py</code> aligns the published book and ours section by section and block by block (<code>rendering/bits_compare.py</code>). It writes one page per report to <code>output/QC/compare/</code>: side by side or unified, switched on the page, with changed words marked, tables compared cell for cell (columns paired by heading, rows by group and label, however each book lays them out) and the sections that differ most listed first. Next to each page are a conventional unified diff of the two books' flat text (<code>&lt;REPORT&gt;.diff</code>, one hunk run per section, for any diff tool) and the two flat texts it is taken over. <code>--fresh</code> renders ours from the session instead of reading <code>output/</code>. The running server serves the same comparison at <code>/Compare/&lt;dtxsid&gt;</code>, rendered from the session, and the Bookshelf facsimile links to it:</p>
 <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
 python -m tooling.report_qc                             # every report on the shelf
+python -m tooling.report_compare                        # every report vs its published book
 python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
 python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html</pre></div>
 
@@ -479,7 +481,10 @@ store.save_section(ID, "background", {
   Its standalone CLI (<code>python -m rendering.latex_export --session --dtxsid ID --out bundle.zip</code>) does not apply a
   saved view's document tree; <code>generate_report --surfaces latex</code> does.
 </p>
-<p>For an interactive run, <code>notebooks/workflow_walkthrough.ipynb</code> runs steps 2–7 one cell each and prints the derived phase after each.</p>
+<p><b>Interactive alternative.</b> <code>notebooks/workflow_walkthrough.ipynb</code> is the whole workflow one step per cell, from import to rendered deliverables, then a comparison with the published book. Its cells call the step functions of <code>tooling/generate_report.py</code> (<code>import_files</code>, <code>validate</code>, <code>integrate</code>, <code>apply_design</code>, <code>method_profile</code>, <code>process_async</code>, <code>summary</code>, <code>render</code>, …), so it can't drift from the command line. Each cell that changes the session prints the derived phase. By default it rebuilds NIEHS-10 in a scratch session, <code>DTXSID50469320_nb</code>, from the reference session's input files and the facts the published report states (<code>build_published_reports.STUDIES</code>); set <code>REPORT</code> for another single-study report. The scratch session has no document definition of its own, so it renders from the shared template. Edit the builder, <code>notebooks/_build_workflow_notebook.py</code>, not the <code>.ipynb</code>. Open it with <code>.venv/bin/python -m jupyterlab</code> (the venv's <code>jupyter</code> launcher scripts carry a stale path), or run it headless:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>.venv/bin/python -m nbconvert --to notebook --execute --inplace \
+    --ExecutePreprocessor.timeout=3600 notebooks/workflow_walkthrough.ipynb</pre></div>
+<p>From a notebook or any running event loop, call <code>process_async</code> (awaitable) rather than <code>process</code>, which starts its own loop. The helpers that take a stated input (<code>confirm_metadata</code>, <code>apply_design</code>, <code>apply_experiment_metadata</code>, <code>apply_front_matter</code>) accept the object itself as well as a JSON file.</p>
 
 <!-- ============================================================ -->
 <h2 id="http"><span class="num">5</span>Route B — HTTP API</h2>
@@ -699,14 +704,26 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
 
 <!-- ============================================================ -->
 <h2 id="gaps"><span class="num">10</span>Known gaps</h2>
-<p>As of 2026-10-05. <a href="#appendix-b">Appendix B.4</a> lists every place the report still lacks data, with what would close it.</p>
+<p>As of 2026-10-12. <a href="#appendix-b">Appendix B.4</a> lists every place the report still lacks data, with what would close it.</p>
+<p><b>What only the browser (or its HTTP API) does.</b> Producing a report needs none of these, but reviewing and revising one does:</p>
 <ul>
-  <li><b>About This Report</b> (authors, contributors) is human-set front matter (<code>front_matter.json</code>); nothing in the data supplies it.</li>
-  <li><b>Background</b> needs ATSDR and IRIS. Where either is unreachable (the sandbox firewall), <code>--background</code> saves nothing and says so, rather than writing a Background that reports the unreachable sources as data gaps.</li>
-  <li><b>The report&rsquo;s Appendix C.2 (empirical FDR)</b> needs the study&rsquo;s synthetic-null analysis, which is not ingested; its figure stays pending.</li>
-  <li><b>Materials &amp; Methods</b> in the deliverable comes from Process (<code>_cache_methods_*</code>). The browser's separate <i>Generate M&amp;M</i> button saves <code>methods.json</code>, which the renderer does not read. Headless runs get M&amp;M from Process automatically.</li>
-  <li><b>LaTeX over HTTP.</b> <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</li>
-  <li><b>Experiment metadata review</b> (<code>GET</code>/<code>POST /api/experiment-metadata/{id}</code>: species, sex and organ per experiment, written back into <code>integrated.json</code>) is not a step in either script. Call it after integrate if experiment descriptions need correcting.</li>
+  <li><b>Section review.</b> Approving or reopening a section has no command-line flag. From Python call <code>accept_section_step</code> / <code>release_section_step</code> (§7); over HTTP, <code>POST /api/session/approve</code> / <code>unapprove</code>. Editing a section's text, its version history and restore (<code>/api/session/save-section</code>, <code>…/history/…</code>, <code>…/restore</code>), and the genomics narrative override are HTTP and browser only.</li>
+  <li><b>The prompt workshop</b> (the Summary's versioned prompt template, model comparison, critique threads: <code>/api/prompts/…</code>) and the <b>session chat</b> (ADR-0022) have no command-line form.</li>
+  <li><b>Document structure.</b> The command line renders a saved view (<code>--view</code>) but can't edit the structure; the Configure screen and <code>/api/document-structure/…</code> do. A session's own <code>document.yaml</code> can't extend a study definition, which is why the notebook's scratch session renders from the shared template.</li>
+</ul>
+<p><b>What only the command line does.</b> LaTeX over HTTP: <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</p>
+<p><b>Workflow</b></p>
+<ul>
+  <li><b>Import isn't a workflow step.</b> There is no <code>import_step</code>: Route A and the notebook copy files into <code>sessions/&lt;id&gt;/files/</code> themselves (<code>generate_report.import_files</code>), and Route B uploads them. This is the last piece of the import → process arc not in <code>workflow.steps</code> (ADR-0014).</li>
+  <li><b>Experiment metadata</b> (species, sex and organ per experiment) can be stated in Route A (<code>--experiment-metadata</code>) and the notebook. Route B's script has no step for it: call <code>GET</code>/<code>POST /api/experiment-metadata/{id}</code> after integrate.</li>
+  <li><b>Materials &amp; Methods</b> in the deliverable comes from Process (<code>_cache_methods_*</code>). The browser's separate <i>Generate M&amp;M</i> button saves <code>methods.json</code>, which the renderer doesn't read.</li>
+</ul>
+<p><b>Content</b></p>
+<ul>
+  <li><b>Front matter</b>: the Authors and Contributors parts and the publication details are human-set (<code>--front-matter</code>, the Configure screen). Nothing in the data supplies them.</li>
+  <li><b>Background</b> needs ATSDR and IRIS. Where either can't be reached, <code>--background</code> saves nothing and says so, rather than writing a Background that reports the unreachable sources as data gaps. IRIS has been reachable from the sandbox since 2026-10-09; ATSDR comes and goes.</li>
+  <li><b>The report&rsquo;s Appendix C.2 (empirical FDR)</b> needs the study&rsquo;s synthetic-null analysis, which isn't ingested; its sections stand with their content pending.</li>
+  <li><b>The 2021 profile&rsquo;s apical engine (BMDS 2.7)</b> is built (<code>pipeline/bmds27</code>, ADR-0030) but certifies itself before use. Under Wine with Wine's own <code>msvcrt</code> it gives NTP's recommended model and BMD on 158 of 173 datasets, and 12 differ materially, so it stays off and the ToxicR substitute runs, listed as a deviation. The chosen route to an exact match, Microsoft's 32-bit <code>msvcrt.dll</code> supplied as <code>BMDS27_MSVCRT</code>, is still to be verified.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -830,7 +847,7 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
 </ul>
 <!-- ============================================================ -->
 <h2 id="appendix-b"><span class="num">B</span>What in the report comes from the data</h2>
-<p>This appendix sets out everything in a report that is driven by the data: the rules (B.1), how each fact is worked out from the files (B.2), where each part of the report comes from (B.3), and where it still falls short (B.4). It holds as of 2026-10-07.</p>
+<p>This appendix sets out everything in a report that is driven by the data: the rules (B.1), how each fact is worked out from the files (B.2), where each part of the report comes from (B.3), and where it still falls short (B.4). It holds as of 2026-10-07; the gap analysis (B.4) as of 2026-10-12.</p>
 <h3>B.1 The rules</h3>
 <ul>
   <li><b>The integrated dataset is the source of truth.</b> Every number and study fact in the report is read from <code>integrated.json</code> (the BMDExpress project that Integrate builds) and its sidecars, the per-animal files that keep what the pivot drops: cohort (Core or Biosample), observation day, terminal flag and units. Nothing reads the raw <code>.bm2</code>, <code>.txt</code> or <code>.xlsx</code> uploads directly.</li>
@@ -846,7 +863,7 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
   <thead><tr><th>Label</th><th>File</th><th>What it sets</th></tr></thead>
   <tbody>
     <tr><td class="wrap"><code>template.yaml</code></td><td><code>templates/niehs-5day-report.yaml</code>, the report type</td><td>Sections, their order and headings, the Methods subsections, which data each section shows, the appendix text files it names, page breaks (<code>styles</code>), and charts (<code>charts</code>, <code>chart_style</code>, <code>chart_types</code>)</td></tr>
-    <tr><td class="wrap"><code>deposit.yaml</code></td><td><code>templates/studies/&lt;id&gt;/deposit.yaml</code> (optional)</td><td>The study's own wording for deposited files (<code>captions:</code>), a file's kind where its name breaks the depositors' convention (<code>kinds:</code>), and the deposit's DOI (<code>doi:</code>), which opens the Supplemental Data appendix ("The following supplemental files are available at https://doi.org/…")</td></tr>
+    <tr><td class="wrap"><code>deposit.yaml</code></td><td><code>templates/studies/&lt;id&gt;/deposit.yaml</code> (optional)</td><td>The study's own wording for deposited files (<code>captions:</code>) a file's kind where its name breaks the depositors' convention (<code>kinds:</code>), and the deposit's DOI (<code>doi:</code>), which opens the Supplemental Data appendix ("The following supplemental files are available at https://doi.org/…")</td></tr>
     <tr><td class="wrap"><code>document.yaml</code></td><td>A published study's definition, <code>templates/studies/&lt;id&gt;/document.yaml</code>, extending an era (<code>templates/eras/&lt;era&gt;.yaml</code>) that extends the template (ADR-0029)</td><td>What that report's structure does differently: <code>changes</code> (set / remove / insert / move nodes), <code>packaging</code> (chunked or single-file), <code>object_position</code>, <code>book_meta</code> (series, ISSN, publisher), <code>tissue_order</code> (the genomic tissues named first, the rest alphabetically). A title or caption may name the study's chemical (<code>${chemical_name}</code>) and its animals and treatment (<code>${subject} ${treatment}</code>: "Female Rats and Mice Exposed to … for Five Days"; a per-study copy names its own study); a genomics section's <code>caption_suffix</code> ends each of its tables' captions so, naming the animals that table has rows for. A section may <code>repeat:</code> per deposit species, per study of a report over several (<code>${species}</code>) or per genomic tissue (<code>${organ}</code>); a <code>first_copy</code> node in it stays in the first copy only, showing the whole report's data (a table the studies share, under the first study's heading)</td></tr>
     <tr><td class="wrap"><code>view.yaml</code></td><td>A study overlay, <code>templates/studies/&lt;id&gt;/view.yaml</code>, or a saved view, <code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code></td><td>Selections (<code>filters</code>: organs, sex, assays, genes, gene sets); a saved view can also carry its own structure; an overlay's <code>methods:</code> block overrides profile settings for that study</td></tr>
     <tr><td class="wrap"><code>profile.yaml</code></td><td>The pinned method profile, <code>profiles/&lt;name&gt;.yaml</code></td><td>Statistical tests and thresholds, BMD engine, eligibility, BMR fallback and acceptance, internal-dose rules, GO ranking and display, the settings expected in a <code>.bm2</code></td></tr>
@@ -1022,13 +1039,12 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
 <div class="tablewrap"><table>
   <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
   <tbody>
-    <tr><td class="wrap">G7</td><td>Experiment metadata (organ, sex, species)</td><td>Inferred from experiment names (LLM) unless approved; the source-of-truth <code>.xlsx</code> is primary only for classification</td><td>Read the workbook's Key and Data sheets first (ADR-0017/0019)</td></tr>
-    <tr><td class="wrap">G8</td><td>Multi-species studies (NIEHS-13: rats and mice)</td><td>One gene-expression <code>.bm2</code> per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only</td><td>Key genomics by species and keep every expression project</td></tr>
-    <tr><td class="wrap">G9</td><td>Animal report counts NIEHS-13's biosample animals as Core</td><td>The animal report's Core count is too high; the tables use the right cohort</td><td>Use the cohort rule the tables use</td></tr>
+    <tr><td class="wrap">G7</td><td>Experiment metadata (organ, sex, species)</td><td>Inferred from experiment names (LLM) unless approved or stated (<code>--experiment-metadata</code>); the source-of-truth <code>.xlsx</code> is primary only for classification</td><td>Read the workbook's Key and Data sheets first (ADR-0017/0019)</td></tr>
+    <tr><td class="wrap">G9</td><td>The animal report counts biosample animals as Core</td><td>NIEHS-12/13's rat and mouse studies show biosampling 0 (e.g. NIEHS-13 rats: 252 core); the tables use the right cohort</td><td>Use the cohort rule the tables use</td></tr>
     <tr><td class="wrap">G10</td><td>The UI's Process step sends <code>mg/kg</code> when no unit is set, and a few render helpers (the report's Appendix B dose header, the genomics table labels) fall back to <code>mg/kg</code> when no unit is passed</td><td>Hides the recorded unit and the logged fallback</td><td>Send nothing and let the server resolve it; pass the resolved unit everywhere</td></tr>
     <tr><td class="wrap">G11</td><td>A text or CSV file's platform is read from its file name</td><td>A file not named to NTP conventions is unassigned or misclassified until overridden</td><td>Classify by content (endpoint names), as <code>.bm2</code> files are</td></tr>
     <tr><td class="wrap">G12</td><td>Apical outlier exclusion (NIEHS staff judgement)</td><td>Not represented; the profile says <code>outliers: null</code></td><td>A per-study exclusion list in the overlay</td></tr>
-    <tr><td class="wrap">G13</td><td>NIEHS-10's apical engine (BMDS 2.7) and <code>all_endpoints</code></td><td>Listed as profile deviations; the substitute runs</td><td>Implement, or accept as recorded</td></tr>
+    <tr><td class="wrap">G13</td><td>The 2021 profile's apical engine (BMDS 2.7) and its <code>all_endpoints</code> eligibility</td><td>The engine is built (<code>pipeline/bmds27</code>, ADR-0030) but its self-check keeps it off: under Wine's own <code>msvcrt</code> it gives NTP's result on 158 of 173 datasets. The ToxicR substitute runs, listed as a deviation. NTP's own runs show eligibility was trend OR pairwise, not <code>all_endpoints</code></td><td>Verify Microsoft's <code>msvcrt.dll</code> under Wine (<code>BMDS27_MSVCRT</code>); a new profile for the eligibility rule</td></tr>
   </tbody>
 </table></div>
 <p><b>Text gaps</b></p>
@@ -1037,22 +1053,31 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
   <tbody>
     <tr><td class="wrap">G14</td><td>Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text</td><td>The LLM writes plausible, older-era protocol text</td><td>Move the guides into the profile, or build them from data</td></tr>
     <tr><td class="wrap">G15</td><td>The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes"</td><td>Can disagree with the profile's GO ranking</td><td>Generate from the profile, as the statistics guide is</td></tr>
-    <tr><td class="wrap">G16</td><td>The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose</td><td>Fixed text</td><td>Generate from the profile and the recorded configuration</td></tr>
+    <tr><td class="wrap">G16</td><td>The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose</td><td>Fixed text in the shared template. The published eras' definitions replace Appendix D with the rules table and two flowcharts, which aren't produced</td><td>Generate from the profile and the recorded configuration; produce the flowcharts</td></tr>
     <tr><td class="wrap">G17</td><td>The report's Appendix E describes liver, kidney and heart whatever was weighed</td><td>Can describe organs the study didn't weigh, and miss ones it did</td><td>Select descriptions by the organs in the data</td></tr>
     <tr><td class="wrap">G18</td><td>The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10)</td><td>Fixed in code, not the profile</td><td>Read them from the profile, as the acceptance criteria are</td></tr>
     <tr><td class="wrap">G19</td><td>BMD precision (1 or 3 decimals) is inferred from whether the <code>.bm2</code> has gene-level analyses</td><td>A data heuristic standing in for a method setting</td><td>A profile setting</td></tr>
-    <tr><td class="wrap">G20</td><td>The transcriptomics Methods guides name TempO-Seq and the S1500+ platform</td><td>Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip</td><td>Build the guides from the detected assay</td></tr>
+    <tr><td class="wrap">G20</td><td>The transcriptomics Methods subsection headings name sequencing ("RNA Isolation, Library Creation, and Sequencing", "Sequencing Quality Checks …")</td><td>The guides now follow the assay the chip names (TempO-Seq, Affymetrix), but the headings are fixed in <code>SUBSECTION_SKELETON</code>, so an array study's Methods heads its sections as sequencing</td><td>Title the subsections from the detected assay</td></tr>
     <tr><td class="wrap">G21</td><td>The set of Methods subsections, and when each applies, is fixed in code (<code>narrative/methods_models.SUBSECTION_SKELETON</code>)</td><td>A template node can place or retitle a subsection but not add one the LLM writes</td><td>Derive the list from the template's <code>methods_key</code> nodes</td></tr>
     <tr><td class="wrap">G22</td><td>Peer Review says the design and methods are identical to those reviewed</td><td>Not checked</td><td>Compare the pinned profile with the reviewed one</td></tr>
-    <tr><td class="wrap">G23</td><td>The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type</td><td>Both are built from the design facts but drop these parts</td><td>Build both from the cover title, with the sexes in the data</td></tr>
+    <tr><td class="wrap">G23</td><td>Peer Review names the study by its short title, without the CASRN, strain designation and study type the published books print</td><td>Built from the design facts, which drop these parts</td><td>Build it from the cover title</td></tr>
   </tbody>
 </table></div>
 <p><b>Structure gaps</b></p>
 <div class="tablewrap"><table>
   <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
   <tbody>
-    <tr><td class="wrap">G24</td><td>NIEHS-13's "most potent GO per tissue" table, the report's Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
-    <tr><td class="wrap">G25</td><td>Genomics organs are ordered liver, kidney, then alphabetical</td><td>NIEHS-10's order, fixed in code; another study's published order may differ</td><td>Order by the template or the study overlay</td></tr>
+    <tr><td class="wrap">G24</td><td>The 2026 books' "most potent GO per tissue" table (NIEHS-13 Table 12) and gene-set definitions (Appendix E)</td><td>Not produced; the 2026 era definition places them</td><td>Build the tables from the genomics results</td></tr>
+  </tbody>
+</table></div>
+<p><b>Closed since 2026-10-05</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>How it was closed</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G8</td><td>Multi-species studies (NIEHS-12/13: rats and mice)</td><td>A report over several studies (ADR-0029 §9, 2026-10-11): each species' study is its own session, run through the unchanged pipeline, and the report session composes them (<code>--studies</code>)</td></tr>
+    <tr><td class="wrap">G23 (title)</td><td>The title didn't name the sex of a one-sex study</td><td>The title names it from the design facts' sexes (2026-10-11); the Peer Review part stays open</td></tr>
+    <tr><td class="wrap">G24 (order)</td><td>NIEHS-13's appendix order</td><td>The 2026 era definition orders the appendices as the books do (ADR-0029)</td></tr>
+    <tr><td class="wrap">G25</td><td>Genomics organs ordered liver, kidney, then alphabetical, fixed in code</td><td>A definition's <code>tissue_order</code> (the shared template: liver, kidney; the 2026 era: alphabetical)</td></tr>
   </tbody>
 </table></div>
 <!-- ============================================================ -->
@@ -1272,11 +1297,10 @@ methods:                       # study overlay only: method overrides (C.4)
 <ul>
   <li>the boilerplate text: Foreword, Peer Review, Acknowledgments;</li>
   <li>the set of Methods subsections and their LLM instructions;</li>
-  <li>table captions and the wording of the prose built from the data;</li>
+  <li>the wording of the prose built from the data (table captions are YAML: a table's <code>caption</code>, a genomics section's <code>caption_suffix</code>, with <code>${subject}</code> and <code>${treatment}</code>);</li>
   <li>endpoint decimals;</li>
   <li>the "most sensitive" lower limit and anomaly ratio;</li>
-  <li>BMD precision;</li>
-  <li>the genomics organ order.</li>
+  <li>BMD precision.</li>
 </ul>
 
 <footer>

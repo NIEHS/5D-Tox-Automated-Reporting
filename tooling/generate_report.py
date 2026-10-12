@@ -212,16 +212,25 @@ def validate(dtxsid: str, store) -> dict:
     return report
 
 
-def confirm_metadata(dtxsid: str, corrections_path: Path | None, store) -> None:
-    """Apply (platform, data_type) overrides. The JSON file is keyed by FILENAME
-    (file ids are minted per scan, so they are not stable across runs)."""
+def _stated(value: Path | dict | None):
+    """A stated input given as a JSON file (the command line) or as the object
+    itself (a notebook or script)."""
+    if value is None or isinstance(value, dict):
+        return value
+    return json.loads(Path(value).read_text())
+
+
+def confirm_metadata(dtxsid: str, corrections_path: Path | dict | None, store) -> None:
+    """Apply (platform, data_type) overrides, keyed by FILENAME (file ids are
+    minted per scan, so they are not stable across runs): a JSON file or the
+    {filename: {platform, data_type}} object itself."""
     from workflow.steps import confirm_metadata_step
 
     fps = store.get_fingerprints(dtxsid)
     by_name = {_fp(fp, "filename"): fid for fid, fp in fps.items()}
     corrections: dict = {}
     if corrections_path:
-        for fname, fix in json.loads(corrections_path.read_text()).items():
+        for fname, fix in _stated(corrections_path).items():
             if fname not in by_name:
                 raise SystemExit(f"--metadata names an unknown file: {fname!r}")
             corrections[by_name[fname]] = fix
@@ -231,17 +240,18 @@ def confirm_metadata(dtxsid: str, corrections_path: Path | None, store) -> None:
     _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
 
 
-def apply_design(dtxsid: str, design_path: Path, store) -> None:
+def apply_design(dtxsid: str, design_path: Path | dict, store) -> None:
     """Record study-design facts the data does not carry (route, vehicle,
     strain, …): kept in the session's study_design.json, which every later
     integration re-applies, and put on every experiment now.  Values must be
-    from the controlled vocabulary; nothing is written otherwise."""
+    from the controlled vocabulary; nothing is written otherwise.  A JSON file
+    or the object itself."""
     from bmdx_pipe import VOCABULARIES
     from common.clock import now_iso
     from pipeline.study_design import DESIGN_FILE, design_field_errors
     from workflow.steps import reapply_study_design
 
-    fields = json.loads(design_path.read_text())
+    fields = _stated(design_path)
     errors = design_field_errors(fields, VOCABULARIES)
     if errors:
         raise SystemExit("--design: " + "; ".join(errors))
@@ -252,17 +262,18 @@ def apply_design(dtxsid: str, design_path: Path, store) -> None:
     _log(f"  study design recorded on {count} experiment(s): {fields}")
 
 
-def apply_experiment_metadata(dtxsid: str, path: Path) -> None:
+def apply_experiment_metadata(dtxsid: str, path: Path | dict) -> None:
     """Record stated experiment metadata ({experiment name: {organ, sex, …}})
     the data does not carry — e.g. the tissue of a project whose experiment is
     named "EDHP mg_kg".  Laid over each named experiment's description and kept
     as the approval (metadata_approved.json), which every later integration
-    re-applies — the same record the browser's approval writes."""
+    re-applies — the same record the browser's approval writes.  A JSON file
+    or the object itself."""
     from bmdx_pipe import VOCABULARIES
     from pipeline.integrated_io import load_integrated
     from pipeline.metadata_approval import approve_experiment_metadata
 
-    given = json.loads(path.read_text())
+    given = _stated(path)
     if not isinstance(given, dict) or not all(isinstance(v, dict) for v in given.values()):
         raise SystemExit("--experiment-metadata: expected {experiment name: {field: value}}")
     names = {e.get("name") for e in (load_integrated(dtxsid) or {}).get("doseResponseExperiments") or []}
@@ -278,13 +289,14 @@ def apply_experiment_metadata(dtxsid: str, path: Path) -> None:
     _log(f"  experiment metadata recorded on {result['updated']} experiment(s): {given}")
 
 
-def apply_front_matter(dtxsid: str, path: Path, store) -> None:
+def apply_front_matter(dtxsid: str, path: Path | dict, store) -> None:
     """Merge human-set front matter (authors, contributors, publication details,
     the title's strain designation) into the session's front_matter.json, as the
-    Configure screen saves it; keys the file gives replace the saved ones."""
+    Configure screen saves it; keys the file gives replace the saved ones.  A
+    JSON file or the object itself."""
     from rendering.front_matter import clean_front_matter
 
-    given = json.loads(path.read_text())
+    given = _stated(path)
     if not isinstance(given, dict):
         raise SystemExit("--front-matter: the file must be a JSON object")
     saved = store.read_json(dtxsid, "front_matter.json")
@@ -349,10 +361,17 @@ def animal_report(dtxsid: str, store) -> None:
          f"(core {ar.get('core_count')} / biosampling {ar.get('biosampling_count')})")
 
 
-def process(dtxsid: str, params: dict, store) -> None:
+def process(dtxsid: str, params: dict, store) -> dict:
+    """Process, then materialize the result sections; returns the payload."""
+    return asyncio.run(process_async(dtxsid, params, store))
+
+
+async def process_async(dtxsid: str, params: dict, store) -> dict:
+    """`process` for a caller already inside an event loop (a notebook cell
+    awaits it: asyncio.run cannot start a loop there)."""
     from workflow.steps import materialize_result_sections, process_step
 
-    payload = asyncio.run(process_step(dtxsid, params, store))
+    payload = await process_step(dtxsid, params, store)
     _log(f"  {len(payload.get('sections') or [])} apical section(s), "
          f"{len(payload.get('genomics_sections') or [])} genomics section(s), "
          f"methods={'yes' if payload.get('methods') else 'no'}")
@@ -365,6 +384,7 @@ def process(dtxsid: str, params: dict, store) -> None:
                  "(record the real values with --design)")
     mat = materialize_result_sections(dtxsid, store)
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
+    return payload
 
 
 def summary(dtxsid: str, store) -> None:
