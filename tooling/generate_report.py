@@ -650,6 +650,13 @@ def main(argv: list[str] | None = None) -> int:
         manifest = record_deposit(dtxsid, deposit, tuple(args.deposit_exclude))
         _log(f"deposit: {len(manifest['files'])} file(s) from {deposit}"
              + (f", species {[s['key'] for s in manifest['species']]}" if manifest["species"] else ""))
+        # The deposit's synthetic-null analyses give the eFDR (genomics.efdr).
+        from genomics.efdr import ZIP_PATTERN, record_efdr
+        nulls = sorted(deposit.glob(ZIP_PATTERN))
+        if nulls:
+            efdr = record_efdr(dtxsid, nulls)
+            _log(f"eFDR: {len(efdr['tissues'])} species-tissue(s) from {len(nulls)} "
+                 f"synthetic-null analysis file(s)")
 
     try:
         if not args.render_only:

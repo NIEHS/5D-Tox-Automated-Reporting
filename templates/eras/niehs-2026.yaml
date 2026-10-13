@@ -218,6 +218,20 @@ changes:
   - move: appendix-a-body
     into: appendix-a
   - remove: appendix-a-quantitation
+  # D.2 Empirical False Discovery Rate: the method and the results table, from
+  # the study's synthetic-null analysis (rendering.genomics_appendix) — no
+  # boxplots in these books.
+  - set: appendix-c-efdr-methods
+    type: narrative
+    data_key: efdr_methods
+  - remove: figure-c-efdr
+  - set: appendix-c-efdr-results
+    type: narrative
+    data_key: efdr_results
+  - insert:
+    - {id: table-c-efdr, type: data-table, title: Empirical False Discovery Results,
+       data_key: appendix_efdr_matrix}
+    into: appendix-c-efdr-results
   # C: each study's animals and their sequencing files, one table per study.
   - set: table-b-1
     title: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
@@ -231,10 +245,16 @@ changes:
       element: book-app
       book_part_type: appendix
       title: Gene Set and Gene Definitions
+      # Each tissue's top gene sets with their GO definitions, then each
+      # study's genes (NIEHS-13 Tables E-1 … E-5, E-6 and E-7).
       children:
-      - {id: table-gene-definitions, type: data-table,
-         title: Active Genes and Definitions within the Top 10 Gene Ontology Biological Process Gene Sets,
-         data_key: appendix_gene_definitions_matrix}
+      - {id: table-gene-set-definitions, type: data-table, repeat: genomic_organs,
+         title: "Active Genes and Definitions within Top 10 ${organ} Gene Ontology Biological Process Gene Sets",
+         data_key: appendix_gene_set_definitions}
+      - {id: table-gene-identifiers, type: data-table, repeat: study_species,
+         title: "Gene Identifiers and Definitions for ${subject} ${treatment}",
+         caption: "Gene Identifiers and Definitions for ${subject} ${treatment}",
+         data_key: appendix_gene_identifiers}
     after: appendix-c
   # G: Supplemental Data opens with the materials and methods and the
   # theoretical inhaled dose, lists each species' files in its own section

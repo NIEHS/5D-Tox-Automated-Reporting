@@ -1323,12 +1323,25 @@ def sample_counts_table(node: DocNode, data: dict) -> dict | None:
     key = node.data_key
     if not key:
         return None
-    built = data.get(key)
+    built = scoped_value(node, data.get(key))
     if not isinstance(built, dict):
         return None
     if not built.get("headers") and not built.get("rows"):
         return None
     return built
+
+
+def scoped_value(node: DocNode, value):
+    """A value a repeated node takes its own of: ``{"by_organ": {organ: …}}``
+    gives a tissue's copy (``scope_organ``) its tissue's, ``{"by_species":
+    {study: …}}`` a study's copy its study's ("" for a single study's).  Any
+    other value as given."""
+    if isinstance(value, dict):
+        if "by_organ" in value:
+            return value["by_organ"].get(node.scope_organ or "")
+        if "by_species" in value:
+            return value["by_species"].get(node.scope_species or "")
+    return value
 
 
 # ---------------------------------------------------------------------------

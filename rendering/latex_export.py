@@ -1063,6 +1063,11 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     # tables (a definition binds them, rendering.genomics_results).
     from rendering.genomics_results import attach_genomics_results
     attach_genomics_results(data, render_tree)
+    # The genomic appendices: eFDR (the study's synthetic-null analysis) and the
+    # gene set and gene definitions (rendering.genomics_appendix).
+    from genomics.efdr import load_efdr
+    from rendering.genomics_appendix import attach_genomics_appendix
+    attach_genomics_appendix(data, render_tree, load_efdr(dtxsid))
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

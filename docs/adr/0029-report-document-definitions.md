@@ -271,3 +271,43 @@ folder (`web_routes.supplemental_routes`; `BMDX_LOCAL_URL` overrides the
   replaced (`pipeline.deposit.load_deposit` / `deposit_address`). The
   package's file references are the files' own names.
 
+**The genomic appendices** (2026-10-13). The 2026 era's Appendix D.2 and E
+now have the books' shape, built from the data (`rendering.genomics_appendix`).
+
+- **D.2 Empirical False Discovery Rate.** The Methods is the books' paragraph
+  (`efdr_methods`). The Results is the summary sentences (`efdr_results`) and
+  the table "Empirical False Discovery Results" (`appendix_efdr_matrix`), in
+  place of the 2023 boxplots. The data is the study's synthetic-null analysis
+  (`genomics.efdr`, the session's `efdr.json`), which is recorded from the
+  deposit's `*_eFDR_Synthetic_Null_Analysis.zip` when `--deposit` names it.
+  - Gene eFDR is the share of the analysed genes that pass the gene
+    analysis's filters in each null experiment. The universe comes from the
+    Fisher tail, K/U.
+  - GO eFDR is the processes active by the profile's `go_display` criteria.
+    The GO universe is not in the export, so a null experiment with active
+    processes prints a pending cell.
+  - The Methods names whose control data were used only when the null
+    analyses' doses are the study's own.
+- **E Gene Set and Gene Definitions.**
+  - One table per tissue (`repeat: genomic_organs`) gives its top gene sets
+    with their GO term definitions, from `go-basic.obo` (`genomics.go_definitions`).
+    The file goes in `resources/go/go-basic.obo`, or the path in `BMDX_GO_OBO`.
+  - One table per study (`repeat: study_species`) gives the genes of its top
+    gene tables with their Entrez and probe ids.
+  - A repeated table takes its own matrix from a `by_organ` / `by_species`
+    mapping (`render_common.scoped_value`).
+  - The gene definitions (the books' human UniProt function) have no source
+    yet and print a placeholder.
+
+Comparison with the NIEHS-13 book:
+
+- The gene identifier tables list the book's genes exactly: 47 rat, 45 mouse.
+- 9 of 10 eFDR means match. Mouse liver is 0.04 against the book's 0.05.
+- The book's rat ranges cannot be right: each is below its own mean ("0.02",
+  "0–0.005"). They look like the maxima divided by the 20 experiments.
+- NIEHS-13 deposited NIEHS-12's synthetic-null analysis. The two zips are
+  identical, the null doses are 1,2-DCB's, and the NIEHS-13 Methods itself
+  says "1,2-dichlorobenzene". Two livers were run on yet another design.
+- Our criteria find 8 active GO processes in one rat heart null experiment,
+  all from one probe shared by eight RT1 genes. The book reports 0.
+

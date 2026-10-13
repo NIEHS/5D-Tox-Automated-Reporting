@@ -704,6 +704,9 @@ def marshal_export_data(
     data.setdefault(DATA_KEY, most_potent_gene_sets(data))
     from rendering.genomics_results import attach_genomics_results
     attach_genomics_results(data, active_tree)
+    from genomics.efdr import load_efdr
+    from rendering.genomics_appendix import attach_genomics_appendix
+    attach_genomics_appendix(data, active_tree, load_efdr(body.get("dtxsid")))
     name_report_in_peer_review(data)
     return data
 
