@@ -707,7 +707,11 @@ def _instantiate_node(
 def _load_raw(name: str):
     """Parse a template YAML file by name; return the raw deserialized value
     (a list for legacy scaffolds, or a mapping with a ``document:`` key for the
-    full config).  Raises FileNotFoundError if absent."""
+    full config).  Raises FileNotFoundError if absent.  ``@pinned/<id>`` is a
+    session's pinned definition (document_model.definition_pin)."""
+    from document_model.definition_pin import PINNED, load_snapshot
+    if name.startswith(PINNED):
+        return load_snapshot(name[len(PINNED):])
     path = TEMPLATES_DIR / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"no template named {name!r} at {path}")

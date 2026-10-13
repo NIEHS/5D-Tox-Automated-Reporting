@@ -216,9 +216,17 @@ def study_definition_name(dtxsid: str) -> str | None:
     return name if (_templates_dir() / f"{name}.yaml").exists() else None
 
 
-def definition_name(dtxsid: str) -> str:
-    """The definition a study renders from: its own, else DEFAULT_DEFINITION."""
+def current_definition_name(dtxsid: str) -> str:
+    """The definition the files give a study: its own, else DEFAULT_DEFINITION."""
     return study_definition_name(dtxsid) or DEFAULT_DEFINITION
+
+
+def definition_name(dtxsid: str) -> str:
+    """The definition a study renders from: its pinned snapshot when the
+    session FIXES its definition (document_model.definition_pin), else the
+    current one."""
+    from document_model.definition_pin import pinned_name
+    return pinned_name(dtxsid) or current_definition_name(dtxsid)
 
 
 def packaging_of(raw) -> str:

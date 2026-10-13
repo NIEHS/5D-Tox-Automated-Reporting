@@ -357,3 +357,29 @@ Still in code, as language rather than era wording:
 - the BMD and dose number formats;
 - the `*x*` / `BMD_L` inline markup;
 - the system placeholders.
+
+## 12. Amendment (2026-10-13): a session pins its definition
+
+Era files change as the tool learns the books. A finished report must not
+change with them. The user decided that definitions are pinned like method
+profiles (ADR-0027) (`document_model.definition_pin`):
+
+- **The pin.** `sessions/<id>/document_definition.json` holds the name and
+  content hash of the composed definition (every `extends` resolved).
+  `document_definition.yaml` holds the composed definition itself.
+- **TRACK** (the default) renders from the current files. The pin records
+  what the report rendered from. A change re-pins, and the previous pin and
+  snapshot are kept under `history/_document_definition/`. Process and
+  `generate_report` keep the pin current.
+- **FIXED** (`generate_report --document-definition fixed`) renders from the
+  snapshot. `definition_name` returns `@pinned/<id>`, and
+  `document_template._load_raw` reads the snapshot, so the tree, the series
+  facts and the phrasing all come from it. `drift` reports when the files
+  have moved on. An edited snapshot fails loudly. Re-pinning takes up a
+  revised definition.
+- **Outside the pin:** the content files a node names, and the renderers'
+  code. Rules that change in code are kept as named implementations that the
+  definition selects (docs/writing-rules-inventory.md).
+
+The published reproductions still TRACK, because they are still being
+refined toward the books. Each is fixed when it is final.

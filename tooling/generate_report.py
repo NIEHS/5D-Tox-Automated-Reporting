@@ -345,6 +345,18 @@ def integrate(dtxsid: str, identity: dict, store) -> None:
          f"{summary.get('bmd_result_count')} BMD results")
 
 
+def document_definition(dtxsid: str, mode: str | None) -> None:
+    """Pin the document definition in ``mode`` when given, then say which
+    definition the report renders from and whether the files moved on."""
+    from document_model.definition_pin import drift, ensure_pin, pin_definition
+
+    pin = pin_definition(dtxsid, mode, by="user") if mode else ensure_pin(dtxsid)
+    _log(f"  document definition: {pin['name']} {pin['hash']} ({pin['mode']}; pinned by "
+         f"{pin['pinned_by']}, {pin['pinned_at']})")
+    if (moved := drift(dtxsid)):
+        _log(f"  NOTE: {moved}")
+
+
 def method_profile(dtxsid: str, name: str | None) -> None:
     """Pin `name` when given (a re-pin is logged and recomputes), then say which
     method the study runs under and anything it cannot do as stated."""
@@ -568,6 +580,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "ADR-0027), or 'newest' to track the newest profile as profiles are "
                          "added.  Default: the study's pin; a study with none tracks the "
                          "newest.  A change of profile recomputes")
+    ap.add_argument("--document-definition", choices=("fixed", "track"),
+                    help="fix the report on its document definition as it is now (it then "
+                         "renders from that snapshot whatever the templates say later), or "
+                         "track the current definition (the default; ADR-0029 §12)")
     ap.add_argument("--bmd-stats", default=None,
                     help="comma list of BMD statistics for the GO tables, overriding the "
                          "method profile's GO ranking for this run")
@@ -687,6 +703,7 @@ def main(argv: list[str] | None = None) -> int:
                 with _Timer("experiment metadata"):
                     apply_experiment_metadata(dtxsid, args.experiment_metadata)
             method_profile(dtxsid, args.method_profile)
+            document_definition(dtxsid, args.document_definition)
             with _Timer("animal report"):
                 animal_report(dtxsid, store)
             if args.stop_after == "integrate":

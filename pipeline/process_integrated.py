@@ -1666,6 +1666,13 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     method = _resolve_request_method(dtxsid, body)
     for deviation in method.deviations:
         logger.warning("Method for %s: %s", dtxsid, deviation)
+    # The document definition likewise (ADR-0029 §12): a session tracking the
+    # current definition records it (a change, in its history); a fixed one
+    # renders from its snapshot and is told when the files moved on.
+    from document_model.definition_pin import drift, ensure_pin as ensure_definition_pin
+    ensure_definition_pin(dtxsid)
+    if (moved := drift(dtxsid)):
+        logger.warning("Document definition: %s", moved)
     bmd_stats = list(method.get("genomics.go_ranking"))
     bmd_stat = bmd_stats[0]  # primary stat for category lookup
     _go = method.get("genomics.go_display")

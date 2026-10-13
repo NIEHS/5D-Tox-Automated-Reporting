@@ -220,6 +220,7 @@ the same session finishes in seconds.
 | `--deposit DIR` | The study's data deposit: the supplemental files deposited with the report. Recorded as the session's `deposit.json` (each file's size, kind and species, read from its name); the Supplemental Data appendix lists them, one section per kind (and, in the 2026 books, per species). Its `*_eFDR_Synthetic_Null_Analysis.zip` files are also analysed for the empirical false discovery rate (`efdr.json`, Appendix D.2; `python -m genomics.efdr <id> <zip…>` does it alone). `--deposit-exclude GLOB…` leaves out files in `DIR` that are not deposited (`build_published_reports` passes the Bookshelf package less the book's own XML, figures, `TOC.pdf`, `license.txt`, `SOURCE.txt`) |
 | `--front-matter FILE.json` | Front matter, as the Configure screen saves it to `front_matter.json`: `authors`, `contributors`, `publication` (`report_number`, `doi`, `report_date`) and `strain_designation`, the supplier designation the title prints after the strain, e.g. `{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}`. Keys the file gives replace the saved ones |
 | `--method-profile NAME` | The analysis method profile (`profiles/<name>.yaml`, ADR-0027): test family per platform, thresholds, BMD acceptance, internal-dose rules, GO ranking. `NAME` fixes the study on that profile; `newest` makes it track the newest profile as profiles are added, which is also the default for a study with no pin. A change of profile archives the old pin and recomputes. The log prints the profile, anything it asks for that the tool does not implement (`NOTE`), and every setting a `.bm2` analysis records differently (`WARNING`, also a `method_mismatch` in the validation report) |
+| `--document-definition fixed\|track` | The report's document definition (ADR-0029 §12). `fixed` pins the definition as it is now: the report then renders from that snapshot (`sessions/<id>/document_definition.yaml`) whatever the templates say later, and the log notes when they have moved on. `track`, the default, renders from the current templates and records each change of definition in the session's history. Fix a finished report; run `fixed` again to take up a revised definition |
 | `--bmd-stats`, `--go-pct`, `--go-min-genes`, `--go-max-genes`, `--go-min-bmd` | GO gene-set table settings for this run, overriding the method profile's (ntp-5day-2025: `fifth_pct,median`, 5, 20, 500, 3). Omit them to use the profile |
 | `--reintegrate` | Run integration again even though `integrated.json` exists. This wipes the process caches, so processing starts from scratch. Without the flag, integration is skipped when `integrated.json` is already there |
 | `--background` | Also generate and save the Background section (LLM over ATSDR, IRIS and PubChem; needs network). `--model` picks the model |
@@ -1675,8 +1676,25 @@ A profile (`profiles/<name>.yaml`) states the whole analysis method.
 - **Text follows the profile.** Footnotes, the Methods statistics and BMD
   text, and the report's Appendix D-1 are generated from the resolved values.
 
-The shipped profiles are `ntp-5day-2025` (NIEHS-12/13, the reference
-NIEHS-13) and `ntp-5day-2021` (NIEHS-07 to -10, the reference NIEHS-10).
+The shipped profiles are `ntp-5day-2025.1` and `ntp-5day-2025` (NIEHS-12/13,
+the reference NIEHS-13; 2025.1 also states how the eFDR's synthetic null data
+were made, `genomics.efdr`) and `ntp-5day-2021` (NIEHS-07 to -10, the
+reference NIEHS-10). A section added to the schema after a profile was written
+is "to confirm" for that profile.
+
+The document definition is pinned the same way (ADR-0029 §12):
+`sessions/<id>/document_definition.json` records the composed definition's
+hash. A session that tracks (the default) renders from the current templates
+and records each change in its history. A fixed one renders from its snapshot,
+`document_definition.yaml` (`--document-definition fixed`).
+
+The words of the prose the report writes from its data are the definition's
+`phrasing:` block (ADR-0029 §11, `document_model.phrasing`). Each sentence is
+a template whose `{fields}` the rule fills. The block is checked against a
+closed schema and deep-merged through `extends`. `cited_as` on a node names
+what that prose cites (`supplemental-data`, `gene-set-summary-table`,
+`efdr-table`). The rules still in code are listed in
+`docs/writing-rules-inventory.md`.
 
 ### C.5 Style vocabularies
 
