@@ -67,6 +67,7 @@ def render_surface(
     surface: str = DEFAULT_SURFACE,
     section_filter: str | None = None,
     downloads: list[dict] | None = None,
+    shelf: str | None = None,
 ) -> bytes | str:
     """Render `data` to one output surface.
 
@@ -78,14 +79,15 @@ def render_surface(
 
     `downloads` (a list of {label, href}) is honored only by the `bookshelf`
     surface, which renders it as the page's right-rail Download panel; every other
-    surface ignores it.
+    surface ignores it.  So is `shelf`, the address of the list of reports the
+    page belongs to (the app's /Bookshelf), which the page links back to.
     """
     from document_model.document_tree import rendering_tree
     with rendering_tree(tree):          # cross-references number from the study's tree
-        return _render_surface(data, tree, surface, section_filter, downloads)
+        return _render_surface(data, tree, surface, section_filter, downloads, shelf)
 
 
-def _render_surface(data, tree, surface, section_filter, downloads):
+def _render_surface(data, tree, surface, section_filter, downloads, shelf=None):
     if surface == "docx":
         from rendering.docx_generator import generate_docx
         return generate_docx(data, tree)
@@ -100,8 +102,11 @@ def _render_surface(data, tree, surface, section_filter, downloads):
         from rendering.bookshelf_preview import render_book_xml, chart_images
         # Inline chart PNGs (base64 in the data) so the preview is self-contained;
         # the BITS <graphic> only carries a filename.
+        # A published report's own content (a companion) says so (published_from).
         return render_book_xml(
-            generate_bits(data, tree), images=chart_images(data), downloads=downloads
+            generate_bits(data, tree), images=chart_images(data), downloads=downloads,
+            published=data.get("published_from"),
+            generated_of=data.get("generated_of_published"), shelf=shelf,
         )
     if surface == "bits":
         from rendering.jats_generator import generate_bits
@@ -246,16 +251,23 @@ def _preview_inputs(dtxsid: str, view: str) -> tuple[dict, "list | None"]:
 
 def render_preview(
     dtxsid: str, surface: str = DEFAULT_SURFACE, view: str | None = None,
-    downloads: list[dict] | None = None,
+    downloads: list[dict] | None = None, shelf: str | None = None,
 ) -> bytes | str:
     """Render a session's report to `surface` and RETURN it, WITHOUT persisting —
     the no-archive twin of materialize_preview, for on-demand views like the
     Bookshelf facsimile page (web_routes.bookshelf_routes).  Uses the same data
     loading + tree resolution, so an on-demand render matches the materialized one.
-    `downloads` is forwarded to render_surface (honored only by `bookshelf`).
+    `downloads` and `shelf` are forwarded to render_surface (honored only by
+    `bookshelf`).
     Raises ValueError on an unknown surface, NotImplementedError on a provisioned-
     but-unimplemented one (e.g. latex)."""
     if surface not in KNOWN_SURFACES:
         raise ValueError(f"Unknown preview surface: {surface!r}")
     data, tree = _preview_inputs(dtxsid, view or DEFAULT_VIEW)
-    return render_surface(data, tree, surface=surface, downloads=downloads)
+    if surface == "bookshelf" and not data.get("published_from"):
+        # Our version of a report already published says so (bookshelf_preview).
+        from narrative.prompt_workshop import report_of
+        report = report_of(dtxsid)[0]
+        if report:
+            data = dict(data, generated_of_published=report)
+    return render_surface(data, tree, surface=surface, downloads=downloads, shelf=shelf)

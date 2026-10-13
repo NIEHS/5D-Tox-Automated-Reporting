@@ -674,6 +674,9 @@ def load_session_data(
     from rendering.published_clone import CLONE_FILE, CONTENT_FILE, apply_clone
     if (session_dir / CLONE_FILE).is_file():
         apply_clone(data, _load_json(session_dir / CONTENT_FILE) or {})
+        clone = _load_json(session_dir / CLONE_FILE)
+        data["published_from"] = data.get("report_number") or (
+            clone.get("report") if isinstance(clone, dict) else None) or "The report"
         _number_and_list(data, dtxsid, view)
         data["layout_style"] = _resolve_export_layout_style(dtxsid)
         return data

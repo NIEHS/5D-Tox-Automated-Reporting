@@ -318,8 +318,18 @@ def book_banner(m: dict) -> str:
             + "".join(f"<li>{x}</li>" for x in links if x) + "</ul></div>")
 
 
-def collection_panel(m: dict) -> str:
-    """The rail's "Other titles in this collection" panel."""
+# The collection the app's shelf is: every report it holds (/Bookshelf).
+SHELF_COLLECTION = "rlm-bmdx Report Series"
+
+
+def collection_panel(m: dict, shelf: str | None = None) -> str:
+    """The rail's "Other titles in this collection" panel: served by the app
+    (``shelf``, its list of reports), the app's own series, linked to that
+    list; else the book's Bookshelf collection."""
+    if shelf:
+        return ('<div class="rail-panel"><div class="rail-title">Other titles in this '
+                f'collection</div><ul class="rail-links"><li><a href="{_esc(shelf)}">'
+                f'{_esc(SHELF_COLLECTION)}</a></li></ul></div>')
     if not m["collection"]:
         return ""
     return ('<div class="rail-panel"><div class="rail-title">Other titles in this collection'

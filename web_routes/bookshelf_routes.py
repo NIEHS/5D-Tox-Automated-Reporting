@@ -205,7 +205,8 @@ def bookshelf_facsimile(dtxsid: Dtxsid):
     if not has_generated_report(dtxsid):
         return HTMLResponse(_not_found_page(dtxsid), status_code=404)
     try:
-        page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid))
+        page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid),
+                              shelf="/Bookshelf")
     except Exception:
         logger.exception("Bookshelf facsimile render failed for %s", dtxsid)
         return HTMLResponse(_error_page(dtxsid), status_code=500)

@@ -32,7 +32,12 @@ def main() -> None:
                     help="output HTML path (default: <xml stem>-bookshelf-preview.html)")
     args = ap.parse_args()
     out = args.out or args.xml.with_name(args.xml.stem + "-bookshelf-preview.html")
-    html_text = render_book_file(args.xml)
+    # A published book's bundle (assets/cebs/_bookshelf/<REPORT>) is the report
+    # as published, and the page says so.
+    from tooling.build_published_reports import BOOKSHELF
+    src = args.xml.resolve()
+    published = src.name if src.is_dir() and src.parent == BOOKSHELF.resolve() else None
+    html_text = render_book_file(args.xml, published=published)
     out.write_text(html_text, encoding="utf-8")
     print(f"wrote {out} ({len(html_text):,} bytes)")
 
