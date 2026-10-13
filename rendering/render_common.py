@@ -1345,6 +1345,18 @@ def sample_counts_table(node: DocNode, data: dict) -> dict | None:
     return built
 
 
+def matrix_head_rows(built: dict) -> list[list]:
+    """A matrix's header rows: ``head_rows`` (several, as a published table
+    has them: "Dose (mg/kg)" over the dose columns) when it gives them, else
+    its one ``headers`` row.  A cell, header or footnote text in a matrix may
+    be a plain str or a list of inline units (a footnote mark, an italic gene
+    symbol); each surface renders the list as it renders a paragraph."""
+    rows = built.get("head_rows")
+    if rows:
+        return [list(r) for r in rows]
+    return [list(built["headers"])] if built.get("headers") else []
+
+
 def scoped_value(node: DocNode, value):
     """A value a repeated node takes its own of: ``{"by_organ": {organ: …}}``
     gives a tissue's copy (``scope_organ``) its tissue's, ``{"by_species":

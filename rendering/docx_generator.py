@@ -96,6 +96,7 @@ from rendering.render_common import (
     incidence_table_plan,
     is_protected,
     resolve_protection,
+    matrix_head_rows,
     sample_counts_table,
     table_caption as _table_caption,
     figure_prefix,
@@ -545,6 +546,7 @@ def _booktabs_table(
     caption: str = "",
     footnotes: list | None = None,
     merged_label_rows: bool = False,
+    head_rows: list[list] | None = None,
 ) -> None:
     """
     Append a booktabs-style table (top rule, header rule, bottom rule; no
@@ -561,30 +563,37 @@ def _booktabs_table(
                         ``**...**`` (the apical / sample-counts sex separator)
                         is emitted as a single bold cell merged across all
                         columns — the Word twin of the HTML colspan row.
+    head_rows:          several header rows in place of ``headers``
+                        (render_common.matrix_head_rows).  A cell, header or
+                        footnote text may be an inline-unit list.
     """
+    head_rows = head_rows or ([headers] if headers else [])
     if caption:
         _add_table_caption(doc, caption)
 
-    ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
+    ncols = max(max((len(r) for r in head_rows), default=0),
+                max((len(r) for r in rows), default=0), 1)
     table = doc.add_table(rows=0, cols=ncols)
     table.autofit = True
 
-    if headers:
+    for head in head_rows:
         hcells = table.add_row().cells
-        for i, h in enumerate(headers):
+        for i, h in enumerate(head):
             if i >= ncols:
                 break
             para = hcells[i].paragraphs[0]
             # Reference table headers are Arial Bold, one step below body size.
-            _style_run(para.add_run(_clean(h)), size_pt=_TABLE_PT,
-                       font=_HEADING_FONT, bold=True)
-        _set_repeat_header(table.rows[0])
-        for c in table.rows[0]._tr.tc_lst:
+            for run in _cell_runs(para, h):
+                _style_run(run, size_pt=_TABLE_PT, font=_HEADING_FONT, bold=True)
+    for r in range(len(head_rows)):
+        _set_repeat_header(table.rows[r])
+    if head_rows:
+        for c in table.rows[len(head_rows) - 1]._tr.tc_lst:
             _set_edge_border(c, "bottom")
 
     for row in rows:
-        cells = [_clean(c) for c in row]
-        first = cells[0] if cells else ""
+        cells = [c if isinstance(c, list) else _clean(c) for c in row]
+        first = cells[0] if cells and isinstance(cells[0], str) else ""
         if merged_label_rows and first.startswith("**") and first.endswith("**"):
             tr = table.add_row()
             merged = tr.cells[0]
@@ -595,9 +604,11 @@ def _booktabs_table(
             continue
         tr = table.add_row()
         for i in range(ncols):
-            val = cells[i].strip() if i < len(cells) else ""
+            val = cells[i] if i < len(cells) else ""
+            val = val.strip() if isinstance(val, str) else val
             # Data cells: body font (Times), table size (10pt).
-            _style_run(tr.cells[i].paragraphs[0].add_run(val), size_pt=_TABLE_PT)
+            for run in _cell_runs(tr.cells[i].paragraphs[0], val):
+                _style_run(run, size_pt=_TABLE_PT)
 
     # Outer top + bottom rules complete the booktabs frame.
     _set_edge_border(table._tbl, "top")
@@ -619,8 +630,18 @@ def _add_footnotes(doc: Document, footnotes) -> None:
             marker = para.add_run(f"{_clean(fn['letter'])} ")
             marker.font.superscript = True
             marker.font.size = Pt(8)
-        run = para.add_run(_clean(text))
-        run.font.size = Pt(8)
+        for run in _cell_runs(para, text):
+            run.font.size = Pt(8)
+
+
+def _cell_runs(paragraph, value) -> list:
+    """Add a table cell's (or footnote's) text to ``paragraph``: one run for a
+    str, the inline runs for an inline-unit list.  Returns the runs added."""
+    if not isinstance(value, list):
+        return [paragraph.add_run(_clean(value))]
+    before = len(paragraph.runs)
+    _add_inline_runs(paragraph, value)
+    return paragraph.runs[before:]
 
 
 def _add_page_break(doc: Document) -> None:
@@ -771,13 +792,14 @@ def _render_sample_counts_table(doc: Document, node: DocNode, data: dict) -> Non
     if built is None:
         _add_pending(doc, f"Table data pending: {node.title}")
         return
-    headers = [str(h) for h in built.get("headers", [])]
-    rows = [[str(c) for c in r] for r in built.get("rows", [])]
+    head_rows = matrix_head_rows(built)
+    rows = [[c if isinstance(c, list) else str(c) for c in r] for r in built.get("rows", [])]
     _booktabs_table(
-        doc, headers, rows,
+        doc, head_rows[-1] if head_rows else [], rows,
         caption=_table_caption(node, built.get("caption", "")),
         footnotes=built.get("footnotes", []),
         merged_label_rows=True,
+        head_rows=head_rows,
     )
 
 

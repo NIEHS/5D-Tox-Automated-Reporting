@@ -149,3 +149,28 @@ def test_superscript_and_bold_render_on_every_surface():
     assert (p.runs[0].bold, p.runs[2].font.superscript) == (True, True)
     assert etree.tostring(_p_inline(para), encoding="unicode") == (
         "<p><bold>Liver</bold> weight<sup>a</sup></p>")
+
+
+def test_a_matrix_with_header_rows_and_inline_cells_on_every_surface():
+    """A published table (rendering.published_clone): two header rows, a cell
+    with a footnote mark, an inline footnote — on each surface."""
+    from lxml import etree
+    from document_model.document_node import DocNode
+    from rendering.jats_generator import _emit_sample_counts_table
+    node = DocNode(id="t", title="T", node_type="data-table", data_key="m")
+    data = {"m": {"caption": "Weights", "head_rows": [["", "Dose (mg/kg)", ""], ["n", "0", "10"]],
+                  "rows": [["Male", "5", ["4", rc.make_sup("a")]]],
+                  "footnotes": [{"kind": "definition", "text": [rc.make_sup("a"), "One died."]}]}}
+    html = hg._render_sample_counts_table(node, data)
+    assert html.count("<tr><th>") == 2 and "<td>4<sup>a</sup></td>" in html
+    assert "<li><sup>a</sup>One died.</li>" in html
+    latex = lg._render_sample_counts_table(node, data)
+    assert r" & Dose (mg/kg) &  \\" in latex and r"4\textsuperscript{a}" in latex
+    doc = Document(); dg._render_sample_counts_table(doc, node, data)
+    table = doc.tables[0]
+    assert len(table.rows) == 3 and table.rows[2].cells[2].text == "4a"
+    assert table.rows[2].cells[2].paragraphs[0].runs[1].font.superscript
+    (tw,) = _emit_sample_counts_table(node, data)
+    xml = etree.tostring(tw, encoding="unicode")
+    assert xml.count("<tr><th>") == 2 and "<td>4<sup>a</sup></td>" in xml
+    assert "<fn><p><sup>a</sup>One died.</p></fn>" in xml

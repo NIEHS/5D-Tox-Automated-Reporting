@@ -99,6 +99,7 @@ from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
     section_heading_text,
+    matrix_head_rows,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -580,12 +581,13 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
     "Table B-1. …" text prints.  Each cell is escaped exactly once (by
     _emit_tabular_row).
     """
-    headers = [str(h) for h in built.get("headers", [])]
-    rows = [[str(c) for c in r] for r in built.get("rows", [])]
-    ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
+    head_rows = matrix_head_rows(built)
+    rows = [[c if isinstance(c, list) else str(c) for c in r] for r in built.get("rows", [])]
+    ncols = max(max((len(r) for r in head_rows), default=0),
+                max((len(r) for r in rows), default=0), 1)
     caption = _table_caption(node, built.get("caption", node.title or ""))
     colspec = _matrix_colspec(built, ncols, " ".join("l" for _ in range(ncols)))
-    header_cells = " & ".join(_escape_latex(h) for h in headers)
+    header_cells = " \\\\\n".join(" & ".join(_cell_latex(h) for h in r) for r in head_rows)
     col_head = "\\toprule\n" + header_cells + " \\\\\n\\midrule\n"
     # Inside an appendix the caption takes an empty short form so it stays out
     # of the front-matter \listoftables (the appendix's own list carries it).
@@ -603,7 +605,7 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
         body = body.replace("\\_", "\\_\\allowbreak{}")
     # A longtable has no threeparttable notes; footnotes follow it as small text.
     notes = "".join(
-        "\n\n{\\footnotesize " + _escape_latex(fn.get("text") or "") + "\\par}"
+        "\n\n{\\footnotesize " + _cell_latex(fn.get("text") or "") + "\\par}"
         for fn in built.get("footnotes") or []
         if isinstance(fn, dict) and fn.get("text")
     )
@@ -681,8 +683,13 @@ def _emit_tabular_row(cells: list[str], *, raw: bool = False) -> str:
     if raw:
         body = " & ".join(cells)
     else:
-        body = " & ".join(_escape_latex(c) for c in cells)
+        body = " & ".join(_cell_latex(c) for c in cells)
     return body + r" \\"
+
+
+def _cell_latex(cell) -> str:
+    """A table cell: a str escaped, an inline-unit list rendered as inline."""
+    return _escape_latex(cell) if not isinstance(cell, list) else _render_inline(cell)
 
 
 def _emit_table_footnotes(footnotes: list) -> str:
@@ -707,10 +714,10 @@ def _emit_table_footnotes(footnotes: list) -> str:
             continue
         if kind == "lettered" and fn.get("letter"):
             items.append(
-                f"\\item[{_escape_latex(fn['letter'])}] {_escape_latex(text)}"
+                f"\\item[{_escape_latex(fn['letter'])}] {_cell_latex(text)}"
             )
         else:
-            items.append(f"\\item {_escape_latex(text)}")
+            items.append(f"\\item {_cell_latex(text)}")
     if not items:
         return ""
     return "\n\\begin{tablenotes}\n" + "\n".join(items) + "\n\\end{tablenotes}"
@@ -837,16 +844,18 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
         # A long matrix (the animal roster) must paginate: longtable, not a float.
         return _emit_long_matrix(node, built)
 
-    headers = [str(h) for h in built.get("headers", [])]
+    head_rows = matrix_head_rows(built)
     rows = built.get("rows", [])
-    ncols = max(len(headers), max((len(r) for r in rows), default=0))
+    ncols = max(max((len(r) for r in head_rows), default=0),
+                max((len(r) for r in rows), default=0))
     colspec = _matrix_colspec(built, ncols, "l" + "c" * (ncols - 1) if ncols > 1 else "l")
 
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(headers), "\\midrule"]
+             *[_emit_tabular_row([c if isinstance(c, list) else str(c) for c in r])
+               for r in head_rows], "\\midrule"]
     for row in rows:
-        cells = [str(c) for c in row]
-        first = cells[0] if cells else ""
+        cells = [c if isinstance(c, list) else str(c) for c in row]
+        first = cells[0] if cells and isinstance(cells[0], str) else ""
         if first.startswith("**") and first.endswith("**"):
             # Sex-header separator row — bold, spanning every column.
             label = first.strip("*").strip()
@@ -854,7 +863,7 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
                 f"\\multicolumn{{{ncols}}}{{l}}{{\\textbf{{{_escape_latex(label)}}}}} \\\\"
             )
         else:
-            if cells:
+            if cells and isinstance(cells[0], str):
                 cells[0] = cells[0].strip()
             lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")

@@ -80,6 +80,7 @@ from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
     section_heading_text,
+    matrix_head_rows,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -517,14 +518,22 @@ def _emit_table_row(cells: list, *, td_class: str = "", tr_class: str = "") -> s
     """
     td_attr = f' class="{td_class}"' if td_class else ""
     tr_attr = f' class="{tr_class}"' if tr_class else ""
-    tds = "".join(f"<td{td_attr}>{_esc(c)}</td>" for c in cells)
+    tds = "".join(f"<td{td_attr}>{_cell_html(c)}</td>" for c in cells)
     return f"<tr{tr_attr}>{tds}</tr>"
 
 
-def _emit_table_header(headers: list) -> str:
-    """Emit the <thead> with one <th> per header cell (each escaped)."""
-    ths = "".join(f"<th>{_esc(h)}</th>" for h in headers)
-    return f"<thead><tr>{ths}</tr></thead>"
+def _cell_html(cell) -> str:
+    """A table cell: a str escaped, an inline-unit list rendered as inline."""
+    return _esc(cell) if not isinstance(cell, list) else _render_inline(cell)
+
+
+def _emit_table_header(headers: list, more: list | None = None) -> str:
+    """Emit the <thead> with one <th> per header cell (each escaped); ``more``,
+    the header rows of a matrix that has several (matrix_head_rows)."""
+    rows = more if more else [headers]
+    trs = "".join("<tr>" + "".join(f"<th>{_cell_html(h)}</th>" for h in r) + "</tr>"
+                  for r in rows)
+    return f"<thead>{trs}</thead>"
 
 
 def _emit_table_footnotes(footnotes: list) -> str:
@@ -548,10 +557,10 @@ def _emit_table_footnotes(footnotes: list) -> str:
             continue
         if fn.get("kind") == "lettered" and fn.get("letter"):
             items.append(
-                f'<li><span class="letter">{_esc(fn["letter"])}</span> {_esc(text)}</li>'
+                f'<li><span class="letter">{_esc(fn["letter"])}</span> {_cell_html(text)}</li>'
             )
         else:
-            items.append(f"<li>{_esc(text)}</li>")
+            items.append(f"<li>{_cell_html(text)}</li>")
     if not items:
         return ""
     return (
@@ -705,15 +714,15 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
             f"{_pending(f'Table data pending: {node.title}')}"
         )
 
-    headers = [str(h) for h in built.get("headers", [])]
-    ncols = max(len(headers),
+    head_rows = matrix_head_rows(built)
+    ncols = max(max((len(r) for r in head_rows), default=0),
                 max((len(r) for r in built.get("rows", [])), default=0))
-    head = _emit_table_header(headers) if headers else ""
+    head = _emit_table_header([], head_rows) if head_rows else ""
 
     body_rows: list[str] = []
     for row in built.get("rows", []):
-        cells = [str(c) for c in row]
-        first = cells[0] if cells else ""
+        cells = [c if isinstance(c, list) else str(c) for c in row]
+        first = cells[0] if cells and isinstance(cells[0], str) else ""
         if first.startswith("**") and first.endswith("**"):
             label = first.strip("*").strip()
             body_rows.append(
@@ -721,7 +730,7 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
                 f"{_esc(label)}</strong></td></tr>"
             )
         else:
-            if cells:
+            if cells and isinstance(cells[0], str):
                 cells[0] = cells[0].strip()
             body_rows.append(_emit_table_row(cells))
 

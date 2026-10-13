@@ -75,6 +75,7 @@ from rendering.render_common import (
     INLINE_STYLES,
     apical_table_plan,
     incidence_table_plan,
+    matrix_head_rows,
     sample_counts_table,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
@@ -257,12 +258,26 @@ def _split_label(caption: str) -> tuple[str, str]:
     return "", (caption or "").strip()
 
 
+def _cell_el(tag: str, value) -> etree._Element:
+    """A <td>/<th>: a str as its text, an inline-unit list as inline content
+    (render_common.matrix_head_rows)."""
+    if not isinstance(value, list):
+        return E(tag, str(value))
+    p = _p_inline(value)
+    cell = E(tag)
+    cell.text = p.text
+    for child in list(p):
+        cell.append(child)
+    return cell
+
+
 def _table_wrap(
     node_id: str,
     caption: str,
     headers: list[str],
     rows: list[list[str]],
     footnotes: list | None = None,
+    head_rows: list[list] | None = None,
 ) -> etree._Element:
     """Build one <table-wrap> from a grid (caption + header row + body rows).
 
@@ -276,7 +291,8 @@ def _table_wrap(
     Footnotes (the typed dicts table_builder_common emits: ``{text, [letter]}``)
     go under <table-wrap-foot> as <fn><p> — omitted entirely when there are none,
     since an empty <table-wrap-foot> fails the StyleChecker empty-element check."""
-    ncols = max([len(headers)] + [len(r) for r in rows], default=1)
+    head_rows = head_rows or ([headers] if headers else [])
+    ncols = max([len(r) for r in head_rows] + [len(r) for r in rows], default=1)
     tw = E("table-wrap", {"id": table_wrap_id(node_id)})
 
     label, descriptive = _split_label(caption)
@@ -288,18 +304,17 @@ def _table_wrap(
         tw.append(E.caption(E.title(descriptive)))
 
     table = E.table()
-    if headers:
-        thead = E.thead(E.tr(*[E.th(str(h)) for h in headers]))
-        table.append(thead)
+    if head_rows:
+        table.append(E.thead(*[E.tr(*[_cell_el("th", h) for h in r]) for r in head_rows]))
     tbody = E.tbody()
     for row in rows:
-        cells = [str(c) for c in row]
-        first = cells[0] if cells else ""
+        cells = [c if isinstance(c, list) else str(c) for c in row]
+        first = cells[0] if cells and isinstance(cells[0], str) else ""
         if first.startswith("**") and first.endswith("**"):
             label_text = first.strip("*").strip()
             tbody.append(E.tr(E.td({"colspan": str(ncols)}, label_text)))
         else:
-            tbody.append(E.tr(*[E.td(c) for c in cells]))
+            tbody.append(E.tr(*[_cell_el("td", c) for c in cells]))
     table.append(tbody)
     tw.append(table)
 
@@ -308,7 +323,7 @@ def _table_wrap(
         foot = E("table-wrap-foot")
         for f in foots:
             text = f.get("text", "") if isinstance(f, dict) else str(f)
-            foot.append(E.fn(E.p(str(text))))
+            foot.append(E.fn(_p_inline(text) if isinstance(text, list) else E.p(str(text))))
         tw.append(foot)
     return tw
 
@@ -479,11 +494,13 @@ def _emit_sample_counts_table(node: DocNode, data: dict) -> list:
     # the tree), exactly as the HTML/LaTeX emitters do — the built dict's
     # caption carries no locator, so without this BITS emitted the matrix
     # with no <label> and the cross-surface table-number parity test failed.
+    head_rows = matrix_head_rows(built)
     return [_table_wrap(
         node.id, table_caption(node, built.get("caption", node.title or "")),
-        [str(h) for h in built.get("headers", [])],
+        head_rows[-1] if head_rows else [],
         built.get("rows", []) or [],
         built.get("footnotes", []) or [],
+        head_rows=head_rows,
     )]
 
 
