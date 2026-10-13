@@ -6,9 +6,12 @@ NIEHS-13's published sentences (assets/cebs/_bookshelf/NIEHS-13, Results).
 
 import pytest
 
+from document_model.document_template import load_phrasing
+from document_model.phrasing import Phrasing
 from rendering.genomics_results import GENE_NAME_PENDING, attach_genomics_results
 from rendering.render_common import inline_plain_text, node_data
 
+P = Phrasing(load_phrasing("eras/niehs-2026"))       # the 2026 books' words
 DISPLAY = {"stat": "fifth_pct", "unit": "ppm", "decimals": 1}
 DOSES = [0, 1, 10, 50, 150, 400, 800]
 
@@ -67,7 +70,7 @@ def report(monkeypatch):
             "study_design": {"route": "inhaled", "studies": [_design("rat"), _design("mouse")]},
             "abbreviation": "1,4-DCB", "dose_unit": "ppm",
             "genomics_sections": [heart_sets, ovary_sets, heart_genes]}
-    attach_genomics_results(data, None)
+    attach_genomics_results(data, None, P)
     return data
 
 
@@ -150,3 +153,30 @@ def test_gene_names_are_not_looked_up_unless_allowed(monkeypatch, tmp_path):
     monkeypatch.delenv(gn.ALLOW_ENV, raising=False)
     monkeypatch.setattr(gn, "_fetch", lambda ids: pytest.fail("looked up without consent"))
     assert gn.gene_names(["313050"]) == {}
+
+
+def test_without_phrasing_the_definition_binds_no_results():
+    """The earlier eras state no phrasing (and bind none of these keys)."""
+    data = {"genomics_sections": [{"type": "gene", "organ": "heart", "top_genes": []}]}
+    attach_genomics_results(data, None, Phrasing(load_phrasing("eras/niehs-2023")))
+    assert "gene_intro" not in data and "results" not in data["genomics_sections"][0]
+
+
+def test_a_sentence_the_definition_does_not_word_is_a_visible_placeholder(report):
+    block = {k: v for k, v in P.block.items() if k != "genes"}
+    data = {"genomics_sections": [{"type": "gene", "organ": "heart", "display": DISPLAY,
+                                   "top_genes": []}]}
+    attach_genomics_results(data, None, Phrasing(block))
+    assert _text(data["genomics_sections"][0]["results"][""]) == [
+        "[Placeholder: the document definition states no wording for genes.none]"]
+
+
+def test_the_cited_appendix_and_table_are_the_nodes_the_definition_declares():
+    from document_model.document_node import DocNode
+    from rendering.genomics_results import cited
+    tree = [DocNode(id="app-x", title="Supplemental Data", appendix_letter="G",
+                    cited_as="supplemental-data"),
+            DocNode(id="t-x", title="", table_number=12, cited_as="gene-set-summary-table")]
+    assert cited(tree, "supplemental-data", "appendix") == "G"
+    assert cited(tree, "gene-set-summary-table", "table") == 12
+    assert cited(tree, "efdr-table", "table") is None

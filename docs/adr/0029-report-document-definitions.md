@@ -311,3 +311,49 @@ Comparison with the NIEHS-13 book:
 - Our criteria find 8 active GO processes in one rat heart null experiment,
   all from one probe shared by eight RT1 genes. The book reports 0.
 
+
+## 11. Amendment (2026-10-13): the generated prose's words are declared
+
+The sentences of §10 were first written as strings in the renderer. That left
+an era's wording in Python: a definition that words a sentence differently
+would have needed a code change. The user's rule is that everything is
+specified either by a rule or by the document definition.
+
+- **Rule or word.** The code keeps the rules: which gene sets are named,
+  which form a gene list takes, when a group is named, the lower limit of
+  extrapolation, whose control data the eFDR names. The words are the
+  definition's `phrasing:` block, one template per sentence with `{fields}`
+  the rule fills (`document_model.phrasing`). This covers:
+  - the gene set and gene results, openings and summary;
+  - the eFDR methods and results sentences, and the eFDR table's caption,
+    headers and footnote;
+  - the gene set and gene definition tables' captions, headers and
+    footnotes;
+  - the words the sentences use: number words, statistic names,
+    directions, "both" / "all three", singular and plural nouns;
+  - the two percentages the eFDR results' wording names ("<1%", "below
+    0.5%").
+- **Closed schema.** The block is checked at load. An unknown key, a field
+  the rule does not supply, or a mis-shaped word list fails loudly. A key a
+  definition leaves out prints a visible placeholder naming it.
+- **Inherited.** `extends` deep-merges the block, so a study re-words one
+  sentence by stating only that key. The 2026 era states the whole block.
+  The earlier eras state none, and their reports write none of these keys
+  (they bind none).
+- **What is cited.** The prose cites an appendix by letter and tables by
+  number. A node declares what it is cited as: `cited_as:
+  supplemental-data`, `gene-set-summary-table`, `efdr-table`
+  (`document_tree.find_cited`). The code knows no node ids.
+- **Method facts are the method profile's.** How the eFDR's synthetic null
+  data were made (the generator, its address, the distribution, the values
+  drawn per probe) is a fact of the method, not wording. It is the profile's
+  `genomics.efdr` (ADR-0027 amendment). A profile that does not state it
+  prints placeholders.
+
+NIEHS-12 and 13 render text-identically before and after.
+
+Still in code, as language rather than era wording:
+- the serial list ("a, b, and c");
+- the BMD and dose number formats;
+- the `*x*` / `BMD_L` inline markup;
+- the system placeholders.

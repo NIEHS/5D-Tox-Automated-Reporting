@@ -858,6 +858,18 @@ def build_node_index(tree: list[DocNode]) -> dict[str, DocNode]:
     return index
 
 
+def find_cited(name: str, tree: list[DocNode] | None) -> DocNode | None:
+    """The node the definition declares ``cited_as: name`` (the first, in
+    document order), None when there is no tree or no such node."""
+    for node in tree or []:
+        if node.cited_as == name:
+            return node
+        found = find_cited(name, node.children)
+        if found:
+            return found
+    return None
+
+
 def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None:
     """
     Find a node by its ID anywhere in the tree.

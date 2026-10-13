@@ -93,7 +93,7 @@
       "has_tissue_conc": false,
       "hematology_endpoints": [],
       "hormone_endpoints": [],
-      "method_profile": "ntp-5day-2025",
+      "method_profile": "ntp-5day-2025.1",
       "method_settings": {
         "apical.bmd.acceptance.bmd_above_highest_dose": "nvm",
         "apical.bmd.acceptance.bmd_bmdl_max": 10.0,
@@ -117,6 +117,11 @@
         "apical.statistics.pairwise.Urinalysis": "shirley_or_dunn",
         "apical.statistics.trend_select_p": 0.01,
         "apical.statistics.trend_test": "jonckheere",
+        "genomics.efdr.distribution": "normal",
+        "genomics.efdr.generator": "Synthetic and Null Data Generator",
+        "genomics.efdr.generator_abbreviation": "SaNDGen",
+        "genomics.efdr.generator_url": "https://rstudio.niehs.nih.gov/sandgen/",
+        "genomics.efdr.resamples_per_probe": 1000,
         "genomics.go_display": {
           "max_genes": 500,
           "min_bmd": 3,

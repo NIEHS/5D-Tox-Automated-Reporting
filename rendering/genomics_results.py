@@ -21,7 +21,9 @@ prose states exactly what the tables do, programmatically, no model:
                    value, corresponding to …".
   gene_intro       the Gene Benchmark Dose Analysis' opening.
 
-The rules are the books':
+The rules are the books' (here); their words are the document definition's
+``phrasing:`` block (document_model.phrasing; eras/niehs-2026), each sentence
+a template whose fields these rules fill:
 
   - A gene set or gene is "reliably calculated" when its BMD is at least the
     lower limit of extrapolation (the lowest non-zero dose / 3, "<0.333 ppm");
@@ -37,9 +39,11 @@ The rules are the books':
   - The "full list … can be found in Appendix G" sentence closes a tissue's
     gene set results, naming the animals with gene sets there.
 
-What a definition prints is its choice: the 2026 era binds these keys
-(eras/niehs-2026.yaml); the per-tissue results reach a tissue's section
-through render_common.node_data (``gene_set_results`` / ``gene_results``).
+What a definition prints is its choice: the 2026 era binds these keys and
+states their wording (eras/niehs-2026.yaml); the per-tissue results reach a
+tissue's section through render_common.node_data (``gene_set_results`` /
+``gene_results``).  The appendix and table they cite are the nodes the
+definition declares ``cited_as`` (supplemental-data, gene-set-summary-table).
 Paragraphs are inline-unit lists (render_common's inline model).
 """
 
@@ -48,15 +52,10 @@ from __future__ import annotations
 import math
 import re
 
+from document_model.phrasing import Phrasing
 from rendering.render_common import make_italic, make_sub
 from tables.table_builder_common import format_display_number
 
-# The ranking statistic as the prose names it.
-_STAT = {"fifth_pct": "5th percentile", "median": "median"}
-# The aggregate score of gene set potency the analysis used (the intro).
-_SCORE = {"fifth_pct": "5th percentile of transcript BMDs", "median": "median transcript BMD"}
-_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
-_ALL = {2: "both", 3: "all three", 4: "all four", 5: "all five"}
 _MARKUP = re.compile(r"\*([^*]+)\*|BMD_L")
 GENE_NAME_PENDING = "[Placeholder: gene name]"
 
@@ -84,10 +83,6 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + ", and " + items[-1]
 
 
-def _word(n: int) -> str:
-    return _WORDS[n] if 0 <= n < len(_WORDS) else str(n)
-
-
 def _num(v) -> float | None:
     try:
         f = float(v)
@@ -106,11 +101,12 @@ def _lower_first(s: str) -> str:
 
 class _Report:
     """What the sentences name: each study's animals and dose, the unit, the
-    precision, the chemical."""
+    precision, the chemical — and the definition's words for them."""
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, phrasing: Phrasing):
         from pipeline.study_design import design_or_standard, exposure_verb, species_plural
         self.data = data
+        self.p = phrasing
         studies = data.get("studies") or []
         design = data.get("study_design") or {}
         self.verb = exposure_verb(design)
@@ -136,6 +132,15 @@ class _Report:
         if len(self.labels.get(key) or []) > 1:
             return f"{str(label or '').lower()} {self.noun[key]}".strip()
         return self.noun[key]
+
+    def exposed(self, animals: str) -> str:
+        """"rats exposed to 1,4-DCB"."""
+        return self.p.say("animals.exposed", animals=animals, exposed=self.verb,
+                          chemical=self.chemical)
+
+    def in_group(self, animals: str, sentence: str) -> str:
+        """"In female rats, the most sensitive …"."""
+        return self.p.say("animals.in_group", animals=animals, sentence=_lower_first(sentence))
 
     def several_groups(self, key: str) -> bool:
         return len(self.labels.get(key) or []) > 1
@@ -193,26 +198,39 @@ def _lle_text(lle: float) -> str:
 # ---------------------------------------------------------------------------
 
 class _Values:
-    def __init__(self, entry: dict, unit: str):
+    def __init__(self, entry: dict, unit: str, phrasing: Phrasing):
         d = _display(entry)
+        self.p = phrasing
         self.dec = d.get("decimals", 3)
         self.unit = d.get("unit") or unit
         self.stat = d.get("stat", "median")
 
+    def statistic(self, stat: str | None = None) -> str:
+        """"5th percentile" — the ranking statistic as the prose names it."""
+        stat = stat or self.stat
+        return self.p.word("statistic", stat, default=stat)
+
+    def measure(self, statistic: str = "", plural: bool = False) -> str:
+        """"5th percentile BMD", "BMDs"."""
+        return f"{statistic} {self.p.noun('bmd', 2 if plural else 1)}".strip()
+
     def one(self, v) -> str:
-        return format_display_number(v, self.dec) if _num(v) is not None else "NC"
+        return (format_display_number(v, self.dec) if _num(v) is not None
+                else self.p.say("values.not_calculated"))
 
     def pair(self, row: dict) -> str:
-        return f"{self.one(row.get('bmd'))} ({self.one(row.get('bmdl'))})"
+        return self.p.say("values.pair", bmd=self.one(row.get("bmd")),
+                          bmdl=self.one(row.get("bmdl")))
 
-    def clause(self, rows: list[dict], what: str) -> str:
+    def clause(self, rows: list[dict], statistic: str) -> str:
         """" with 5th percentile BMDs (BMD_Ls) of a (b) and c (d) ppm,
         respectively", or ", both with a 5th percentile BMD (BMD_L) of a (b) ppm"."""
         pairs = [self.pair(r) for r in rows]
-        lead = f"{what} " if what else ""
-        if len(set(pairs)) == 1 and len(pairs) in _ALL:
-            return f", {_ALL[len(pairs)]} with a {lead}BMD (BMD_L) of {pairs[0]} {self.unit}"
-        return f" with {lead}BMDs (BMD_Ls) of {_join(pairs)} {self.unit}, respectively"
+        if len(set(pairs)) == 1 and self.p.has_word("all_of", len(pairs)):
+            return self.p.say("values.same", all=self.p.word("all_of", len(pairs)),
+                              measure=self.measure(statistic), pair=pairs[0], unit=self.unit)
+        return self.p.say("values.each", measures=self.measure(statistic, plural=True),
+                          pairs=_join(pairs), unit=self.unit)
 
 
 def _reliable(rows: list[dict], lle: float | None) -> list[dict]:
@@ -225,6 +243,10 @@ def _below(rows: list[dict], lle: float | None) -> list[dict]:
     if lle is None:
         return []
     return [r for r in rows or [] if (b := _num(r.get("bmd"))) is not None and b < lle]
+
+
+def _term(row: dict, p: Phrasing) -> str:
+    return p.say("term", go_term=row.get("go_term", ""), go_id=row.get("go_id", ""))
 
 
 # ---------------------------------------------------------------------------
@@ -241,19 +263,23 @@ def _top_gene_sets(sets: list[dict], values: _Values) -> list[dict]:
 
 
 def _gene_set_sentence(sets: list[dict], values: _Values, table: str) -> str:
-    stat = _STAT.get(values.stat, values.stat)
-    terms = [f"{s.get('go_term', '')} ({s.get('go_id', '')})" for s in sets]
+    p, stat = values.p, values.statistic()
     if len(sets) == 1:
-        return (f"The most sensitive GO biological process for which a BMD value could be "
-                f"reliably calculated was {terms[0]} with a {stat} BMD (BMD_L) of "
-                f"{values.pair(sets[0])} {values.unit}{table}.")
-    return (f"The most sensitive GO biological processes for which a BMD value could be "
-            f"reliably calculated were {_join(terms)}{values.clause(sets, stat)}{table}.")
+        return p.say("gene_sets.one", term=_term(sets[0], p), measure=values.measure(stat),
+                     pair=values.pair(sets[0]), unit=values.unit, table=table)
+    return p.say("gene_sets.several", terms=_join([_term(s, p) for s in sets]),
+                 values=values.clause(sets, stat), table=table)
+
+
+def _table_cite(entry: dict, p: Phrasing) -> str:
+    n = entry.get("table_number")
+    return p.say("tables.cite", number=n) if n else ""
 
 
 def _gene_set_results(entry: dict, report: _Report, unit: str, appendix: str | None) -> None:
-    values = _Values(entry, unit)
-    table = f" (Table {entry['table_number']})" if entry.get("table_number") else ""
+    p = report.p
+    values = _Values(entry, unit, p)
+    table = _table_cite(entry, p)
     results: dict[str, list] = {}
     with_sets: list[str] = []
     for key, _, _ in report.studies:
@@ -262,23 +288,20 @@ def _gene_set_results(entry: dict, report: _Report, unit: str, appendix: str | N
             noun = report.group_noun(key, b.get("sex"))
             sets = _reliable(b.get("gene_sets"), report.lle.get(key))
             if not sets:
-                sentences.append(f"In {noun} {report.verb} {report.chemical}, there were no "
-                                 f"active GO terms (i.e., no gene expression response at the "
-                                 f"gene set level).")
+                sentences.append(p.say("gene_sets.none", animals=report.exposed(noun)))
                 continue
             if key not in with_sets:
                 with_sets.append(key)
             sentence = _gene_set_sentence(_top_gene_sets(sets, values), values, table)
             if report.several_groups(key):
-                sentence = f"In {noun}, {_lower_first(sentence)}"
+                sentence = report.in_group(noun, sentence)
             sentences.append(sentence)
         if sentences:
             results[key] = sentences
     if with_sets and appendix:
-        organ = (entry.get("organ") or "").strip().lower()
-        results[with_sets[-1]].append(
-            f"The full list of affected gene sets in the {organ} of "
-            f"{report.subjects(with_sets)} can be found in Appendix {appendix}.")
+        results[with_sets[-1]].append(p.say(
+            "gene_sets.full_list", organ=(entry.get("organ") or "").strip().lower(),
+            animals=report.subjects(with_sets), appendix=appendix))
     entry["results"] = {k: [units(" ".join(v))] for k, v in results.items()}
 
 
@@ -286,84 +309,76 @@ def _gene_set_results(entry: dict, report: _Report, unit: str, appendix: str | N
 # Gene results, per tissue and study
 # ---------------------------------------------------------------------------
 
-def _gene(row: dict, names: dict) -> str:
-    symbol = str(row.get("gene") or row.get("gene_symbol") or "")
-    name = names.get(str(row.get("entrez_id") or ""))
-    return f"*{symbol}* ({name or GENE_NAME_PENDING})"
+def _gene(row: dict, names: dict, p: Phrasing) -> str:
+    return p.say("gene", symbol=str(row.get("gene") or row.get("gene_symbol") or ""),
+                 name=names.get(str(row.get("entrez_id") or "")) or GENE_NAME_PENDING)
 
 
-def _gene_list_sentence(genes: list[dict], lead: str, values: _Values, names: dict) -> str:
-    listed = _join([_gene(g, names) for g in genes])
-    return f"{lead} {listed}{values.clause(genes, '')}."
-
-
-def _one_gene(gene: dict, direction: str, values: _Values, names: dict) -> str:
-    return (f"One gene, {_gene(gene, names)}, was {direction}regulated with a BMD (BMD_L) of "
-            f"{values.pair(gene)} {values.unit}.")
+def _genes(genes: list[dict], names: dict, p: Phrasing) -> str:
+    return _join([_gene(g, names, p) for g in genes])
 
 
 def _gene_block(genes: list[dict], organ: str, noun: str, lle: float | None,
-                values: _Values, names: dict) -> list[str]:
-    """One group's gene results (the books' patterns, module docstring)."""
+                values: _Values, names: dict) -> tuple[list[str], bool]:
+    """One group's gene results (the books' patterns, module docstring), and
+    whether its first sentence names the group's animals itself."""
+    p = values.p
     if not genes:
-        return [f"No {organ} genes in {noun} met the criteria."]
+        return [p.say("genes.none", organ=organ, animals=noun)], True
     out: list[str] = []
     below = _below(genes, lle)
     calc = [g for g in genes if g not in below]
     if below:
         dirs = {str(g.get("direction", "")).lower() for g in below}
-        plural = len(below) > 1
-        exhibit = (f", exhibiting {'an increase' if dirs == {'up'} else 'a decrease'} in "
-                   f"expression," if len(dirs) == 1 else "")
-        out.append(f"The most sensitive {organ} gene{'s' if plural else ''} in {noun}{exhibit} "
-                   f"{'were' if plural else 'was'} {_join([_gene(g, names) for g in below])} "
-                   f"with {'estimated median BMDs' if plural else 'an estimated median BMD'} "
-                   f"<{_lle_text(lle)} {values.unit}.")
+        exhibiting = (p.say("genes.exhibiting_up" if dirs == {"up"} else "genes.exhibiting_down")
+                      if len(dirs) == 1 else "")
+        out.append(p.say("genes.below_many" if len(below) > 1 else "genes.below_one",
+                         organ=organ, animals=noun, exhibiting=exhibiting,
+                         genes=_genes(below, names, p), lle=_lle_text(lle), unit=values.unit))
     few = len(genes) < 10
     if few:
-        out.append(f"Only {_word(len(genes))} genes met the criteria.")
+        out.append(p.say("genes.few", count=p.number(len(genes))))
     up = [g for g in calc if str(g.get("direction", "")).lower() == "up"]
     down = [g for g in calc if str(g.get("direction", "")).lower() == "down"]
     body: list[str] = []
     if not below and up and down and len(up) == len(down) and len(genes) == 10:
-        body.append(f"Half of the top 10 most sensitive {organ} genes were upregulated and the "
-                    f"other half were downregulated.")
-        body.append(_gene_list_sentence(up, "The upregulated genes with a calculated BMD were",
-                                        values, names))
-        body.append(_gene_list_sentence(down, "The downregulated genes with a calculated BMD "
-                                        "were", values, names))
+        body.append(p.say("genes.half", count=len(genes), organ=organ))
+        body.append(p.say("genes.half_up", genes=_genes(up, names, p),
+                          values=values.clause(up, "")))
+        body.append(p.say("genes.half_down", genes=_genes(down, names, p),
+                          values=values.clause(down, "")))
     elif not below and calc and not (up and down) and len(calc) > 1:
-        direction = "up" if up else "down"
-        body.append(f"All {len(calc)} of the most sensitive {organ} genes were "
-                    f"{direction}regulated.")
-        body.append(_gene_list_sentence(calc, "These genes were", values, names))
+        body.append(p.say("genes.all_one_way", count=len(calc), organ=organ,
+                          direction=p.word("direction", "up" if up else "down")))
+        body.append(p.say("genes.all_list", genes=_genes(calc, names, p),
+                          values=values.clause(calc, "")))
     else:
-        for group, direction, lead in (
-                (up, "up", "The most sensitive upregulated genes with a calculated BMD were"),
-                (down, "down", "The most sensitive genes exhibiting a decrease in expression "
-                               "were")):
+        for group, direction in ((up, "up"), (down, "down")):
             if len(group) == 1:
-                body.append(_one_gene(group[0], direction, values, names))
+                body.append(p.say("genes.one", gene=_gene(group[0], names, p),
+                                  direction=p.word("direction", direction),
+                                  pair=values.pair(group[0]), unit=values.unit))
             elif group:
-                body.append(_gene_list_sentence(group, lead, values, names))
+                body.append(p.say(f"genes.most_{direction}", genes=_genes(group, names, p),
+                                  values=values.clause(group, "")))
     if few and body:
-        body[0] = f"Of these {_word(len(genes))} genes, {_lower_first(body[0])}"
-    return out + body
+        body[0] = p.say("genes.few_lead", count=p.number(len(genes)),
+                        sentence=_lower_first(body[0]))
+    return out + body, bool(below)
 
 
 def _gene_results(entry: dict, report: _Report, unit: str, names: dict) -> None:
-    values = _Values(entry, unit)
+    values = _Values(entry, unit, report.p)
     organ = (entry.get("organ") or "").strip().lower()
     results: dict[str, list] = {}
     for key, _, _ in report.studies:
         sentences = []
         for b in [b for b in _blocks(entry) if (b.get("study") or "") == key]:
             noun = report.group_noun(key, b.get("sex"))
-            block = _gene_block(b.get("top_genes") or [], organ, noun, report.lle.get(key),
-                                values, names)
-            if report.several_groups(key) and block and not block[0].startswith(
-                    "The most sensitive " + organ):
-                block[0] = f"In {noun}, {_lower_first(block[0])}"
+            block, names_animals = _gene_block(b.get("top_genes") or [], organ, noun,
+                                               report.lle.get(key), values, names)
+            if report.several_groups(key) and block and not names_animals:
+                block[0] = report.in_group(noun, block[0])
             sentences += block
         if sentences:
             results[key] = [units(" ".join(sentences))]
@@ -374,25 +389,27 @@ def _gene_results(entry: dict, report: _Report, unit: str, names: dict) -> None:
 # The sections' openings and the gene set summary
 # ---------------------------------------------------------------------------
 
-def _tables_phrase(entries: list[dict]) -> tuple[str, str]:
+def _tables_phrase(entries: list[dict], p: Phrasing) -> tuple[str, str]:
     """("the heart (Table 7), kidney (Table 8), …", "Table 7 to Table 11")."""
     shown = [((e.get("organ") or "").strip().lower(), e.get("table_number")) for e in entries]
-    where = "the " + _join([f"{o} (Table {n})" if n else o for o, n in shown])
+    where = p.say("tables.where", tissues=_join(
+        [p.say("tables.tissue", organ=o, number=n) if n else o for o, n in shown]))
     numbers = [n for _, n in shown if n]
     if not numbers:
-        span = "these tables"
+        span = p.say("tables.span_none")
     elif len(numbers) == 1:
-        span = f"Table {numbers[0]}"
+        span = p.say("tables.span_one", first=numbers[0])
     elif len(numbers) == 2:
-        span = f"Table {numbers[0]} and Table {numbers[1]}"
+        span = p.say("tables.span_two", first=numbers[0], last=numbers[1])
     else:
-        span = f"Table {numbers[0]} to Table {numbers[-1]}"
+        span = p.say("tables.span_many", first=numbers[0], last=numbers[-1])
     return where, span
 
 
 def _exceptions(entries: list[dict], rows_key: str, report: _Report, noun: str) -> str:
     """" with the exception of one lung gene in mice" — the items below the
     lower limit of extrapolation, by tissue and group; "" when none."""
+    p = report.p
     found = []
     for e in entries:
         organ = (e.get("organ") or "").strip().lower()
@@ -400,67 +417,56 @@ def _exceptions(entries: list[dict], rows_key: str, report: _Report, noun: str) 
             key = b.get("study") or ""
             n = len(_below(b.get(rows_key), report.lle.get(key)))
             if n:
-                found.append(f"{_word(n)} {organ} {noun}{'s' if n > 1 else ''} in "
-                             f"{report.group_noun(key, b.get('sex'))}")
-    return f" with the exception of {_join(found)}" if found else ""
+                found.append(p.say("limit.exception", count=p.number(n), organ=organ,
+                                   noun=p.noun(noun, n),
+                                   animals=report.group_noun(key, b.get("sex"))))
+    return p.say("limit.exceptions", items=_join(found)) if found else ""
 
 
-def _lle_sentence(entries, rows_key, report, noun: str, what: str, unit: str) -> str:
+def _lle_sentence(entries, rows_key, report, noun: str, measure: str, unit: str) -> str:
     """" No gene sets had estimated 5th percentile BMD values <0.333 ppm[ with
-    the exception of …]." — "" when no study states its doses."""
+    the exception of …]." — "" when no study states its doses.  ``noun``: the
+    words key of what is counted (gene_set, gene)."""
     lles = [x for x in report.lle.values() if x is not None]
     if not lles:
         return ""
-    return (f" No {noun}s had estimated {what} values <{_lle_text(min(lles))} {unit}"
-            f"{_exceptions(entries, rows_key, report, noun)}.")
+    return report.p.say("limit.below", nouns=report.p.noun(noun, 2), measure=measure,
+                        lle=_lle_text(min(lles)), unit=unit,
+                        exceptions=_exceptions(entries, rows_key, report, noun))
 
 
 def _gene_set_intro(sets: list[dict], report: _Report, unit: str, summary_table) -> list:
-    values = _Values(sets[0], unit)
-    stat = _STAT.get(values.stat, values.stat)
+    p = report.p
+    values = _Values(sets[0], unit, p)
+    stat = values.statistic()
     tissues = _join([(e.get("organ") or "").strip().lower() for e in sets])
-    first = (f"Chemical-induced alterations in {tissues} gene transcript expression were "
-             f"examined to determine those gene sets most sensitive to {report.chemical} "
-             f"exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology "
-             f"[GO] biological process) was conducted to determine the potency of the chemical "
-             f"to elicit gene expression changes in the {tissues}. This analysis used "
-             f"transcript-level BMD data to assess an aggregate score of gene set potency "
-             f"({_SCORE.get(values.stat, stat)}) and enrichment.")
-    where, span = _tables_phrase(sets)
-    summary = (f", with a summary of the top gene set per tissue based on lowest BMD {stat} "
-               f"provided in Table {summary_table}" if summary_table else "")
-    below = _lle_sentence(sets, "gene_sets", report, "gene set", f"{stat} BMD", values.unit)
-    second = (f"The “active” gene sets with the lowest {stat} BMD values are shown in "
-              f"{where}{summary}.{below} The gene sets shown in {span} should be interpreted "
-              f"with caution from the standpoint of the underlying biological mechanism and any "
-              f"relationship to toxicity or toxic agents referenced in the GO term definitions. "
-              f"The data primarily should be considered as a metric of potency for "
-              f"chemical-induced transcriptional changes (i.e., a concerted biological change) "
-              f"that could serve as a surrogate of estimated biological potency and, by "
-              f"extension, toxicological potency when more definitive toxicological data are "
-              f"unavailable.")
+    first = p.say("gene_sets.intro_examined", tissues=tissues, chemical=report.chemical,
+                  score=p.word("score", values.stat, default=stat))
+    where, span = _tables_phrase(sets, p)
+    summary = (p.say("gene_sets.intro_summary", statistic=stat, table=summary_table)
+               if summary_table else "")
+    below = _lle_sentence(sets, "gene_sets", report, "gene_set", values.measure(stat),
+                          values.unit)
+    second = p.say("gene_sets.intro_shown", statistic=stat, where=where, summary=summary,
+                   below=below, span=span)
     return [units(first), units(second)]
 
 
 def _gene_intro(genes: list[dict], report: _Report, unit: str) -> list:
-    values = _Values(genes[0], unit)
-    where, span = _tables_phrase(genes)
-    below = _lle_sentence(genes, "top_genes", report, "gene", "median BMD", values.unit)
-    return [units(
-        f"The top 10 genes ranked by BMD potency are shown in {where}.{below} As with the GO "
-        f"analysis, the biological or toxicological significance of the changes in gene "
-        f"expression shown in {span} should be interpreted with caution. The data primarily "
-        f"should be considered as a metric of potency for chemical-induced transcriptional "
-        f"changes that could serve as a conservative surrogate of estimated biological "
-        f"potency, and by extension toxicological potency, when more definitive "
-        f"toxicological data are unavailable.")]
+    values = _Values(genes[0], unit, report.p)
+    where, span = _tables_phrase(genes, report.p)
+    # A gene's BMD is the median of its probes' (the gene tables' rule).
+    below = _lle_sentence(genes, "top_genes", report, "gene",
+                          values.measure(values.statistic("median")), values.unit)
+    return [units(report.p.say("genes.intro", where=where, below=below, span=span))]
 
 
 def _gene_set_summary(sets: list[dict], report: _Report, unit: str, summary_table) -> list:
+    p = report.p
     groups: dict[tuple, tuple] = {}
     for e in sets:
         organ = (e.get("organ") or "").strip().lower()
-        values = _Values(e, unit)
+        values = _Values(e, unit, p)
         for b in _blocks(e):
             key = b.get("study") or ""
             top = _reliable(b.get("gene_sets"), report.lle.get(key))
@@ -471,30 +477,25 @@ def _gene_set_summary(sets: list[dict], report: _Report, unit: str, summary_tabl
         return []
     order = {key: i for i, (key, _, _) in enumerate(report.studies)}
     found = sorted(groups.items(), key=lambda kv: order.get(kv[0][0], 0))
-    sentences = [f"A summary of the most potent gene set per tissue is provided in Table "
-                 f"{summary_table}."] if summary_table else []
+    sentences = [p.say("gene_sets.summary_lead", table=summary_table)] if summary_table else []
     organs = {organ for _, (organ, _, _) in found}
     if len(found) == 2 and len(organs) == 1:
         # The same tissue in both groups (NIEHS-12: the liver in rats and mice).
         (k1, l1), (o, r1, v) = found[0]
         (k2, l2), (_, r2, _) = found[1]
-        stat = _STAT.get(v.stat, v.stat)
-        sentences.append(
-            f"In both {report.group_noun(k1, l1)} and {report.group_noun(k2, l2)} "
-            f"{report.verb} {report.chemical}, the {o} had the gene set with the lowest BMD "
-            f"{stat} value, corresponding to {r1.get('go_term', '')} ({r1.get('go_id', '')}) "
-            f"and {r2.get('go_term', '')} ({r2.get('go_id', '')}), respectively. The BMDs "
-            f"(BMD_Ls) were {v.pair(r1)} and {v.pair(r2)} {v.unit}, respectively.")
+        sentences.append(p.say(
+            "gene_sets.summary_both", first=report.group_noun(k1, l1),
+            second=report.group_noun(k2, l2), exposed=report.verb, chemical=report.chemical,
+            organ=o, statistic=v.statistic(), term1=_term(r1, p), term2=_term(r2, p),
+            pair1=v.pair(r1), pair2=v.pair(r2), unit=v.unit))
         return [units(" ".join(sentences))]
     for i, ((key, label), (organ, row, values)) in enumerate(found):
         who = report.group_noun(key, label)
         if i == 0:
-            who = f"{who} {report.verb} {report.chemical}"
-        stat = _STAT.get(values.stat, values.stat)
-        sentences.append(
-            f"In {who}, the {organ} had the gene set with the lowest BMD {stat} value, "
-            f"corresponding to {row.get('go_term', '')} ({row.get('go_id', '')}) with a BMD "
-            f"(BMD_L) of {values.pair(row)} {values.unit}.")
+            who = report.exposed(who)
+        sentences.append(p.say(
+            "gene_sets.summary_each", animals=who, organ=organ, statistic=values.statistic(),
+            term=_term(row, p), pair=values.pair(row), unit=values.unit))
     return [units(" ".join(sentences))]
 
 
@@ -502,27 +503,33 @@ def _gene_set_summary(sets: list[dict], report: _Report, unit: str, summary_tabl
 # Entry point
 # ---------------------------------------------------------------------------
 
-SUPPLEMENTAL_APPENDIX = "appendix-f"            # the Supplemental Data appendix's node
-SUMMARY_TABLE = "table-most-potent-gene-sets"   # the most potent gene set per tissue
+def cited(tree, name: str, attribute: str):
+    """The number or letter of the node the definition declares ``cited_as:
+    name`` (document_tree.find_cited); None when it declares none."""
+    from document_model.document_tree import find_cited
+    node = find_cited(name, tree)
+    if node is None:
+        return None
+    if attribute == "table":
+        return node.table_label or node.table_number
+    return node.appendix_letter
 
 
-def attach_genomics_results(data: dict, tree) -> None:
+def attach_genomics_results(data: dict, tree, phrasing: Phrasing) -> None:
     """Write the books' gene set and gene results into ``data`` (module
-    docstring) from its numbered genomic tables; ``tree`` is the report's
-    numbered document tree (the appendix and summary table it cites)."""
-    from document_model.document_tree import find_node
+    docstring) from its numbered genomic tables, worded by the definition's
+    ``phrasing``; ``tree`` is the report's numbered document tree (the
+    appendix and summary table its nodes declare cited).  Nothing when the
+    definition declares no phrasing (it binds none of these keys)."""
     entries = data.get("genomics_sections") or []
     sets = [e for e in entries if e.get("type") == "gene_set"]
     genes = [e for e in entries if e.get("type") == "gene"]
-    if not (sets or genes):
+    if not phrasing or not (sets or genes):
         return
-    report = _Report(data)
+    report = _Report(data, phrasing)
     unit = data.get("dose_unit") or "mg/kg"
-    appendix_node = find_node(SUPPLEMENTAL_APPENDIX, tree) if tree else None
-    appendix = getattr(appendix_node, "appendix_letter", None)
-    table_node = find_node(SUMMARY_TABLE, tree) if tree else None
-    summary_table = getattr(table_node, "table_label", None) or getattr(
-        table_node, "table_number", None)
+    appendix = cited(tree, "supplemental-data", "appendix")
+    summary_table = cited(tree, "gene-set-summary-table", "table")
     from genomics.gene_names import gene_names
     names = gene_names(g.get("entrez_id") for e in genes for b in _blocks(e)
                        for g in b.get("top_genes") or [])

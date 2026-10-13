@@ -27,6 +27,113 @@ tissue_order: []
 # The abstract names gene sets, not individual genes (NIEHS-12, 13).
 abstract_genes: false
 
+# The wording of the prose the report writes from its data (ADR-0029 §11,
+# document_model.phrasing): the gene set and gene results
+# (rendering.genomics_results) and the eFDR and definitions appendices
+# (rendering.genomics_appendix).  Which gene sets and genes are named, and in
+# which form, is the rule's; the words are these, `{fields}` filled by the
+# rule.  *x* prints in italics, BMD_L with its L subscript.  These are the
+# 2026 books' sentences (NIEHS-12, 13; NIEHS-10 words its results the same).
+phrasing:
+  words:
+    numbers: ["no", one, two, three, four, five, six, seven, eight, nine, ten]
+    statistic: {fifth_pct: 5th percentile, median: median}
+    score: {fifth_pct: 5th percentile of transcript BMDs, median: median transcript BMD}
+    direction: {up: upregulated, down: downregulated}
+    all_of: {2: both, 3: all three, 4: all four, 5: all five}
+    species: {rat: Rat, mouse: Mouse}
+    bmd: [BMD, BMDs]
+    gene_set: [gene set, gene sets]
+    gene: [gene, genes]
+    study: [study, studies]
+  values:
+    pair: "{bmd} ({bmdl})"
+    not_calculated: NC
+    # Two or more gene sets or genes with the same values, or each its own.
+    same: ", {all} with a {measure} (BMD_L) of {pair} {unit}"
+    each: " with {measures} (BMD_Ls) of {pairs} {unit}, respectively"
+  animals:
+    in_group: "In {animals}, {sentence}"
+    exposed: "{animals} {exposed} {chemical}"
+  term: "{go_term} ({go_id})"
+  gene: "*{symbol}* ({name})"
+  tables:
+    cite: " (Table {number})"
+    tissue: "{organ} (Table {number})"
+    where: "the {tissues}"
+    span_none: these tables
+    span_one: "Table {first}"
+    span_two: "Table {first} and Table {last}"
+    span_many: "Table {first} to Table {last}"
+  # The gene sets or genes below the lower limit of extrapolation.
+  limit:
+    below: " No {nouns} had estimated {measure} values <{lle} {unit}{exceptions}."
+    exceptions: " with the exception of {items}"
+    exception: "{count} {organ} {noun} in {animals}"
+  gene_sets:
+    none: "In {animals}, there were no active GO terms (i.e., no gene expression response at the gene set level)."
+    one: "The most sensitive GO biological process for which a BMD value could be reliably calculated was {term} with a {measure} (BMD_L) of {pair} {unit}{table}."
+    several: "The most sensitive GO biological processes for which a BMD value could be reliably calculated were {terms}{values}{table}."
+    full_list: "The full list of affected gene sets in the {organ} of {animals} can be found in Appendix {appendix}."
+    intro_examined: "Chemical-induced alterations in {tissues} gene transcript expression were examined to determine those gene sets most sensitive to {chemical} exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology [GO] biological process) was conducted to determine the potency of the chemical to elicit gene expression changes in the {tissues}. This analysis used transcript-level BMD data to assess an aggregate score of gene set potency ({score}) and enrichment."
+    intro_summary: ", with a summary of the top gene set per tissue based on lowest BMD {statistic} provided in Table {table}"
+    intro_shown: "The “active” gene sets with the lowest {statistic} BMD values are shown in {where}{summary}.{below} The gene sets shown in {span} should be interpreted with caution from the standpoint of the underlying biological mechanism and any relationship to toxicity or toxic agents referenced in the GO term definitions. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes (i.e., a concerted biological change) that could serve as a surrogate of estimated biological potency and, by extension, toxicological potency when more definitive toxicological data are unavailable."
+    summary_lead: "A summary of the most potent gene set per tissue is provided in Table {table}."
+    # The same tissue the most potent in both groups (NIEHS-12: the liver).
+    summary_both: "In both {first} and {second} {exposed} {chemical}, the {organ} had the gene set with the lowest BMD {statistic} value, corresponding to {term1} and {term2}, respectively. The BMDs (BMD_Ls) were {pair1} and {pair2} {unit}, respectively."
+    summary_each: "In {animals}, the {organ} had the gene set with the lowest BMD {statistic} value, corresponding to {term} with a BMD (BMD_L) of {pair} {unit}."
+  genes:
+    none: "No {organ} genes in {animals} met the criteria."
+    below_one: "The most sensitive {organ} gene in {animals}{exhibiting} was {genes} with an estimated median BMD <{lle} {unit}."
+    below_many: "The most sensitive {organ} genes in {animals}{exhibiting} were {genes} with estimated median BMDs <{lle} {unit}."
+    exhibiting_up: ", exhibiting an increase in expression,"
+    exhibiting_down: ", exhibiting a decrease in expression,"
+    few: "Only {count} genes met the criteria."
+    few_lead: "Of these {count} genes, {sentence}"
+    half: "Half of the top {count} most sensitive {organ} genes were upregulated and the other half were downregulated."
+    half_up: "The upregulated genes with a calculated BMD were {genes}{values}."
+    half_down: "The downregulated genes with a calculated BMD were {genes}{values}."
+    all_one_way: "All {count} of the most sensitive {organ} genes were {direction}."
+    all_list: "These genes were {genes}{values}."
+    one: "One gene, {gene}, was {direction} with a BMD (BMD_L) of {pair} {unit}."
+    most_up: "The most sensitive upregulated genes with a calculated BMD were {genes}{values}."
+    most_down: "The most sensitive genes exhibiting a decrease in expression were {genes}{values}."
+    intro: "The top 10 genes ranked by BMD potency are shown in {where}.{below} As with the GO analysis, the biological or toxicological significance of the changes in gene expression shown in {span} should be interpreted with caution. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes that could serve as a conservative surrogate of estimated biological potency, and by extension toxicological potency, when more definitive toxicological data are unavailable."
+  # D.2 Empirical False Discovery Rate.  The method's facts (the generator,
+  # the distribution, the values per probe) are the method profile's
+  # (genomics.efdr), the experiments and groups the null analyses'.
+  efdr:
+    bound_pct: 1
+    majority_below_pct: 0.5
+    bound_below: "<{limit}%"
+    bound_at_most: "at most {max}%"
+    gene_range: "In all species-tissue combinations, the gene-level eFDR was {bound}, with a range of {min}% to {max}%{table}."
+    gene_majority: "Most gene-level eFDR values were below {limit}%."
+    go_none: "In all cases, the eFDR for GO biological processes was 0% across all species-tissue combinations."
+    go_active: "GO biological processes were active in the synthetic null data of {found}; in all other species-tissue combinations the eFDR for GO biological processes was 0%."
+    go_active_item: "the {species} {tissue} ({active} in {experiments_with} of {experiments} synthetic null experiments)"
+    methods: "Synthetic null data were generated using the probe-filtered (i.e., “no 0”) {control} data from each tissue in {whose}. The synthetic null data were generated using the {generator} ({generator_abbreviation}; {generator_url}), which employed the {distribution} distribution method previously described for generating synthetic data. In short, for each set of tissue/species, {control} data were used to generate a distribution for each probe. This distribution was resampled to generate {resamples} values for each probe. These values were distributed into synthetic samples, which were then organized into {count} different experiments paralleling the distribution of samples in the experimental study, {groups}. Each of the {count} synthetic null experiments was processed through BMDExpress using the identical parameters used to analyze the experimental data. The resultant data were then used to determine the empirical false discovery rates (eFDR), which are reported as percentages of possible genes and Gene Ontology (GO) biological processes.{appendix}"
+    methods_groups: "i.e., {control_n} samples in the {control} group and {treated_n} for each nonzero exposure concentration"
+    methods_whose: "the {chemical} {species} {studies}"
+    methods_appendix: " The associated bm2 analysis files that are the basis of the empirical false discovery rate can be found in Appendix {appendix}."
+    table:
+      caption: Empirical False Discovery Results
+      headers: [Species, Tissue, Gene eFDR (%) Mean, Gene eFDR (%) Range,
+                GO Biological Process eFDR (%) Mean, GO Biological Process eFDR (%) Range]
+      footnote: "eFDR = empirical false discovery rate; GO = Gene Ontology."
+  # E: the top gene sets' genes with their GO definitions; each study's genes.
+  gene_set_definitions:
+    caption: "Active Genes and Definitions within {table}"
+    headers: [Category Name, "Input Genes/Platform Genes in Gene Set (% Coverage)", Active Genes,
+              "BMD{tag} {statistic} of Gene Set Transcripts (BMDL{tag}–BMDU{tag}) ({unit})",
+              Definition]
+    go_source: "Definitions of GO terms are the Gene Ontology Resource's (go-basic.obo{release})."
+    go_release: ", {release}"
+    fifth_pct: "5th percentile = the value below which 5% of transcript benchmark dose values fall."
+  gene_identifiers:
+    headers: [Gene Symbol, Entrez Gene IDs, Probe IDs, Definition]
+    footnote: "In some cases, a probe may map to more than one gene, resulting in duplicate reporting of that probe mapped to different genes."
+
 changes:
   # ── Materials and Methods: Chemistry first, with the test article's
   # procurement and the vapor generation, monitoring and chamber atmosphere.
@@ -91,7 +198,7 @@ changes:
   - insert:
     - {id: table-most-potent-gene-sets, type: data-table,
        title: "Most Potent Gene Ontology Biological Process Gene Set per Tissue",
-       data_key: most_potent_gene_sets_matrix}
+       data_key: most_potent_gene_sets_matrix, cited_as: gene-set-summary-table}
     into: gene-sets
     at: first
   - insert:
@@ -230,7 +337,7 @@ changes:
     data_key: efdr_results
   - insert:
     - {id: table-c-efdr, type: data-table, title: Empirical False Discovery Results,
-       data_key: appendix_efdr_matrix}
+       data_key: appendix_efdr_matrix, cited_as: efdr-table}
     into: appendix-c-efdr-results
   # C: each study's animals and their sequencing files, one table per study.
   - set: table-b-1
@@ -260,6 +367,10 @@ changes:
   # theoretical inhaled dose, lists each species' files in its own section
   # ("G.3 Rats", "G.4 Mice": one per species of the deposit), and closes with
   # the software.  The lists are derived from the study's data deposit.
+  # The appendix a tissue's gene set results send the reader to ("The full
+  # list … can be found in Appendix G").
+  - set: appendix-f
+    cited_as: supplemental-data
   - insert:
     - id: appendix-f-methods
       type: heading-only

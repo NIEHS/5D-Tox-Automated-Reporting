@@ -1061,13 +1061,19 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     assign_genomics_figure_numbers(render_tree, data.get("genomics_sections"))
     # The gene set and gene results as the books write them, over the numbered
     # tables (a definition binds them, rendering.genomics_results).
+    # Worded by the definition's phrasing (document_model.phrasing).
+    from document_model.phrasing import phrasing_for
     from rendering.genomics_results import attach_genomics_results
-    attach_genomics_results(data, render_tree)
+    phrasing = phrasing_for(dtxsid)
+    attach_genomics_results(data, render_tree, phrasing)
     # The genomic appendices: eFDR (the study's synthetic-null analysis) and the
     # gene set and gene definitions (rendering.genomics_appendix).
     from genomics.efdr import load_efdr
+    from pipeline.method_profile import session_method
     from rendering.genomics_appendix import attach_genomics_appendix
-    attach_genomics_appendix(data, render_tree, load_efdr(dtxsid))
+    efdr = load_efdr(dtxsid)
+    attach_genomics_appendix(data, render_tree, efdr, phrasing,
+                             session_method(dtxsid).efdr_generation() if efdr else None)
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

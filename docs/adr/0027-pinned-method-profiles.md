@@ -181,3 +181,24 @@ Each step is a separate change, verified against the golden oracle.
   - per-endpoint display precision (`tables/display_precision.py`);
   - the body weight intermediate-day rule.
 - **Not done:** a profile picker in the UI (CLI only); automated apical outlier exclusion (`outliers: null` in both profiles).
+
+## Amendment (2026-10-13): a section added after profiles were written
+
+The schema gained `genomics.efdr`: how the empirical FDR's synthetic null
+data were made (the generator and its address, the distribution, the values
+drawn per probe; NIEHS-12/13 Appendix D.2.1). The report's eFDR methods
+paragraph takes these facts from the profile (ADR-0029 §11).
+
+- **Old profiles stay as written.** Profiles are immutable, so
+  `ntp-5day-2021` and `ntp-5day-2025` do not state the section. A section
+  listed in `_ADDED_LATER` may be absent from a profile written before it.
+  For such a profile the section resolves as "to confirm" (the default,
+  None), and the report prints placeholders for those facts.
+- **The revised record is a new profile.** `ntp-5day-2025.1` is
+  `ntp-5day-2025` with `genomics.efdr` stated. Every other value is the same
+  (a test checks this). Its effective date sorts after 2025, so it is the
+  newest profile: tracking and unpinned sessions resolve to it.
+- **Fixed pins are unchanged.** Sessions pinned FIXED to `ntp-5day-2025`
+  (the NIEHS-12/13 member studies) stay there. The eFDR is the report
+  session's (`efdr.json`), and the report session resolves to the newest
+  profile.

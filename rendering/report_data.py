@@ -702,11 +702,19 @@ def marshal_export_data(
 
     from rendering.genomics_summary import DATA_KEY, most_potent_gene_sets
     data.setdefault(DATA_KEY, most_potent_gene_sets(data))
+    from document_model.phrasing import phrasing_for
     from rendering.genomics_results import attach_genomics_results
-    attach_genomics_results(data, active_tree)
+    phrasing = phrasing_for(body.get("dtxsid"))
+    attach_genomics_results(data, active_tree, phrasing)
     from genomics.efdr import load_efdr
     from rendering.genomics_appendix import attach_genomics_appendix
-    attach_genomics_appendix(data, active_tree, load_efdr(body.get("dtxsid")))
+    efdr = load_efdr(body.get("dtxsid"))
+    if efdr:
+        from pipeline.method_profile import session_method
+        method = session_method(body.get("dtxsid")).efdr_generation()
+    else:
+        method = None
+    attach_genomics_appendix(data, active_tree, efdr, phrasing, method)
     name_report_in_peer_review(data)
     return data
 

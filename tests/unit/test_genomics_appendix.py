@@ -11,10 +11,16 @@ from pathlib import Path
 import pytest
 
 from document_model.document_node import DocNode
+from document_model.document_template import load_phrasing
+from document_model.phrasing import Phrasing
 from rendering import genomics_appendix as ga
 from rendering.render_common import inline_plain_text, scoped_value
 
 DOSES = [0, 1, 10, 30, 100, 250, 500]
+P = Phrasing(load_phrasing("eras/niehs-2026"))       # the 2026 books' words
+SANDGEN = {"generator": "Synthetic and Null Data Generator", "generator_abbreviation": "SaNDGen",
+           "generator_url": "https://rstudio.niehs.nih.gov/sandgen/", "distribution": "normal",
+           "resamples_per_probe": 1000}
 
 
 def _tissue(species, tissue, genes, go_active=None, doses=DOSES[1:]):
@@ -34,7 +40,7 @@ def _data(species_doses=DOSES):
 def test_the_efdr_table_prints_as_the_books_do():
     efdr = {"tissues": [_tissue("mouse", "Heart", [0.0, 0.0651, 0.208]),
                         _tissue("rat", "Heart", [0.0, 0.42, 0.0], [0, 8, 0])]}
-    m = ga.appendix_efdr_matrix(efdr)
+    m = ga.appendix_efdr_matrix(efdr, P)
     assert m["caption"] == "Empirical False Discovery Results"
     assert m["rows"][0] == ["Mouse", "Heart", "0.09", "0–0.21", "0", "0"]
     assert m["rows"][1][:4] == ["Rat", "Heart", "0.14", "0–0.42"]
@@ -44,7 +50,7 @@ def test_the_efdr_table_prints_as_the_books_do():
 def test_the_efdr_results_sentences():
     efdr = {"tissues": [_tissue("mouse", "Heart", [0.0, 0.07, 0.21]),
                         _tissue("rat", "Liver", [0.0, 0.0, 0.03])]}
-    (p,) = ga.efdr_results(efdr, "D-1")
+    (p,) = ga.efdr_results(efdr, "D-1", P)
     assert inline_plain_text(p) == (
         "In all species-tissue combinations, the gene-level eFDR was <1%, with a range of 0% to "
         "0.21% (Table D-1). Most gene-level eFDR values were below 0.5%. In all cases, the eFDR "
@@ -53,16 +59,44 @@ def test_the_efdr_results_sentences():
 
 def test_the_efdr_methods_name_the_study_only_when_the_doses_are_its_own():
     efdr = {"tissues": [_tissue("rat", "Heart", [0.0] * 20)]}
-    (p,) = ga.efdr_methods(_data(), efdr, "G")
+    (p,) = ga.efdr_methods(_data(), efdr, "G", SANDGEN, P)
     text = inline_plain_text(p)
     assert "0 ppm data from each tissue in the 1,2-dichlorobenzene rat study." in text
+    assert "(SaNDGen; https://rstudio.niehs.nih.gov/sandgen/), which employed the normal " \
+        "distribution method" in text
+    assert "resampled to generate 1,000 values for each probe" in text
     assert "organized into 20 different experiments" in text
     assert "i.e., 10 samples in the 0 ppm group and 5 for each nonzero exposure concentration" in text
     assert text.endswith("can be found in Appendix G.")
     # NIEHS-13 deposited NIEHS-12's synthetic null analysis (other doses).
-    (p,) = ga.efdr_methods(_data([0, 1, 10, 50, 150, 400, 800]), efdr, "G")
+    (p,) = ga.efdr_methods(_data([0, 1, 10, 50, 150, 400, 800]), efdr, "G", SANDGEN, P)
     assert "[Placeholder: whose 0 ppm data — the synthetic null analyses of the rat heart" \
         in inline_plain_text(p)
+
+
+def test_a_profile_that_does_not_state_the_null_data_s_making_says_so():
+    """ntp-5day-2025 predates genomics.efdr: its facts are placeholders, not
+    the 2026 books' words."""
+    from pipeline.method_profile import resolve
+    method = resolve("ntp-5day-2025").efdr_generation()
+    (p,) = ga.efdr_methods(_data(), {"tissues": [_tissue("rat", "Heart", [0.0] * 20)]}, None,
+                           method, P)
+    text = inline_plain_text(p)
+    assert "SaNDGen" not in text
+    assert "[Placeholder: synthetic null data generator — not stated by the method profile]" \
+        in text
+    assert resolve("ntp-5day-2025.1").efdr_generation() == SANDGEN
+
+
+def test_the_results_wording_is_the_definition_s():
+    """A definition that words a sentence differently, or names another
+    bound, changes the prose — not the code."""
+    efdr = {"tissues": [_tissue("mouse", "Heart", [0.0, 0.07, 0.21])]}
+    reworded = Phrasing({**P.block, "efdr": {**P.block["efdr"], "bound_pct": 0.1,
+                                             "majority_below_pct": None,
+                                             "gene_range": "Gene eFDR: {bound} ({min}–{max}%)."}})
+    (p,) = ga.efdr_results(efdr, None, reworded)
+    assert inline_plain_text(p).startswith("Gene eFDR: at most 0.21% (0–0.21%).")
 
 
 def _gene_set_entry():
@@ -80,7 +114,7 @@ def test_a_tissue_s_gene_set_definitions(monkeypatch):
     monkeypatch.setattr(gd, "_loaded", lambda: ({"GO:0044770": "The cell cycle process by "
                                                  "which a cell commits to entering the next "
                                                  "cell cycle phase."}, "releases/2025-07-22"))
-    built = ga.appendix_gene_set_definitions({"genomics_sections": [_gene_set_entry()]})
+    built = ga.appendix_gene_set_definitions({"genomics_sections": [_gene_set_entry()]}, P)
     heart = built["by_organ"]["heart"]
     assert heart["caption"].startswith("Active Genes and Definitions within Top 1 Heart Gene "
                                        "Ontology Biological Process Gene Sets Ranked by Potency")
@@ -93,7 +127,7 @@ def test_a_tissue_s_gene_set_definitions(monkeypatch):
 
 def test_without_go_basic_the_definitions_are_pending(monkeypatch, tmp_path):
     monkeypatch.setenv("BMDX_GO_OBO", str(tmp_path / "absent.obo"))
-    built = ga.appendix_gene_set_definitions({"genomics_sections": [_gene_set_entry()]})
+    built = ga.appendix_gene_set_definitions({"genomics_sections": [_gene_set_entry()]}, P)
     assert built["by_organ"]["heart"]["rows"][0][-1] == ga.GO_DEFINITION_PENDING
 
 
@@ -115,7 +149,7 @@ def test_each_study_lists_its_genes_once():
             {"gene": g, "entrez_id": i, "probe_id": f"{g.upper()}_1"} for g, i in genes]}]}
         for o, genes in (("heart", [("Spp1", "25353"), ("Lck", "313050")]),
                          ("kidney", [("Lck", "313050"), ("abcc3", "140668")]))]}
-    rat = ga.appendix_gene_identifiers(data)["by_species"]["rat"]
+    rat = ga.appendix_gene_identifiers(data, P)["by_species"]["rat"]
     assert [r[:3] for r in rat["rows"]] == [["abcc3", "140668", "ABCC3_1"],
                                            ["Lck", "313050", "LCK_1"],
                                            ["Spp1", "25353", "SPP1_1"]]

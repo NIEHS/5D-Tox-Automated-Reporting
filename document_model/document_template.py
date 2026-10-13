@@ -104,6 +104,8 @@ _COMPUTED_OR_SPECIAL = frozenset(
 
 # ADR-0029: what a section may repeat over (document_tree.study_tree).
 _REPEATS = ("deposit_species", "study_species", "genomic_organs")
+# What generated prose may cite a node as (DocNode.cited_as).
+CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table")
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file
@@ -479,6 +481,9 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
     if entry.get("study_title") is not None and repeat != "study_species":
         raise ValueError(f"template node {node_id!r}: study_title is only valid on a "
                          f"`repeat: study_species` node")
+    if entry.get("cited_as") is not None and entry["cited_as"] not in CITED_AS:
+        raise ValueError(f"template node {node_id!r}: cited_as must be one of "
+                         f"{list(CITED_AS)}, got {entry['cited_as']!r}")
     route = entry.get("requires_route")
     if route is not None:
         from pipeline.study_design import ROUTES
@@ -881,6 +886,22 @@ def load_tissue_order(name: str) -> list[str]:
     if not isinstance(order, list) or not all(isinstance(t, str) for t in order):
         raise ValueError(f"template {name!r}: tissue_order is a list of tissues, got {order!r}")
     return [t.strip().lower() for t in order]
+
+
+def load_phrasing(name: str) -> dict:
+    """The wording of the prose the report writes from its data (ADR-0029 §11,
+    document_model.phrasing): the definition's ``phrasing:`` block, checked
+    against its schema.  {} when the definition states none."""
+    from document_model.phrasing import PhrasingError, validate
+    raw = _load_raw(name)
+    block = raw.get("phrasing") if isinstance(raw, dict) else None
+    if block is None:
+        return {}
+    try:
+        validate(block)
+    except PhrasingError as e:
+        raise ValueError(f"template {name!r}: {e}") from None
+    return block
 
 
 def load_abstract_genes(name: str) -> bool:

@@ -212,8 +212,23 @@ SCHEMA: dict = {
             "bmr": _bmr,
             "model_selection": _impl("model_selection"),
         },
+        # How the synthetic null data of the empirical FDR were made (the books'
+        # Appendix D.2): the generator, its address, the distribution each
+        # probe's control values were fitted to and the values drawn per probe.
+        "efdr": {
+            "generator": _text,
+            "generator_abbreviation": _text,
+            "generator_url": _text,
+            "distribution": _text,
+            "resamples_per_probe": _count,
+        },
     },
 }
+
+# Sections added to the schema after profiles were written.  Profiles are
+# immutable, so one that predates a section does not state it: the section is
+# "to confirm" for it (the default), and a profile written since states it.
+_ADDED_LATER = frozenset({"genomics.efdr"})
 
 _IDENTITY_KEYS = ("name", "series", "effective", "reference", "description")
 
@@ -232,7 +247,8 @@ def _validate_section(doc, schema: dict, partial: bool, path: str) -> None:
     unknown = sorted(set(doc) - set(schema))
     if unknown:
         _fail(path or "<profile>", f"unknown key(s) {unknown}")
-    missing = [] if partial else sorted(set(schema) - set(doc))
+    missing = [] if partial else sorted(
+        k for k in set(schema) - set(doc) if (f"{path}.{k}" if path else k) not in _ADDED_LATER)
     if missing:
         _fail(path or "<profile>", f"missing key(s) {missing} (state null for 'to confirm')")
     for key, sub in schema.items():
@@ -294,6 +310,8 @@ def _builtin_defaults() -> dict:
             "go_ranking": ["median"],
             "go_display": {"pct": 5, "min_genes": 20, "max_genes": 500, "min_bmd": 3},
             "recorded": {"bmr": None, "model_selection": None},
+            "efdr": {"generator": None, "generator_abbreviation": None, "generator_url": None,
+                     "distribution": None, "resamples_per_probe": None},
         },
     }
 
@@ -423,6 +441,12 @@ class MethodSettings:
             max_dose=self.get(a + "bmd_above_highest_dose") == "nvm",
             nr_fraction=self.get(a + "not_reportable_fraction"),
         )
+
+    def efdr_generation(self) -> dict:
+        """How the eFDR's synthetic null data were made: {generator,
+        generator_abbreviation, generator_url, distribution,
+        resamples_per_probe}, a value None where the profile does not say."""
+        return self.section("genomics.efdr")
 
     def bmr_when_unrecorded(self, platform: str | None) -> dict:
         """{type, factor} for a platform whose analysis records no BMR."""

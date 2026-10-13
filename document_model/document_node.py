@@ -213,6 +213,13 @@ class DocNode:
                         opens it, before its tables (the 2026 books'
                         `gene_set_intro` / `gene_intro`, rendering.
                         genomics_results); unset, the section's narrative.
+        cited_as:       What the prose the report writes from its data cites this
+                        node as (CITED_AS): "supplemental-data" — the appendix
+                        a gene set result's "full list … in Appendix G" names;
+                        "gene-set-summary-table", "efdr-table" — the tables
+                        those paragraphs cite by number.  Declared by the
+                        definition (eras/niehs-2026), so the citing code knows
+                        no node ids (document_tree.find_cited).
         scope_species:  COMPUTED by that expansion: the species a copy (and every
                         node in it) is about; derived file lists keep to it, and
                         in a report over several studies the copy renders from
@@ -252,6 +259,7 @@ class DocNode:
     requires_route: str | None = None
     entry_narrative: bool | None = None
     intro_key: str | None = None
+    cited_as: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None
