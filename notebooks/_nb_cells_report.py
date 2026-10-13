@@ -40,6 +40,10 @@ request layer), from which come the GO ranking statistics and the GO display
 cutoffs (`go_pct`, `go_min_genes`, `go_max_genes`, `go_min_bmd`); the organ,
 sex, assay, gene and gene-set filters of the document template or the
 session's view; and `integrated.json` (refused with `StepError` 400 if absent).
+Before the work starts, the method pin and the document definition pin are
+made current (step 10): a session that tracks moves to the newest profile, and
+records a changed definition; a fixed one is told when the templates have moved
+on (`definition_pin.drift`, logged).
 
 **Concern [1], the data: `run_data`** (ADR-0021). A pure function of the data
 and the method.
@@ -106,7 +110,11 @@ content kinds, run in dependency order:
   then one LLM call writes the narrative, citing papers as `[Pn]` from the
   catalogue it was given. The citations are checked against that catalogue.
 - `genomics-body`: merges those narratives into the genomics sections. A
-  person's edits in `genomics_narrative_overrides.json` win.
+  person's edits in `genomics_narrative_overrides.json` win. Whether the
+  report prints them is the definition's: the 2023 and earlier eras print each
+  tissue's interpretation with its table; the 2026 books (and so a new study)
+  print instead the sentences written from the tables at render time
+  (step 15), and keep these narratives out (`entry_narrative: false`).
 - `apical-bmd`: the BMD summary's narrative, a programmatic descriptive part
   and an LLM analytical part.
 - `references`: the report-wide reference list, numbered after the
@@ -130,7 +138,8 @@ the new file carries a `wording_review` flag.
 **Reads → writes.** `integrated.json`, the sidecars, `genomics.sidecar.json`,
 `_category_lookup.json`, `animal_report.json`, `method_profile.json`,
 `identity.json` → `_cache_*.json`, `.prepare_content.*`, `references.json`,
-`session.duckdb`, `bm2_<slug>.json`.
+`session.duckdb`, `bm2_<slug>.json`; `method_profile.json` and
+`document_definition.json` kept current.
 
 **If it goes wrong.** Any failure in concern [1] raises `StepError` 500. An LLM
 failure in Methods leaves Methods empty. A content kind that fails is logged,
@@ -220,7 +229,9 @@ it has one, as `build_published_reports` keeps it across rebuilds.
 **The Summary.** *Purpose:* the report's Summary section, from this study's
 results. *Implementation:* `workflow.steps.materialize_summary` →
 `narrative.report_summary.build_report_summary(**narrative.summary_llm.summary_inputs(session))`,
-with no LLM: the same inputs as the Abstract, in a fixed five-part shape. It
+with no LLM: the same inputs as the Abstract, in NIEHS-10's fixed five-part
+shape (a study with apical results only names its single "most sensitive"
+endpoint, as NIEHS-05 does). It
 writes `summary.json` (`source: generated`, unapproved), and **never** replaces
 a Summary a person approved or wrote.
 
@@ -306,12 +317,38 @@ writes each surface to `OUT/<DTXSID><suffix>`. For all but LaTeX/PDF it calls
    silence. A report over several studies (`studies.json`) is composed from
    its member sessions (`rendering.report_compose`).
 2. **The tree** (`document_model.view_config.build_view_tree`): the first of
-   the session view's own structure, the session's `document.yaml`, the
-   study's document definition (`templates/studies/<DTXSID>/document.yaml`, its
-   era's base plus the study's alterations, ADR-0029), or the shared template
-   `templates/niehs-5day-report.yaml`. `study_document_facts` adds the
-   definition's series details, packaging and object placement.
-3. **The surface** (`render_surface`, with cross-references numbered from the
+   the session view's own structure, the session's `document.yaml`, or the
+   study's document definition (step 10): its pinned snapshot when the
+   session fixes it, else its own (`templates/studies/<DTXSID>/document.yaml`,
+   its era's base plus the study's alterations, ADR-0029), else the
+   definition of a new study (`templates/eras/niehs-2026.yaml`). The shared
+   template `templates/niehs-5day-report.yaml` is the base grammar every era
+   extends. `study_tree` then fits the tree to the study: tables of domains it
+   didn't collect drop out, sections gated on another route
+   (`requires_route: inhaled`) drop out, and repeated sections are copied per
+   study, per tissue or per deposited species (`repeat`).
+   `study_document_facts` adds the definition's series details, packaging,
+   object placement, tissue order, abstract convention and **phrasing**.
+3. **The prose written from the tables**, once the tree has numbered them
+   (`latex_export._number_and_list`), in the words the definition's
+   `phrasing:` block declares (ADR-0029 §11; nothing when it declares none,
+   as the 2023 and earlier eras don't):
+   - `rendering.genomics_results`: the gene set and gene analyses' openings,
+     each tissue's results per study and the gene set summary, by the books'
+     rules (the lower limit of extrapolation, the two most potent gene sets
+     and any tied, the "One gene / All N / Half / Only N" forms). Gene names
+     come from `assets/gene_names.json` (NCBI, looked up only with
+     `BMDX_ALLOW_NCBI_GENE=1`); the short name from `identity.json`'s
+     `abbreviation` (step 9).
+   - `rendering.genomics_appendix`: Appendix D.2's eFDR methods, results and
+     table from `efdr.json` (step 9) and the method profile's `genomics.efdr`;
+     Appendix E's gene set definitions (GO definitions from
+     `resources/go/go-basic.obo`, or `BMDX_GO_OBO`) and gene identifiers.
+     What no source supplies (the gene definitions; GO definitions without
+     the file) prints as a visible placeholder.
+   The appendix and tables those sentences cite are the nodes the definition
+   declares `cited_as`.
+4. **The surface** (`render_surface`, with cross-references numbered from the
    tree), over the shared intermediate form in `rendering.render_common`:
    - `docx`: `rendering.docx_generator.generate_docx`, on the styles of
      `assets/templates/niehs-10-base.docx` (the NTP report template's styles);
@@ -324,10 +361,15 @@ writes each surface to `OUT/<DTXSID><suffix>`. For all but LaTeX/PDF it calls
    - `latex` / `pdf`: the Overleaf bundle (`rendering.latex_export`), compiled
      with `tect` for the PDF.
 
-This scratch session has no document definition of its own (that lives under
-the reference session's id), so it renders from the shared template. Where
-the published definition differs, the next step shows structural differences
-that the reference session doesn't have.
+This scratch session has no document definition of its own (NIEHS-10's lives
+under the reference session's id, `templates/studies/DTXSID50469320/`), so it
+renders as a **new study** would: from the 2026 books' definition, not
+NIEHS-10's 2023 one. The structure is the 2026 books': Chemistry first, the
+apical results under "Apical Endpoint Analysis", each tissue's gene set and
+gene results under its own heading written from the tables, the eFDR and
+definitions appendices. The inhalation-only sections drop out, since NIEHS-10
+was a gavage study. So the next step's comparison with the NIEHS-10 book shows
+those era differences, which the reference session doesn't have.
 
 **Reads → writes.** The session → `output/<DTXSID>/<DTXSID>.docx`, `.html`,
 `-bits.zip`, ….
@@ -370,7 +412,10 @@ The same comparison runs for every published report with
 browser at `/Compare/<dtxsid>`.
 
 **Reads → writes.** → `output/<DTXSID>/<DTXSID>-compare.html`,
-`<DTXSID>-compare.diff`. The table lists the sections that differ most.
+`<DTXSID>-compare.diff`. The table lists the sections that differ most. For
+this scratch session they include the era differences step 15 describes; the
+reference session, rendered from NIEHS-10's own definition, is the measure of
+how close the tool gets to the book.
 """)
 
 _code(r"""

@@ -1,8 +1,8 @@
 """
 Cells of notebooks/workflow_walkthrough.ipynb, part 1: the introduction and
 the data-preparation arc (setup → parameters → input files → import → validate
-→ resolve → confirm → integrate → stated facts → method profile → animal
-report).  Assembled by notebooks/_build_workflow_notebook.py; each step's
+→ resolve → confirm → integrate → stated facts → method profile and document
+definition → animal report).  Assembled by notebooks/_build_workflow_notebook.py; each step's
 explanation must stay true to the code it describes.
 """
 
@@ -69,7 +69,8 @@ Read this once. The step explanations below refer back to it.
 |---|---|---|
 | Front ends | `web_routes/*` (the browser), `tooling/generate_report.py` (the command line), this notebook | Parse input, call a step, show the result. No workflow logic. |
 | Workflow core | `workflow/steps.py`, `workflow/engine.py`, `workflow/phases.py`, `workflow/store.py` | One function per step. Takes plain Python, returns plain Python, raises `workflow.errors.StepError` (with an HTTP-style status code the routes pass on). All session I/O goes through an injected `PoolStore` (`DiskPoolStore` here). |
-| Pipeline | `pipeline/*`, `tables/*`, `genomics/*`, `narrative/*`, `rendering/*` | The work: fingerprint caching, processing layers, tables, narratives, the document tree and the four render surfaces. HTTP-free. |
+| Pipeline | `pipeline/*`, `tables/*`, `genomics/*`, `narrative/*`, `rendering/*` | The work: fingerprint caching, processing layers, tables, narratives and the four render surfaces. HTTP-free. |
+| Document | `document_model/*`, `templates/`, `profiles/` | The report's declarations: the document tree and its definitions (an era plus a study's alterations, ADR-0029), the wording of the prose written from data (`phrasing:`), the session's definition pin; the analysis method profiles (ADR-0027). Neither `pipeline` nor `document_model` imports the web layer. |
 | Data model | `bmdx_pipe` (the sibling package `/workspace/bmdx-pipe`) | Fingerprinting, pool validation, integration, NTP statistics, BMD acceptance, the animal report. |
 | Java | BMDExpress-3 (`$BMDX_PROJECT_ROOT/target/bmdx-core.jar` + `target/deps/*.jar`) and the helper classes in `bmdx_pipe/java/` | `ExportBm2` (`.bm2` → JSON), `IntegrateProject` (the merge), `ExportCategories`, `ExportGenomics`, `RunApicalBmds` (ToxicR model averaging), `SubsetBm2`, `JsonToBm2`. Called as subprocesses (`bmdx_pipe.java_bridge.build_classpath`). |
 
@@ -80,6 +81,10 @@ Everything about a study lives in `sessions/<DTXSID>/`: the input files in
 `integrated.json`, `animal_report.json`, `bm2_<slug>.json`, …). There is no
 database of sessions and no in-memory state that matters. Restart the server,
 or open the session in the browser, and everything is still there.
+
+A session file that exists but can't be read (corrupt JSON, say) is an error
+naming the file (`common.session_files.UnreadableSessionFile`, HTTP 422 in
+the browser), never treated as absent: a report is not built without it.
 
 ### The phase is derived, never stored
 
@@ -137,6 +142,18 @@ walled NIEHS gateway: `ANTHROPIC_BASE_URL` must be
 not a setting. Off the NIEHS network the LLM features fail; they never fall
 back to a public endpoint.
 
+Two other lookups would send the study's genes outside, so both are off
+unless switched on: Enrichr cluster labels (`BMDX_ALLOW_ENRICHR=1`, step 12)
+and NCBI gene names for the genomic sentences (`BMDX_ALLOW_NCBI_GENE=1`,
+step 15; otherwise the committed cache `assets/gene_names.json`, and a
+visible placeholder for a gene it lacks).
+
+Most of the prose that is **not** LLM-written is written by rules over the
+tables (the Abstract, the Summary, the 2026 books' gene set and gene results).
+Where a definition declares the wording (`phrasing:`, ADR-0029 §11), the rule
+only chooses the form and fills the fields; the rules still worded in code are
+listed in `docs/writing-rules-inventory.md`.
+
 ### Three rules every step keeps
 
 1. **`integrated.json` is the single source of truth.** After integration,
@@ -156,10 +173,10 @@ back to a public endpoint.
 | 6 | Resolve | `workflow.steps.resolve_step` | – | – | `precedence.json` |
 | 7 | Confirm | `workflow.steps.confirm_metadata_step` | – | – | file headers, `_fingerprints.json` |
 | 8 | Integrate | `workflow.steps.integrate_step` | `IntegrateProject`, `ExportCategories`, `ExportGenomics`, `JsonToBm2` | ✓ | `integrated.json`, `integrated.bm2`, `_category_lookup.json`, `genomics.sidecar.json`, `identity.json`, `method_profile.json` |
-| 9 | State facts | `generate_report.apply_*`, `pipeline.deposit.record_deposit` | `JsonToBm2` | – | `study_design.json`, `metadata_approved.json`, `front_matter.json`, `deposit.json` |
-| 10 | Method profile | `pipeline.method_profile.pin_profile` | – | – | `method_profile.json` |
+| 9 | State facts | `generate_report.apply_*`, `generate_report.record_abbreviation`, `pipeline.deposit.record_deposit`, `genomics.efdr.record_efdr` | `JsonToBm2`, `ExportCategories`, `ExportBm2` (eFDR) | – | `study_design.json`, `metadata_approved.json`, `front_matter.json`, `identity.json`, `deposit.json`, `efdr.json` |
+| 10 | Method profile, document definition | `pipeline.method_profile.pin_profile`, `document_model.definition_pin` | – | – | `method_profile.json`, `document_definition.json` + `.yaml` |
 | 11 | Animal report | `workflow.steps.generate_animal_report_step` | – | – | `animal_report.json` |
-| 12 | Process | `workflow.steps.process_step` + `materialize_result_sections` | `RunApicalBmds`, `ExportGenomics` | ✓ | `_cache_*.json`, `references.json`, `bm2_<slug>.json`, `session.duckdb` |
+| 12 | Process | `workflow.steps.process_step` + `materialize_result_sections` | `RunApicalBmds`, `ExportGenomics` | ✓ | `_cache_*.json`, `references.json`, `bm2_<slug>.json`, `session.duckdb`; the definition pin kept current |
 | 13 | Background, Summary | `generate_report.background`, `workflow.steps.materialize_summary` | – | ✓ (Background) | `background.json`, `summary.json` |
 | 14 | Publish gate | `WorkflowEngine.publish_readiness` | – | – | – |
 | 15 | Render | `rendering.preview_surface.render_preview` | – | – | `output/<DTXSID>/…` |
@@ -249,7 +266,8 @@ command line.
 | `FRONT_MATTER` | `--front-matter` | `front_matter.json` | Authors, contributors, publication details, and the strain designation the title prints. |
 | `METHOD_PROFILE` | `--method-profile` | `method_profile.json` (the pin) | Every statistical and BMD setting, and the Methods text. |
 | `DEPOSIT` | `--deposit` | `deposit.json` | The Supplemental Data appendix. |
-| `DOSE_UNIT`, `SHORT_NAME` | `--dose-unit`, `--compound-name` | Process parameters | Table headers and narratives. |
+| `DOCUMENT_DEFINITION` | `--document-definition` | `document_definition.json` + `.yaml` (the pin) | Which definition the report renders from: `None`/`"track"` the current templates (recorded), `"fixed"` a snapshot taken now. |
+| `DOSE_UNIT`, `SHORT_NAME` | `--dose-unit`, `--compound-name` | Process parameters; `SHORT_NAME` also as `identity.json`'s `abbreviation` | Table headers and narratives; the short name the sentences written from the tables use ("PFHxSAm", "1,4-DCB"). |
 
 The rest steer the notebook itself:
 
@@ -286,6 +304,7 @@ RESEED = False                      # True: wipe the scratch session and run col
 FROM_PACKAGE = True                 # False: copy the reference session's inputs instead
 
 FRONT_MATTER = {"strain_designation": DESIGNATION}
+DOCUMENT_DEFINITION = None          # "fixed": render from a snapshot of the definition as it is now
 EXPERIMENT_METADATA = None          # {experiment name: {"organ": …, "sex": …}}
 if REPORT in GENOMIC_STATED and _project_json(REPORT):
     _names = [e["name"] for e in json.loads(_project_json(REPORT).read_text())
@@ -301,6 +320,7 @@ OUT = ROOT / "output" / DTXSID
 for k, v in dict(REPORT=REPORT, DTXSID=DTXSID, NAME=NAME, CASRN=CASRN, SHORT_NAME=SHORT_NAME,
                  DOSE_UNIT=DOSE_UNIT, DESIGN=DESIGN, FRONT_MATTER=FRONT_MATTER,
                  EXPERIMENT_METADATA=EXPERIMENT_METADATA, METHOD_PROFILE=METHOD_PROFILE,
+                 DOCUMENT_DEFINITION=DOCUMENT_DEFINITION,
                  FROM_PACKAGE=FROM_PACKAGE, DEPOSIT=DEPOSIT.relative_to(ROOT),
                  OUT=OUT.relative_to(ROOT)).items():
     print(f"{k:19} {v}")
@@ -761,11 +781,31 @@ metadata from scratch each time).
   kind read from its name (apical, genomic, study tables, animal data, methods,
   internal dose, software) and a caption; a study's
   `templates/studies/<id>/deposit.yaml` can override both. Writes
-  `deposit.json`, which the Supplemental Data appendix lists.
+  `deposit.json`, which the Supplemental Data appendix lists. The
+  appendix gives the deposit's address: its DOI when `deposit.yaml` states
+  one (every file's link then points there), else the session's local folder
+  `sessions/<id>/supplemental/`, served at
+  `http://127.0.0.1:9000/api/sessions/<id>/supplemental/` (`BMDX_LOCAL_URL`
+  overrides the host) until the publishing package gives the real address
+  (`pipeline.deposit.deposit_address`). A new study with no deposit of its own
+  lists that folder's files.
+- **The empirical FDR**, `genomics.efdr.record_efdr(dtxsid, zips)`, when the
+  deposit holds synthetic-null analyses (`*_eFDR_Synthetic_Null_Analysis*.zip`,
+  NIEHS-12/13 only; NIEHS-10 has none). For each `.bm2` in them the Java
+  `ExportCategories` and `ExportBm2` helpers read the null experiments; per
+  experiment, the gene eFDR is the genes passing the gene-level filters over
+  the genes analysed (that universe recovered exactly from a one-gene
+  category's Fisher tail), and the GO eFDR counts the processes passing the
+  method profile's `go_display` criteria. Writes `efdr.json`, which Appendix D.2
+  reads (step 15).
+- **The short name**, `generate_report.record_abbreviation(dtxsid, SHORT_NAME, store)`:
+  `identity.json`'s `abbreviation`, the name the sentences written from the
+  tables use (step 15). Step 8 rewrote `identity.json`, so it is recorded
+  here, after it, as the command line keeps it across integrations.
 
 **Reads → writes.** → `study_design.json`, `metadata_approved.json`,
-`front_matter.json`, `deposit.json`; `integrated.json` and `integrated.bm2`
-updated.
+`front_matter.json`, `identity.json`, `deposit.json`, `efdr.json`;
+`integrated.json` and `integrated.bm2` updated.
 """)
 
 _code(r"""
@@ -775,11 +815,19 @@ gr.apply_design(DTXSID, DESIGN, store)
 if EXPERIMENT_METADATA:
     gr.apply_experiment_metadata(DTXSID, EXPERIMENT_METADATA)
 gr.apply_front_matter(DTXSID, FRONT_MATTER, store)
+gr.record_abbreviation(DTXSID, SHORT_NAME, store)
 if DEPOSIT:
     manifest = record_deposit(DTXSID, DEPOSIT, tuple(BOOK_OWN_FILES))
     kinds = collections.Counter(f.get("kind") for f in manifest["files"])
     print(f"  deposit: {len(manifest['files'])} file(s) from {DEPOSIT.relative_to(ROOT)}: "
           + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items(), key=lambda kv: str(kv[0]))))
+    from genomics.efdr import ZIP_PATTERN, record_efdr
+    nulls = sorted(DEPOSIT.glob(ZIP_PATTERN))
+    if nulls:
+        efdr = record_efdr(DTXSID, nulls)
+        print(f"  eFDR: {len(efdr['tissues'])} species-tissue(s) from {len(nulls)} null analysis file(s)")
+    else:
+        print("  eFDR: no synthetic-null analyses in the deposit")
 d = load_integrated(DTXSID)["doseResponseExperiments"][0]["experimentDescription"]
 print("  first experiment now:", {k: d.get(k) for k in ("species", "strain", "articleRoute",
                                                          "administrationMeans", "articleVehicle", "studyDuration")})
@@ -787,14 +835,20 @@ print("  first experiment now:", {k: d.get(k) for k in ("species", "strain", "ar
 
 # ---------------------------------------------------------------------------
 _md(r"""
-## 10. Method profile
+## 10. Method profile and document definition
 
-**Purpose.** Fix the analysis method the study is reported under. The method
-(which statistical tests, which BMD engine and acceptance rules, which GO
-ranking and cutoffs, and the Methods text that describes them) changed between
-report eras, so it is a versioned, named **profile** rather than code
-(ADR-0027): `profiles/ntp-5day-2021.yaml` for NIEHS 07 … 10,
-`profiles/ntp-5day-2025.yaml` for NIEHS-12/13.
+**Purpose.** Fix what the study is reported under: the analysis method, and
+the document the report is written to. Both changed between report eras, so
+both are versioned declarations rather than code, and a session pins each.
+
+The method (which statistical tests, which BMD engine and acceptance rules,
+which GO ranking and cutoffs, how the eFDR's null data were made, and the
+Methods text that describes them) is a named **profile** (ADR-0027):
+`profiles/ntp-5day-2021.yaml` for NIEHS 07 … 10; `ntp-5day-2025.yaml` and
+`ntp-5day-2025.1.yaml` for NIEHS-12/13 (2025.1 is the same method with
+`genomics.efdr` stated, and is the newest). Profiles are immutable: a revised
+record is a new file, and a section added to the schema after a profile was
+written resolves as "to confirm" for it.
 
 **How it's implemented.** `generate_report.method_profile(dtxsid, METHOD_PROFILE)`:
 
@@ -825,13 +879,35 @@ report eras, so it is a versioned, named **profile** rather than code
 The settings' signature is part of every Process cache key, so re-pinning a
 profile recomputes what depends on it.
 
-**Reads → writes.** `profiles/<name>.yaml` → `method_profile.json`.
+**The document definition** (ADR-0029 §12),
+`generate_report.document_definition(dtxsid, DOCUMENT_DEFINITION)`:
+
+1. Which definition: the study's own (`templates/studies/<DTXSID>/document.yaml`,
+   its era plus alterations), else the definition of a new study,
+   `templates/eras/niehs-2026.yaml` (the 2026 books, ADR-0029 §10;
+   `document_definition.current_definition_name`). The scratch session has no
+   definition of its own, so it gets the 2026 one (step 15).
+2. `document_model.definition_pin.ensure_pin` (or `pin_definition` with a
+   mode) composes it (every `extends` resolved), hashes it and writes the pin,
+   `document_definition.json` (name, hash, mode, who, when), with the composed
+   definition beside it as `document_definition.yaml`.
+   - **track** (the default): the report renders from the current templates;
+     when the definition changes, the next pin records it and keeps the old
+     pin and snapshot in `history/_document_definition/`.
+   - **fixed**: the report renders from the snapshot, whatever the templates
+     say later (`definition_name` gives `@pinned/<id>`, which the template
+     loader reads from the session). `drift` says when the templates have
+     moved on; an edited snapshot is refused; fixing again takes them up.
+
+**Reads → writes.** `profiles/<name>.yaml`, `templates/…` →
+`method_profile.json`, `document_definition.json`, `document_definition.yaml`.
 """)
 
 _code(r"""
 from pipeline.method_profile import session_method
 
 gr.method_profile(DTXSID, METHOD_PROFILE)
+gr.document_definition(DTXSID, DOCUMENT_DEFINITION)
 settings = session_method(DTXSID).to_json()["settings"]
 print(f"\n{len(settings)} resolved settings (value — the layer that set it):")
 for path, s in settings.items():
