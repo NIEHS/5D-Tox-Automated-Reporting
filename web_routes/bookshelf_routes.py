@@ -7,8 +7,10 @@ standalone URL.
   GET /Bookshelf/<dtxsid>  → that session's report rendered through the `bookshelf`
                              preview surface (rendering.bookshelf_preview), as a
                              self-contained HTML page.
-  GET /Bookshelf           → the shelf: the sessions on disk, each linked to its
-                             facsimile.
+  GET /Bookshelf           → the shelf: each generated report, linked to its
+                             facsimile — the published ones in the order they
+                             were published, labelled with the date, then the
+                             unpublished ones.
 
 The facsimile is rendered FRESH per request via preview_surface.render_preview
 (no archive/persist side effect), so it always reflects the current report.  Only
@@ -61,23 +63,87 @@ def _sessions_root() -> Path:
     return common.paths.SESSIONS_DIR
 
 
-def has_generated_report(dtxsid: str) -> bool:
-    """Whether the session holds a generated report: it was integrated and
-    processed (integrated.json plus a processed-sections cache).  An empty,
-    abandoned or test-made session directory is not a report, so it is neither
-    shelved nor served."""
+def _holds_report(dtxsid: str) -> bool:
+    """Whether the session's own data was integrated and processed
+    (integrated.json plus a processed-sections cache)."""
     sess = _sessions_root() / dtxsid
     return (sess / "integrated.json").is_file() and any(sess.glob("_cache_sections_*.json"))
 
 
+def _members(dtxsid: str) -> dict[str, str]:
+    """{study key: member session} of a report over several studies
+    (studies.json, rendering.report_compose); {} for a single study."""
+    data = _load_json(_sessions_root() / dtxsid / "studies.json")
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def has_generated_report(dtxsid: str) -> bool:
+    """Whether the session holds a generated report: it was integrated and
+    processed, or it is a report over several studies each of which was.  An
+    empty, abandoned or test-made session directory is not a report, so it is
+    neither shelved nor served."""
+    if _holds_report(dtxsid):
+        return True
+    members = _members(dtxsid)
+    return bool(members) and all(_holds_report(m) for m in members.values())
+
+
 def generated_reports() -> list[str]:
-    """The sessions on disk that hold a generated report, sorted."""
+    """The sessions on disk whose own data makes a generated report, sorted
+    (a report over several studies is composed from these; shelf_books)."""
     try:
         return sorted(p.name for p in _sessions_root().iterdir()
                       if p.is_dir() and not p.name.startswith(".")
-                      and has_generated_report(p.name))
+                      and _holds_report(p.name))
     except OSError:
         return []
+
+
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _date_label(published: str | None) -> str:
+    """"2023-03" as Bookshelf prints a publication date, "2023 Mar"."""
+    if not published:
+        return "date not recorded"
+    year, _, month = published.partition("-")
+    return f"{year} {_MONTHS[int(month) - 1]}" if month.isdigit() and 1 <= int(month) <= 12 \
+        else year
+
+
+def _report_order(report: str) -> tuple:
+    """"NIEHS-02" before "NIEHS-10": the series, then the number."""
+    import re
+    return tuple(int(t) if t.isdigit() else t for t in re.split(r"(\d+)", report))
+
+
+def shelf_books() -> tuple[list[dict], list[dict]]:
+    """The shelf's books, (published, unpublished): each {dtxsid, title,
+    report, published, studies}.  A report over several studies is one book,
+    its member studies not shelved apart.  Published books are in the order
+    they were published (the published book's date; reports of one date by
+    their number), unpublished ones by title."""
+    from narrative.prompt_workshop import published_date
+    from pipeline.deposit import SPECIES_TITLES
+    from web_routes.compare_routes import published_report
+
+    try:
+        composed = [p.name for p in _sessions_root().iterdir()
+                    if p.is_dir() and _members(p.name) and has_generated_report(p.name)]
+    except OSError:
+        composed = []
+    members = {m for c in composed for m in _members(c).values()}
+    published, unpublished = [], []
+    for d in sorted((set(generated_reports()) - members) | set(composed)):
+        report = published_report(d)
+        book = {"dtxsid": d, "title": _session_title(d), "report": report,
+                "published": published_date(report),
+                "studies": [SPECIES_TITLES.get(k, k.title()) for k in _members(d)]}
+        (published if report else unpublished).append(book)
+    published.sort(key=lambda b: (b["published"] is None, b["published"] or "",
+                                  _report_order(b["report"])))
+    unpublished.sort(key=lambda b: (b["title"].lower(), b["dtxsid"]))
+    return published, unpublished
 
 
 def _session_title(dtxsid: str) -> str:
@@ -160,7 +226,7 @@ def bookshelf_pdf(dtxsid: Dtxsid):
 @router.get("/Bookshelf", response_class=HTMLResponse)
 def bookshelf_shelf():
     """The shelf: the generated reports on disk, each linked to its facsimile."""
-    return HTMLResponse(_shelf_page(generated_reports()))
+    return HTMLResponse(_shelf_page(*shelf_books()))
 
 
 def _docx_to_pdf(docx_bytes: bytes) -> bytes | None:
@@ -205,22 +271,40 @@ li.book a{display:block;text-decoration:none;color:inherit;background:var(--card
 li.book a:hover{border-left-color:#12263a;background:#eef2f5;}
 .book .title{font-weight:700;color:#12263a;}
 .book .id{font-size:.78rem;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace;}
+.book .when{font-size:.8rem;font-weight:600;color:var(--link);margin-bottom:4px;}
+.book.unpublished a{border-left-color:#8a96a3;}
+.book.unpublished .when{color:var(--muted);font-weight:400;}
+h2.group{font-size:1.05rem;color:#12263a;margin:30px 0 4px;}
+p.group{color:var(--muted);font-size:.85rem;margin:0 0 12px;}
 .empty{color:var(--muted);}
 a.home{color:var(--link);text-decoration:none;font-size:.85rem;}
 """
 
 
-def _shelf_page(dtxsids: list[str]) -> str:
-    if dtxsids:
-        cards = "".join(
-            f'<li class="book"><a href="/Bookshelf/{_html.escape(d)}">'
-            f'<div class="title">{_html.escape(_session_title(d))}</div>'
-            f'<div class="id">{_html.escape(d)}</div></a></li>'
-            for d in dtxsids
-        )
-        body = f'<ul class="shelf">{cards}</ul>'
-    else:
-        body = '<p class="empty">No generated reports yet.</p>'
+def _card(book: dict, when: str, cls: str = "book") -> str:
+    d = book["dtxsid"]
+    studies = f' · {", ".join(book["studies"])}' if book["studies"] else ""
+    return (f'<li class="{cls}"><a href="/Bookshelf/{_html.escape(d)}">'
+            f'<div class="when">{_html.escape(when)}</div>'
+            f'<div class="title">{_html.escape(book["title"])}</div>'
+            f'<div class="id">{_html.escape(d + studies)}</div></a></li>')
+
+
+def _shelf_page(published: list[dict], unpublished: list[dict]) -> str:
+    """The shelf: the published reports in the order they were published (left
+    to right, top to bottom), each labelled with its date; the unpublished
+    ones in a grid of their own below."""
+    parts = []
+    if published:
+        cards = "".join(_card(b, f"{_date_label(b['published'])} · {b['report']}")
+                        for b in published)
+        parts.append('<h2 class="group">Published</h2><p class="group">In order of '
+                     f'publication.</p><ul class="shelf">{cards}</ul>')
+    if unpublished:
+        cards = "".join(_card(b, "Unpublished", "book unpublished") for b in unpublished)
+        parts.append('<h2 class="group">Unpublished</h2><p class="group">Not yet '
+                     f'published, by title.</p><ul class="shelf">{cards}</ul>')
+    body = "".join(parts) or '<p class="empty">No generated reports yet.</p>'
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
