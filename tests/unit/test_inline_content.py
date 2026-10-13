@@ -135,3 +135,17 @@ def test_italic_and_subscript_render_on_every_surface():
     assert (runs[2].text, runs[2].font.subscript) == ("L", True)
     assert etree.tostring(_p_inline(para), encoding="unicode") == (
         "<p><italic>Spp1</italic> with a BMD (BMD<sub>L</sub>)</p>")
+
+
+def test_superscript_and_bold_render_on_every_surface():
+    """A footnote mark and a bold run (the published books' content,
+    rendering.published_clone) on each surface."""
+    from rendering.jats_generator import _p_inline
+    from lxml import etree
+    para = [rc.make_bold("Liver"), " weight", rc.make_sup("a")]
+    assert hg._render_inline(para) == "<b>Liver</b> weight<sup>a</sup>"
+    assert lg._render_inline(para) == r"\textbf{Liver} weight\textsuperscript{a}"
+    doc = Document(); p = doc.add_paragraph(); dg._add_inline_runs(p, para)
+    assert (p.runs[0].bold, p.runs[2].font.superscript) == (True, True)
+    assert etree.tostring(_p_inline(para), encoding="unicode") == (
+        "<p><bold>Liver</bold> weight<sup>a</sup></p>")

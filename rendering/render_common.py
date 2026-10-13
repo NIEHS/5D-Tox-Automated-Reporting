@@ -157,6 +157,12 @@ INLINE_EXT_LINK = "ext-link"
 # <italic> / <sub>, as the books print them (rendering.genomics_results).
 INLINE_ITALIC = "italic"
 INLINE_SUB = "sub"
+# A superscript (a footnote mark, an exponent) and bold: BITS <sup> / <bold>
+# (the published books' content, rendering.published_clone).
+INLINE_SUP = "sup"
+INLINE_BOLD = "bold"
+# The typed units that only style their text — each surface maps every one.
+INLINE_STYLES = (INLINE_ITALIC, INLINE_SUB, INLINE_SUP, INLINE_BOLD)
 
 
 def make_ext_link(text: str, href: str) -> dict:
@@ -171,6 +177,14 @@ def make_italic(text: str) -> dict:
 
 def make_sub(text: str) -> dict:
     return {"type": INLINE_SUB, "text": text}
+
+
+def make_sup(text: str) -> dict:
+    return {"type": INLINE_SUP, "text": text}
+
+
+def make_bold(text: str) -> dict:
+    return {"type": INLINE_BOLD, "text": text}
 
 
 def normalize_inline(paragraph) -> list:

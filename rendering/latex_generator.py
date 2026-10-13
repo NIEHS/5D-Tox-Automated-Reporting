@@ -87,8 +87,7 @@ from rendering.render_common import (
     inline_plain_text,
     paragraph_has_inline,
     INLINE_EXT_LINK,
-    INLINE_ITALIC,
-    INLINE_SUB,
+    INLINE_STYLES,
     assert_dispatch_covers,
     walk_emit,
     resolve_protection,
@@ -294,6 +293,11 @@ def _splice_urls(text: str) -> str:
     return "".join(out)
 
 
+# Each styling inline unit's LaTeX command.
+_LATEX_STYLE = {"italic": "textit", "sub": "textsubscript", "sup": "textsuperscript",
+                "bold": "textbf"}
+
+
 def _render_inline(paragraph) -> str:
     r"""Render one paragraph (a plain str OR a list of inline units — the
     render_common inline model) to LaTeX.  A plain str keeps the exact
@@ -310,8 +314,8 @@ def _render_inline(paragraph) -> str:
         elif unit.get("type") == INLINE_EXT_LINK:
             href = unit.get("href", "")
             out.append(rf"\href{{{href}}}{{{_escape_latex(unit.get('text', ''))}}}")
-        elif unit.get("type") in (INLINE_ITALIC, INLINE_SUB):
-            cmd = "textit" if unit["type"] == INLINE_ITALIC else "textsubscript"
+        elif unit.get("type") in INLINE_STYLES:
+            cmd = _LATEX_STYLE[unit["type"]]
             out.append(rf"\{cmd}{{{_escape_latex(unit.get('text', ''))}}}")
         else:
             out.append(_escape_latex(unit.get("text", "")))

@@ -89,7 +89,9 @@ from rendering.render_common import (
     normalize_inline,
     inline_plain_text,
     INLINE_EXT_LINK,
+    INLINE_BOLD,
     INLINE_ITALIC,
+    INLINE_STYLES,
     INLINE_SUB,
     incidence_table_plan,
     is_protected,
@@ -254,12 +256,16 @@ def _add_inline_runs(paragraph, content) -> None:
                 paragraph.add_run(_clean(unit))
         elif unit.get("type") == INLINE_EXT_LINK:
             _add_hyperlink(paragraph, _clean(unit.get("text", "")), unit.get("href", ""))
-        elif unit.get("type") in (INLINE_ITALIC, INLINE_SUB):
+        elif unit.get("type") in INLINE_STYLES:
             run = paragraph.add_run(_clean(unit.get("text", "")))
             if unit["type"] == INLINE_ITALIC:
                 run.italic = True
-            else:
+            elif unit["type"] == INLINE_BOLD:
+                run.bold = True
+            elif unit["type"] == INLINE_SUB:
                 run.font.subscript = True
+            else:
+                run.font.superscript = True
         else:
             paragraph.add_run(_clean(unit.get("text", "")))
 
