@@ -75,6 +75,7 @@ from rendering.render_common import (
     INLINE_STYLES,
     apical_table_plan,
     incidence_table_plan,
+    matrix_caption,
     matrix_head_rows,
     sample_counts_table,
     bmd_summary_plan,
@@ -207,6 +208,10 @@ def _p_inline(paragraph) -> etree._Element:
             etree.SubElement(p, unit["type"]).text = str(unit.get("text", ""))
         else:
             _append_run(p, unit if isinstance(unit, str) else str(unit.get("text", "")))
+    if p.text is None and len(p):
+        # Mixed content that opens with an element: an empty text keeps the
+        # pretty-printer from indenting the runs apart ("441 a" for 441ᵃ).
+        p.text = ""
     return p
 
 
@@ -278,6 +283,7 @@ def _table_wrap(
     rows: list[list[str]],
     footnotes: list | None = None,
     head_rows: list[list] | None = None,
+    caption_units: list | None = None,
 ) -> etree._Element:
     """Build one <table-wrap> from a grid (caption + header row + body rows).
 
@@ -298,7 +304,13 @@ def _table_wrap(
     label, descriptive = _split_label(caption)
     if label:
         tw.append(E.label(label))
-    if descriptive:
+    if caption_units:
+        # The caption as inline units after its "Table N. " (matrix_caption).
+        rest = list(caption_units)
+        if rest and isinstance(rest[0], str) and rest[0].startswith("Table "):
+            rest = rest[1:]
+        tw.append(E.caption(_cell_el("title", rest)))
+    elif descriptive:
         # The published books title a table in <caption><title> (a figure's
         # caption is <p>), so the caption heads the table as its title.
         tw.append(E.caption(E.title(descriptive)))
@@ -323,7 +335,16 @@ def _table_wrap(
         foot = E("table-wrap-foot")
         for f in foots:
             text = f.get("text", "") if isinstance(f, dict) else str(f)
-            foot.append(E.fn(_p_inline(text) if isinstance(text, list) else E.p(str(text))))
+            fn = E.fn()
+            # A lettered note keeps its letter, as the published books' <fn>s do:
+            # superscript (NIEHS-05 on), or plain where the note says so (RR-8).
+            if isinstance(f, dict) and f.get("kind") == "lettered" and f.get("letter"):
+                letter = str(f["letter"])
+                # (An empty text keeps the <sup> inline when pretty-printed.)
+                fn.append(E.label(letter) if f.get("letter_style") == "plain"
+                          else E.label("", E.sup(letter)))
+            fn.append(_p_inline(text) if isinstance(text, list) else E.p(str(text)))
+            foot.append(fn)
         tw.append(foot)
     return tw
 
@@ -411,12 +432,12 @@ def _build_front(data: dict) -> etree._Element:
         if plan.kind == "labeled" and plan.labeled_parts:
             abstract = E.abstract({"id": "abstract1"})
             for i, (label, body) in enumerate(plan.labeled_parts, start=1):
-                if not (body or "").strip():
+                if not inline_plain_text(body).strip():
                     continue
                 sec = E.sec({"id": f"Sabs{i}"})
                 if label:
                     sec.append(E.title(label))
-                para = _p(body)
+                para = _p_inline(body)
                 para.set("id", f"Pabs{i}")
                 sec.append(para)
                 abstract.append(sec)
@@ -495,12 +516,15 @@ def _emit_sample_counts_table(node: DocNode, data: dict) -> list:
     # caption carries no locator, so without this BITS emitted the matrix
     # with no <label> and the cross-surface table-number parity test failed.
     head_rows = matrix_head_rows(built)
+    caption, rich = matrix_caption(node, built if built.get("caption") else
+                                   dict(built, caption=node.title or ""))
     return [_table_wrap(
-        node.id, table_caption(node, built.get("caption", node.title or "")),
+        node.id, caption,
         head_rows[-1] if head_rows else [],
         built.get("rows", []) or [],
         built.get("footnotes", []) or [],
         head_rows=head_rows,
+        caption_units=rich,
     )]
 
 
@@ -685,8 +709,8 @@ def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
                 f"deferred to data-tables phase "))
     elif rc.kind == "labeled":
         for label, btext in rc.labeled_parts:
-            if (btext or "").strip():
-                sec.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
+            if inline_plain_text(btext).strip():
+                sec.append(E.sec(E.title(label) if label else E.title(), _p_inline(btext)))
     # narrative+tables: its child `table` nodes become trailing blocks in THIS
     # section (they have no <sec> siblings here, so blocks-after-prose is valid).
     for child in node.children:
@@ -733,8 +757,14 @@ def _append_node(parent: etree._Element, node: DocNode, data: dict) -> None:
 # handler where the content model requires it (heading-only, narrative+tables).
 
 def _emit_narrative(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """narrative / narrative+tables → one <sec> (prose, then child tables)."""
-    parent.append(_narrative_sec(node, data))
+    """narrative / narrative+tables → one <sec> (prose, then child tables).  An
+    untitled one is no section: its blocks are its parent's (a published
+    book's paragraphs between two tables, rendering.published_clone)."""
+    sec = _narrative_sec(node, data)
+    if node.title or node.sec_label:
+        parent.append(sec)
+    else:
+        parent.extend(list(sec))
 
 
 def _titled_sec(node: DocNode) -> etree._Element:
@@ -792,8 +822,13 @@ def _emit_figure(parent: etree._Element, node: DocNode, data: dict) -> None:
         fig.append(E.label(label))
     payload = figure_payload(node, data) or {}
     caption = node.caption or payload.get("caption")
-    if caption:
-        fig.append(E.caption(E.p(caption)))
+    notes = [n for n in payload.get("notes") or [] if n]
+    if caption or notes:
+        cap = E.caption(E.p(caption)) if caption else E.caption()
+        # A figure's notes, as the published books hold them: <p><fn><p>.
+        for note in notes:
+            cap.append(E.p(E.fn(_p_inline(note) if isinstance(note, list) else E.p(note))))
+        fig.append(cap)
     href = payload.get("filename")
     if href:
         graphic = E.graphic()

@@ -71,15 +71,40 @@ def _authors(bm) -> tuple[list[dict], list[tuple[str, str]]]:
             label_by_id[aff.get("id")] = label
     authors = []
     for c in bm.findall("contrib-group/contrib"):
-        given, surname = _ws_text(c.find("name/given-names")), _ws_text(c.find("name/surname"))
-        name = " ".join(x for x in (given, surname) if x) or _ws_text(c.find("string-name"))
+        collab = c.find("collab")
+        members = []
+        if collab is not None:
+            # A collaboration (RR-8: "National Toxicology Program" and its
+            # members nested in it) — its own text is its name.
+            name = " ".join((collab.text or "").split())
+            members = [m["name"] for m in _people(collab.findall("contrib-group/contrib"))]
+            cite = name
+        else:
+            person = _people([c])
+            if not person:
+                continue
+            name, cite = person[0]["name"], person[0]["cite"]
         if not name:
             continue
-        cite = " ".join(x for x in (surname, _initials(given)) if x) or name
         rids = [x.get("rid", "") for x in c.findall("xref[@ref-type='aff']")]
-        authors.append({"name": name, "cite": cite,
-                        "affs": [label_by_id[r] for r in rids if r in label_by_id]})
+        entry = {"name": name, "cite": cite,
+                 "affs": [label_by_id[r] for r in rids if r in label_by_id]}
+        if members:
+            entry["members"] = members
+        authors.append(entry)
     return authors, affs
+
+
+def _people(contribs) -> list[dict]:
+    """[{name, cite}] of the <contrib>s that name a person."""
+    out = []
+    for c in contribs:
+        given, surname = _ws_text(c.find("name/given-names")), _ws_text(c.find("name/surname"))
+        name = " ".join(x for x in (given, surname) if x) or _ws_text(c.find("string-name"))
+        if name:
+            out.append({"name": name,
+                        "cite": " ".join(x for x in (surname, _initials(given)) if x) or name})
+    return out
 
 
 def book_facts(root) -> dict:

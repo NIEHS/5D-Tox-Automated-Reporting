@@ -620,7 +620,25 @@ def compute_table_numbers(tree: list[DocNode] | None = None,
         tree = DOCUMENT_TREE
     # Letters first: the scoped walk prefixes appendix numbers with them.
     compute_appendix_letters(tree)
-    _number_scoped(tree, None, {"table": 0, "figure": 0, "genomics": genomics_sections})
+    # A table or figure in the front matter takes no number and leaves the
+    # body's sequence alone (NIEHS-12, 13: "Author and Contributor Roles and
+    # Definitions", unlabelled, then Table 1 in Materials and Methods).
+    front = [n for n in tree if n.region == "front"]
+    _unnumber_front(front)
+    _number_scoped([n for n in tree if n.region != "front"], None,
+                   {"table": 0, "figure": 0, "genomics": genomics_sections})
+
+
+def _unnumber_front(nodes: list[DocNode]) -> None:
+    """The front matter's tables and figures: no number (see
+    compute_table_numbers)."""
+    def visit(node: DocNode) -> None:
+        node.appendix_scope = None
+        if node.node_type in NUMBERED_TABLE_TYPES:
+            node.table_number = node.table_label = None
+        if node.node_type in NUMBERED_FIGURE_TYPES:
+            node.figure_number = node.figure_label = None
+    walk_tree(nodes, visit)
 
 
 # Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
@@ -643,8 +661,7 @@ def compute_figure_numbers(tree: list[DocNode] | None = None) -> None:
     tree fully numbered.  Mutates nodes in place."""
     if tree is None:
         tree = DOCUMENT_TREE
-    compute_appendix_letters(tree)
-    _number_scoped(tree, None, {"table": 0, "figure": 0})
+    compute_table_numbers(tree)
 
 
 def compute_appendix_letters(tree: list[DocNode] | None = None) -> None:

@@ -373,7 +373,9 @@ def labeled_section_parts(sections) -> list[tuple[str, str]]:
 
     Args:
         sections: the raw list from content["sections"] (may be None, or
-            contain junk — both are tolerated).
+            contain junk — both are tolerated).  A part's text may be a str or
+            a list of inline units (a published abstract's ® and BMD_L), kept
+            as given.
 
     Returns:
         A list of (label, text) tuples.  Both strings are stripped; text is
@@ -383,8 +385,9 @@ def labeled_section_parts(sections) -> list[tuple[str, str]]:
     for sec in sections or []:
         if not isinstance(sec, dict):
             continue
-        text = (sec.get("text") or "").strip()
-        if not text:
+        text = sec.get("text") or ""
+        text = text if isinstance(text, list) else text.strip()
+        if not inline_plain_text(text).strip():
             continue
         label = (sec.get("label") or "").strip()
         parts.append((label, text))
@@ -1343,6 +1346,19 @@ def sample_counts_table(node: DocNode, data: dict) -> dict | None:
     if not built.get("headers") and not built.get("rows"):
         return None
     return built
+
+
+def matrix_caption(node: DocNode, built: dict) -> tuple[str, list | None]:
+    """A matrix's caption: (its text, "Table N. " included — table_caption),
+    and, when the matrix gives the caption as inline units (a published
+    table's footnote mark or subscript), the same as units after the prefix;
+    None when it is plain text or the node's own caption wins."""
+    cap = built.get("caption", "")
+    if not isinstance(cap, list) or node.caption:
+        return table_caption(node, inline_plain_text(cap) if isinstance(cap, list) else cap), None
+    text = table_caption(node, inline_plain_text(cap))
+    label = node.table_label if node.table_label is not None else node.table_number
+    return text, ([f"Table {label}. "] if label is not None else []) + list(cap)
 
 
 def matrix_head_rows(built: dict) -> list[list]:

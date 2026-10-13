@@ -99,6 +99,7 @@ from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
     section_heading_text,
+    matrix_caption,
     matrix_head_rows,
     sample_counts_table,
     genomics_role,
@@ -249,7 +250,7 @@ def _heading(level: int, title: str) -> str:
     Title text is escaped before splicing — section titles can contain
     ampersands (e.g., "Body Weights & Organ Weights").
     """
-    if level <= 0:
+    if level <= 0 or not title:
         return ""
     cmd = _HEADING_BY_LEVEL.get(level, r"\paragraph")
     return f"{cmd}{{{_escape_latex(title)}}}"
@@ -425,10 +426,10 @@ def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
     for label, text in parts:
         if label:
             out.append(
-                f"\\noindent\\textbf{{{_escape_latex(label)}.}} {_escape_latex(text)}"
+                f"\\noindent\\textbf{{{_escape_latex(label)}.}} {_cell_latex(text)}"
             )
         else:
-            out.append(_escape_latex(text))
+            out.append(_cell_latex(text))
     return "\n\n".join(out)
 
 
@@ -585,7 +586,9 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
     rows = [[c if isinstance(c, list) else str(c) for c in r] for r in built.get("rows", [])]
     ncols = max(max((len(r) for r in head_rows), default=0),
                 max((len(r) for r in rows), default=0), 1)
-    caption = _table_caption(node, built.get("caption", node.title or ""))
+    caption, rich = matrix_caption(node, built if built.get("caption") else
+                                   dict(built, caption=node.title or ""))
+    caption = _render_inline(rich) if rich else caption
     colspec = _matrix_colspec(built, ncols, " ".join("l" for _ in range(ncols)))
     header_cells = " \\\\\n".join(" & ".join(_cell_latex(h) for h in r) for r in head_rows)
     col_head = "\\toprule\n" + header_cells + " \\\\\n\\midrule\n"
@@ -871,7 +874,8 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
     tabular = "{\\small\n" + "\n".join(lines) + "\n}"
 
     notes = _emit_table_footnotes(built.get("footnotes", []))
-    caption = _table_caption(node, built.get("caption", ""))
+    caption, rich = matrix_caption(node, built)
+    caption = _render_inline(rich) if rich else caption
     return (
         f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
         f"{tabular}"
@@ -1146,7 +1150,9 @@ def _render_figure(node: DocNode, data: dict) -> str:
         "\\begin{center}\n"
         f"\\includegraphics[width=0.85\\linewidth]{{figures/{filename}}}\\\\\n"
         f"{{\\small\\itshape {caption}}}\n"
-        "\\end{center}"
+        + "".join(f"\\\\[2pt]{{\\small {_cell_latex(n)}}}\n"
+                  for n in payload.get("notes") or [])
+        + "\\end{center}"
     )
 
 

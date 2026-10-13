@@ -54,7 +54,7 @@ from lxml import etree
 from document_model.document_node import DocNode
 from document_model.render_capabilities import PACKAGING_PART_ELEMENTS
 from document_model.document_tree import render_nodes, rendering_tree
-from rendering.jats_generator import E, _XLINK, _append_node, _p, _p_inline
+from rendering.jats_generator import E, _XLINK, _append_node, _p_inline
 from rendering.render_common import (
     front_matter_plan,
     inline_plain_text,
@@ -168,7 +168,9 @@ def _name(full: str) -> etree._Element:
 
 def _contrib_group(data: dict) -> list:
     """<contrib-group content-type="authors"> + one <aff> per distinct
-    affiliation, from the author roster (nothing when no roster is supplied)."""
+    affiliation, from the author roster (nothing when no roster is supplied).
+    A roster entry with ``members`` is a collaboration: <collab> with its name
+    and the members' contribs."""
     authors = _authors(data)
     if not authors:
         return []
@@ -179,7 +181,13 @@ def _contrib_group(data: dict) -> list:
             affs.append(aff)
     cg = E("contrib-group", {"content-type": "authors"})
     for a in authors:
-        contrib = E.contrib({"contrib-type": "author"}, _name(a["name"]))
+        if a.get("members"):
+            # A collaboration: its name, its members nested in it (RR-8).
+            collab = E.collab(a["name"].strip(), E("contrib-group", *[
+                E.contrib(_name(m)) for m in a["members"] if (m or "").strip()]))
+            contrib = E.contrib({"contrib-type": "author"}, collab)
+        else:
+            contrib = E.contrib({"contrib-type": "author"}, _name(a["name"]))
         aff = (a.get("affiliation") or "").strip()
         if aff:
             n = affs.index(aff) + 1
@@ -216,7 +224,7 @@ def _abstract(node: DocNode, data: dict) -> etree._Element:
     current = ""
     for label, body in (plan.labeled_parts if plan.kind == "labeled" else []):
         current = label or current
-        if (body or "").strip():
+        if inline_plain_text(body).strip():
             texts.setdefault(current, []).append(body)
     if not node.parts:
         return _unstructured_abstract(node, texts)
@@ -233,7 +241,7 @@ def _abstract(node: DocNode, data: dict) -> etree._Element:
             bodies = [f"[Abstract {label or 'text'} pending: not yet generated for this study.]"]
         for body in bodies:
             n += 1
-            para = _p(body)
+            para = _p_inline(body)
             para.set("id", f"Pabs{n}")
             sec.append(para)
         abstract.append(sec)
@@ -246,7 +254,7 @@ def _unstructured_abstract(node: DocNode, texts: dict[str, list[str]]) -> etree.
     for label, bodies in texts.items():
         for i, body in enumerate(bodies):
             n += 1
-            para = _p(body)
+            para = _p_inline(body)
             para.set("id", f"Pabs{n}")
             if label and i == 0:
                 run_in = E.bold(f"{label}:")
@@ -327,8 +335,8 @@ def _prose_blocks(node: DocNode, data: dict) -> list:
                 out.append(_p_inline(para))
     elif rc.kind == "labeled":
         for label, btext in rc.labeled_parts:
-            if (btext or "").strip():
-                out.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
+            if inline_plain_text(btext).strip():
+                out.append(E.sec(E.title(label) if label else E.title(), _p_inline(btext)))
     return out
 
 
@@ -373,7 +381,11 @@ def _front_part(node: DocNode, data: dict) -> etree._Element:
     <named-book-part-body> — its prose (or roster), then its own sections (the
     RR-8 Peer Review's "Peer Reviewers")."""
     blocks: list = []
-    if node.book_part_type in _ROSTER_PARTS:
+    content = data.get(node.data_key) if node.data_key else None
+    # A part whose content is a book's own text (rendering.published_clone)
+    # is that text, not a roster composed from the front matter.
+    verbatim = isinstance(content, dict) and content.get("verbatim")
+    if node.book_part_type in _ROSTER_PARTS and not verbatim:
         blocks = _roster_blocks(node, data)
         if not blocks:
             blocks = _prose_blocks(node, data) or [
@@ -397,7 +409,7 @@ def _ref_list(node: DocNode, data: dict) -> etree._Element:
     if rc.kind in ("paragraphs", "methods"):
         texts = [inline_plain_text(p) for p in rc.paragraphs]
     elif rc.kind == "labeled":
-        texts = [btext for _label, btext in rc.labeled_parts]
+        texts = [inline_plain_text(btext) for _label, btext in rc.labeled_parts]
     else:
         texts = []
     rl = E("ref-list", {"id": "ref-list1"})

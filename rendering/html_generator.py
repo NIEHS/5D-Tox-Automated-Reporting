@@ -80,6 +80,7 @@ from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
     section_heading_text,
+    matrix_caption,
     matrix_head_rows,
     sample_counts_table,
     genomics_role,
@@ -451,7 +452,7 @@ def _heading(level: int, title: str) -> str:
     Level 0 returns "" so callers can unconditionally splice the result.
     Title text is escaped before splicing.
     """
-    if level <= 0:
+    if level <= 0 or not title:
         return ""
     tag = _HEADING_TAG_BY_LEVEL.get(level, "h5")
     return f"<{tag}>{_esc(title)}</{tag}>"
@@ -661,9 +662,9 @@ def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
     out: list[str] = []
     for label, text in parts:
         if label:
-            out.append(f"<p><strong>{_esc(label)}.</strong> {_esc(text)}</p>")
+            out.append(f"<p><strong>{_esc(label)}.</strong> {_cell_html(text)}</p>")
         else:
-            out.append(f"<p>{_esc(text)}</p>")
+            out.append(f"<p>{_cell_html(text)}</p>")
     return "".join(out)
 
 
@@ -735,10 +736,10 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
             body_rows.append(_emit_table_row(cells))
 
     notes = _emit_table_footnotes(built.get("footnotes", []))
-    caption = _table_caption(node, built.get("caption", ""))
+    caption, rich = matrix_caption(node, built)
     return (
         '<table class="niehstable">'
-        f"<caption>{_esc(caption)}</caption>"
+        f"<caption>{_render_inline(rich) if rich else _esc(caption)}</caption>"
         f"{head}"
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"
@@ -915,7 +916,9 @@ def _render_figure(node: DocNode, data: dict) -> str:
     return (
         f'<figure class="report-figure">'
         f'<img src="{src}" alt="{_esc(descriptive)}">'
-        f"<figcaption>{_esc(display)}</figcaption></figure>"
+        f"<figcaption>{_esc(display)}"
+        + "".join(f'<p class="fig-note">{_cell_html(n)}</p>' for n in payload.get("notes") or [])
+        + "</figcaption></figure>"
     )
 
 

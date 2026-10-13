@@ -225,10 +225,12 @@ class Section:
         return " › ".join(typo_norm(plain(p)).lower() for p in self.path)
 
 
-def expand_rows(trs) -> list[list[str]]:
+def expand_rows(trs, cell=None) -> list[list[str]]:
     """Table rows of cell text on a full grid: a value spanning rows repeats in
     each row it covers (so a row still reads on its own); one spanning columns
-    stands in its first column, the rest empty (as it reads on the page)."""
+    stands in its first column, the rest empty (as it reads on the page).
+    ``cell`` makes a cell's value (default its marked text)."""
+    cell = cell or text_of
     grid, pending = [], {}          # column → [rows left, value]
 
     def carry(row, upto=None):
@@ -252,7 +254,7 @@ def expand_rows(trs) -> list[list[str]]:
             if _ln(c) not in ("td", "th"):
                 continue
             carry(row)
-            v = text_of(c)
+            v = cell(c)
             rs, cs = int(c.get("rowspan") or 1), int(c.get("colspan") or 1)
             for k in range(cs):
                 val = v if k == 0 else ""

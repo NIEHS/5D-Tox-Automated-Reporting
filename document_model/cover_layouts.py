@@ -125,6 +125,13 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     """
     from pipeline.study_design import study_type_label, title_subjects
 
+    # A title the report states (a published book's own, rendering.
+    # published_clone) is the title; one is composed only from the facts.
+    stated = str(data.get("book_title") or "").strip()
+    if stated:
+        if stated.startswith(_TITLE_HEADER + " "):
+            return [_TITLE_HEADER, *_wrap_words(stated[len(_TITLE_HEADER) + 1:], max_chars)]
+        return _wrap_words(stated, max_chars)
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
     design = data.get("study_design") or {}

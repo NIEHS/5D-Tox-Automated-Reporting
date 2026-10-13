@@ -96,6 +96,7 @@ from rendering.render_common import (
     incidence_table_plan,
     is_protected,
     resolve_protection,
+    matrix_caption,
     matrix_head_rows,
     sample_counts_table,
     table_caption as _table_caption,
@@ -309,7 +310,7 @@ def _add_labeled_sections(doc: Document, parts) -> None:
         if label:
             run = para.add_run(f"{_clean(label)}. ")
             run.bold = True
-        para.add_run(_clean(text))
+        _cell_runs(para, text)
 
 
 def _add_pending(doc: Document, label: str) -> None:
@@ -381,14 +382,16 @@ def _ensure_table_title_style(doc: Document):
         return style
 
 
-def _add_table_caption(doc: Document, caption: str) -> None:
+def _add_table_caption(doc: Document, caption: str, units: list | None = None) -> None:
     r"""Emit a table caption ABOVE its table in `0-25_Table_Title` style, numbered
     by a SEQ FIELD ("Table {SEQ Table}. <text>") rather than literal text — so the
     number auto-renumbers AND the front-matter Table-of-Figures field can collect
     it (a TOF collects by paragraph style).  The incoming caption already carries a
     literal "Table N. " prefix (from render_common.table_caption); strip it and let
     the SEQ supply the number.  A non-breaking space after "Table" keeps the label
-    with its number (matching the reference)."""
+    with its number (matching the reference).  ``units``: the caption as inline
+    units after its prefix (render_common.matrix_caption), written in place of
+    the text."""
     style = _ensure_table_title_style(doc)
     para = doc.add_paragraph(style=style)
     label, text = _split_table_prefix(_clean(caption))
@@ -398,22 +401,34 @@ def _add_table_caption(doc: Document, caption: str) -> None:
         para.add_run("Table ")   # nbsp, so "Table" never wraps off its number
         _add_seq_field(para, "Table", cached=label)
         para.add_run(". ")
-        para.add_run(text)
+        _caption_text(para, text, units)
     elif label:
         # Appendix table: "Table B-1." -> literal (letter+number the arabic SEQ
         # can't express); emitting a SEQ here is what doubled the prefix.
         para.add_run(f"Table {label}. ")
-        para.add_run(text)
+        _caption_text(para, text, units)
     else:
         # No recognizable prefix -> plain SEQ-numbered caption.
         para.add_run("Table ")
         _add_seq_field(para, "Table")
         para.add_run(". ")
-        para.add_run(text)
+        _caption_text(para, text, units)
 
 
 # "N"  (body, arabic) vs  "B-1" (appendix, letter-prefixed).
 _re_arabic_label = re.compile(r"^\d+$")
+
+
+def _caption_text(para, text: str, units: list | None) -> None:
+    """A caption's text after its label: the inline units when given (their
+    leading "Table N. " dropped — the label is written already), else the text."""
+    if not units:
+        para.add_run(text)
+        return
+    rest = list(units)
+    if rest and isinstance(rest[0], str) and rest[0].startswith("Table "):
+        rest = rest[1:]
+    _add_inline_runs(para, rest)
 
 
 def _split_table_prefix(caption: str) -> tuple[str, str]:
@@ -547,6 +562,7 @@ def _booktabs_table(
     footnotes: list | None = None,
     merged_label_rows: bool = False,
     head_rows: list[list] | None = None,
+    caption_units: list | None = None,
 ) -> None:
     """
     Append a booktabs-style table (top rule, header rule, bottom rule; no
@@ -569,7 +585,7 @@ def _booktabs_table(
     """
     head_rows = head_rows or ([headers] if headers else [])
     if caption:
-        _add_table_caption(doc, caption)
+        _add_table_caption(doc, caption, caption_units)
 
     ncols = max(max((len(r) for r in head_rows), default=0),
                 max((len(r) for r in rows), default=0), 1)
@@ -794,12 +810,14 @@ def _render_sample_counts_table(doc: Document, node: DocNode, data: dict) -> Non
         return
     head_rows = matrix_head_rows(built)
     rows = [[c if isinstance(c, list) else str(c) for c in r] for r in built.get("rows", [])]
+    caption, rich = matrix_caption(node, built)
     _booktabs_table(
         doc, head_rows[-1] if head_rows else [], rows,
-        caption=_table_caption(node, built.get("caption", "")),
+        caption=caption,
         footnotes=built.get("footnotes", []),
         merged_label_rows=True,
         head_rows=head_rows,
+        caption_units=rich,
     )
 
 
@@ -1422,6 +1440,10 @@ def _render_figure(doc: Document, node: DocNode, data: dict) -> None:
         run.italic = True
         run.font.size = Pt(9)
         cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # A figure's notes (the published books' description under the caption).
+    for note in payload.get("notes") or []:
+        for run in _cell_runs(doc.add_paragraph(), note):
+            run.font.size = Pt(9)
 
 
 def _render_gene_set_table(doc: Document, entry: dict) -> None:
