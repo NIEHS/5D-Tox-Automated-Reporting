@@ -383,3 +383,53 @@ profiles (ADR-0027) (`document_model.definition_pin`):
 
 The published reproductions still TRACK, because they are still being
 refined toward the books. Each is fixed when it is final.
+
+## 13. Amendment (2026-10-13): each published report has its published content as a companion
+
+The user asked that each app-generated published report have, as a
+companion, a clone of the published report's *content* (not the
+Bookshelf page's chrome), as a session in the app.
+
+- **The companion is a definition plus content.** `tooling.published_clone`
+  reads the book's Bookshelf bundle (`rendering.published_clone.clone_book`)
+  and writes `sessions/<twin>_published/`:
+  - `document.yaml`: the book's structure as node entries, in the book's
+    order, with node ids taken from the published ids. It is validated as a
+    full tree build.
+  - `published_content.json`: each node's content, the book-level facts
+    (title, report number, date, authors, series, abstract) and each table's
+    and figure's published label.
+  - `published_clone.json`: the report, the twin, the bundle and its hash,
+    and the clone format.
+
+  `latex_export.load_session_data` lays this content over the scaffold for
+  such a session, so it renders through every surface unchanged. It is a
+  declaration, not a renderer branch.
+- **Numbering is checked, not forced.** Tables and figures keep positional
+  numbers (Invariant 2). `--check` compares every number the tree gives with
+  the book's label and fails on any difference. All twelve books number as
+  published.
+- **General rules this brought in, for every report:**
+  - **Front-matter objects.** A table or figure in the front matter is
+    unnumbered and leaves the body's sequence alone (NIEHS-12/13's
+    unlabelled "Author and Contributor Roles and Definitions").
+  - **Untitled narratives.** An untitled narrative is a run of paragraphs
+    in its parent: there is no `<sec>` and no empty heading.
+  - **Inline units.** A paragraph, a cell, a caption or an abstract part may
+    carry inline units: sup, sub, italic and bold, as well as links.
+  - **Matrices.** A matrix may have several header rows.
+  - **Lettered notes.** A lettered table note carries `<label><sup>`, or a
+    plain label when the note says so.
+  - **Collaborations.** A roster author with `members` is a collaboration
+    (`<collab>`, RR-8).
+  - **Verbatim front matter.** A front part marked `verbatim` is printed as
+    given, without the roster.
+- **Measured (`python -m tooling.published_clone --check`, 2026-10-13).**
+  99.9–100% of the words match in every book. RR-8 matches with no block
+  different. What is left is stated:
+  - **The book title's ®.** It is a superscript in the books; our title is
+    plain text.
+  - **MathML formulas** (NIEHS-07…10, 2 each). They are written as a line of
+    text: a fraction is "a / b", followed by the equation number.
+  - **NIEHS-03's figure labels.** The book writes them in the caption; the
+    clone moves them to the label.

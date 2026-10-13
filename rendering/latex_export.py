@@ -669,6 +669,15 @@ def load_session_data(
     if isinstance(identity, dict) and str(identity.get("abbreviation") or "").strip():
         data["abbreviation"] = str(identity["abbreviation"]).strip()
 
+    # ── A published report's companion (rendering.published_clone) ────
+    # Its content is the book's; nothing of a study's data is overlaid.
+    from rendering.published_clone import CLONE_FILE, CONTENT_FILE, apply_clone
+    if (session_dir / CLONE_FILE).is_file():
+        apply_clone(data, _load_json(session_dir / CONTENT_FILE) or {})
+        _number_and_list(data, dtxsid, view)
+        data["layout_style"] = _resolve_export_layout_style(dtxsid)
+        return data
+
     # ── Background paragraphs + abstract Background sentence ──────────
     bg = _load_json(session_dir / "background.json")
     if isinstance(bg, dict):

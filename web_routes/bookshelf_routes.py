@@ -10,7 +10,11 @@ standalone URL.
   GET /Bookshelf           → the shelf: each generated report, linked to its
                              facsimile — the published ones in the order they
                              were published, labelled with the date, then the
-                             unpublished ones.
+                             unpublished ones.  A published report's card also
+                             links its companion, the published book's content
+                             as a session (<dtxsid>_published,
+                             rendering.published_clone), which is not shelved
+                             apart.
 
 The facsimile is rendered FRESH per request via preview_surface.render_preview
 (no archive/persist side effect), so it always reflects the current report.  Only
@@ -55,6 +59,17 @@ def _download_links(dtxsid: str) -> list[dict]:
     report = published_report(dtxsid)
     if report:
         links.append({"label": f"Compare with {report}", "href": f"/Compare/{dtxsid}"})
+    companion = companion_of(dtxsid)
+    if companion:
+        links.append({"label": f"Published content ({report or 'the book'})",
+                      "href": f"/Bookshelf/{companion}"})
+    clone = clone_record(dtxsid)
+    if clone and clone.get("twin"):
+        twin = clone["twin"]
+        links.append({"label": "Generated report", "href": f"/Bookshelf/{twin}"})
+        if published_report(twin):
+            links.append({"label": f"Compare with {clone.get('report') or 'the book'}",
+                          "href": f"/Compare/{twin}"})
     return links
 
 
@@ -77,12 +92,30 @@ def _members(dtxsid: str) -> dict[str, str]:
     return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
 
 
+def clone_record(dtxsid: str) -> dict | None:
+    """The companion record (published_clone.json: report, twin, bundle …)
+    when the session is a published book's content; else None."""
+    from rendering.published_clone import CLONE_FILE
+    data = _load_json(_sessions_root() / dtxsid / CLONE_FILE)
+    return data if isinstance(data, dict) else None
+
+
+def companion_of(dtxsid: str) -> str | None:
+    """The companion session of a generated report — the published book's
+    content (tooling.published_clone) — when one was built for it."""
+    from tooling.published_clone import companion_id
+    cid = companion_id(dtxsid)
+    clone = clone_record(cid)
+    return cid if clone and clone.get("twin") == dtxsid else None
+
+
 def has_generated_report(dtxsid: str) -> bool:
     """Whether the session holds a generated report: it was integrated and
-    processed, or it is a report over several studies each of which was.  An
+    processed, or it is a report over several studies each of which was, or it
+    is a published book's content (a companion, served beside its twin).  An
     empty, abandoned or test-made session directory is not a report, so it is
     neither shelved nor served."""
-    if _holds_report(dtxsid):
+    if _holds_report(dtxsid) or clone_record(dtxsid):
         return True
     members = _members(dtxsid)
     return bool(members) and all(_holds_report(m) for m in members.values())
@@ -119,7 +152,8 @@ def _report_order(report: str) -> tuple:
 
 def shelf_books() -> tuple[list[dict], list[dict]]:
     """The shelf's books, (published, unpublished): each {dtxsid, title,
-    report, published, studies}.  A report over several studies is one book,
+    report, published, studies, companion}.  A companion (the published
+    book's content) is not a book of its own: its twin's card links it.  A report over several studies is one book,
     its member studies not shelved apart.  Published books are in the order
     they were published (the published book's date; reports of one date by
     their number), unpublished ones by title."""
@@ -138,7 +172,8 @@ def shelf_books() -> tuple[list[dict], list[dict]]:
         report = published_report(d)
         book = {"dtxsid": d, "title": _session_title(d), "report": report,
                 "published": published_date(report),
-                "studies": [SPECIES_TITLES.get(k, k.title()) for k in _members(d)]}
+                "studies": [SPECIES_TITLES.get(k, k.title()) for k in _members(d)],
+                "companion": companion_of(d)}
         (published if report else unpublished).append(book)
     published.sort(key=lambda b: (b["published"] is None, b["published"] or "",
                                   _report_order(b["report"])))
@@ -265,14 +300,17 @@ h1{font-size:1.6rem;color:#12263a;margin:0 0 4px;}
 .sub{color:var(--muted);font-size:.9rem;margin:0 0 26px;}
 ul.shelf{list-style:none;margin:0;padding:0;display:grid;gap:12px;
   grid-template-columns:repeat(auto-fill,minmax(240px,1fr));}
-li.book a{display:block;text-decoration:none;color:inherit;background:var(--card);
-  border:1px solid var(--rule);border-left:5px solid var(--link);border-radius:5px;
-  padding:14px 16px;height:100%;}
-li.book a:hover{border-left-color:#12263a;background:#eef2f5;}
+li.book{display:flex;flex-direction:column;background:var(--card);
+  border:1px solid var(--rule);border-left:5px solid var(--link);border-radius:5px;}
+li.book:hover{border-left-color:#12263a;background:#eef2f5;}
+li.book a.open{display:block;flex:1;text-decoration:none;color:inherit;padding:14px 16px;}
+li.book a.companion{display:block;font-size:.8rem;color:var(--link);text-decoration:none;
+  border-top:1px solid var(--rule);padding:6px 16px;}
+li.book a.companion:hover{text-decoration:underline;}
 .book .title{font-weight:700;color:#12263a;}
 .book .id{font-size:.78rem;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace;}
 .book .when{font-size:.8rem;font-weight:600;color:var(--link);margin-bottom:4px;}
-.book.unpublished a{border-left-color:#8a96a3;}
+li.book.unpublished{border-left-color:#8a96a3;}
 .book.unpublished .when{color:var(--muted);font-weight:400;}
 h2.group{font-size:1.05rem;color:#12263a;margin:30px 0 4px;}
 p.group{color:var(--muted);font-size:.85rem;margin:0 0 12px;}
@@ -284,10 +322,13 @@ a.home{color:var(--link);text-decoration:none;font-size:.85rem;}
 def _card(book: dict, when: str, cls: str = "book") -> str:
     d = book["dtxsid"]
     studies = f' · {", ".join(book["studies"])}' if book["studies"] else ""
-    return (f'<li class="{cls}"><a href="/Bookshelf/{_html.escape(d)}">'
+    companion = book.get("companion")
+    more = (f'<a class="companion" href="/Bookshelf/{_html.escape(companion)}">'
+            f'Published content →</a>' if companion else "")
+    return (f'<li class="{cls}"><a class="open" href="/Bookshelf/{_html.escape(d)}">'
             f'<div class="when">{_html.escape(when)}</div>'
             f'<div class="title">{_html.escape(book["title"])}</div>'
-            f'<div class="id">{_html.escape(d + studies)}</div></a></li>')
+            f'<div class="id">{_html.escape(d + studies)}</div></a>{more}</li>')
 
 
 def _shelf_page(published: list[dict], unpublished: list[dict]) -> str:

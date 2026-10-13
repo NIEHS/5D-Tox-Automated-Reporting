@@ -150,6 +150,26 @@ against the published tables and the published book's structure, and writes
 diff alone (`-` published only, `+` ours only), and `tooling/bookshelf_preview.py`
 renders a published bundle through our Bookshelf facsimile.
 
+**The published book's content as a companion.** `tooling/published_clone.py`
+builds, next to each published report's generated session, a session that holds
+the published book's own content: `sessions/<DTXSID>_published` (NIEHS-12 and 13:
+next to the report session). It is read from the book's Bookshelf bundle
+(`rendering/published_clone.py`): the book's parts, headings, paragraphs, tables
+(header rows, inline marks, lettered notes), figures with their notes, appendices,
+references, authors and abstract become the session's `document.yaml`, which is
+checked as a full tree build before it is written, and `published_content.json`.
+`published_clone.json` records the report, the twin, the bundle and its hash.
+The session renders through every surface like any report. The tables and figures
+are numbered by the tree, as in any report, and the check confirms that those
+numbers are the book's. The shelf card links it ("Published content →"), and its
+facsimile links back to the generated report and to the comparison. A companion
+is rebuilt only when its bundle or the clone's format changes. `--check` renders
+each companion's BITS and compares it with the book: the share of words that
+match, every block that is not the same, and any table or figure numbered
+differently. What it cannot carry yet: MathML formulas (a line of text), the ®
+superscripts in the book title (plain text), and a figure label that the book
+writes in its caption (moved to the label).
+
 To read a report against the published one by eye, `tooling/report_compare.py`
 aligns the published book and ours section by section and block by block
 (`rendering/bits_compare.py`). It writes one page per report to
@@ -169,6 +189,7 @@ python -m tooling.report_qc                             # every report on the sh
 python -m tooling.report_compare                        # every report vs its published book
 python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
 python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html
+python -m tooling.published_clone --check                # each published book as a companion session
 ```
 
 ---
