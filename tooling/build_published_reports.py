@@ -53,9 +53,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
+import common.paths
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CEBS = REPO_ROOT / "assets" / "cebs"
-BACKUPS = REPO_ROOT / "output" / "_session_backups"
+BACKUPS = common.paths.OUTPUT_DIR / "_session_backups"
 # The published book's Bookshelf package: the book (its XML and figures) and the
 # files deposited with it.  The deposit is the package less the book's own files.
 BOOKSHELF = CEBS / "_bookshelf"
@@ -141,7 +143,7 @@ def _project_json(report: str) -> Path | None:
 
 
 def _fresh_session(dtxsid: str) -> None:
-    session = REPO_ROOT / "sessions" / dtxsid
+    session = common.paths.SESSIONS_DIR / dtxsid
     if session.exists():
         BACKUPS.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
@@ -169,7 +171,7 @@ def build(report: str) -> tuple[str, int, str]:
         return build_composed(report)
     (dtxsid, name, casrn, short, bm2, token, unit, design, designation,
      profile, convert_args) = STUDIES[report]
-    out = REPO_ROOT / "output" / dtxsid
+    out = common.paths.OUTPUT_DIR / dtxsid
     out.mkdir(parents=True, exist_ok=True)
     log = out / "build.log"
     _fresh_session(dtxsid)
@@ -222,7 +224,7 @@ def build_composed(report: str) -> tuple[str, int, str]:
     """A report over several studies: each member study through the pipeline
     in its own session, then the report session listing them, rendered."""
     (dtxsid, name, casrn, short, _, _, unit, _, _, profile, convert_args) = STUDIES[report]
-    out = REPO_ROOT / "output" / dtxsid
+    out = common.paths.OUTPUT_DIR / dtxsid
     out.mkdir(parents=True, exist_ok=True)
     log = out / "build.log"
     py = sys.executable

@@ -633,9 +633,11 @@ def main(argv: list[str] | None = None) -> int:
     design = args.design.resolve() if args.design else None
     front_matter = args.front_matter.resolve() if args.front_matter else None
     deposit = args.deposit.resolve() if args.deposit else None
-    out_dir = (args.out.resolve() if args.out else REPO_ROOT / "output" / args.dtxsid)
+    out_dir = args.out.resolve() if args.out else None
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
+    import common.paths
+    out_dir = out_dir or common.paths.OUTPUT_DIR / args.dtxsid
 
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")

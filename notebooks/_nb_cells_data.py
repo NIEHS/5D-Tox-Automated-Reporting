@@ -39,7 +39,8 @@ the web app's routes call too. A session built here is an ordinary session:
 open it in the browser afterwards, or carry on from the command line.
 
 By default it rebuilds **NIEHS-10** (perfluorohexanesulfonamide, Bookshelf
-NBK589955) in a scratch session, `DTXSID50469320_nb`. It converts the CEBS data
+NBK589955) in a scratch session, `DTXSID50469320_nb` (in a workspace of your
+own, below, the study's own id, `DTXSID50469320`). It converts the CEBS data
 package in `assets/cebs/NIEHS-10/`, states the facts the published report
 states (from `tooling.build_published_reports`), and finishes by comparing the
 result with the published Bookshelf book. Change `REPORT` in the parameters
@@ -52,6 +53,31 @@ A cold run (`RESEED = True`) takes three to five minutes: the conversion a few
 seconds, integration about 20 s, Process two to three and a half minutes (its
 LLM calls and chart rendering dominate, and vary), rendering about 25 s. A
 re-run reuses the session and its caches, and finishes in about a minute.
+
+**A workspace of your own, with your own data.** To try it on your own study
+without touching anyone else's sessions, outputs or Bookshelf, someone starts
+a workspace for you: `tooling/workspace.sh <name>`. It keeps its sessions in
+`workspaces/<name>/sessions/` (`SESSIONS_DIR`) and its deliverables in
+`workspaces/<name>/output/` (`OUTPUT_DIR`). It starts the app on port 9300,
+whose `/Bookshelf` lists that workspace's reports only, and JupyterLab on port
+9400 (unless other ports are given) with this notebook copied into `workspaces/<name>/notebooks/`, so your
+runs and their outputs stay in your copy.
+
+Bring your data from your own machine: in JupyterLab, open the `uploads/`
+folder beside the notebook and use the upload button (or drag the files onto
+the file list). The notebook takes the kinds of file the browser's *Upload*
+step does: BMDExpress projects (`.bm2`), `.csv`, `.txt` and `.xlsx` (the app
+also unpacks a `.zip`); validation (step 5) says what each one is and which it
+cannot use. Then set your study's id and what you
+know about it in the parameters cell (step 2) and run the notebook. Steps 16
+and 17's comparison with a published book apply only to a published study.
+The app on port 9300 takes uploads too: its *Upload* step sends files from your
+machine into the same workspace.
+
+With `uploads/` empty, the notebook builds the published study (`REPORT`)
+under its own id, as an example. The workspace's Bookshelf then shows it as the
+published report's generated version, linked to the published content
+(step 16).
 
 The manual for the whole headless workflow is
 `docs/headless-report-generation.md`.
@@ -192,7 +218,8 @@ LLM layers need, exactly as the command line sets it.
 
 **How it's implemented.**
 
-1. `os.chdir(ROOT)`. The app resolves several things relative to the working
+1. `os.chdir(ROOT)`: the repository (`BMDX_REPO` when a workspace sets it,
+   else this notebook's parent directory). The app resolves several things relative to the working
    directory: `templates/`, `profiles/`, `sessions/` (via
    `common.paths.SESSIONS_DIR`) and the knowledge base `bmdx.duckdb`. The repo
    root goes on `sys.path` too, because the packages are imported by name
@@ -228,7 +255,8 @@ _code(r"""
 import os, sys, subprocess
 from pathlib import Path
 
-ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
+ROOT = Path(os.environ.get("BMDX_REPO") or
+            (Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()))
 os.chdir(ROOT)                      # the app is cwd-relative (templates, profiles, bmdx.duckdb)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -241,7 +269,10 @@ from common import provenance               # quiet per-step provenance events, 
 provenance.logger.setLevel(logging.WARNING) # command line does without -v
 
 java = subprocess.run(["java", "-version"], capture_output=True, text=True).stderr.splitlines()[0]
+import common.paths
 print("repository        :", ROOT)
+print("sessions          :", common.paths.SESSIONS_DIR)
+print("outputs           :", common.paths.OUTPUT_DIR)
 print("java              :", java)
 print("BMDX_PROJECT_ROOT :", os.environ.get("BMDX_PROJECT_ROOT", "(unset — integrate will fail)"))
 print("SSL_CERT_FILE     :", os.environ.get("SSL_CERT_FILE", "(unset — LLM narratives will fail)"))
@@ -269,9 +300,20 @@ command line.
 | `DOCUMENT_DEFINITION` | `--document-definition` | `document_definition.json` + `.yaml` (the pin) | Which definition the report renders from: `None`/`"track"` the current templates (recorded), `"fixed"` a snapshot taken now. |
 | `DOSE_UNIT`, `SHORT_NAME` | `--dose-unit`, `--compound-name` | Process parameters; `SHORT_NAME` also as `identity.json`'s `abbreviation` | Table headers and narratives; the short name the sentences written from the tables use ("PFHxSAm", "1,4-DCB"). |
 
+With your own data (`OWN_DATA`: files in `UPLOADS`), set these yourself:
+`DTXSID` (the session id: your test article's DTXSID if it has one, so its
+name and CASRN can be looked up), and whichever facts you know. Each one left
+`None` is not invented: the name and CASRN are resolved from a real DTXSID;
+the dose unit is read from the data; the design is the standard one and the
+report says so; the method profile is the newest. There is no published book
+to compare with, and no deposit unless you name one.
+
 The rest steer the notebook itself:
 
-- **`FROM_PACKAGE`** (default `True`): convert the CEBS package in step 3. With
+- **`UPLOADS`**: the folder of your own data files (`BMDX_UPLOADS`, which
+  `tooling/workspace.sh` sets to the workspace's `uploads/`). Files there
+  make the notebook build your study (`OWN_DATA`).
+- **`FROM_PACKAGE`** (default `True`; a published study only): convert the CEBS package in step 3. With
   `False`, step 3 instead copies the inputs the reference session `SOURCE`
   was built from (the same files, already converted once).
 - **`RESEED`**: `True` deletes the scratch session first and runs everything
@@ -281,7 +323,14 @@ The rest steer the notebook itself:
 - **`CORRECTIONS`**: file classifications to override in step 7.
 - **`PROCESS_OVERRIDES`**: Process settings for this run only (step 12).
 - **`BACKGROUND`**: write the Background with the LLM (step 13).
-- **`SURFACES`**, **`OUT`**: what to render (step 15) and where to.
+- **`SURFACES`**, **`OUT`**: what to render (step 15) and where to
+  (`OUTPUT_DIR/<DTXSID>`).
+- **`DTXSID`**: the session this notebook builds. In the repository's own
+  sessions it is a scratch session, `<SOURCE>_nb`, so the reference session
+  `SOURCE` (the study as `build_published_reports` built it) is left alone. In
+  a workspace of your own (`SESSIONS_DIR` elsewhere) it is the study's own id,
+  `SOURCE`. **`REFERENCE`** is the reference session, in the repository's
+  `sessions/` either way.
 
 `EXPERIMENT_METADATA` is derived for the reports whose genomic project
 names its experiments by chemical and dose only (RR-8, NIEHS-02 … 06): the
@@ -295,40 +344,68 @@ import json
 from tooling.build_published_reports import (BOOK_OWN_FILES, BOOKSHELF, CEBS, GENOMIC_STATED,
                                              STUDIES, _project_json)
 
-REPORT = "NIEHS-10"                 # a published report about one study (not NIEHS-12/13)
-(SOURCE, NAME, CASRN, SHORT_NAME, BM2, BM2_TOKEN, DOSE_UNIT, DESIGN, DESIGNATION,
- METHOD_PROFILE, CONVERT_ARGS) = STUDIES[REPORT]
+# Your own data: the files in UPLOADS (a workspace's uploads/ folder, BMDX_UPLOADS,
+# where JupyterLab's upload button puts what you send from your machine). With
+# files there, the notebook builds your study; else the published study REPORT.
+UPLOADS = Path(os.environ["BMDX_UPLOADS"]) if os.environ.get("BMDX_UPLOADS") else None
+OWN_DATA = bool(UPLOADS and any(p.is_file() for p in UPLOADS.iterdir()))
+WORKSPACE = common.paths.SESSIONS_DIR.resolve() != (ROOT / "sessions").resolve()
 
-DTXSID = f"{SOURCE}_nb"             # the scratch session this notebook builds
-RESEED = False                      # True: wipe the scratch session and run cold
+if OWN_DATA:
+    REPORT = SOURCE = REFERENCE = None
+    DTXSID = "DTXSID_MY_STUDY"      # your study's session id: its DTXSID if it has one
+                                    # ("DTXSID" + up to 64 letters, digits, _ or -)
+    NAME = CASRN = None             # the test article; None: resolved from a real DTXSID
+    SHORT_NAME = None               # the short name the prose uses ("PFHxSAm"); None: the name
+    DOSE_UNIT = None                # None: the unit the data records, else mg/kg
+    DESIGN = None                   # {"strain": …, "articleRoute": …, …}; None: the standard
+                                    # design (SD rats, gavage, corn oil, 5 days), logged as such
+    METHOD_PROFILE = None           # None: the newest profile, tracked
+    FRONT_MATTER = {}               # {"authors": […], "strain_designation": …}
+    EXPERIMENT_METADATA = None
+    DEPOSIT = None                  # a folder of the files deposited with the report, if any
+else:
+    REPORT = "NIEHS-10"             # a published report about one study (not NIEHS-12/13)
+    (SOURCE, NAME, CASRN, SHORT_NAME, BM2, BM2_TOKEN, DOSE_UNIT, DESIGN, DESIGNATION,
+     METHOD_PROFILE, CONVERT_ARGS) = STUDIES[REPORT]
+    DTXSID = SOURCE if WORKSPACE else f"{SOURCE}_nb"   # the session this notebook builds
+    REFERENCE = ROOT / "sessions" / SOURCE             # the reference session (step 3, 13)
+    FRONT_MATTER = {"strain_designation": DESIGNATION}
+    EXPERIMENT_METADATA = None      # {experiment name: {"organ": …, "sex": …}}
+    if REPORT in GENOMIC_STATED and _project_json(REPORT):
+        _names = [e["name"] for e in json.loads(_project_json(REPORT).read_text())
+                  .get("doseResponseExperiments") or []]
+        EXPERIMENT_METADATA = {n: GENOMIC_STATED[REPORT] for n in _names}
+    DEPOSIT = BOOKSHELF / REPORT    # the deposit = the Bookshelf package less the book's own files
+
+RESEED = False                      # True: wipe the session and run cold
 FROM_PACKAGE = True                 # False: copy the reference session's inputs instead
-
-FRONT_MATTER = {"strain_designation": DESIGNATION}
 DOCUMENT_DEFINITION = None          # "fixed": render from a snapshot of the definition as it is now
-EXPERIMENT_METADATA = None          # {experiment name: {"organ": …, "sex": …}}
-if REPORT in GENOMIC_STATED and _project_json(REPORT):
-    _names = [e["name"] for e in json.loads(_project_json(REPORT).read_text())
-              .get("doseResponseExperiments") or []]
-    EXPERIMENT_METADATA = {n: GENOMIC_STATED[REPORT] for n in _names}
-DEPOSIT = BOOKSHELF / REPORT        # the deposit = the Bookshelf package less the book's own files
 CORRECTIONS = {}                    # {filename: {"platform": …, "data_type": …}} overrides
 PROCESS_OVERRIDES = {}              # e.g. {"go_pct": 5}; empty = the method profile's settings
 BACKGROUND = False                  # True: write the Background (LLM + ATSDR/IRIS/PubChem)
 SURFACES = ["docx", "html", "bits"] # also: jats, bookshelf, latex, pdf (pdf needs `tect`)
-OUT = ROOT / "output" / DTXSID
+OUT = common.paths.OUTPUT_DIR / DTXSID
 
-for k, v in dict(REPORT=REPORT, DTXSID=DTXSID, NAME=NAME, CASRN=CASRN, SHORT_NAME=SHORT_NAME,
+for k, v in dict(UPLOADS=UPLOADS, OWN_DATA=OWN_DATA, REPORT=REPORT, DTXSID=DTXSID, NAME=NAME, CASRN=CASRN, SHORT_NAME=SHORT_NAME,
                  DOSE_UNIT=DOSE_UNIT, DESIGN=DESIGN, FRONT_MATTER=FRONT_MATTER,
                  EXPERIMENT_METADATA=EXPERIMENT_METADATA, METHOD_PROFILE=METHOD_PROFILE,
                  DOCUMENT_DEFINITION=DOCUMENT_DEFINITION,
-                 FROM_PACKAGE=FROM_PACKAGE, DEPOSIT=DEPOSIT.relative_to(ROOT),
-                 OUT=OUT.relative_to(ROOT)).items():
+                 FROM_PACKAGE=FROM_PACKAGE, DEPOSIT=DEPOSIT,
+                 OUT=OUT).items():
     print(f"{k:19} {v}")
+if UPLOADS and not OWN_DATA:
+    print(f"\n{UPLOADS} is empty: upload your data files there (JupyterLab's upload button)"
+          f" and run this cell again. Until then the notebook builds {REPORT} as an example.")
 """)
 
 # ---------------------------------------------------------------------------
 _md(r"""
-## 3. Input files: from the CEBS package
+## 3. Input files: your uploads, or the CEBS package
+
+**With your own data** (`OWN_DATA`), the input files are simply the files in
+`UPLOADS`, as you uploaded them; step 4 imports them, and validation (step 5)
+says what each one is. The rest of this step is about a published study.
 
 **Purpose.** Turn what NIEHS published into files the pool accepts. CEBS
 publishes each study's apical data as NTP "Individual Animal" workbooks
@@ -385,7 +462,9 @@ rest are converted. A workbook with no apical platform is `skipped`.
 _code(r"""
 import shutil, tempfile
 
-if FROM_PACKAGE:
+if OWN_DATA:
+    INPUT_FILES = sorted(p for p in UPLOADS.iterdir() if p.is_file() and not p.name.startswith("."))
+elif FROM_PACKAGE:
     inputs = Path(tempfile.mkdtemp(prefix=f"nb_{REPORT}_")) / "inputs"
     project_json = _project_json(REPORT)
     dose_args = ["--mg-per-kg-from", str(project_json)] if project_json else []
@@ -408,7 +487,7 @@ if FROM_PACKAGE:
         shutil.copy2(project, inputs / project.name)
     INPUT_FILES = sorted(inputs.iterdir())
 else:
-    src = ROOT / "sessions" / SOURCE
+    src = REFERENCE
     originals = sorted((src / "_originals").glob("*")) if (src / "_originals").is_dir() else []
     converted = {p.name.split(".")[0] for p in originals}   # stems validation derived pivots from
     INPUT_FILES = originals + sorted(p for p in (src / "files").iterdir()
@@ -717,7 +796,11 @@ The usual causes are the environment in step 1: no JDK 21, or no
 _code(r"""
 from pipeline.integrated_io import load_integrated
 
-identity = {"dtxsid": DTXSID, "name": NAME, "casrn": CASRN}
+from types import SimpleNamespace
+
+# The stated name and CASRN over identity.json; neither: resolved from the DTXSID
+# (PubChem/CTX, best effort), as the command line does.
+identity = gr._resolve_identity(DTXSID, SimpleNamespace(name=NAME, casrn=CASRN), store)
 REINTEGRATE = RESEED
 
 if store.artifact_exists(DTXSID, "integrated.json") and not REINTEGRATE:
@@ -811,15 +894,20 @@ metadata from scratch each time).
 _code(r"""
 from pipeline.deposit import record_deposit
 
-gr.apply_design(DTXSID, DESIGN, store)
+if DESIGN:
+    gr.apply_design(DTXSID, DESIGN, store)
+else:
+    print("  no design stated: the report uses the standard design and says so")
 if EXPERIMENT_METADATA:
     gr.apply_experiment_metadata(DTXSID, EXPERIMENT_METADATA)
-gr.apply_front_matter(DTXSID, FRONT_MATTER, store)
-gr.record_abbreviation(DTXSID, SHORT_NAME, store)
+if FRONT_MATTER:
+    gr.apply_front_matter(DTXSID, FRONT_MATTER, store)
+if SHORT_NAME:
+    gr.record_abbreviation(DTXSID, SHORT_NAME, store)
 if DEPOSIT:
     manifest = record_deposit(DTXSID, DEPOSIT, tuple(BOOK_OWN_FILES))
     kinds = collections.Counter(f.get("kind") for f in manifest["files"])
-    print(f"  deposit: {len(manifest['files'])} file(s) from {DEPOSIT.relative_to(ROOT)}: "
+    print(f"  deposit: {len(manifest['files'])} file(s) from {DEPOSIT}: "
           + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items(), key=lambda kv: str(kv[0]))))
     from genomics.efdr import ZIP_PATTERN, record_efdr
     nulls = sorted(DEPOSIT.glob(ZIP_PATTERN))

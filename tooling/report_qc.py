@@ -53,6 +53,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 
+import common.paths
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BOOKSHELF = REPO_ROOT / "assets" / "cebs" / "_bookshelf"
 
@@ -125,7 +127,7 @@ def _context(text: str, match: re.Match, width: int = 70) -> str:
 
 
 def _integrated(dtxsid: str) -> dict:
-    p = REPO_ROOT / "sessions" / dtxsid / "integrated.json"
+    p = common.paths.SESSIONS_DIR / dtxsid / "integrated.json"
     return json.loads(p.read_text()) if p.exists() else {}
 
 
@@ -136,13 +138,13 @@ def _design(integrated: dict, unit: str | None) -> dict:
 
 def _members(dtxsid: str) -> list[str]:
     """A report over several studies' member sessions (studies.json), else []."""
-    p = REPO_ROOT / "sessions" / dtxsid / "studies.json"
+    p = common.paths.SESSIONS_DIR / dtxsid / "studies.json"
     return list(json.loads(p.read_text()).values()) if p.exists() else []
 
 
 def _sexes(dtxsid: str) -> set[str]:
     sexes = set()
-    for p in glob.glob(str(REPO_ROOT / "sessions" / dtxsid / "files" / "*.sidecar.json")):
+    for p in glob.glob(str(common.paths.SESSIONS_DIR / dtxsid / "files" / "*.sidecar.json")):
         try:
             sex = json.load(open(p)).get("sex")
         except (OSError, ValueError):
@@ -790,8 +792,8 @@ def check_structure(qc: ReportQC, xml_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def qc_report(dtxsid: str) -> ReportQC:
-    out = REPO_ROOT / "output" / dtxsid
-    sess = REPO_ROOT / "sessions" / dtxsid
+    out = common.paths.OUTPUT_DIR / dtxsid
+    sess = common.paths.SESSIONS_DIR / dtxsid
     identity = json.loads((sess / "identity.json").read_text()) if (sess / "identity.json").exists() else {}
     qc = ReportQC(dtxsid, identity.get("name") or dtxsid, PUBLISHED.get(dtxsid))
     check_files(qc, out)
@@ -894,7 +896,7 @@ def _markdown(results: list[ReportQC]) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("dtxsids", nargs="*")
-    ap.add_argument("--out", type=Path, default=REPO_ROOT / "output" / "QC")
+    ap.add_argument("--out", type=Path, default=common.paths.OUTPUT_DIR / "QC")
     a = ap.parse_args(argv)
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))

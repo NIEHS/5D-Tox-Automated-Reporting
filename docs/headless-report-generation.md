@@ -97,6 +97,28 @@ You don't need to export most of this by hand:
 > app's egress guard enforces toxpipe-only. Don't work around it by pointing
 > `ANTHROPIC_BASE_URL` somewhere else.
 
+**A separate workspace.** To let someone else try the tool on their own data
+without touching your sessions, outputs or Bookshelf, start a workspace for
+them: `tooling/workspace.sh <name>`.
+
+- **Where things go.** Its sessions are in `workspaces/<name>/sessions/`
+  (`SESSIONS_DIR`) and its deliverables in `workspaces/<name>/output/`
+  (`OUTPUT_DIR`, which the command-line tools and the notebook write to).
+- **The app,** on port 9300, serves only those sessions: its `/Bookshelf` is
+  the workspace's own, and its *Upload* step takes files from their machine.
+- **JupyterLab,** on port 9400 (with a token; the address is printed and kept
+  in `jupyter-url.txt`), opens on the workspace's own copy of the walkthrough
+  notebook. Files uploaded into its `uploads/` folder (`BMDX_UPLOADS`) are the
+  study the notebook builds.
+- **The environment.** Both run with `run-server.sh`'s environment
+  (`run-server.sh --run CMD` runs any command with it).
+- **Other ports.** `--server-port` and `--jupyter-port` choose others; they must
+  be ones the sandbox forwards (`SANDBOX_PORT`).
+- **Stopping and shell use.** `tooling/workspace.sh <name> stop` stops both, and
+  `eval "$(tooling/workspace.sh <name> env)"` points a shell (and
+  `generate_report`) at the workspace.
+- **Data.** `workspaces/` is never committed.
+
 ---
 
 ## 3. Input files

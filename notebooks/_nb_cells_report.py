@@ -150,7 +150,8 @@ three and a half minutes cold**, a few seconds warm.
 _code(r"""
 import time
 
-params = {"compound_name": SHORT_NAME, "dose_unit": DOSE_UNIT, **PROCESS_OVERRIDES}
+params = {"compound_name": SHORT_NAME or identity.get("name") or DTXSID, "dose_unit": DOSE_UNIT,
+          **PROCESS_OVERRIDES}
 t0 = time.monotonic()
 payload = await gr.process_async(DTXSID, params, store)
 print(f"  {time.monotonic() - t0:.0f} s")
@@ -185,7 +186,7 @@ for key, sec in sorted(store.read_section_dicts(DTXSID).items()):
 
 rows = (payload.get("apical_bmd_summary") or [])[:8]
 if rows:
-    print(f"\nmost sensitive apical endpoints ({DOSE_UNIT}):")
+    print(f"\nmost sensitive apical endpoints ({DOSE_UNIT or 'the unit the data records'}):")
     for r in rows:
         print(f"  {r.get('endpoint', '')[:30]:30} {r.get('sex', ''):6} {r.get('platform', '')[:18]:18} "
               f"BMD {r.get('bmd')!s:>6}  BMDL {r.get('bmdl')!s:>6}  {r.get('bmd_status', '')}  "
@@ -242,8 +243,8 @@ _code(r"""
 if BACKGROUND:
     gr.background(DTXSID, identity, "", store)
 elif not (session / "background.json").exists():
-    src = store.session_dir(SOURCE) / "background.json"
-    if src.exists():
+    src = REFERENCE / "background.json" if REFERENCE else None
+    if src and src.exists():
         shutil.copy2(src, session / "background.json")
         print(f"  Background copied from sessions/{SOURCE}/ (unapproved, as written there)")
     else:
@@ -370,24 +371,27 @@ writes each surface to `OUT/<DTXSID><suffix>`. For all but LaTeX/PDF it calls
    - `latex` / `pdf`: the Overleaf bundle (`rendering.latex_export`), compiled
      with `tect` for the PDF.
 
-This scratch session has no document definition of its own (NIEHS-10's lives
-under the reference session's id, `templates/studies/DTXSID50469320/`), so it
+In a workspace of your own the session is the study's own id, so it renders
+from NIEHS-10's own definition (`templates/studies/DTXSID50469320/`, the 2023
+books'), as the reference session does. The scratch session in the
+repository's sessions (`<SOURCE>_nb`) has no definition of its own, so it
 renders as a **new study** would: from the 2026 books' definition, not
 NIEHS-10's 2023 one. The structure is the 2026 books': Chemistry first, the
 apical results under "Apical Endpoint Analysis", each tissue's gene set and
 gene results under its own heading written from the tables, the eFDR and
 definitions appendices. The inhalation-only sections drop out, since NIEHS-10
 was a gavage study. So the next step's comparison with the NIEHS-10 book shows
-those era differences, which the reference session doesn't have.
+those era differences, which the reference session (and a workspace's session)
+doesn't have.
 
-**Reads → writes.** The session → `output/<DTXSID>/<DTXSID>.docx`, `.html`,
+**Reads → writes.** The session → `OUTPUT_DIR/<DTXSID>/<DTXSID>.docx`, `.html`,
 `-bits.zip`, ….
 """)
 
 _code(r"""
 written = gr.render(DTXSID, SURFACES, OUT, None, False)
 for p in written:
-    print(f"  {p.relative_to(ROOT)}  ({p.stat().st_size / 1024:.0f} KB)")
+    print(f"  {p}  ({p.stat().st_size / 1024:.0f} KB)")
 """)
 
 # ---------------------------------------------------------------------------
@@ -449,39 +453,43 @@ _code(r"""
 from rendering.bits_compare import compare, load_book, unified_diff
 from rendering.bits_compare_page import render_page
 
-if "bits" not in SURFACES:
-    gr.render(DTXSID, ["bits"], OUT, None, False)
-pub_book, pub_images = load_book(BOOKSHELF / REPORT)
-our_book, our_images = load_book(OUT / f"{DTXSID}-bits.zip")
-cmp = compare(pub_book, our_book, left_images=pub_images, right_images=our_images)
+if not REPORT:
+    print("Your own study has no published book to compare with; the report is in", OUT)
+else:
+    if "bits" not in SURFACES:
+        gr.render(DTXSID, ["bits"], OUT, None, False)
+    pub_book, pub_images = load_book(BOOKSHELF / REPORT)
+    our_book, our_images = load_book(OUT / f"{DTXSID}-bits.zip")
+    cmp = compare(pub_book, our_book, left_images=pub_images, right_images=our_images)
 
-page = OUT / f"{DTXSID}-compare.html"
-page.write_text(render_page(cmp, title=f"{REPORT} · {NAME} — published vs this notebook",
-                            left_label=f"Published — {REPORT}", right_label=f"Generated — {DTXSID}"),
-                encoding="utf-8")
-(OUT / f"{DTXSID}-compare.diff").write_text(
-    unified_diff(cmp, f"published/{REPORT}", f"generated/{DTXSID}"), encoding="utf-8")
+    page = OUT / f"{DTXSID}-compare.html"
+    page.write_text(render_page(cmp, title=f"{REPORT} · {NAME} — published vs this notebook",
+                                left_label=f"Published — {REPORT}", right_label=f"Generated — {DTXSID}"),
+                    encoding="utf-8")
+    (OUT / f"{DTXSID}-compare.diff").write_text(
+        unified_diff(cmp, f"published/{REPORT}", f"generated/{DTXSID}"), encoding="utf-8")
 
-print(f"{cmp.sim:.0%} of the words match;", ", ".join(f"{n} {s}" for s, n in sorted(cmp.counts().items())))
-print("by kind:", "; ".join(f"{g} {v:.0%}" for g, (v, w) in cmp.by_kind().items() if w))
-print("page:", page.relative_to(ROOT))
+    print(f"{cmp.sim:.0%} of the words match;", ", ".join(f"{n} {s}" for s, n in sorted(cmp.counts().items())))
+    print("by kind:", "; ".join(f"{g} {v:.0%}" for g, (v, w) in cmp.by_kind().items() if w))
+    print("page:", page)
 
-rows = [(sp, sim) for sp, (sim, st) in zip(cmp.sections, cmp.subtree()) if sp.changes]
-rows.sort(key=lambda r: r[1])
-display(Markdown("| section | words match | changed blocks | status |\n|---|---|---|---|\n" + "\n".join(
-    f"| {' › '.join(sp.section.path)} | {sim:.0%} | {sp.changes} | {sp.status} |" for sp, sim in rows[:15])))
+    rows = [(sp, sim) for sp, (sim, st) in zip(cmp.sections, cmp.subtree()) if sp.changes]
+    rows.sort(key=lambda r: r[1])
+    display(Markdown("| section | words match | changed blocks | status |\n|---|---|---|---|\n" + "\n".join(
+        f"| {' › '.join(sp.section.path)} | {sim:.0%} | {sp.changes} | {sp.status} |" for sp, sim in rows[:15])))
 """)
 
 _code(r"""
 # The published book as a session: the companion of the reference session.
 from tooling.published_clone import build, check
 
-companion, rebuilt = build(REPORT, SOURCE)
-print(f"{companion}: {'built' if rebuilt else 'up to date'}")
-res = check(REPORT, companion)
-print(f"{res['sim']:.1%} of the book's words match;",
-      ", ".join(f"{n} {s} {k}" for (s, k), n in sorted(res["off"].items())) or "every block the same")
-print("tables and figures numbered as the book:", "yes" if not res["numbered"] else res["numbered"])
+if REPORT:
+    companion, rebuilt = build(REPORT, SOURCE)
+    print(f"{companion}: {'built' if rebuilt else 'up to date'}")
+    res = check(REPORT, companion)
+    print(f"{res['sim']:.1%} of the book's words match;",
+          ", ".join(f"{n} {s} {k}" for (s, k), n in sorted(res["off"].items())) or "every block the same")
+    print("tables and figures numbered as the book:", "yes" if not res["numbered"] else res["numbered"])
 """)
 
 # ---------------------------------------------------------------------------
@@ -489,11 +497,15 @@ _md(r"""
 ## 17. Where things stand
 
 The final derived state and the session's files. The session is an ordinary
-one: it shows in the browser's session list and on `/Bookshelf`, among the
-unpublished reports, since the shelf counts as published only the study's own
-session (`SOURCE`), whose card links the companion. To remove it, delete
-`sessions/<DTXSID>/` and `output/<DTXSID>/`; the companion
-(`sessions/<SOURCE>_published/`) belongs to the shelf and stays.
+one: it shows in the browser's session list and on `/Bookshelf`. In a
+workspace of your own it is the study's own session, so the workspace's
+Bookshelf (port 9300 by default) shows it as the published report's generated version,
+its card linking the published content. The scratch session in the
+repository's sessions is listed among the unpublished reports instead, since
+the shelf counts as published only the study's own session (`SOURCE`), whose
+card links the companion. To remove it, delete `SESSIONS_DIR/<DTXSID>/` and
+`OUTPUT_DIR/<DTXSID>/`; the companion (`SESSIONS_DIR/<SOURCE>_published/`)
+belongs to the shelf and stays.
 """)
 
 _code(r"""
@@ -503,5 +515,5 @@ for p in sorted(session.glob("*.json")):
     print(f"  {p.name:42} {p.stat().st_size:>10,} bytes")
 print("\ndeliverables:")
 for p in sorted(OUT.iterdir()):
-    print(f"  {p.relative_to(ROOT)}  ({p.stat().st_size / 1024:.0f} KB)")
+    print(f"  {p}  ({p.stat().st_size / 1024:.0f} KB)")
 """)

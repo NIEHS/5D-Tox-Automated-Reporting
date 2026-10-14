@@ -21,6 +21,7 @@
 #   ./run-server.sh                 # port 9000, bound to 0.0.0.0 (see below)
 #   ./run-server.sh --port 8080     # any background_server.py flags pass through
 #   ./run-server.sh --host 127.0.0.1  # override the default bind (loopback only)
+#   ./run-server.sh --run CMD …       # run CMD with this environment instead
 #
 # Default bind is 0.0.0.0 (all interfaces), NOT background_server.py's own
 # 127.0.0.1 default. This sandbox reaches the app through a host port-forward that
@@ -125,6 +126,14 @@ fi
 # symlink still fails -type f — which is exactly the false alarm to avoid.
 if ! find -L "${BMDX_PROJECT_ROOT:-/nonexistent}/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
   echo "run-server.sh: no readable *.jar under $BMDX_PROJECT_ROOT/target — Java classpath will be broken." >&2
+fi
+
+# `--run CMD …`: run CMD with this environment instead of the server (e.g. a
+# workspace's JupyterLab, tooling/workspace.sh), so its kernels reach the LLM
+# gateway and the Java layer exactly as the server does.
+if [[ "${1:-}" == "--run" ]]; then
+  shift
+  exec "$@"
 fi
 
 # Default to binding all interfaces so the host port-forward reaches us (see the

@@ -312,6 +312,16 @@ WorkflowEngine("DTXSID50469320").state().to_dict()</pre></div>
   Unpublished study data may only go to the walled toxpipe gateway, never a public model endpoint. The app's egress guard
   enforces toxpipe-only. Don't work around it by pointing <code>ANTHROPIC_BASE_URL</code> somewhere else.</p>
 </div>
+<p><b>A separate workspace.</b> To let someone else try the tool on their own data without touching your sessions, outputs or Bookshelf, start a workspace for them: <code>tooling/workspace.sh &lt;name&gt;</code>. </p>
+<ul>
+  <li><b>Where things go.</b> Its sessions are in <code>workspaces/&lt;name&gt;/sessions/</code> (<code>SESSIONS_DIR</code>) and its deliverables in <code>workspaces/&lt;name&gt;/output/</code> (<code>OUTPUT_DIR</code>, which the command-line tools and the notebook write to).</li>
+  <li><b>The app,</b> on port 9300, serves only those sessions: its <code>/Bookshelf</code> is the workspace's own, and its <i>Upload</i> step takes files from their machine.</li>
+  <li><b>JupyterLab,</b> on port 9400 (with a token; the address is printed and kept in <code>jupyter-url.txt</code>), opens on the workspace's own copy of the walkthrough notebook. Files uploaded into its <code>uploads/</code> folder (<code>BMDX_UPLOADS</code>) are the study the notebook builds.</li>
+  <li><b>The environment.</b> Both run with <code>run-server.sh</code>'s environment (<code>run-server.sh --run CMD</code> runs any command with it).</li>
+  <li><b>Other ports.</b> <code>--server-port</code> and <code>--jupyter-port</code> choose others; they must be ones the sandbox forwards (<code>SANDBOX_PORT</code>).</li>
+  <li><b>Stopping and shell use.</b> <code>tooling/workspace.sh &lt;name&gt; stop</code> stops both, and <code>eval "$(tooling/workspace.sh &lt;name&gt; env)"</code> points a shell (and <code>generate_report</code>) at the workspace.</li>
+  <li><b>Data.</b> <code>workspaces/</code> is never committed.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="inputs"><span class="num">3</span>Input files</h2>

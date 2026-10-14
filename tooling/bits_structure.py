@@ -24,6 +24,8 @@ from pathlib import Path
 
 from rendering.bits_bundle import OutlineEntry, outline, read_bundle, structure_keys
 
+import common.paths
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BOOKSHELF = REPO_ROOT / "assets" / "cebs" / "_bookshelf"
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "reference"
@@ -42,7 +44,7 @@ def published_outline(report: str) -> list[OutlineEntry]:
 
 
 def generated_outline(dtxsid: str) -> list[OutlineEntry]:
-    return outline(read_bundle(REPO_ROOT / "output" / dtxsid / f"{dtxsid}.xml"))
+    return outline(read_bundle(common.paths.OUTPUT_DIR / dtxsid / f"{dtxsid}.xml"))
 
 
 def fixture_path(report: str) -> Path:
@@ -97,7 +99,7 @@ def main() -> int:
         if report is None or not (BOOKSHELF / report).is_dir():
             print(f"== {dtxsid}: no published bundle")
             continue
-        xml = REPO_ROOT / "output" / dtxsid / f"{dtxsid}.xml"
+        xml = common.paths.OUTPUT_DIR / dtxsid / f"{dtxsid}.xml"
         if not xml.exists():
             print(f"== {dtxsid} ({report}): no generated BITS ({xml.relative_to(REPO_ROOT)})")
             continue

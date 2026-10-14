@@ -116,3 +116,7 @@ assets/given-2026/*
 # Microsoft's msvcrt.dll for BMDS 2.7 under Wine (pipeline/bmds27) — a Windows
 # system file, never committed.
 assets/windows/
+
+# Separate workspaces (tooling/workspace.sh): other people's sessions, uploads
+# and outputs — study data, never committed.
+workspaces/

@@ -35,9 +35,11 @@ from pathlib import Path
 from rendering.bits_compare import compare, flat_lines, load_book, unified_diff
 from rendering.bits_compare_page import render_index, render_page
 
+import common.paths
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BOOKSHELF = REPO_ROOT / "assets" / "cebs" / "_bookshelf"
-OUTPUT = REPO_ROOT / "output"
+OUTPUT = common.paths.OUTPUT_DIR
 DEFAULT_OUT = OUTPUT / "QC" / "compare"
 
 
