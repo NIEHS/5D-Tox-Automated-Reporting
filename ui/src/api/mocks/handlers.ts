@@ -1,0 +1,126 @@
+import { HttpResponse, delay, http } from 'msw'
+import { API_V2 } from '../client'
+import type { ErrorEnvelope, RunEvent, StudyState } from '../types'
+import {
+  DRY_RUNS_BY_ACT,
+  REFUSAL_RUN_IN_FLIGHT,
+  STATES_BY_ID,
+  STREAM_PROCESS_OK,
+  VOCABULARIES,
+  stateNotFound,
+} from './fixtures'
+
+/**
+ * The MSW handlers for the shared contracts (MODULES.md §4). A module's own
+ * endpoints are added here by the orchestrator, from the module's contract.
+ *
+ * The mock keeps one piece of memory: which studies are being processed, so
+ * that a reload during a run shows the "already running" state.
+ */
+
+export interface MockOptions {
+  /** pause between streamed events; 0 in tests */
+  stepDelayMs?: number
+}
+
+const running = new Map<string, string>()
+
+/** Forget every mock run; called between tests. */
+export function resetMockDb(): void {
+  running.clear()
+}
+
+export function envelope(body: ErrorEnvelope): Response {
+  return HttpResponse.json(body, { status: body.error.status })
+}
+
+function withRun(state: StudyState): StudyState {
+  const since = running.get(state.id)
+  if (!since || !state.run) return state
+  return { ...state, run: { ...state.run, in_flight: true, started_at: since } }
+}
+
+/** An NDJSON response that sends `events` one by one. */
+export function ndjsonResponse(events: RunEvent[], stepDelayMs = 0, onEnd?: () => void): Response {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (const ev of events) {
+          if (stepDelayMs > 0) await delay(stepDelayMs)
+          controller.enqueue(encoder.encode(JSON.stringify(ev) + '\n'))
+        }
+      } finally {
+        onEnd?.()
+        controller.close()
+      }
+    },
+  })
+  return new HttpResponse(stream, { headers: { 'Content-Type': 'application/x-ndjson' } })
+}
+
+export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
+  return [
+    http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
+      const id = String(params.id)
+      const state = STATES_BY_ID[id]
+      return HttpResponse.json(state ? withRun(state) : stateNotFound(id))
+    }),
+
+    http.get(`${API_V2}/vocabularies`, () => HttpResponse.json(VOCABULARIES)),
+
+    http.get(`${API_V2}/studies/:id/dry-run/:act`, ({ params }) => {
+      const dry = DRY_RUNS_BY_ACT[String(params.act)]
+      if (dry) return HttpResponse.json(dry)
+      return envelope({
+        error: {
+          code: 'unknown_act',
+          status: 404,
+          message: `no dry run for act ${String(params.act)}`,
+          say: 'The application cannot say in advance what this would do.',
+          fix: null,
+          details: { act: String(params.act) },
+        },
+      })
+    }),
+
+    http.post(`${API_V2}/studies/:id/process`, ({ params }) => {
+      const id = String(params.id)
+      const state = STATES_BY_ID[id]
+      if (!state) {
+        return envelope({
+          error: { code: 'no_such_study', status: 404, message: `no session ${id}`, say: 'There is no study with this id.', fix: 'M1', details: {} },
+        })
+      }
+      if (running.has(id)) return envelope(REFUSAL_RUN_IN_FLIGHT)
+      if (!state.legal_actions.includes('REPROCESS')) {
+        return envelope({
+          error: {
+            code: 'phase_not_allowed',
+            status: 409,
+            message: `StepError: action REPROCESS is not legal in phase ${state.phase}`,
+            say: 'The study cannot be processed yet: its data have not been combined.',
+            fix: 'M3',
+            details: { phase: state.phase, action: 'REPROCESS', legal_actions: state.legal_actions },
+          },
+        })
+      }
+      running.set(id, new Date().toISOString())
+      return ndjsonResponse(STREAM_PROCESS_OK, stepDelayMs, () => running.delete(id))
+    }),
+
+    // Anything else under /api/v2 is not in the contract (yet).
+    http.all(`${API_V2}/*`, ({ request }) =>
+      envelope({
+        error: {
+          code: 'no_such_endpoint',
+          status: 404,
+          message: `${request.method} ${new URL(request.url).pathname} is not mocked`,
+          say: 'This part of the application is not available yet.',
+          fix: null,
+          details: {},
+        },
+      }),
+    ),
+  ]
+}
