@@ -20,7 +20,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
-| Kit + skeleton | building (wave 0) | ui-backend-engineer (`ui-kit-be`), ui-frontend-engineer (`ui-kit-fe`) | Gate 0 (MODULES §4–5) | | |
+| Kit + skeleton | backend built (`ui-kit-be` 4e1cba7, 60 tests); front-end building (`ui-kit-fe`) | ui-frontend-engineer | Gate 0 (MODULES §4–5) | | |
 | C1 legal actions enforced | spec | ui-backend-engineer (spec stage) | | | §9 method-profile choice |
 | C2 owned content protected | spec ready, **awaiting the maintainer** (S1–S9) | | | | |
 | C3 saves merge and check | not started | | | | Q10 |
