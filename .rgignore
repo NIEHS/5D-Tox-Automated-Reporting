@@ -1,0 +1,3 @@
+# The walled Compare files (docs/ui-redesign/WALL.md): ripgrep skips them.
+web_routes/compare_routes.py
+rendering/bits_compare_page.py

@@ -60,6 +60,10 @@ and your scratch directory. If it doesn't, ask in your report rather than guess.
   worktree's own files. No indirect looks either: an `rlm-code` result that lands
   there, a path built to reach there. If something behind the wall seems
   necessary, stop and say so in your report; the orchestrator asks the maintainer.
+- **Every repo-wide search excludes the two Compare files**, which are checked out
+  because the app imports them: `grep -r … --exclude=compare_routes.py
+  --exclude=bits_compare_page.py`; `rg` skips them through `.rgignore`. A search
+  that prints their lines is a look over the wall.
 - **The design comes from the workflow**, the data and the requirements, never
   from the old screens. The notebook (`notebooks/`) shows the workflow and its
   code; its shape is not the interface's shape.

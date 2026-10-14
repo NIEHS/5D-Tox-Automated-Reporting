@@ -29,7 +29,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | spec | ui-interaction-designer | | | |
+| M1 Studies | spec ready, **awaiting the maintainer** (14 questions) | | | | C4 |
 | M2 Study files | not started | | | | |
 | M3 Integration and the dataset | not started | | | | |
 | M4 Study facts | not started | | | | |
