@@ -5,7 +5,16 @@ orchestrator.
 
 ## Gate 0: the module map and the contracts
 
-Not started.
+In progress (2026-10-14). Stage 1: three workflow analysts, in parallel:
+
+| Step group | Analysis | On it |
+|---|---|---|
+| Data preparation (steps 1–8) | `modules/gate0-data/analysis.md` | ui-workflow-analyst |
+| Process (step 9) | `modules/gate0-process/analysis.md` | ui-workflow-analyst |
+| Document (steps 10–13) | `modules/gate0-document/analysis.md` | ui-workflow-analyst |
+
+Stage 2: the orchestrator drafts `MODULES.md` (modules, shared kit, contracts,
+skeleton) from the three analyses, for the maintainer's sign-off.
 
 ## Modules
 
