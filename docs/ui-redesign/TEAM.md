@@ -68,9 +68,11 @@ it touches is told; a change to a signed spec is signed again.
 
 ## How the work is laid out
 
-- **Module documents:** `docs/ui-redesign/modules/<m>/`, written in the
-  orchestrator's worktree (`/workspace/rlm-bmdx-ui`). Each role writes only its
-  own file and does not commit; the orchestrator commits.
+- **Module documents:** `docs/ui-redesign/modules/<m>/`, in the orchestrator's
+  worktree (`/workspace/rlm-bmdx-ui`). The harness does not let subagents write
+  report files, so the analyst, designer, tester and reviewer return their
+  document as Markdown in their final report, and the orchestrator saves and
+  commits it.
 - **Code:** each coding agent works in **its own sparse worktree**, made by
   `tooling/ui_team_worktree.sh add <m>-<role>`: path `/workspace/ui-team/<m>-<role>`,
   branch `ui-<m>-<role>`, from `ui-redesign`, with the same sparse-checkout rules
@@ -87,7 +89,9 @@ it touches is told; a change to a signed spec is signed again.
 - **Data:** `sessions/`, `output/` and `workspaces/` are the maintainer's real
   store, linked in. Read them; never write them. To run anything that writes, copy
   a session to `/workspace/ui-team/_scratch/<agent>/sessions/` and set
-  `SESSIONS_DIR` and `OUTPUT_DIR` there.
+  `SESSIONS_DIR` and `OUTPUT_DIR` there, and `BM2_CACHE_DIR` to
+  `<scratch>/bm2_cache` (the shared `/tmp/_bm2_cache` LMDB has a 1 GB map; when
+  it fills, `.bm2` reads degrade silently).
 - **Ports:** 9000 (the main app), 9100 (the maintainer's Jupyter), 9300 and 9400
   (a workspace) are not the team's. 9200 is the orchestrator's demo for the
   maintainer. Agents use the `127.0.0.1` port their brief assigns, from 9500 up.

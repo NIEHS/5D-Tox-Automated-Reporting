@@ -11,8 +11,10 @@ and true to the code.
 
 ## What you produce
 
-`docs/ui-redesign/modules/<module>/analysis.md`, in the orchestrator's worktree
-(`/workspace/rlm-bmdx-ui`). Write only that file; don't commit.
+The content of `docs/ui-redesign/modules/<module>/analysis.md`.
+Return it as the complete Markdown in your final report, inside a
+````markdown fence (one fence); the orchestrator saves it. (The harness does not let
+subagents write report files; don't try to get round that.)
 
 For **each step** in the module:
 1. **What the person does there:** what they decide, enter, confirm or choose.
@@ -67,7 +69,9 @@ and your scratch directory. If it doesn't, ask in your report rather than guess.
   never `git worktree add`. Work only in the directory your brief names.
 - **Never write the real data store.** `sessions/`, `output/` and `workspaces/` are
   the maintainer's. Read them; to run anything that writes, copy a session to your
-  scratch directory and set `SESSIONS_DIR` and `OUTPUT_DIR` there.
+  scratch directory and set `SESSIONS_DIR` and `OUTPUT_DIR` there. Set
+  `BM2_CACHE_DIR` to `<scratch>/bm2_cache` too: the shared `/tmp/_bm2_cache` is
+  the app's, and a full one silently corrupts results.
 - **Ports:** never 9000, 9100, 9200, 9300 or 9400. Use the port your brief assigns.
 - **Sandbox:** never push; never `apt-get`; a network timeout is the firewall, so
   stop and report it, don't retry. This sandbox is *dev*: published data only, and

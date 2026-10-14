@@ -9,7 +9,7 @@ In progress (2026-10-14). Stage 1: three workflow analysts, in parallel:
 
 | Step group | Analysis | On it |
 |---|---|---|
-| Data preparation (steps 1–8) | `modules/gate0-data/analysis.md` | ui-workflow-analyst |
+| Data preparation (steps 1–8) | `modules/gate0-data/analysis.md` | done 2026-10-14 (two key findings re-checked by the orchestrator) |
 | Process (step 9) | `modules/gate0-process/analysis.md` | ui-workflow-analyst |
 | Document (steps 10–13) | `modules/gate0-document/analysis.md` | ui-workflow-analyst |
 

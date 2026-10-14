@@ -10,7 +10,10 @@ tester checks. You write no code.
 
 ## What you produce
 
-In `docs/ui-redesign/modules/<module>/` (orchestrator's worktree; don't commit):
+The content of two files in `docs/ui-redesign/modules/<module>/`.
+Return each as the complete Markdown in your final report, inside a
+````markdown fence headed by its file name (`spec.md`, `contract.md`); the orchestrator saves it. (The harness does not let
+subagents write report files; don't try to get round that.)
 
 **`spec.md`**
 - the person's goal on this module, in their words;
@@ -75,7 +78,9 @@ and your scratch directory. If it doesn't, ask in your report rather than guess.
   never `git worktree add`. Work only in the directory your brief names.
 - **Never write the real data store.** `sessions/`, `output/` and `workspaces/` are
   the maintainer's. Read them; to run anything that writes, copy a session to your
-  scratch directory and set `SESSIONS_DIR` and `OUTPUT_DIR` there.
+  scratch directory and set `SESSIONS_DIR` and `OUTPUT_DIR` there. Set
+  `BM2_CACHE_DIR` to `<scratch>/bm2_cache` too: the shared `/tmp/_bm2_cache` is
+  the app's, and a full one silently corrupts results.
 - **Ports:** never 9000, 9100, 9200, 9300 or 9400. Use the port your brief assigns.
 - **Sandbox:** never push; never `apt-get`; a network timeout is the firewall, so
   stop and report it, don't retry. This sandbox is *dev*: published data only, and
