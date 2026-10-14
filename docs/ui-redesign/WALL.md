@@ -19,7 +19,7 @@ Only the maintainer lifts the wall. Until then:
 | `rendering/bits_compare_page.py`, `web_routes/compare_routes.py` | the Compare page |
 | `docs/ui-state-management-plan.html`, `docs/plans/integrated-wizard-versioned-preview.md`, `docs/code-walkthrough.*`, `docs/architecture-map.*`, `docs/code-structure-report-*.html` | documents that describe those front-ends |
 | `tests/e2e/` | browser tests of the old front-end |
-| the memory files listed in `walled_existing_ui_index.md` (in the memory directory) | notes about the old screens |
+| memory notes about the old screens: `expertise_ui_state.md`, `constraints_ui_work.md`, `feedback_state_derivation.md`, `project_wizard_step_granularity_revisit.md`, `project_data_review_page_revisit.md`, `project_approve_page_revisit.md`, `project_integrated_wizard_versioned_preview.md`, `project_document_configurator.md`, `project_process_step_phase_placement.md`, `project_notebook_ui.md`, and their index, `walled_existing_ui_index.md` | what these notes held that the new design needs is restated, neutrally, in `HANDOFF.md` §2 and §10 |
 
 This includes indirect looks:
 - `rlm-code` symbol queries that land in those paths;
