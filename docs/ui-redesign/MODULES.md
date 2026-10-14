@@ -86,13 +86,16 @@ where noted.
 
 | # | Guarantee | Today | Fix (summary) | Waits on |
 |---|---|---|---|---|
-| C1 | **Legal actions are enforced** | advisory only | one guard used by every step and route (refuse with a `StepError` that names the phase); integrate refuses when the fingerprints don't match the coverage matrix; re-integration withdraws the data approval; Process refuses outside its phases and pins nothing before refusing | Q3 (does Process need APPROVED?) |
+| C1 | **Legal actions are enforced** | advisory only | one guard used by every step and route (refuse with a `StepError` that names the phase); integrate refuses when the fingerprints don't match the coverage matrix and pins nothing (Q8); Process is legal from INTEGRATED on, the data approval does not gate it (Q3), and it pins nothing before refusing | – |
 | C2 | **Owned content is never overwritten by a machine** | no caller of `may_machine_write`; materialize un-approves; save-section destroys; restore re-approves silently | `may_machine_write` on every machine write path; archive before any overwrite of owned content; restore and discard become `workflow.steps` steps that record a version event; accept becomes state-only | Q1, Q6 |
 | C3 | **Saves merge and check** | experiment-metadata and front-matter saves replace; vocabularies unchecked on HTTP; identity overwritten; classifications not durable; precedence key mismatch | merge + vocabulary check on every statement save; identity written only by its own step; person-stated classifications durable and keyed by file name; precedence keyed by compound key and file name | Q10 |
 | C4 | **Reads have no side effects; ids are stable** | `GET …/state` creates the session folder; fingerprints re-scan and mint new ids on a cold server; `GET /api/session/{id}` registers uploads | side-effect-free reads; file ids stable across validations and restarts | – |
 | C5 | **Process is one guarded, observable act** | no lock; HTTP process and materialize are two calls; no progress across requests; LLM failure = success; run parameters forgotten | per-session run lock + in-flight record; one endpoint that runs process + materialize and streams events (§4.4); `content_errors` and fallbacks in the result; run parameters become saved declarations | Q11, Q12 |
 | C6 | **Readiness is derived, complete and explained** | the data approval checks nothing; the publish gate checks stale LLM sections only | a derived data-approval checklist (§3 M6) and a derived publish checklist (§3 D1), both folding in member studies, pending markers, pins and deviations | Q2, Q3, Q4, Q5 |
-| C7 | **Currency covers every input** | only file changes stale | re-pins, stated-fact changes and a tracking pin's move stale the dependent LLM sections; a stale section gets a fresh draft beside the approved text | Q2, Q5 |
+| C7 | **Currency covers every input** | only file changes stale | a change to a stated fact stales the dependent AI-written sections (decided, Q2); so does a change of method profile, pending confirmation (§8); a stale section gets a fresh draft beside the approved text | Q6 |
+| C9 | **Every LLM-written part is an approvable section** (decided, Q4) | Methods, the apical-BMD narrative and the genomics interpretations live only in caches | each becomes a section file with the same ownership, currency and history rules as the Summary; the renderer reads the section, not the cache | – |
+| C10 | **Every rendered surface is marked draft** (decided, Q3) | nothing marks a draft | a "DRAFT" watermark on docx, the PDFs (from docx and LaTeX), the HTML view and the Bookshelf facsimile, where the format allows; the BITS bundle is the one publishable artifact and is released only by the publish act (Q5) | – |
+| C11 | **Externally edited versions come back, into a changelog** (decided, Q1) | Overleaf edits reach only HTML and LaTeX; no Word return; no changelog | ingest a new version from Word or Overleaf; attribute its changes to sections; record every change (generated, ingested, re-accepted) in one report changelog; a machine never overwrites an ingested version | – |
 | C8 | **Destructive acts can be previewed and undone** | resets and invalidations delete with no list; no restore for a removed file | a dry-run that returns what an act will delete and keep (feeds the confirm pattern, §4.3); restore a removed file; history for stated facts | Q9 |
 
 C1, C2 and C4 protect every module, so they go first. Each is small enough for one
@@ -111,12 +114,12 @@ designer turns them into the module's `contract.md`.
 
 | # | Module | Steps | The person decides | Needs |
 |---|---|---|---|---|
-| M1 | **Studies** | create, list, open, delete a session | which study, which chemical, under which id | kit; C4 |
+| M1 | **Studies** | create, list, open, delete a session; the id is the chemical's DTXSID (Q7) and the screen says which report format it brings | which study, which chemical | kit; C4 |
 | M2 | **Study files** | 1 bring in, 2 validate, 3 conflicts, 4 classification; clear files, reset | which files belong, and what each one is | M1; C3, C4, C8 |
 | M3 | **Integration and the dataset** | 5 integrate; review each experiment's metadata (stated vs inferred) | is the merged dataset what the files say | M2; C1, C3 |
 | M4 | **Study facts** | 6: design, dose unit, short name, eFDR | what the data cannot say | M3 (design and eFDR need integration); C3 |
 | M5 | **Method and document pins** | 7 | which method, which document definition, fixed or tracking | M1; C7 for the re-pin consequences |
-| M6 | **Data approval** | 8: the animal accounting and a derived readiness checklist | is the data right to compute on | reads M2–M5; C6 |
+| M6 | **Data review** | 8: the animal accounting and a derived checklist; informs, gates nothing (Q3) | is the data right | reads M2–M5; C6 |
 
 ### Computation
 
@@ -132,7 +135,7 @@ designer turns them into the module's `contract.md`.
 | D1 | **Review** | 11 + the publish checklist of 12: sections grouped by what needs attention; per section, what a person needs to approve knowingly (document analysis §8); accept, release with a reason, history, restore | is each section right; is the report ready | C2, C6; D3 for the per-section preview |
 | D2 | **Narrative generation** | 10: Background, Summary (deterministic or a model run), Methods and genomics re-preparation; each produces a draft beside the approved text | which text stands | D1; C2 |
 | D3 | **Preview and deliverables** | 13: a faithful preview per target (Word → PDF, LaTeX → PDF), the HTML content view, downloads labelled draft or final | is this what goes out | D1 (the gate) |
-| D4 | **Hand-off and return** | Overleaf (bind, commit, push, pull, the edits that came back); Word (one-way until Q15 is settled) | where authoring happens; what came back | D3 |
+| D4 | **Hand-off, return and changelog** | hand a draft to Word or Overleaf; ingest the edited version; show what changed, section by section, in the report changelog (Q1) | where authoring happens; which ingested changes stand | D3; C11 |
 | D5 | **Configurator** | §7: the document definition and its pin, views, layout styles; the report details (front matter, deposit) | how this report is structured and presented; who wrote it | kit vocabulary fields; C3, C8 |
 | D6 | **Bookshelf hook-up** | links to `/Bookshelf/<id>` and the companion; a draft/approval notice on the facsimile and its downloads; where the Compare link points | – | D1, D3; Q16, Q17 |
 
@@ -154,8 +157,8 @@ follows the dependencies.
 |---|---|---|
 | 0 | the shared kit and the skeleton (§4, §5) | C1, C2, C4 |
 | 1 | M1, M2, D1, D5 | C3, C5, C6 |
-| 2 | M3, M4, M5, M6, P1, D3 | C7, C8 |
-| 3 | P2, D2, D4, D6 | – |
+| 2 | M3, M4, M5, M6, P1, D3, D4 | C7, C8, C9, C10, C11 |
+| 3 | P2, D2, D6 | – |
 
 ---
 
@@ -377,3 +380,47 @@ question number.
   - new routes under `/api/v2/`.
 
   Agreed?
+
+---
+
+## 8. Decisions at Gate 0 (the maintainer, 2026-10-14)
+
+- **Q1. Editing happens outside, in Word or Overleaf, after generation.** The app
+  ingests the new versions and integrates their changes into a changelog (C11, D4).
+  *Orchestrator's reading:*
+  - no in-app editing of section text;
+  - a machine never overwrites an ingested version;
+  - when Process changes generated content a person had approved, the change goes
+    into the changelog and the section is marked for re-review, never silently.
+- **Q2. A factual change marks AI text stale** (C7). *Open:* whether a change of
+  method profile counts as one (§9).
+- **Q3. The data approval does not gate Process.** M6 becomes a review that informs.
+  **Every rendering surface is marked draft only, with a watermark where possible**
+  (C10).
+- **Q4. Methods, the apical-BMD narrative and the genomics interpretations become
+  approvable sections** (C9).
+- **Q5. Publishing, in the interface, means the BITS bundle becomes available for
+  publishing on NCBI Bookshelf.** It is the publish act at the end of D1/D3. What
+  blocks it is settled with D1's spec.
+- **Q7. The session id is the chemical's DTXSID.** M1 enforces it for studies a
+  person creates. The suffixed sessions (`_published`, `_rat`, `_mouse`) are made by
+  the system.
+- **Q8. Integration is independent of the profile.** It stops pinning anything (C1).
+  *Open:* how the method profile is chosen before Process (§9).
+- **Q17. `published_report` may leave the walled Compare file** (D6). *Open:* how to
+  move it while the deny rule still covers that file (§9).
+- **Q18. The skeleton is agreed:** antd 6, `ui/`, `/app`, `/api/v2/`.
+
+## 9. Still open after Gate 0
+
+These do not block wave 0 (the kit, the skeleton, C1, C2, C4).
+- **The method profile.** Is a change of method profile a factual change that stales
+  AI text? How is a study's profile chosen before its first Process: pre-selected
+  and confirmed by a person, or never defaulted? (C7, M5, P1)
+- **Moving `published_report`.** Two ways:
+  - rebuild it, unwalled, from what the Bookshelf uses and the data it must come
+    from, without opening the walled file;
+  - or the maintainer lifts the deny rule for that one function's move.
+
+  (D6, wave 3)
+- Q6 and Q9–Q16: with the spec of the module each belongs to.
