@@ -19,6 +19,13 @@ The existing front-ends are **off limits** (`docs/ui-redesign/WALL.md`):
 
 Only the maintainer lifts the wall.
 
+**Work on the new UI in `/workspace/rlm-bmdx-ui`** (branch `ui-redesign`). It is a
+sparse worktree without the old front-ends: their files are absent, so a
+repository-wide search can't land in them. Untracked data (`sessions/`, `assets/`,
+`output/`, `.venv`, …) is linked in from `/workspace/rlm-bmdx`. It has its own deny
+rules and its own `rlm-code` index, built without the old front-end. The app on 9000
+runs from it and serves no old front-end.
+
 ## Package layout (read first)
 
 The codebase is organized into **concern packages** (restructured 2026-08-12, ADR-0013).

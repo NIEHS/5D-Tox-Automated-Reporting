@@ -28,9 +28,24 @@ This includes indirect looks:
 - `git log -p` or `git show` on them;
 - serving `/`, `/workflow…` or `/Compare` and looking at the pages.
 
-The Claude Code settings deny reading and editing these paths
-(`.claude/settings.local.json`, 54 rules). Shell commands that name them are blocked
-too. Don't work around it, for instance by building a path indirectly.
+**Work in `/workspace/rlm-bmdx-ui`** (branch `ui-redesign`). It is a sparse
+worktree, and the old front-end's source, its documents and the browser tests are
+not checked out there. So a repository-wide `grep`, `rg` or `find` cannot land in
+them, and its `rlm-code` index (`.rlm-code.duckdb` in the worktree) was built
+without them. Untracked data (`sessions/`, `assets/`, `output/`, `.venv`, …) is
+linked in from `/workspace/rlm-bmdx`. The app on port 9000 (and a workspace's on
+9300) runs from the worktree and serves no old front-end.
+
+The Claude Code settings in both checkouts deny reading and editing these paths
+(`.claude/settings.local.json`). Shell commands that name them are blocked too.
+
+What still reaches the old front-ends, and so is on you:
+- the main checkout (`/workspace/rlm-bmdx`): don't search or browse it;
+- git history, which the two checkouts share: no `git log -p`, `git show <commit>`
+  or `git grep` beyond the worktree's own files;
+- the two Compare files, which the app imports and so are checked out (denied).
+
+Don't work around any of it, for instance by building a path indirectly.
 
 ## Allowed, and the material to design from
 
