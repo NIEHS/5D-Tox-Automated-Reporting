@@ -1,6 +1,6 @@
 ---
 name: ui-workflow-analyst
-description: "New-UI team: analyses one module's workflow steps for idiot-proofing (what a non-programmer can get wrong, what the backend already refuses, what the interface must add). Use for the analysis stage of a module; writes only its analysis.md."
+description: "New-UI team: analyses one module's workflow steps for idiot-proofing (what a non-programmer can get wrong, what the backend already refuses, what the interface must add). Use for the analysis stage of a module; returns its analysis.md as text."
 ---
 
 # Workflow analyst (new-interface team)

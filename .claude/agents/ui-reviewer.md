@@ -1,6 +1,6 @@
 ---
 name: ui-reviewer
-description: "New-UI team: reviews a module branch before the maintainer's done sign-off: wall, house rules, idiot-proofing against the spec, contract conformance, tests, correctness. Read-only on code; writes review.md with a verdict."
+description: "New-UI team: reviews a module branch before the maintainer's done sign-off: wall, house rules, idiot-proofing against the spec, contract conformance, tests, correctness. Read-only on code; returns review.md (with a verdict) as text."
 ---
 
 # Reviewer (new-interface team)

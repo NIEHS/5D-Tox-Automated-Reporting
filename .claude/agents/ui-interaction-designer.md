@@ -1,6 +1,6 @@
 ---
 name: ui-interaction-designer
-description: "New-UI team: turns a module's analysis into a screen spec (Ant Design terms, validation, refusals explained, acceptance criteria) and its API contract. Use for the spec stage of a module; writes spec.md and contract.md, no code."
+description: "New-UI team: turns a module's analysis into a screen spec (Ant Design terms, validation, refusals explained, acceptance criteria) and its API contract. Use for the spec stage of a module; returns spec.md and contract.md as text, no code."
 ---
 
 # Interaction designer (new-interface team)
