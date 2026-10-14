@@ -14,32 +14,32 @@ In progress (2026-10-14). Stage 1: three workflow analysts, in parallel:
 | Document (steps 10–13) | `modules/gate0-document/analysis.md` | done 2026-10-14 (two key findings re-checked by the orchestrator) |
 
 Stage 2: `MODULES.md` drafted 2026-10-14 (modules, shared kit, shared contracts,
-skeleton, core track, 18 merged questions). **Awaiting the maintainer's sign-off.**
+skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in `MODULES.md` §8; still open: §9).
 
 ## Modules
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
-| Kit + skeleton | waiting for Gate 0 | | – | | Gate 0 |
-| C1 legal actions enforced | waiting for Gate 0 | | | | Q3 |
-| C2 owned content protected | waiting for Gate 0 | | | | Q1, Q6 |
-| C3 saves merge and check | waiting for Gate 0 | | | | Q10 |
-| C4 side-effect-free reads | waiting for Gate 0 | | | | |
-| C5 Process guarded, observable | waiting for Gate 0 | | | | Q11, Q12 |
-| C6 derived readiness | waiting for Gate 0 | | | | Q2–Q5 |
-| C7 currency covers every input | waiting for Gate 0 | | | | Q2, Q5 |
-| C8 dry-run and undo | waiting for Gate 0 | | | | Q9 |
-| M1 Studies | waiting for Gate 0 | | | | |
-| M2 Study files | waiting for Gate 0 | | | | |
-| M3 Integration and the dataset | waiting for Gate 0 | | | | |
-| M4 Study facts | waiting for Gate 0 | | | | |
-| M5 Method and document pins | waiting for Gate 0 | | | | |
-| M6 Data approval | waiting for Gate 0 | | | | |
-| P1 Process | waiting for Gate 0 | | | | |
-| P2 Change impact | waiting for Gate 0 | | | | |
-| D1 Review | waiting for Gate 0 | | | | |
-| D2 Narrative generation | waiting for Gate 0 | | | | |
-| D3 Preview and deliverables | waiting for Gate 0 | | | | |
-| D4 Hand-off and return | waiting for Gate 0 | | | | |
-| D5 Configurator | waiting for Gate 0 | | | | |
-| D6 Bookshelf hook-up | waiting for Gate 0 | | | | Q17 |
+| Kit + skeleton | building (wave 0) | ui-backend-engineer (`ui-kit-be`), ui-frontend-engineer (`ui-kit-fe`) | Gate 0 (MODULES §4–5) | | |
+| C1 legal actions enforced | spec | ui-backend-engineer (spec stage) | | | §9 method-profile choice |
+| C2 owned content protected | spec | ui-backend-engineer (spec stage) | | | Q6 |
+| C3 saves merge and check | not started | | | | Q10 |
+| C4 side-effect-free reads | not started | | | | |
+| C5 Process guarded, observable | not started | | | | Q11, Q12 |
+| C6 derived readiness | not started | | | | Q2–Q5 |
+| C7 currency covers every input | not started | | | | Q2, Q5 |
+| C8 dry-run and undo | not started | | | | Q9 |
+| M1 Studies | spec | ui-interaction-designer | | | |
+| M2 Study files | not started | | | | |
+| M3 Integration and the dataset | not started | | | | |
+| M4 Study facts | not started | | | | |
+| M5 Method and document pins | not started | | | | |
+| M6 Data approval | not started | | | | |
+| P1 Process | not started | | | | |
+| P2 Change impact | not started | | | | |
+| D1 Review | not started | | | | |
+| D2 Narrative generation | not started | | | | |
+| D3 Preview and deliverables | not started | | | | |
+| D4 Hand-off and return | not started | | | | |
+| D5 Configurator | not started | | | | |
+| D6 Bookshelf hook-up | not started | | | | Q17 |
