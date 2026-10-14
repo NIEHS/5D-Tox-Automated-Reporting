@@ -22,7 +22,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 |---|---|---|---|---|---|
 | Kit + skeleton | building (wave 0) | ui-backend-engineer (`ui-kit-be`), ui-frontend-engineer (`ui-kit-fe`) | Gate 0 (MODULES §4–5) | | |
 | C1 legal actions enforced | spec | ui-backend-engineer (spec stage) | | | §9 method-profile choice |
-| C2 owned content protected | spec | ui-backend-engineer (spec stage) | | | Q6 |
+| C2 owned content protected | spec ready, **awaiting the maintainer** (S1–S9) | | | | |
 | C3 saves merge and check | not started | | | | Q10 |
 | C4 side-effect-free reads | not started | | | | |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
