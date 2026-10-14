@@ -1,130 +1,74 @@
-# C2 — contract: refusals, no-ops, routes
+# C2 — Owned content is never overwritten by a machine: contract (revision 2)
 
-Built on the shared contracts of MODULES §4: the error envelope (§4.2) and the state read model (§4.1).
-Codes go in the kit's closed code list; `say` is written there, next to the code. Placeholders in
-`{braces}` are filled by the backend. "Decision" marks text that depends on spec §1.
+Every new or changed route answers refusals in the MODULES §4.2 envelope:
 
-## 1. Refusals C2 adds
+```json
+{"error": {"code": "…", "status": 409, "message": "…verbatim…", "say": "…", "fix": "D1", "details": {}}}
+```
 
-Envelope: `{"error": {"code", "status", "message", "say", "fix", "details"}}`.
+A success that did nothing carries `"noop": {"code": "…", "say": "…"}`. `code` and `say` live in the backend's closed error list (the kit's module), next to the `StepError` that raises them. `message` texts are verbatim. `{…}` are filled in from the request.
 
-| code | status | message (verbatim) | say | fix | details |
+## Refusals C2 adds
+
+| code | status | message (verbatim) | say (plain words) | fix | raised by |
 |---|---|---|---|---|---|
-| `section_owned` | 409 | `'{key}' is held by a person (approved, open for rework, or brought back from an edited file); a machine may not replace its text. To replace it, ask again with replace and a reason; the current text is kept in its history.` | This section is yours: a person approved it or is reworking it, so the app won't overwrite it. If you want the new text instead, choose Replace and say why; the current text is kept and can be brought back. | D2 (regenerate), D1 | `{key, version, approved, maturity}` |
-| `reason_required` | 400 | `A reason is required to {act} '{key}'; it is kept in the section's history.` (`{act}`: release, discard, restore, replace) | Say why in a few words. The reason is kept with the section so the next reader knows what happened. | D1 | `{act}` |
-| `no_section` | 404 | accept: `No '{key}' section to approve` (today's text, `steps.py:680-682`); release: `No '{key}' section to release`; discard: `No '{key}' section to discard` | This section has no text yet, so there is nothing to {act}. Result sections and the Summary appear after Process; the Background after it is generated. | P1 (results, Summary), D2 (Background) | `{act}` |
-| `bad_section_key` | 400 | `'{key}' is not a section of this report` | That section isn't part of this report's structure. Reload the list of sections. | D1 | `{key}` |
-| `version_changed` | 409 | `'{key}' changed since it was opened: expected version {expected}, current version {current}` | This section changed after you opened it (Process may have run again). Read the new version before you {act} it. | D1 | `{expected, current}` |
-| `version_required` | 400 | `expect_version is required: the version of '{key}' the person read` | The screen didn't say which version you read. Reload the section. | D1 | – |
-| `no_such_version` | 404 | `Version {version} of '{key}' not found` | That version isn't in this section's history. | D1 | `{version, versions: [...]}` |
-| `restore_not_meaningful` (decision S7) | 409 | `'{key}' is rebuilt from the data on every Process; an older version can be compared, not restored` | Result sections are written from the data each time Process runs, so the report always prints the current numbers. You can compare an older version, but not bring it back. | D1 | `{key}` |
-| `history_write_failed` | 500 | `Could not keep the previous version of '{key}' in its history: {error}. Nothing was changed.` | The app couldn't save a copy of the current text before changing it, so it changed nothing. Tell the person who maintains the app; the disk may be full or read-only. | null | `{error}` |
-| `route_retired` (decision S5/S6) | 410 | `{route} is retired: section text is no longer posted to the app (ADR-0018; decision Q1). Use {replacement}.` | This action was removed: text is edited in Word or Overleaf, not in the app. | null | `{route, replacement}` |
+| `section_owned` | 409 | `"'{key}' is approved or protected; {act} would replace its text. Release it first, with a reason."` | "This section has been approved, or you chose to keep it, so it can't be replaced automatically. To replace it, reopen it and say why." | D1 | the gate (§3 rule 5): save-section, use run, CLI background, discard of an approved section, regenerate without force |
+| `section_key_invalid` | 400 | `"'{key}' is not a section of this report"` | "There is no section by that name in this report." | D1 | every section step (rule 1); replaces today's unvalidated restore key |
+| `section_not_found` | 404 | `"No '{key}' section to {act}"` (accept keeps today's `"No '{key}' section to approve"`) | "This section hasn't been written yet, so there is nothing to {act}." | D2 (generate it) | accept, release (today ok), discard, approve-route fence |
+| `reason_required` | 400 | `"A reason is required to {act} '{key}'"` | "Please say why. The reason is kept with the section's history." | D1 | release, restore, discard, any forced write (◆ D3) |
+| `version_not_found` | 404 | `"Version {n} of '{key}' not found"` | "That version of the section doesn't exist." | D1 | restore, history read |
+| `version_content_missing` | 409 | `"Version {n} of '{key}' is recorded but its text was not kept"` | "This version is listed in the history, but its text was lost before history was kept reliably. It can't be restored." | – | restore of a manifest version with no archive (old sessions) |
+| `approve_content_retired` | 409 | `"Approving no longer saves text; accept '{key}' as it is, or change it outside the application and bring the new version in"` | "Approving can't change the text. Accept the section as it is, or edit it in Word or Overleaf and bring that version back." | D4 | `POST /api/session/approve` when the posted content differs from the file (◆ D5) |
+| `approve_via_accept` | 400 | `"save-section cannot approve a section; use accept"` | "Saving doesn't approve. Use Accept." | D1 | `POST /api/session/save-section` with `approved: true` |
 
-## 2. No-ops ("success that did nothing", MODULES §4.2)
+**No-ops** (200, with `noop`):
 
-Answered with 200 and `"noop": {"code", "say"}`, never a bare `ok`.
-
-| code | where | say |
+| code | say | from |
 |---|---|---|
-| `already_accepted` | accept on a section approved, FINAL and not stale | This section was already approved; nothing changed. |
-| `already_released` | release on a section already open for rework | This section is already open for rework; nothing changed. |
-| `already_current` | restore of the current version (message kept: `Already the current version`) | That version is already the current one; nothing changed. |
-| `unchanged` | a machine write whose text is identical | The new text is the same as the current text; nothing was written. |
-| `section_owned` | an automatic write (materialize, Process) over a held section | Kept the text a person holds; the app's new version was not written over it. |
-| `draft_from_elsewhere` | `materialize_summary` over a Summary chosen from a model run | Kept the Summary chosen from a model run; the automatic draft was not written over it. |
+| `already_accepted` | "This section is already accepted and nothing has changed since." | accept |
+| `not_approved` | "This section isn't approved, so there is nothing to reopen." | release |
+| `already_current` | "That version is already the current one." | restore (today: `"Already the current version"`) |
 
-## 3. Routes added (`/api/v2`, thin drivers over `workflow.steps`)
+**Not refusals, but reported** in step results and in the trail: a `held` write (a machine had new text for an owned section and didn't apply it) and a `needs_review` (an approved apical section's printed content changed; ◆ D2). They are carried in `materialize-sections` responses and later in C5's Process stream (`{"event":"step", …}` / result summary).
 
-`{id}` is validated by the existing `Dtxsid` dependency. `{key}` is validated against the section
-catalog (`bad_section_key`). Every response that returns a section uses the read model's section
-fields (MODULES §4.1).
+## Routes added (new `web_routes` module; registration by the orchestrator)
 
-**`POST /api/v2/studies/{id}/sections/{key}/accept`**
-```json
-// request
-{"expect_version": 3}
-// 200
-{"section": {"key": "summary", "version": 3, "approved": true, "maturity": "final",
-             "version_status": "blessed", "machine_may_write": false, "stale": false}}
-```
-Refusals: `bad_section_key`, `version_required`, `no_section`, `version_changed`, `history_write_failed`. No-op: `already_accepted`.
+All take `{id}` through the `Dtxsid` parameter and `{key}` validated by the catalog.
 
-**`POST /api/v2/studies/{id}/sections/{key}/release`**
-```json
-{"reason": "tone of paragraph 2", "expect_version": 3}
-// 200
-{"section": {"key": "summary", "version": 3, "approved": false, "maturity": null,
-             "version_status": "working", "machine_may_write": false}}
-```
-Refusals: the accept list plus `reason_required`. No-op: `already_released`.
+| Route | Body | 200 response | Refusals |
+|---|---|---|---|
+| `POST /api/v2/studies/{id}/sections/{key}/accept` | `{}` | `{section_key, approved: true, version, version_status: "blessed", noop?}` | `section_key_invalid`, `section_not_found` |
+| `POST /api/v2/studies/{id}/sections/{key}/release` | `{reason}` | `{section_key, approved: false, version, version_status: "working", noop?}` | `section_key_invalid`, `section_not_found`, `reason_required` |
+| `POST /api/v2/studies/{id}/sections/{key}/restore` | `{version, reason}` | `{section_key, version, from_version, approved, version_status}` (`approved` per ◆ D3) | `section_key_invalid`, `version_not_found`, `version_content_missing`, `reason_required`, `noop already_current` |
+| `POST /api/v2/studies/{id}/sections/{key}/discard` (only if ◆ D4 keeps it) | `{reason}` | `{section_key, archived, version}` | `section_key_invalid`, `section_not_found`, `section_owned`, `reason_required` |
+| `GET /api/v2/studies/{id}/sections/{key}/history` | – | `{section_key, current_version, current_status, versions: [{version, archived, status, approved_at}], events: [ …§5 lines… ]}`; works when the current file is absent | `section_key_invalid`, `section_not_found` (no file and no history) |
+| `GET /api/v2/studies/{id}/sections/{key}/history/{version}` | – | the version's section JSON | `section_key_invalid`, `version_not_found`, `version_content_missing` |
 
-**`POST /api/v2/studies/{id}/sections/{key}/restore`**
-```json
-{"version": 1, "reason": "v2 dropped the hepatic finding", "expect_version": 3}
-// 200 (decision S2-A shown; under S2-B approved/maturity/version_status follow the restored version)
-{"section": {"key": "summary", "version": 4, "restored_from": 1, "approved": false,
-             "maturity": null, "version_status": "working", "machine_may_write": false},
- "archived": "v0003.json"}
-```
-Allowed when the current file is absent (after a discard); then `expect_version` is `null`.
-Refusals: `bad_section_key`, `version_required`, `no_such_version`, `version_changed`, `reason_required` (decision S3), `restore_not_meaningful` (S7), `history_write_failed`. No-op: `already_current`.
+Each is a thin driver: parse → `accept_section_step` / `release_section_step` / `restore_section_step` / `discard_section_step` / `section_writes.section_history` → serialize. Every mutating route is followed by the kit's state re-read (MODULES §4.1).
 
-**`POST /api/v2/studies/{id}/sections/{key}/discard`**
-```json
-{"reason": "regenerate from the new data", "expect_version": 3}
-// 200
-{"section": {"key": "summary", "version": null}, "discarded_version": 3, "archived": "v0003.json"}
-```
-Refusals: `bad_section_key`, `version_required`, `no_section`, `version_changed`, `reason_required`, `history_write_failed`.
-Strength for `<ConfirmAct>`: **costly** (it is undone by restore).
+## Routes changed
 
-**`GET /api/v2/studies/{id}/sections/{key}/history`** (side-effect-free)
-```json
-{"key": "summary",
- "current": {"version": 4, "approved": false, "version_status": "working", "content_hash": "sha256:…"},
- "versions": [{"version": 1, "content_hash": "sha256:…", "current": false},
-              {"version": 4, "content_hash": "sha256:…", "current": true}],
- "events": [{"version": 1, "cause": "generate", "status": "draft", "ts": "…", "by": "system",
-             "via": "materialize_summary", "who": null, "source": "generated", "content_hash": "sha256:…"}],
- "inconsistent": false}
-```
-`events` are the spec §3.2 records, oldest first. Legacy lines are passed through with `by: null`.
-`current` is `null` after a discard. Refusal: `bad_section_key`. A section with no file and no history → `no_section` (404).
-
-**`GET /api/v2/studies/{id}/sections/{key}/versions/{n}`**
-→ `{"key", "version", "content": {…the section JSON as archived…}}`. Refusals: `bad_section_key`, `no_such_version`.
-
-The report-wide changelog route (the merge of every section's events) is **C11's**, built on these records.
-
-## 4. Routes changed
-
-| route | change |
+| Route | Change |
 |---|---|
-| `POST /api/pool/materialize-sections/{id}` | Behaviour per spec W1. Response `{"ok": true, "materialized": [...], "unchanged": [...], "needs_review": [{"key", "from_version", "version", "wording": [...]}]}`. Errors are wrapped in the envelope. C5 later folds this into the one Process endpoint. |
-| `POST /api/prompts/summary/runs/{id}/{run}/use` | Optional body `{"replace": true, "reason": "…"}`. Over a held Summary without it → `section_owned` (409); `replace` without a reason → `reason_required`. 200 → `{"ok": true, "version": 5, "replaced_version": 4}`. |
-| `POST /api/session/{id}/regenerate-genomics-narrative` | Body adds `{"replace", "reason"}`. When a person's override exists for the organ: `section_owned` (409, `details.organ`) without them. With them, the override file is archived under `history/genomics_narrative_overrides/` with its event before it is cleared. |
-| `POST /api/pool/reset/{id}` | Response unchanged. Each deleted section is archived first with a `reset` event (spec W12). |
+| `POST /api/session/approve` | fenced (◆ D5): state-only accept when the posted content equals the file; otherwise `approve_content_retired` / `section_not_found`; no longer writes `identity.json`/`meta.json` |
+| `POST /api/session/save-section` | through the gate: `section_owned`, `approve_via_accept`; archives what it replaces; records an event |
+| `POST /api/session/unapprove` | calls `release_section_step`: `section_not_found`, `reason_required`, `noop not_approved`; envelope |
+| `POST /api/session/discard-section` | calls `discard_section_step` (archives first; `section_owned`, `reason_required`) |
+| `POST /api/session/{id}/restore` | calls `restore_section_step` (key validated; works after a discard; approval per ◆ D3) |
+| `GET /api/session/{id}/history/{key}` | unchanged shape; reads through `section_history`, so it works after a discard and lists unique archives |
+| `POST /api/prompts/{section}/runs/{id}/{run}/use` | through the gate (`section_owned` ◆ D6); response `{ok, version}` |
+| `POST /api/pool/materialize-sections/{id}` | response gains `unchanged`, `needs_review`, `held` (`materialized` = files written) |
+| `POST /api/session/{id}/regenerate-genomics-narrative` | archives the override and records an event before clearing it; takes `reason` (◆ D3) |
+| `POST /api/generate-genomics-narrative` | `force: true` without `reason` → `reason_required` |
+| `POST /api/session/{id}/genomics-narrative-override` | archives the prior override before writing (still retired from the new interface by Q1) |
+| `POST /api/pool/reset/{id}` | archives each section and records `discard` events before deleting |
 
-## 5. Routes retired (410 `route_retired`; decisions S5, S6)
+## Routes retired
 
-| route | replacement |
-|---|---|
-| `POST /api/session/approve` | `POST /api/v2/studies/{id}/sections/{key}/accept` |
-| `POST /api/session/save-section` | none (no in-app editing, Q1); generation saves server-side (D2, over the core write) |
-| `POST /api/session/unapprove` | `…/release` |
-| `POST /api/session/discard-section` | `…/discard` |
-| `POST /api/session/{id}/restore` | `…/restore` |
-| `POST /api/session/{id}/genomics-narrative-override` | none (Q1); existing overrides keep rendering until C9 imports them |
-| `GET /api/session/{id}/history/{key}` | `GET …/sections/{key}/history`. Kept read-only until D1 ships, then retired. |
+None removed outright (◆ D5: the old front-end may still call them). From the **new interface**, never call:
+- `POST /api/session/approve` (use `…/accept`);
+- `POST /api/session/save-section` (D2's server-side generate replaces it);
+- `POST /api/session/discard-section` (◆ D4);
+- `POST /api/session/{id}/genomics-narrative-override` (no in-app editing, Q1).
 
-## 6. What C2 fills in the state read model (MODULES §4.1, `sections[]`)
-
-| field | source after C2 |
-|---|---|
-| `machine_may_write` | `workflow.ownership.may_machine_write(section)` (the one definition) |
-| `maturity` (add to the §4.1 example) | `labels.maturity_rung(section_facts(section))`: `"final"`, `"working_draft"`, `"first_draft"` or `null` |
-| `version` | the current file's `version` |
-| `version_status` | the last manifest status for the current version: `draft`, `blessed`, `working`, `needs-re-bless` (`discarded` only in history) |
-| `source` | the section's `source` (`generated`, `model`, `ingested`; Background read as `model` when absent) |
-| `wording_review`, `regenerated`, `stale` | unchanged, from the file |
+When the old interface is retired, these four can be deleted.

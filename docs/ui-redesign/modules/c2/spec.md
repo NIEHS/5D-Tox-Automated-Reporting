@@ -1,382 +1,260 @@
-# C2 — Owned content is never overwritten by a machine (spec)
+# C2 — Owned content is never overwritten by a machine: spec (revision 2)
 
-Core-guarantees module C2 (MODULES.md §2). Spec stage, 2026-10-14. Evidence: gate0-document §2 and §8,
-gate0-process finding 1, §4.2 and P5, gate0-data §3.2; ADR-0015, ADR-0018, ADR-0020; MODULES §8 (Q1, Q4).
+Core-guarantees module C2 (MODULES.md §2). Spec stage: no code. Written 2026-10-14.
 
-**Legend.** **[V]**: verified by running it on a scratch copy of `DTXSID50469320`
-(`/workspace/ui-team/_scratch/spec-c2/`, scripts in `scripts/e1_writes.py`, `e2_discard.py`, `survey.py`).
-**[R]**: read from the code. `file:line` refers to the `ui-redesign` worktree at `e9e763c`.
+**Legend.** *verified* = I ran it on a scratch copy (`/workspace/ui-team/_scratch/spec-c2/sessions/DTXSID50469320`, with `SESSIONS_DIR`, `OUTPUT_DIR` and `BM2_CACHE_DIR` pointed at the scratch; scripts in `…/spec-c2/scripts/e1_writes.py`, `e2_discard.py`, `e3_key.py`, `e4_key.py`, `survey.py`). *read* = taken from the code only. Line numbers are for the `ui-redesign` worktree at e9e763c.
+
+**Decisions this spec needs are marked ◆ and listed together in §9.**
 
 ---
 
 ## 0. What C2 guarantees, in one paragraph
 
-After C2, every write to a report section goes through **one guarded core write**. That write consults
-`workflow.ownership.may_machine_write` and records a **version event**. A machine never replaces the text
-of a section a person holds; it either keeps the person's text (LLM-written sections) or makes a
-**recorded** refresh that archives the person's version and marks the section for re-review
-(programmatic apical sections, whose printed numbers come from the data). Every version that ever existed
-is in `history/<key>/`, and every change has a line in `history/<key>/index.jsonl` that says what caused it,
-who or what did it, and why. That line is the record C11's report changelog is built from. Accept and
-release become state-only acts. Restore and discard become `workflow.steps` steps that record their
-event. "Protected" has one definition.
+A section a person owns (they approved it, or it holds the PROTECTED fact, or a person's text came back from outside the app) is never replaced by a machine. Every write to a section file, whether a person's or a machine's, goes through one core gate. The gate refuses a machine write over owned content. It saves the old content to history, under a name that cannot collide, before anything replaces it. It also adds one line to the section's version trail saying who did what, why, and to which version. Accepting a section changes its state and never its text. Restore and discard become `workflow.steps` steps. A Process run that changes nothing leaves every section file untouched. "Protected" means one thing everywhere.
 
----
+## 1. Today, verified
 
-## 1. Decisions for the maintainer
-
-| # | Question | Options | Recommendation |
-|---|---|---|---|
-| **S1** (confirms Q1) | Process changes an **approved apical section** (`bm2_*`): its numbers and/or wording differ | **A.** Any change to the section's content: archive the approved version, write the new one, mark it for re-review (`approved: false`, status `needs-re-bless`), list flipped words in `wording_review`. **B.** Numbers-only change (no categorical word flipped): keep the approval on the new version (event status `blessed`, reason `numbers_refreshed`); a word flip behaves as A. | **A.** It is the orchestrator's reading of Q1, and a person who approved a table approved its numbers. Cost: after a data change, every apical section a person approved needs re-accepting. D1 groups and diffs them. |
-| **S2** (Q6a) | Restoring a past version | **A.** It comes back as a working draft: `approved: false`, PROTECTED (it is a person's text), event `restore/working`. The person accepts it again. **B.** It comes back as it was: approved again if the archived version was blessed (today's behaviour, now recorded). **C.** As B, but only when that version was blessed **and** the section is not stale; otherwise A. | **A.** It means no implicit approval, at the cost of one extra click. |
-| **S3** (Q6b) | Is a reason required? | For each of release, discard, restore and replace: required or optional | **Required for all four.** The trail exists to say why, and the changelog is empty without it. |
-| **S4** | A person asks for new machine text (regenerate the Background, "use run" for the Summary, regenerate a genomics narrative) over a section they hold | **R1.** Allowed only with `replace: true` and a reason. The held version is archived and the new text becomes the current draft (unapproved). **R2.** Refused until C7 provides a "draft beside the approved text". | **R1 now.** It is recorded and undoable (restore). C7 can add draft-beside for automatic currency rewrites later. |
-| **S5** | The legacy routes that post section text (`/api/session/approve`, `/api/session/save-section`) and the legacy restore, discard and unapprove routes | **Retire** them on `ui-redesign` (answer 410 with the envelope); the new interface uses the `/api/v2` acts. **Fence** them: keep them, apply the guard. | **Retire.** Q1 rules out in-app text editing, and no served front-end on this branch calls them. **Consequence:** the old front-end on `main` uses them, so merging `ui-redesign` into `main` while that front-end still runs would break it. The maintainer decides when. |
-| **S6** | `POST /api/session/{id}/genomics-narrative-override` (an in-app edit of a genomics narrative) | Retire (Q1). Existing overrides keep rendering until C9 imports them as versions. Or keep it, guarded and archived. | **Retire.** |
-| **S7** | Restore or discard on a **programmatic** section (`bm2_*`) | Refuse restore (`restore_not_meaningful`): the deliverable prints the current data, so an old version can only be compared. Discard allowed (archived; next Process recreates a draft). Or allow both. | **Refuse restore, allow discard.** |
-| **S8** | Archive every content change, or only changes to owned content? | Every content change, including unowned machine drafts. Or owned only. | **Every change.** Small cost (the full apical set is ~100 KB [V]); it lets the changelog show a diff for every generated change, as Q1 asks. |
-| **S9** | Who did it | `by: person/system` and `via: <entry point>` now; `who` stays `null` until the interface has users (HANDOFF §10 Q8) | Confirm that C2 needs no login. |
-
-Not C2's, but adjacent:
-- **C7:** should accept refuse a stale LLM section whose text was not rewritten?
-- **C6:** should an apical section waiting for re-review block publishing (today only stale LLM sections block)?
-
----
-
-## 2. One definition of "protected" (ownership)
-
-**Today [V]:**
-- After a release, a section has `facts=['protected']`, `approved=false`.
-- `may_machine_write` answers **False**, because it reads the facts (`workflow/ownership.py:134-154`).
-- `protection_level` answers **OPEN**, because it reads only `approved`/`user_edited` (`ownership.py:161-179`, `is_user_owned` `:111-127`).
-- `materialize_summary` reads only `approved` and `source` (`workflow/steps.py:76`). It **wrote over the released Summary**, dropped PROTECTED and archived nothing [V].
-- `user_edited` is never written by any production code [R]: it is read by the predicate and returned by the approve route (`session_routes.py:943-962`), never persisted.
-
-**After C2** (`workflow/ownership.py`):
-- `is_owned(section) -> bool`, the one predicate. True when any of these holds:
-  - `approved` is true;
-  - the stored facts raise the guard to GUARDED or above (FINAL or PROTECTED; `guard.guard_level`);
-  - `source == "ingested"` (reserved for C11);
-  - legacy `user_edited` is true.
-- `is_user_owned` remains as a deprecated alias of `is_owned`.
-- `may_machine_write(section, *, force=False)` = `force or not is_owned(section)`. Only the guarded write (§4) passes `force`, and only on a person's `replace` with a reason.
-- `protection_level(section)` = GUARDED when `is_owned(section)`, with the report-grain `published` floor kept. So after a release the mark and the machine guard agree: a machine won't overwrite it.
-- The human axis stays separate: **maturity** = `labels.maturity_rung(section_facts(...))` (final / working / none).
-- The read model serves both as `machine_may_write` (= `may_machine_write(section)`) and `maturity`. The kit's `<SectionStatus>` draws one mark from them (MODULES §4.5).
-- Release keeps PROTECTED (ADR-0015 §5, unchanged). A released section is a person's text being reworked: no automatic write touches it, and only a person's replace, discard or restore changes it.
-
----
-
-## 3. Versions, archives and version events
-
-### 3.1 The model
-- A **version** is one distinct content of a section. Every content change mints a new version number. State-only changes (accept, release, the currency stale flip) record an event against the **same** version.
-- The **current** version is `<key>.json`. **Every superseded version** is archived as `history/<key>/v{version:04d}.json` before it is replaced or deleted.
-  - Today the archive is named by `approved_at` (`pipeline/session_store.py:282-289`), and that name collides [V]: accept, then invalidate, then the approve route overwrote v3's archive with v4, and two different contents were both labelled v4 (E5).
-  - Legacy timestamp-named archives are kept and read by the `version` field inside them.
-- **Next version** = 1 + the highest of: the current file's `version`, every archived `version`, every manifest `version`.
-  - Today it is 1 + the count of archive files (`session_store.py:294`), or the prior file's version for `archive=False`.
-  - [V] After accept, discard and `materialize_summary`, the new unapproved draft was **v1**, and the manifest called v1 **blessed** (E8).
-- **Deleting** a section always archives its current version first and records a `discard` (or `reset`) event. Today `session_store.delete_section` unlinks the file (`:412-422`). [V] After a discard, history exists but the routes answer 404 "No approved 'summary' section found" (E6).
-
-### 3.2 The version-event record (one line of `history/<key>/index.jsonl`)
-
-```json
-{"version": 5, "cause": "reprocess", "status": "needs-re-bless", "ts": "2026-10-14T20:35:54.97+00:00",
- "by": "system", "via": "materialize_result_sections", "who": null,
- "reason": "data_changed", "from_version": 4, "archived": "v0004.json",
- "content_hash": "sha256:…", "source": "generated",
- "changes": {"content": true, "wording": ["Male|Terminal Body Wt..direction"]}}
-```
-
-| field | meaning | today |
+| # | Finding | How shown |
 |---|---|---|
-| `version` | the version the event describes | exists |
-| `cause` | closed list: `generate` (a machine wrote text), `reprocess` (the system reacted to new data), `edit` (a person accepted; kept from today's manifests, shown as "accepted"), `revise` (release), `restore`, `discard`, `reset` (pool reset), `ingest` (reserved for C11) | edit/revise/reprocess exist |
-| `status` | the version's standing after the event: `draft` (machine text nobody approved), `blessed`, `working` (a person's text, not currently approved), `needs-re-bless`, `discarded` | blessed/working/needs-re-bless |
-| `ts` | when | exists |
-| `by` | `person` or `system`. **Required; no default:** a caller that omits it is a programming error (`ValueError`), not a silent "system". | new |
-| `via` | the entry point: the step name, or `api/v2`, `cli`, `notebook` | new |
-| `who` | the person's identity; `null` until there are users (S9) | new |
-| `reason` | a person's free text, or a system code (`data_changed`, `numbers_refreshed`) | exists for revise |
-| `from_version` | for `restore`: the version brought back; for `reprocess`/`generate`/`discard`: the version superseded | new |
-| `archived` | the history file the superseded version went to | new |
-| `content_hash` | `sha256` of the version's content (§4.2): two versions with the same hash have the same text | new |
-| `source` | who wrote the text: `generated`, `model`, `ingested` (C11) | new on the event |
-| `changes` | a short summary: `content: bool`; `wording`: flipped categorical slots (apical); C11 adds the regions changed | new |
+| T1 | A warm `materialize_result_sections` over an approved apical section with **identical content** sets `approved: False`, drops `facts`, keeps v1, writes no archive. The manifest still says v1 `blessed`. | *verified* E1: `bm2_body-weight` before `True ['final','protected'] v1 blessed`; after `False None v1 blessed`; "content identical apart from flags: True"; history holds only `index.jsonl` |
+| T2 | The same happens when the content **did** change: the approval is lost, with no archive and no event. | *verified* E9 (changed caption in `_cache_sections_*`): `approved False facts None v1 status blessed archives []` |
+| T3 | After a release, `facts=['protected']`, `may_machine_write=False`, but `protection_level=OPEN`. | *verified* E2 |
+| T4 | `materialize_summary` **overwrites a released Summary** that still holds PROTECTED, because it checks only `approved` and `source`. | *verified* E2: `{'ok': True, 'written': True, 'paragraphs': 5}` |
+| T5 | Releasing a key that does not exist answers ok. | *verified* E3: `{'ok': True, 'section_key': 'bm2_no-such-thing', 'approved': False}` |
+| T6 | "Use run" over an approved Summary: the approval vanishes. The old text is archived, but no event is recorded, and the current version's status reads `None`. | *verified* E4 (same `save_section` call as `prompt_routes.py:222-229`) |
+| T7 | **Archive names collide and history is lost.** An archive is named after the section's `approved_at` (`session_store.py:282-289`). Invalidation keeps `approved_at`, so the next approve archives v4 under v3's file name and **v3's archive is overwritten**. | *verified* E5: archives `v1, v2, v3` became `v1, v2, v4` |
+| T8 | **Version numbers restart after a discard**, and the manifest then lies. Discard deletes the file and keeps `history/`. The next save stamps v1 (`len(glob)+1`, or `setdefault 1` with `archive=False`), and the old manifest's `v1 blessed` line now describes an unapproved draft. | *verified* E8: new draft `approved False v1`, `current_version_status = blessed` |
+| T9 | After a discard, restore and history both answer 404, though the archives are still on disk. Nothing can bring the text back. | *verified* E6: `"No approved 'summary' section found"` |
+| T10 | Restore takes `section_key` unvalidated and builds paths from it (`session_routes.py:1288-1290`). `../DTXSID_VICTIM/summary` read another session's file. | *verified* E3 (it answered "Already the current version" from the other session's file). No cross-session write was achieved (E4). |
+| T11 | No production code calls `may_machine_write`. | *read* (only tests, and a comment at `narrative/genomics_llm.py:212-219`) |
+| T12 | Real data on disk: 118 section files across `sessions/`. **0 approved, 0 with `facts`, 0 archives, 0 section manifests.** `workspaces/guest` and `workspaces/NAME` have none. 15 `background.json` files carry no `source`. | *verified* `survey.py`, read-only over the real store |
+| T13 | Baseline: the 15 test files that pin this behaviour pass (254 tests); `run-tests.sh guard` passes (10). | *verified* |
 
-### 3.3 How the changelog builds on it (C11)
-- The **report changelog is derived**, never stored. It is every section's `index.jsonl` (and the pins' `history/_method_profile`, `_document_definition`) merged and ordered by `ts`.
-- Each content-changing line (`content_hash` differs from the previous version's) links `from_version` → `version`, so the screen can show a diff from the two archives.
-- State lines (accept, release) carry no diff.
-- C11 appends `cause: ingest, by: person, via: word|overleaf` lines with `source: ingested`, which make the section owned (§2). So "a machine never overwrites an ingested version" follows from the same predicate.
-- `.provenance.jsonl` (`common/provenance.py`) stays an operational log; it is not the changelog.
+## 2. One definition of "owned" (and so of "protected")
 
-### 3.4 The store seam (`workflow/store.py`, `PoolStore`)
-`save_section(…, archive=…)` and its transient `_version_event` marker (`session_store.py:231-360`) are
-replaced by explicit operations. Each requires an event:
+Today two predicates disagree after a release (T3): `protection_level` keys on `approved`/`user_edited` (`ownership.py:161-179`), and `may_machine_write` also on the FINAL/PROTECTED facts (`:134-154`).
 
-| method | does |
-|---|---|
-| `write_section_version(dtxsid, key, data, event) -> int` | archive the current version (if any) to `v{n}.json`, mint the next version, write the current file atomically (temp + rename), append the event |
-| `record_section_event(dtxsid, key, data, event)` | rewrite the current file in place (same version) and append the event; for state-only acts |
-| `delete_section(dtxsid, key, event)` | archive the current version, append the event (`status: discarded`), remove the file |
-| `section_events(dtxsid, key) -> list[dict]` | the manifest (legacy lines without `by`/`via` read as `by: null`) |
-| `section_versions(dtxsid, key) -> list[dict]` | `[{version, file, content_hash}]` from archives plus the current file |
-| `read_section_version(dtxsid, key, n) -> dict \| None` | one version's content |
+**After C2** there is one predicate in `workflow/ownership.py`:
 
-An archive or event that can't be written raises `StepError(500)` (`history_write_failed`) **before** the
-current file is replaced. Today the event append is fail-soft (`session_store.py:322-330, 357-360`), which
-would let a change happen with no changelog line.
-
----
-
-## 4. The guarded write (`workflow/section_writes.py`, new)
-
-### 4.1 The function
-
-```python
-def write_section_content(dtxsid, key, content: dict, *, store, by, via, source,
-                          replace=False, reason="") -> WriteOutcome
+```
+is_owned(section, *, report_published=False) =
+      section.approved
+   or section.user_edited                      # person's text (old in-app edit; C11 ingest)
+   or section.source == "ingested"             # reserved for C11
+   or guard_level(section_facts(section)) >= GUARDED   # FINAL or PROTECTED
+   or report_published                         # ADR-0015 published floor, once Q5's act exists
 ```
 
-`WriteOutcome` is one of:
-- `written(version)`;
-- `unchanged`;
-- `kept_owned` (noop `section_owned`);
-- `kept_other_draft` (noop `draft_from_elsewhere`);
-- `refreshed_for_review(version, from_version, wording)`.
+- `may_machine_write(section, *, force=False)` = `force or not is_owned(section)`. Unchanged signature.
+- `protection_level(section, report_published)` = `PUBLISHED` if published; else `GUARDED` if `is_owned`; else `OPEN`.
 
-| prior section | content origin (`workflow.content_origin`) | who asks | result |
+  So `protection_level >= GUARDED ⇔ not may_machine_write` (invariant I7). The render wiring `protection_map` is unchanged; it simply calls the fixed `protection_level`.
+- **The state read model** (MODULES §4.1, `sections[].machine_may_write`) serves `may_machine_write(section)`. The kit's `<SectionStatus>` draws one mark from it.
+- **The content/state split.** `ownership.STATE_KEYS` lists the keys that are state, not content: `approved, approved_at, facts, stale, regenerated, wording_review, review, revised, version, saved_at`. The gate compares content as the section dict minus `STATE_KEYS`, through a canonical JSON hash (`content_hash`). This is how "nothing changed" is decided (§3, I5).
+
+◆ **D1. A released section stays protected** (ADR-0015 §5: release withdraws FINAL, PROTECTED stands). So after a release, Process still may not overwrite it. A machine replaces it only by a person's explicit act (regenerate, use run, restore). *Recommended*, as the ADR says. The alternative is for release to drop PROTECTED too, so the next Process rewrites a released section freely. That would make "release" mean "let the machine have it", which is not what a person reopening a section usually wants.
+
+## 3. The gate: `workflow.section_writes`
+
+A new core module (about 250 lines). Everything that writes a section file calls it. Nothing else calls `session_store.save_section` / `delete_section` directly, except the gate itself and the invalidation demote (§4.14, which the gate wraps).
+
+```
+write_section(dtxsid, key, content, store, *, act, actor, author,
+              force=False, reason=None, extra_event=None) -> WriteOutcome
+WriteOutcome = {key, outcome: "written"|"unchanged"|"held"|"needs_review"|"refused",
+                version, prior_version, archived, event}
+```
+
+Rules, in order:
+1. **Key.** It must be a section of this session's catalog (`section_catalog.catalog_for_session` and its families). Otherwise `StepError 400 section_key_invalid`. This closes T10 for every path.
+2. **Read the prior** file. Absent → write it as v(next), and record an event.
+3. **Unchanged.** If `content_hash(prior) == content_hash(new)`: no write, no event, outcome `unchanged` (I5).
+4. **Owned, and the actor is the system** (Process, CLI defaults): no overwrite. The outcome is `held` (or `needs_review` for apical sections, §4.1). The bulk caller carries on; a held event is recorded (§5).
+5. **Owned, and the actor is a person, without force:** `StepError 409 section_owned`.
+6. **Owned, with force** (a person's explicit act): a reason is required (`reason_required`, ◆ D3). Archive, then write.
+7. **Otherwise:** archive the prior if its content differs, write, and record the event.
+
+**The primitive changes** in `pipeline/session_store.py`:
+- **Archive names are unique.** `history/<key>/v{version:04d}-{ts}.json`, where `{version}` is the archived content's own version. Today the name is `approved_at` (T7). Readers already read `version` from the content, so old timestamp-named archives still read.
+- **The version counter is monotonic.** next = `max(current.version, max(archived versions), max(manifest versions)) + 1`. Today it is `len(glob)+1` (`:294-295`), which restarts after a discard and breaks after a collision (T8).
+- `save_section(..., archive=False)` keeps its meaning for state-only saves (accept, release, demote).
+- **An archive helper**, `archive_current(dtxsid, key)`, for discard and pool reset.
+- `delete_section` stays as a primitive and is called only by `discard_section_step` (after archiving) and the resets.
+
+**The store seam.** `PoolStore` gains the following, so steps stay testable with a fake:
+- `archive_section(dtxsid, key) -> name|None`;
+- `delete_section(dtxsid, key)`;
+- `read_version_history(dtxsid, key) -> list`;
+- `read_archived(dtxsid, key, version) -> dict|None`.
+
+`DiskPoolStore` delegates to `session_store`, as it does today.
+
+## 4. Behaviour after C2, write path by write path
+
+| # | Path (today's code) | Today | After C2 |
 |---|---|---|---|
-| absent | any | any | new version, `approved: false`, event `generate/draft` |
-| same `content_hash` | any | any | **no write at all**: file byte-identical, approval, facts and version kept; `unchanged` |
-| not owned, same `source` as the writer | any | any | archive, new version, event `generate/draft` |
-| not owned, different `source` (e.g. a model run chosen by a person, and the deterministic Summary arrives) | any | system | **keep**; noop `draft_from_elsewhere` |
-| not owned, different `source` | any | person | archive, new version, event `generate/draft` |
-| **owned** | **LLM** | system | **keep**; noop `section_owned`. C7 adds "draft beside" here. |
-| **owned** | **LLM** | person, no `replace` | refuse `section_owned` (409) |
-| **owned** | **LLM** | person, `replace` + reason | archive the held version; new version `approved: false`, no facts, event `generate/draft`, `by: person`, reason |
-| **owned** | **programmatic** (`bm2_*`) | system (materialize) | **S1-A:** archive the held version; new version `approved: false`, facts = `currency.demote_for_currency(prior)` (FINAL withdrawn, PROTECTED stands), `regenerated: {reason: "data_changed", from_version}`, `wording_review` = flips if any; event `reprocess/needs-re-bless`. **S1-B:** the same when a word flipped; with numbers only, approval and FINAL carried, event `reprocess/blessed`, reason `numbers_refreshed`. |
+| 4.1 | `workflow.steps.materialize_result_sections` (`steps.py:90-179`; callers `tooling/generate_report.py:407`, `POST /api/pool/materialize-sections` `pool_routes.py:285-296`, the notebook through `process_async`) | rewrites every `bm2_<slug>.json` with `approved: False` (`:155`), `archive=False` (`:170`); approval, facts and edits lost; `wording_review` only on a flip (T1, T2) | through the gate, `actor=system, act=materialize, author=generated`. **Unchanged content → nothing written** (approval stands; T1 fixed). **Changed content over an unowned section** → archived, written, event `generate/draft`. **Changed content over an owned section** → ◆ **D2** (below). Returns `{ok, materialized, unchanged, needs_review:[{key, why, prior_version, version, flips}], held}`; `materialized` keeps its meaning: "files written" |
+| 4.2 | `workflow.steps.materialize_summary` (`steps.py:54-87`; caller `generate_report.py:417`, the notebook) | refuses over `approved` or `source != generated`; **overwrites a released, PROTECTED Summary** (T4); `archive=False` | through the gate (`actor=system, act=summary`). It keeps its own extra rule: it replaces only its own earlier output (`source == generated`). Owned → `held`, plus a `hold` event when the new text differs (so the changelog shows "Process wrote a new Summary; not applied because you approved this one"). The held text itself is **not** kept; C7's "fresh draft beside" stores it. Returns `{ok, written, paragraphs, held?: {why}}` |
+| 4.3 | `workflow.steps.accept_section_step` (`steps.py:655-717`); no route calls it today | state-only; records `edit/blessed` on the same version | stays state-only (`archive=False`). Adds: key validated (rule 1). Accepting a section that is already approved, carries no `stale`/`review`, and has status `blessed` → `noop: already_accepted`, no event. Clears the new `review` marker as it clears `wording_review`. Event `edit/blessed`, `actor=person, act=accept` |
+| 4.4 | `workflow.steps.release_section_step` (`steps.py:720-751`); twin route `POST /api/session/unapprove` (`session_routes.py:1084-1134`) duplicates the logic instead of calling the step | a missing key answers ok (T5); the reason is optional | missing → `StepError 404 section_not_found`. Not approved → `noop: not_approved`, no event. Reason per ◆ **D3**. The route calls the step |
+| 4.5 | `POST /api/session/approve` (`session_routes.py:767-964`) | **writes the posted `data` as the section**, archive=True, plus `identity.json`/`meta.json` (`:824-840`); empty data replaced an approved Summary (document analysis §2) | ◆ **D5** (fence, recommended): the file exists and the posted content hashes equal to it → `accept_section_step` (state-only). Content differs → `409 approve_content_retired`. No file → `404 section_not_found`. The identity write is dropped (C3 owns identity). The new interface uses `POST /api/v2/…/accept` only |
+| 4.6 | `POST /api/session/save-section` (`session_routes.py:1037-1077`) | writes any content, `archive=False`; takes `approved` from the body (`:1073`), a back-door approval; destroys an approved Background (document analysis §2) | through the gate as `actor=person, act=save, author=<data.source or "client">`: owned → `409 section_owned`; changed → archive + event `generate/draft`. `approved: true` in the body → `400 approve_via_accept`. Kept only until D2 saves generated Background server-side (◆ D5) |
+| 4.7 | `POST /api/session/discard-section` → `session_store.delete_section` (`session_routes.py:1141-1161`, `session_store.py:412-422`) | deletes the file; history is abandoned in practice (T8, T9) | `discard_section_step(dtxsid, key, store, *, reason)`: owned and approved → `409 section_owned` (release first). Otherwise archive the current file, delete it, and record event `discard/discarded`. The version counter stays monotonic, and restore still reaches the archives (T9 fixed). ◆ **D4**: keep it, or retire it from the new interface |
+| 4.8 | `POST /api/session/{id}/restore` (`session_routes.py:1261-1335`) | the key is unvalidated (T10); comes back **approved** with a fresh `approved_at` (`:1325`); no event; 404 after a discard | `restore_section_step(dtxsid, key, version, store, *, reason)`: key validated; finds the version in the archives or the current file; works when the current file is absent (after a discard); archives the current file; writes the restored content as v(next); event `restore` with `from_version`. The approval it comes back with: ◆ **D3 / Q6**. Restoring never clears currency: if the current file is `stale` or under `review`, the restored one keeps those markers |
+| 4.9 | `POST /api/prompts/{section}/runs/{id}/{run}/use` (`prompt_routes.py:213-230`) | `save_section` archive=True, `approved: False`, no event; an approved Summary loses its approval (T6) | through the gate, `actor=person, act=use_run, author=model` (+`run_id`, `model`). Owned → ◆ **D6** (`409 section_owned`, recommended: release first, with its reason). Response stays `{"ok": true}`, with `version` added |
+| 4.10 | `tooling.generate_report.background` (`generate_report.py:461-468`); the notebook calls it | `store.save_section(..., archive=False)`, no guard | through the gate, `actor=person` (the operator asked), `act=background`, `author=model`. Owned → the CLI prints the `section_owned` message and saves nothing. `--force` with `--reason` is the escape hatch |
+| 4.11 | `POST /api/generate`, `/api/generate-methods`, `/api/generate-summary` (`llm_routes.py:169-249, 256+, 507+`) | return text and write no section file (*read*) | unchanged. D2 adds a server-side "generate and save as draft" that calls the gate |
+| 4.12 | genomics: `POST /api/session/{id}/regenerate-genomics-narrative` (`llm_routes.py:657-832`) clears the person's override with no backup (`:753-771`); `POST /api/generate-genomics-narrative` takes `force` from the request body (`:648`); `POST /api/session/{id}/genomics-narrative-override` (`session_routes.py:713-760`) replaces the override in place | no archive; no record | Until C9 there is no genomics section file. C2 still: (a) **archives** `genomics_narrative_overrides.json` to `history/genomics_<organ>_<sex>/` and records an event (`act=regenerate`, `actor=person`, reason ◆ D3) before regenerate clears it; (b) `force` from the generate route's body is honoured only with a `reason`, else `400 reason_required`; (c) archives before each override write. Converging the override store onto section files is C9's job (§7) |
+| 4.13 | `run_process` / `document_step` writing `_cache_methods_*`, `_cache_apical_narrative_*`, `_cache_interpretation_*` (*read*: no section file is written) | Methods and the apical-BMD narrative rewritten silently when their hash moves (Process analysis, finding 4) | **Out of C2's reach until C9**: there is nothing approvable to protect. C2 states it as a known gap, and §7 says how C9 inherits the rules |
+| 4.14 | `pipeline.pool_state.invalidate_pool_artifacts` (`pool_state.py:224-276`); `web_routes/pool_admin.py:151-227` (CLI) | archives and records `reprocess/needs-re-bless` for data-dependent LLM sections (correct), but archives collide (T7) | A state change, not a content write: it keeps its logic and uses the fixed primitive (unique archive names, monotonic versions). The event gains `actor=system, act=invalidate`. It does not touch `bm2_*` (unchanged, Phase 3a) |
+| 4.15 | `POST /api/pool/reset/{id}` (`session_routes.py:1496-1627`, section deletes `:1581-1599`) | deletes `bm2_*`, `genomics_*`, `methods`, `bmd_summary`, `summary`; keeps `history/` | before each delete: `archive_current`, then event `discard/discarded`, `act=pool_reset`, `actor=person`, so a reset is restorable. The dry-run and confirm are C8's |
+| 4.16 | `POST /api/session/reset/{id}` (`:1634-1678`) | deletes the whole directory | out of C2 (irreversible, C8's type-to-confirm) |
+| 4.17 | `roundtrip.reconcile.apply_reconcile` → `set_override` (`roundtrip/reconcile.py:232`) | a person's Overleaf edit enters the override store | out of C2 (C11). Such text is person-owned (`source: "ingested"` in `is_owned`, §2) |
 
-- A missing `reason` where one is required (S3) is `reason_required`.
-- `replace` without a reason is refused.
+◆ **D2. An approved apical section whose content changed on Process.** The deliverable renders apical content from `_cache_sections_*`, not from `bm2_<slug>.json` (`rendering/latex_export.py:762-788`, *read*; the Process analysis's P5). So once the numbers change, the printed section has already changed; keeping the old text in the file would not keep it in the report. Two honest options:
+- **A1 (recommended): knock it down, with a record.**
+  - The new content becomes v(next), and the approved version is archived.
+  - `approved: False`; facts demoted by currency (FINAL withdrawn, PROTECTED stands).
+  - A `review: {why: "numbers_changed"|"wording_changed", since_version, flips}` marker.
+  - Event `reprocess/needs-re-bless`, `act=materialize`, `actor=system`.
 
-### 4.2 Content hash
-- `sha256` of canonical JSON (`sort_keys`, compact separators) of the section, without the state and provenance keys.
-- State keys: `approved`, `approved_at`, `facts`, `stale`, `regenerated`, `wording_review`, `revised`, `version`, `saved_at`, `user_edited`.
-- Provenance keys: `source`, `model_used`, `run_id`, `template_version`, `citation_report`, `notes`, `raw_data`, `original_*`.
-- An exclusion list (rather than per-kind content fields) keeps new content fields counted as content by default.
+  The person sees "approved in v3; the data changed what it prints; read and re-accept". Re-accepting clears `review`. That is the Q1 reading: "marked for re-review, never silently un-approved with no record".
+- **A2: keep `approved: True` and add the marker**, as the LLM `stale` path does today. "Approved" would then describe text that is no longer what prints; the publish gate (C6) must read `review` to block.
 
-### 4.3 The apical "needs re-review" state, and the phase
-- The apical refresh does **not** set `stale`. `DiskPoolStore.has_stale_sections` (`workflow/store.py:149-159`) sends the phase back to UPLOADED for any stale `bm2_*` file [R]. Setting `stale` there would regress the phase.
-- "Needs re-review" is the current version's manifest status `needs-re-bless`, with `approved: false`.
-- LLM sections staled by invalidation keep today's shape (`approved: true`, `stale: true`, `needs-re-bless`). Making those two shapes one is C7's job; C2 records both the same way in the manifest.
+Either way, `stale` is **not** used on `bm2_*`. `has_stale_sections` (`store.py:149-159`) would send the phase back to UPLOADED (`phases.py:167-169`, *read*). `wording_review` stays as it is today: `review.flips` holds the same list, and both are cleared by accept.
 
----
+## 5. The version event: the record the changelog is built on
 
-## 5. Behaviour after C2, write path by write path
+One line per event, appended to `history/<key>/index.jsonl` (append-only, as now). Old lines (`version, cause, status, ts, reason?`) still read. New lines carry `"v": 2`.
 
-| # | Path | Today | After C2 |
+| Field | Type | Meaning |
+|---|---|---|
+| `v` | int | line format (absent = 1) |
+| `section` | str | the section key (the directory says it too; carried so the report changelog can merge lines without paths) |
+| `version` | int | the version this event is about (the new one for a write; the current one for a state change or a hold) |
+| `ts` | ISO 8601 | `common.clock.now_iso()` |
+| `cause` | closed list | `edit` (= accept; old name kept), `revise` (= release), `reprocess`, `generate`, `restore`, `discard`, `hold`; reserved: `ingest` (C11), `propose` (C7) |
+| `status` | closed list | the version's status after the event: `draft`, `blessed`, `working`, `needs-re-bless`, `discarded`; reserved: `proposed` |
+| `act` | str | the entry point: `accept, release, restore, discard, materialize, summary, background, save, use_run, regenerate, invalidate, pool_reset` (+ `ingest` later) |
+| `actor` | `"person"` \| `"system"` | who caused it. A person act is one a person asked for (a route call from the interface, a CLI flag); Process and invalidation are `system` |
+| `user` | str \| null | null until the interface has users (HANDOFF §10 Q8); the field is reserved so C11 needs no format change |
+| `author` | str | who wrote the content of `version`: `generated` (deterministic), `model`, `person`, `ingested`, `client` (old save-section) |
+| `prior_version` | int \| null | the version that was current before |
+| `from_version` | int \| null | restore only |
+| `changed` | bool | did the content change (false for accept, release, hold) |
+| `content_hash` | str | `sha256:` of the canonical content (STATE_KEYS removed) of `version` |
+| `archived` | str \| null | the archive file written by this event (the prior content) |
+| `reason` | str | release / restore / discard / forced writes (◆ D3); the currency reason (`data_changed`) for invalidation |
+| `review` | object \| null | `{why, flips}` for `needs-re-bless` from materialize (D2) |
+| `applied` | bool | false for `hold` (the machine had new content and did not write it) |
+| `run_id`, `model`, `template_version` | optional | for `author: model` |
+
+**Invariants the event log must satisfy** (the acceptance criteria, §8):
+- **I3:** every `version` a line names has retrievable content (the current file, or an archive whose `version` field matches). Today this is violated (T7, and T1's unarchived overwrite).
+- **I4:** every change of approval appends exactly one line.
+- **I8:** `content_hash` lets the changelog say "text changed" or "state only" without loading archives.
+
+**How it serves the changelog (C11).** The report changelog is **derived, never stored**: the union of every section's `index.jsonl` (and the pins' `history/`), ordered by `ts`. Per line, the changelog says:
+- *what*: section, version;
+- *how*: `cause` / `act`;
+- *by whom*: `actor` / `user`;
+- *written by*: `author`;
+- *why*: `reason` / `review`;
+- *whether the text changed*: `changed`, with a diff from the archives for `prior_version` → `version`.
+
+C11 adds `cause: ingest` lines (`author: ingested`, `actor: person`) and, if ingests are reviewed before they stand, `status: proposed`. C7 adds `cause: propose` for the fresh draft beside stale text. Neither needs a format change. A read helper, `workflow.section_writes.section_history(dtxsid, key)`, returns `{current_version, current_status, versions:[{version, archived, status, approved_at}], events:[…]}`. It serves the new history route (contract).
+
+## 6. Existing sessions on disk
+
+- **The real store** (T12, *verified*): no approved sections, no facts, no section archives, no section manifests. Nothing needs migrating. The "approved file whose manifest says blessed" case exists only in tests and in scratch copies.
+- **Old timestamp-named archives** (none in the real store; possible in test fixtures) still read: readers take `version` from the content. A version lost to an old collision stays lost. `section_history` reports a manifest version with no content as `archived: null` (contract: `version_content_missing`).
+- **The 15 `background.json` files with no `source`** are unowned (not approved, no facts), so a machine may replace them. The gate archives them first, so nothing is lost.
+- **Sessions where a version number restarted after a discard** (T8): the monotonic counter starts above every number already seen, so new events never land on an old version's line.
+
+## 7. Methods, the apical-BMD narrative and the genomics interpretations (C9, Q4)
+
+C2's rules are written against the catalog and the gate, not against kinds, so C9 adds no rule. When C9 makes these sections:
+1. each becomes a catalog section with a file (`methods`, `bmd_summary`, `genomics_<organ>_<sex>`; the keys already exist in `singleton_section_stems` and the families);
+2. its writer (content preparation in `run_process` / `document_step`, the genomics regenerate route) calls `write_section` with `actor=system, act=prepare_content` (or `actor=person, act=regenerate`, `force`, `reason`), and gets unchanged / held / needs_review exactly as §3 and §4.2 say;
+3. the renderer reads the section file, not the cache (`latex_export.py:811-813, 834-860`), so "held" really keeps the approved text in the deliverable. That is the difference from apical sections (D2);
+4. the genomics override store (`genomics_narrative_overrides.json`) migrates onto the section file as a person-authored version (`author: person`, owned). The archives C2 writes under `history/genomics_<organ>_<sex>/` (§4.12) become that section's history;
+5. `narrative/genomics_llm.py:133-231`'s "return the store, full stop" rule is replaced by `may_machine_write` (ADR-0015's deferred convergence).
+
+Until C9, Process rewrites Methods and the apical-BMD narrative silently. C2 does not hide that: D1's spec must say these parts are not yet approvable.
+
+## 8. Acceptance criteria (each a test)
+
+- **I1:** for each machine path in §4 (4.1, 4.2, 4.10, 4.12, and the gate itself), an owned section (approved; released with PROTECTED; `user_edited`) is not overwritten. A unit test per path, with the fake store.
+- **I2:** every content-changing overwrite archives the prior first; two overwrites within the same second keep both archives (T7 regression).
+- **I3:** every manifest version has retrievable content (a property test over a sequence of accept / release / invalidate / approve / restore / discard).
+- **I4:** one event per approval change; no event for an unchanged materialize.
+- **I5:** a warm `materialize_result_sections` with nothing changed leaves every `bm2_*.json` byte-identical (mtime too) and an approved section approved (T1 regression).
+- **I6:** a refused person act raises `StepError` with a contract code; a held system write appears in the step's result and as a `hold` line.
+- **I7:** `protection_level(s) >= GUARDED ⇔ not may_machine_write(s)` for every combination of `approved` / `user_edited` / `facts` / `stale` (T3 regression).
+- Restore after a discard works (T9); restore with `../x` → 400 (T10); version numbers never repeat after a discard (T8).
+- Integration, through the FastAPI test client against a scratch `SESSIONS_DIR`: each route in the contract, with each refusal's code and envelope.
+
+## 9. Decisions for the maintainer
+
+| # | Question | Options | Recommended |
 |---|---|---|---|
-| W1 | `workflow.steps.materialize_result_sections` (`steps.py:90-179`; callers `tooling/generate_report.py:407`, `POST /api/pool/materialize-sections` `pool_routes.py:285-296`) | Rewrites every `bm2_*` with `approved: False` (`:155`), `archive=False` (`:170`). [V] With nothing changed: approved+FINAL → `approved False, facts None`, still v1, manifest still `blessed`, no archive, content identical apart from flags (E1). [V] With the caption changed: the same, and the approved text is gone (E9). | Each section through §4.1. **Nothing changed: untouched** (approval kept). Changed and unowned: new draft version, archived. Changed and owned: S1. Returns `{ok, materialized, unchanged, needs_review:[{key, from_version, version, wording}]}`. Goes through `store`, not `pipeline.session_store.save_section` directly. |
-| W2 | `workflow.steps.materialize_summary` (`steps.py:55-87`; `generate_report.py:417`; notebook) | Refuses when `approved` or `source != "generated"`; otherwise rewrites `archive=False`. [V] Wrote over a released (PROTECTED) Summary and dropped the fact (E2). | §4.1 with `by: system`, `source: generated`. Owned → noop `section_owned`. A chosen model run → noop `draft_from_elsewhere`. Identical → `unchanged`. Returns `{ok, written, paragraphs, noop?}`. |
-| W3 | Background generation: `tooling/generate_report.background` (`:424-469`, writes `approved: False, archive=False` at `:461-468`, no guard); HTTP `/api/generate` returns text and the client saved it via save-section | No guard; [V in gate0-document] the approved text was lost | Core `write_section_content(…, by=person, via=cli\|api/v2, source="model")`. Owned → `section_owned` unless replace + reason. The CLI gains an explicit replace option that takes the reason; without it, it prints the refusal and saves nothing. The server-side "generate and save as draft" route is D2's, over the same call. |
-| W4 | "Use run": `POST /api/prompts/summary/runs/{id}/{run}/use` (`prompt_routes.py:213-230`) | Unguarded `save_section(archive=True)`, `approved: False`, no event. [V] (same arguments, called directly): archived v1 and wrote v2 with no event, so `current_version_status` was `None` (E4). | §4.1, `by: person`, `source: model`. Owned → 409 `section_owned` unless `{replace: true, reason}`. Event `generate/draft` with `run_id` in `changes`. |
-| W5 | `POST /api/session/save-section` (`session_routes.py:1037-1077`) | Writes posted content, `archive=False`, no guard; [V in gate0-document] lost an approved Background | **Retired** (S5): 410 `route_retired`. |
-| W6 | `POST /api/session/approve` (`session_routes.py:767-964`): posts content, writes it `archive=True`, and also writes `identity.json`/`meta.json` | [V in gate0-document] empty `data` replaced the Summary with an empty approved v2 | **Retired** (S5). Replaced by the state-only accept (§6). Its legacy side effects (`identity.json`, copying uploads from `/tmp`) are not carried over: identity is C3's, uploads are M2's. |
-| W7 | `accept_section_step` (`steps.py:656-717`) | State-only already; `archive=False`; event `edit/blessed` | Unchanged in effect. Adds `expect_version` (refuse `version_changed`), the noop `already_accepted` (approved, FINAL, not stale), key validation against the catalog, and the event's `by`/`via`. Through `store.record_section_event`. |
-| W8 | `release_section_step` (`steps.py:720-767`); legacy `POST /api/session/unapprove` (`session_routes.py:1084-1134`) duplicates it | [V] A missing key answers `{"ok": True}` (E3); reason optional | Missing → 404 `no_section`. Reason required (S3) → `reason_required`. `expect_version`. Already released → noop `already_released`. The legacy route is retired (S5). |
-| W9 | Restore: legacy `POST /api/session/{id}/restore` (`session_routes.py:1261-1335`) | Route logic; returns already approved with a fresh `approved_at` (`:1325`); no event; key unvalidated; 404 when the current file is absent [V] | New `restore_section_step` (§6.3). The legacy route is retired. |
-| W10 | Discard: legacy `POST /api/session/discard-section` (`session_routes.py:1141-1161`) → `session_store.delete_section` | Deletes, archives nothing, history unreachable [V] (E6) | New `discard_section_step` (§6.4). The legacy route is retired. |
-| W11 | Invalidation: `pipeline.pool_state.invalidate_pool_artifacts` (`pool_state.py:244-276`), `web_routes/pool_admin.invalidate_downstream` (`:189-227`) | Stales the data-dependent LLM sections and archives with event `reprocess/needs-re-bless` | **Behaviour unchanged.** Through `store.write_section_version` (version-numbered archive), the event gains `by: system, via: invalidate, reason: data_changed`. (It mints a new version for unchanged content; the identical `content_hash` tells the changelog. Making it state-only is optional cleanup, not C2.) |
-| W12 | Pool reset `POST /api/pool/reset/{id}` (`session_routes.py:1581-1599`) | Unlinks every `bm2_*`, `genomics_*` and singleton except Background, with no archive | Each through `store.delete_section(…, event{cause: reset, by: person, reason: "pool reset"})`, so the last version of each section stays in `history/` (which reset already keeps). The dry-run listing is C8's. |
-| W13 | Session reset `POST /api/session/reset/{id}` (`:1634-1678`) | Deletes everything, history included | **Not C2** (C8/M1: irreversible, type-to-confirm). |
-| W14 | Genomics: `POST /api/session/{id}/regenerate-genomics-narrative` (`llm_routes.py:657-832`) | Clears the person's override for the organ (`:753-771`) with no backup, then force-regenerates | When an override exists for the organ: refuse `section_owned` unless `{replace: true, reason}`; archive `genomics_narrative_overrides.json` as a version under `history/genomics_narrative_overrides/` with event `generate`, `by: person`, reason; then clear. The interpretation caches it rewrites are machine output with no approval until C9. |
-| W15 | `POST /api/session/{id}/genomics-narrative-override` (`session_routes.py:713-760`) | In-app edit; read-modify-write; no archive | **Retired** (S6). |
-| W16 | Process caches: `_cache_methods_*`, `_cache_apical_narrative_*`, `_cache_interpretation_*` (`pipeline/process_integrated.py`; store rule `narrative/genomics_llm.py:180-231`); `POST /api/generate-genomics-narrative` with `force` (`llm_routes.py:625-654`) | Not sections: no approval exists, so nothing owned to protect | **No change in C2.** C9 turns them into sections written through §4.1 (§7). |
-| W17 | Notebook: `_nb_cells_report.py:243-249` copies a reference `background.json` when absent | Raw copy, creation only | Becomes `write_section_content(…, by=person, via=notebook)` so the copy has its event. Creation only; low risk. |
+| D1 | Does a released section stay protected from machines? | (a) yes, PROTECTED stands (ADR-0015); (b) release drops PROTECTED | (a) |
+| D2 | An approved apical section whose numbers or wording changed on Process | A1 knock down with a record (`approved: False`, FINAL withdrawn, `review` marker, archive, `needs-re-bless`); A2 keep `approved: True` + marker | A1 (what is approved should be what prints) |
+| D3 = Q6 | Restore: approved or draft? Reasons required? | Restore: (a) back as a draft (owned: PROTECTED, not approved, accept is a separate act); (b) back with the approval it had (today); (c) approved only if blessed and its inputs unchanged (needs C7's input fingerprint; later). Reasons: required for release, restore, discard and forced machine writes; or optional (today) | restore (a); reasons required (non-empty) for all four |
+| D4 | Discard | (a) keep, as an archived, restorable step; (b) retire from the new interface (Q1 removes editing; regenerate and restore cover it) | (b) for the interface, with (a)'s step behind the old route and pool reset |
+| D5 | The old front-end's write routes (`/api/session/approve` with content, `save-section`) while the old interface still runs on 9000 | fence them (§4.5, §4.6; the old interface's "edit then approve" is refused with an explanation); or leave them until the new interface replaces it (C2's guarantee then holds only for the new routes) | fence |
+| D6 | "Use run" (or a regenerate) over an approved Summary | (a) refuse: release first, with its reason; (b) allow with a reason and confirm, archiving the approved text | (a); C7's draft-beside will make it one act later |
 
-The golden oracle's `run_process` writes no section file, so W1–W17 do not touch its payload [R] (§8.3).
+## 10. Blast radius
 
----
+**Code that changes:**
+- `pipeline/session_store.py` (`save_section` archive name and counter, `:274-306`; `_record_version_event` fields, `:333-360`; `archive_current`);
+- `workflow/ownership.py` (`is_owned`, `STATE_KEYS`, `content_hash`; `protection_level` `:161-179`);
+- new `workflow/section_writes.py`;
+- `workflow/store.py` (Protocol + `DiskPoolStore`: four methods);
+- `workflow/steps.py` (`materialize_*` `:54-179`; accept/release `:655-767`; new `restore_section_step` and `discard_section_step`; the file goes from 767 to about 950 lines);
+- `pipeline/pool_state.py:269-272` and `web_routes/pool_admin.py:214-220` (event fields; nothing else);
+- `web_routes/session_routes.py` (approve, save-section, unapprove, discard, restore, override, pool reset);
+- `web_routes/prompt_routes.py:213-230`;
+- `web_routes/llm_routes.py:625-654, 753-771`;
+- `tooling/generate_report.py:424-469` (+ `--force/--reason`);
+- a new `web_routes/` v2 module for the section routes (its registration in `background_server.py` is the orchestrator's);
+- the notebook's text on Process and sections (`notebooks/_nb_cells_report.py:120-140, 225-275`): the orchestrator decides.
 
-## 6. The person's acts, as steps (`workflow/steps.py`)
+**Tests that pin today's behaviour and must change:**
+- `tests/unit/test_workflow_steps.py:278-302` (`assert bw["approved"] is False` at `:302`): under D2/A1 still False, but now also `review`, an archive and a `needs-re-bless` line; under A2, True. Add the I5 test beside `:322-342`.
+- `tests/unit/test_workflow_authoring_steps.py:137-142` (`release` of an absent section → ok): becomes 404. `:123-135`, `:145-150` and `:166-175` call `release` without a reason: they need one if D3 requires it.
+- `tests/unit/test_version_cause_snapshots.py:348-365` (`release` without a reason records the reopen) changes under D3. `:296-314` (`TestLiveApproveRoute`, which posts content to a new file) changes under D5. `:103-108`: the docstring's "unapprove / restore are unmarked" becomes false (the assertion on the primitive still holds).
+- `tests/integration/test_session_lifecycle.py`: these use the approve route to *create* sections, so under D5 they must seed a file and accept it instead:
+  - `:99-123`, `:125-158`, `:160-175`, `:177-193`;
+  - `:238-273` and `:275-305` (history through two content-posting approves).
+- `tests/unit/test_review_fixes_2026_09_24.py:40-48` (approve route posting content) changes under D5.
+- `tests/unit/test_prompt_routes.py:65` (`== {"ok": True}` exactly) changes if the response gains `version`.
+- **Unchanged** (*read*):
+  - `test_workflow_ownership.py:106-147, 168-205` (same results for those inputs);
+  - `test_session_store.py:72-185` (archives still end in `.json`; counts are unchanged);
+  - `test_dtxsid_validation.py:95-107` (id validation still runs first);
+  - `test_session_files.py:75-90`;
+  - `test_reprocess.py`, `test_workflow_engine.py:245`, `test_invalidate_pool_stale_by_origin.py:119-130`, `test_protection_marks.py`.
 
-All four take `expect_version`. A mismatch with the current version is `version_changed`: the person acts on
-the version they read, not on one Process wrote in another tab. All four validate the key against the
-section catalog (`workflow.section_catalog`), which the legacy restore route does not.
+**The golden oracle** (`tests/integration/test_process_integrated_golden.py`) **does not move**. It drives `POST /api/process-integrated` → `run_process` and compares the returned payload (`:194-230`). `run_process` writes no section file, and the HTTP route does not materialize (*read*). `guard` passes today (*verified*). After C2, run `guard` to confirm.
 
-1. **`accept_section_step(dtxsid, key, store, *, expect_version, via)`**
-   - Sets `approved`, `approved_at` and FINAL; clears `stale` and `wording_review` (unchanged).
-   - Records `edit/blessed` on the same version.
-   - Returns `{ok, section_key, approved, version, version_status}`.
-2. **`release_section_step(dtxsid, key, store, *, reason, expect_version, via)`**
-   - Applies the HUMAN_RELEASE demote (FINAL withdrawn, PROTECTED stands).
-   - Records `revise/working` with the reason.
-   - 404 when the section is absent.
-3. **`restore_section_step(dtxsid, key, version, store, *, reason, expect_version, via)`**
-   - Refused for programmatic sections (S7, `restore_not_meaningful`).
-   - `no_such_version` when the version isn't in history; noop `already_current` when it is the current version.
-   - Otherwise: archive the current version (if any); write the archived content as a new version.
-     - **S2-A:** `approved: false`, facts `{PROTECTED}`, event `restore/working`, `from_version`.
-     - **S2-B:** keep the archived approval, event `restore/blessed`.
-   - `stale` = the current section's `stale` OR the restored version's: a data change after both still applies (C7 owns currency; restore never clears it).
-   - Works when the current file is absent (after a discard).
-4. **`discard_section_step(dtxsid, key, store, *, reason, expect_version, via)`**
-   - Archives the current version, records `discard/discarded`, removes the file.
-   - Allowed on owned sections, since nothing is lost: undo is restore.
-   - The next machine write mints `max+1`, never an old number.
+## 11. Risks
 
----
+- **The old front-end** (walled; I can't see what it calls) may depend on `approve`-with-content and `save-section` with `approved: true`. D5's fence refuses those with an explanation rather than silently. The orchestrator should ask the maintainer whether the old interface on 9000 is still in use.
+- **Determinism.** I5 assumes apical section content is byte-stable across warm runs. *Verified* for a warm run (E1); not checked across a cold recompute. If floats or ordering wobble, every Process would knock down approved apical sections (D2). The engineer must test a cold-vs-warm hash.
+- **No run lock** (C5): the gate reads, then writes; two concurrent Process runs can still interleave. C2 does not add a lock.
+- **Render bytes.** The I7 fix lights the protection mark on released sections; no real session has facts (T12), so no deliverable on disk changes. The render surfaces don't receive `approved` at all today (document analysis §2, "no surface marks approved content"). Not C2's job; D3/C10.
+- **The publish gate** does not yet read `review` (D2/A1) or `hold`; that is C6. Until then, a knocked-down apical section blocks nothing.
+- **History growth**: one archive per content change, 2–30 KB per apical section (*verified* file sizes); negligible.
 
-## 7. Q4 / C9: how these rules cover Methods, the apical-BMD narrative and the genomics interpretations
+## 12. The order of the changes
 
-- The guarded write keys its rule on **`workflow.content_origin`**, not on a list of section keys, and on the one ownership predicate.
-- `content_origin` already classifies `methods`, `bmd_summary` and `genomics` as LLM (`workflow/content_origin.py:42-48`), and the catalog already declares their files.
-- So when C9 makes them section files, they inherit the LLM row of §4.1: absent → draft; own unowned draft → archived replacement; owned → kept (C7's draft-beside); a person's replace → archived and recorded.
-- C9 must do three things:
-  1. write them only through `write_section_content` (never a cache-only path);
-  2. render them **from the section file**, not from `_cache_*` (today `rendering/latex_export.py:811-813, 859`). Otherwise an approved file and the printed text can differ, as they already do for apical sections (§9 R1);
-  3. import any existing `genomics_narrative_overrides.json` text once, as versions with `cause: ingest, via: legacy_override, source: ingested`. Those versions are owned (§2). This is the ADR-0015 "content-store convergence".
-
----
-
-## 8. Blast radius
-
-### 8.1 Production callers that change
-
-| caller | change |
-|---|---|
-| `workflow/ownership.py:111-179` | `is_owned`; `protection_level` keyed on it |
-| `workflow/store.py:84-86` (protocol), `:174-176` (DiskPoolStore) | the §3.4 methods replace `save_section` |
-| `pipeline/session_store.py:231-422` | version-numbered archives, next = max+1, required event with the new fields, `delete_section` archives first, readers tolerate legacy names and `edit` |
-| `workflow/steps.py:55-87, 90-179, 656-767` | W1, W2, W7, W8; new restore and discard steps (steps.py stays under ~1000 lines) |
-| `workflow/section_writes.py` (new) | §4 |
-| `pipeline/pool_state.py:237-276`, `web_routes/pool_admin.py:189-227` | through the store; event fields (W11) |
-| `web_routes/prompt_routes.py:213-230` | W4 |
-| `web_routes/llm_routes.py:657-832` | W14 |
-| `web_routes/session_routes.py:713-760, 767-964, 1037-1161, 1261-1335` | retired (S5, S6) |
-| `web_routes/session_routes.py:1581-1599` | W12 |
-| `tooling/generate_report.py:424-469` | W3, plus the CLI replace option |
-| `notebooks/_nb_cells_report.py:243-249` | W17 (and the notebook is regenerated) |
-| new `web_routes/v2_sections.py` (or the name the kit uses) | the v2 routes (contract.md); registration in `background_server.py` is the orchestrator's |
-| the kit's error-code module (MODULES §4.2) | C2's codes; `StepError` gains `code` if the kit has not added it yet |
-
-### 8.2 Tests that pin today's behaviour and must change
-
-Baseline before C2: these 15 files pass, **254 passed** [V].
-
-| test | why it changes |
-|---|---|
-| `tests/unit/test_workflow_steps.py:29-75` (`FakeStore`) | the protocol gains the §3.4 methods |
-| `tests/unit/test_workflow_steps.py:251-256` | asserts `result == {"ok": True, "materialized": []}`; the result gains `unchanged`/`needs_review` |
-| `tests/unit/test_workflow_steps.py:278-302` | still holds under S1-A and S1-B (a flip un-approves). The comment at `:301` ("inform-signal … provisional again") changes; add assertions on the archive and the `reprocess/needs-re-bless` event. No test pins today's "nothing changed → un-approved"; the new test pins the opposite (§10). |
-| `tests/unit/test_workflow_authoring_steps.py:19-46` (`FakeSectionStore`) | protocol; `save_calls` tuples |
-| `tests/unit/test_workflow_authoring_steps.py:80-82` | `save_calls == [("background", False)]` becomes `record_section_event` |
-| `tests/unit/test_workflow_authoring_steps.py:123-135, 145-150` | release without a reason → `reason_required`; the result shape gains `version` |
-| `tests/unit/test_workflow_authoring_steps.py:137-142` | a missing section now raises 404 `no_section` |
-| `tests/unit/test_version_cause_snapshots.py:81-122` | the transient marker becomes a required event argument |
-| `tests/unit/test_version_cause_snapshots.py:296-314` | the approve route is retired; rewrite on the v2 accept route |
-| `tests/unit/test_version_cause_snapshots.py:348-360` | release without a reason → `reason_required` (S3) |
-| `tests/unit/test_session_store.py:72-148` | `save_section` → `write_section_version` with an event; the counts still hold |
-| `tests/unit/test_session_store.py:151-185` | `delete_section` archives the current version: history 1 → 2 at `:185` |
-| `tests/integration/test_session_lifecycle.py:99-235` (approve and unapprove), `:238-305` (history via approve) | the routes are retired; reseed the section files and use the v2 routes |
-| `tests/unit/test_review_fixes_2026_09_24.py:40-48` | approve route retired |
-| `tests/unit/test_dtxsid_validation.py:93-105` | body-id traversal via the approve route; re-point it at a body-id route that remains |
-| `tests/unit/test_prompt_routes.py:65` | asserts `.json() == {"ok": True}`; the response gains `version` |
-| `tests/unit/test_session_files.py:75-95` | override route retired (S6) |
-
-Exercised and expected to pass unchanged:
-- `test_invalidate_pool_stale_by_origin.py:119-130`, `test_reprocess.py:83`, `test_workflow_engine.py:245` (all use `accept_section_step`);
-- `test_version_cause_snapshots.py:131-213, 238-252` (cause names kept; archives counted by glob);
-- `test_workflow_ownership.py` (add a released-section case for `protection_level`);
-- `test_protection_marks.py`, `test_workflow_labels_guard.py`.
-
-### 8.3 The golden oracle (`tests/integration/test_process_integrated_golden.py`)
-**It does not move** [R].
-- It compares `run_process`'s payload.
-- `run_process` writes no section file: `materialize_result_sections` runs after it, only from `generate_report.process_async:407` and the materialize route.
-- The genomics override read (`process_integrated.py:435`) is unchanged.
-- No fixture under `tests/fixtures/` has `approved: true` or `facts` [R, grep], so `protection_map` stays `{}` and render goldens stay byte-identical.
-
-The guard still runs after every step of the build (cross-cutting constraint).
-
-### 8.4 Existing sessions on disk
-- **Sandbox store** (`sessions/`, read-only survey [V]):
-  - 118 section files: **0 approved, 0 with facts, 0 archives, 0 manifests**;
-  - 103 `source: generated` (the `bm2_*` and `summary`); 15 Backgrounds with no `source`;
-  - `history/` holds only the pins (`_method_profile`).
-  - Workspaces `guest` and `NAME`: no section files [V].
-  - Nothing here needs migrating.
-- **The host store is not visible from the sandbox.** Run the survey (`/workspace/ui-team/_scratch/spec-c2/scripts/survey.py <sessions dir>`) there before deploying. It reports:
-  - approved files;
-  - files whose `approved` flag disagrees with the manifest status (the aftermath of E1/E9: manifest `blessed`, file unapproved);
-  - duplicate archived versions (E5).
-- **No migration writes.** Readers tolerate:
-  - timestamp-named archives;
-  - `edit` events and events without `by`/`via`;
-  - Backgrounds without `source` (read as `model` for §4.1; new writes stamp it).
-- The v2 history route sets `inconsistent: true` when the current version's last status is `blessed` but the file is unapproved, or when two archives claim one version. D1 shows it; nothing repairs it silently.
-
----
-
-## 9. Risks
-
-- **R1. An approved apical file is not what prints.**
-  - The deliverable renders apical sections from `_cache_sections_*`, re-filtered per view (`rendering/latex_export.py:762-788`) [R]. Summary and Background render from their files (`:685, 743-747`).
-  - C2 makes the approval honest relative to the file, which equals the cache at materialize time. A view-filter change can still print something different from the approved file.
-  - D1 should preview the section from the cache. Whether apical sections render from their files is a C9/D3 question.
-- **R2. Re-review noise (S1-A).** Every data change re-opens every approved apical section. D1 must group these and show the diff and `wording_review`.
-- **R3. A released Summary is never refreshed automatically.** PROTECTED stands after release, so `materialize_summary` keeps it. New text needs a person's replace or discard. D1/D2 must say so.
-- **R4. Concurrency.** There is no lock. `expect_version` protects a person's acts; C5's run lock covers Process; a manifest append and a content write from two processes can still interleave.
-- **R5. Merge to `main`.** Retiring the legacy routes (S5, S6) breaks the old front-end that still exists there.
-- **R6. The host store is unknown** (§8.4).
-- **R7. Event writes are no longer fail-soft.** A full or read-only disk now refuses the act (`history_write_failed`) instead of changing text without a record. This is intended, and new.
-- **R8. Silent defaults in code.** `by`, `via` and `source` are required arguments. A missing one is a programming error, never a default.
-
----
-
-## 10. Order of the changes, and the tests that pin the new behaviour
-
-Each step leaves `smart` and `guard` green.
-
-1. **Ownership.** `is_owned`, `may_machine_write`, `protection_level`.
-   - New test: a released section is GUARDED and not machine-writable.
-2. **Version store.** Version-numbered archives, next = max+1, the event record (§3.2), the §3.4 store methods, the legacy readers.
-   - New tests: E5 replayed (no collision); E8 replayed (a new draft after discard is `max+1`, status `draft`); the event write fails before the content changes.
-3. **Guarded write** (§4), unit-tested with a fake `PoolStore`, one test per row of §4.1.
-4. **W1, W2.**
-   - New tests: E1 replayed (an approved apical section with nothing changed keeps approval, facts, version, bytes); E9 replayed (changed: archived, `needs-re-bless`, from_version); a released Summary is not overwritten (E2 replayed); a chosen model run is not overwritten.
-5. **W7–W10 as steps.**
-   - New tests: `expect_version`; required reasons; release of a missing key is 404 (E3); restore after discard (E6); restore of `bm2_*` refused; restore result per S2.
-6. **Person-initiated writers** W3, W4, W14 (+ the CLI option); W11, W12 event fields.
-7. **v2 routes**, thin, through the kit envelope; integration tests through the FastAPI client against a scratch `SESSIONS_DIR`.
-8. **Retire the legacy routes** (S5, S6). Migrate the §8.2 tests.
-9. Run `run-tests.sh smart`, then `guard`. The one known failure is `test_docx_generator.py::test_yaml_page_breaks_land_as_page_break_before`.
-
-**Acceptance criteria** (each a test):
-- No production code calls `pipeline.session_store` section writes except through the store's §3.4 methods (grep test).
-- Every section write appends exactly one event with `by` and `via`.
-- No content change happens without an archive of the superseded version.
-- An owned LLM section's bytes never change through a system write.
-- An owned apical section's bytes change only together with an archive and a `reprocess` event.
-- `protection_level` and `may_machine_write` agree on every fact combination.
-
----
-
-## 11. Evidence
-
-**Verified** (scratch, `SESSIONS_DIR=/workspace/ui-team/_scratch/spec-c2/sessions`):
-- **E1:** warm `materialize_result_sections` over an accepted `bm2_body-weight` (v1, blessed, FINAL+PROTECTED). After: `approved False`, `facts None`, still v1, manifest still `blessed`, no archive. Content identical apart from the flags.
-- **E2:** release of the Summary gave `facts ['protected']`, `may_machine_write False`, `protection_level OPEN`. `materialize_summary` then returned `written: True` over it.
-- **E3:** `release_section_step` on `bm2_no-such-thing` → `{'ok': True, …}`.
-- **E4:** `save_section` called with the "use run" route's arguments (directly; the route itself not run) over the accepted Summary: v1 archived, v2 unapproved, no event, status `None`.
-- **E5:** accept, then invalidate, then the approve route. v3's archive (named by `approved_at`) was overwritten by v4. The file and the archive both read v4, and the manifest has two v4 lines describing different texts.
-- **E6:** after discard, restore and history both answered 404 "No approved 'summary' section found".
-- **E8:** accept, discard, `materialize_summary`: the new draft is v1, and its manifest status is `blessed`.
-- **E9:** a changed caption on an accepted `bm2_hormones`: un-approved, no archive, status `blessed`.
-- **Survey:** §8.4.
-- **Baseline:** 254 tests passed in the 15 files of §8.2.
-
-**Read:** everything else, with `file:line`.
+1. The primitive: unique archive names, monotonic counter, v2 event lines, `archive_current`. Tests for T7, T8, I2 and I3.
+2. Ownership: `is_owned`, `STATE_KEYS`, `content_hash`; `protection_level` on `is_owned`. Test for I7.
+3. `workflow/section_writes.py`: the gate, `section_history`; fake `PoolStore` methods. Unit tests per rule.
+4. `materialize_result_sections` and `materialize_summary` through the gate (D2). Tests for I1, I5 and T4; `guard`.
+5. The steps: accept noop and key check; release 404 and reason (D3); `restore_section_step`, `discard_section_step`. Unit tests.
+6. Routes: fence the old routes onto the steps (D5, D6); add the v2 section routes. Integration tests.
+7. CLI `background` through the gate; genomics archive-before-clear.
+8. Run `smart`, then `guard`; update the HANDOFF §4.3 text and `http-api.md` (orchestrator).
