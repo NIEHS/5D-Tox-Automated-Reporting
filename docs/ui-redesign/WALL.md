@@ -44,6 +44,10 @@ What still reaches the old front-ends, and so is on you:
 - git history, which the two checkouts share: no `git log -p`, `git show <commit>`
   or `git grep` beyond the worktree's own files;
 - the two Compare files, which the app imports and so are checked out (denied).
+  Their rows were deleted from the worktree's `rlm-code` index on 2026-10-14. Any
+  re-index puts them back, so delete their rows again afterwards (`files`,
+  `symbols` and the `edges`/`metrics` of those symbols, where the path is
+  `rendering/bits_compare_page.py` or `web_routes/compare_routes.py`).
 
 Don't work around any of it, for instance by building a path indirectly.
 
