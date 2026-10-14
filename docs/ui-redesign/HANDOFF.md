@@ -147,6 +147,15 @@ The notebook is the same workflow without any of this.
   published data only, by policy.
 - **Naming.** Don't call the new interface a "wizard"; that was a throwaway
   word. A real name is to be chosen.
+- **Component library: Ant Design** (`antd`, React; the maintainer's choice,
+  2026-10-14). Its business-application components serve the idiot-proofing:
+  - forms with declared validation rules;
+  - `Steps` for an ordered flow;
+  - tables;
+  - `Popconfirm` and modals for destructive acts;
+  - `Result` and `Alert` for explaining a refusal.
+
+  npm is reachable from the sandbox, so it can be installed and built here.
 
 ---
 

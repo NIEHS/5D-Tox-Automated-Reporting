@@ -2,8 +2,9 @@
 
 ## ★ Current direction (2026-10-14): a new user interface, behind a Chinese wall
 
-The maintainer is designing a **new user interface from scratch**. Its **most
-important purpose is idiot-proofing**. Read `docs/ui-redesign/HANDOFF.md` first: the
+The maintainer is designing a **new user interface from scratch**, with **Ant
+Design** (`antd`, React) as its component library. Its **most important purpose is
+idiot-proofing**. Read `docs/ui-redesign/HANDOFF.md` first: the
 workflow's rationale, code, checkpoints, the users' requirements and the open design
 questions.
 
