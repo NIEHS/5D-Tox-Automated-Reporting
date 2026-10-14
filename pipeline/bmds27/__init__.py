@@ -101,6 +101,16 @@ def unavailable_reason() -> str | None:
     return None if ok else why
 
 
+def known_unavailable_reason() -> tuple[bool, str | None]:
+    """(known, reason) without running anything: whether this process has
+    already checked the machine (the check runs Wine and the certification
+    runs, so a read that must have no side effects may not trigger it), and
+    if so, why BMDS 2.7 cannot run here (None when it can)."""
+    if _status.cache_info().currsize == 0:
+        return False, None
+    return True, unavailable_reason()
+
+
 def executor():
     """The certified Wine executor. Raises RuntimeError when unavailable."""
     ok, why = _status()
