@@ -1,0 +1,55 @@
+# The Chinese wall around the existing user interfaces
+
+Set up 2026-10-14, at the maintainer's request, for the work of designing a new
+user interface **from scratch**. The new design should come from the workflow, the
+data and the people who use it, not be anchored on the screens built before. So
+the existing front-ends are off limits, except the **Bookshelf**, which the
+maintainer is keeping.
+
+Only the maintainer lifts the wall. Until then:
+
+## Do not open, search, list or run
+
+| Path | What it is |
+|---|---|
+| `wizard-ui/` | the current browser front-end's source |
+| `web_wizard/` | its built bundle |
+| `web/` | the earlier browser front-end (retired) |
+| `notebooks/` | the Jupyter walkthrough (an alternative front-end) |
+| `rendering/bits_compare_page.py`, `web_routes/compare_routes.py` | the Compare page |
+| `docs/ui-state-management-plan.html`, `docs/plans/integrated-wizard-versioned-preview.md`, `docs/code-walkthrough.*`, `docs/architecture-map.*`, `docs/code-structure-report-*.html` | documents that describe those front-ends |
+| `tests/e2e/` | browser tests of the old front-end |
+| the memory files listed in `walled_existing_ui_index.md` (in the memory directory) | notes about the old screens |
+
+This includes indirect looks:
+- `rlm-code` symbol queries that land in those paths;
+- `git log -p` or `git show` on them;
+- serving `/`, `/workflow…` or `/Compare` and looking at the pages.
+
+The Claude Code settings deny reading and editing these paths
+(`.claude/settings.local.json`, 59 rules). Shell commands that name them are blocked
+too. Don't work around it, for instance by building a path indirectly.
+
+## Allowed, and the material to design from
+
+- **The Bookshelf (kept):**
+  - `rendering/bookshelf_preview.py`, `rendering/bookshelf_landing.py`;
+  - `web_routes/bookshelf_routes.py`, `web_routes/supplemental_routes.py`;
+  - the companion (`rendering/published_clone.py`, `tooling/published_clone.py`);
+  - its pages at `/Bookshelf`.
+
+  Its facsimile's right rail links to `/Compare/<id>`. That link can stay, or be
+  pointed at whatever the new design compares with.
+- **The UI-agnostic core:** `workflow/`, `pipeline/`, `document_model/`,
+  `rendering/` (the emitters and `preview_surface`), `tables/`, `narrative/`,
+  `genomics/`, `knowledge_base/`, `styling_export/`, `common/`.
+- **The backend routes:** `web_routes/` other than `compare_routes.py`. They were
+  shaped by the old front-ends; see `http-api.md`.
+- **Command-line drivers:** `tooling/generate_report.py` (the reference driver of
+  the whole workflow), `tooling/build_published_reports.py`, `tooling/workspace.sh`.
+- **Documents:** `CONTEXT.md`, `docs/adr/`, and `docs/headless-report-generation.md`
+  (skip its few paragraphs about the notebook). Also this directory.
+- **Tests** under `tests/unit` and `tests/integration`.
+
+If something on the far side of the wall seems necessary, ask the maintainer
+rather than looking.

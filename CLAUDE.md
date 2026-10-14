@@ -1,5 +1,20 @@
 # rlm-bmdx
 
+## ★ Current direction (2026-10-14): a new user interface, behind a Chinese wall
+
+The maintainer is designing a **new user interface from scratch**. Read
+`docs/ui-redesign/HANDOFF.md` first: the workflow's rationale, code, checkpoints,
+the users' requirements and the open design questions.
+
+The existing front-ends are **off limits** (`docs/ui-redesign/WALL.md`):
+- `wizard-ui/`, `web_wizard/`, `web/`;
+- `notebooks/`;
+- the Compare page;
+- the docs and memory notes about them.
+
+`.claude/settings.local.json` denies them. The **Bookshelf** is the one exception;
+it is kept and in scope. Only the maintainer lifts the wall.
+
 ## Package layout (read first)
 
 The codebase is organized into **concern packages** (restructured 2026-08-12, ADR-0013).
@@ -32,7 +47,7 @@ Before making changes, identify which type of work this session involves and loa
 | Work type | Constraint profile | Core scope |
 |-----------|-------------------|------------|
 | **Table builders** | `constraints_table_builders.md` | `tables/` — `*_table.py`, `table_builder_common.py`, `apical_bmds.py`; consume integrated.json only |
-| **UI / sessions** | `constraints_ui_work.md` | `web/js/*`, `web_routes/session_routes.py`, `pipeline/session_store.py` — state derivation never imperative |
+| **UI / sessions** | behind the wall (see top); for the new UI: `docs/ui-redesign/HANDOFF.md` | `workflow/`, `web_routes/` (not `compare_routes.py`), `pipeline/session_store.py` — state derivation never imperative |
 | **LLM narratives** | `constraints_llm_narratives.md` | `narrative/` (`background_writer.py`, `interpret.py`, `unified_narrative.py`) + `web_routes/llm_routes.py` — know which sections are LLM vs programmatic |
 | **Knowledge base** | `constraints_knowledge_base.md` | `knowledge_base/` — `build_db.py`, `toxkb.py` ToxKBQuerier, crawl pipeline; schema is a cross-project contract |
 | **Cross-cutting refactor** | `constraints_cross_cutting_refactor.md` | May touch anything, but must map blast radius first and test full flow |
@@ -55,7 +70,7 @@ The `DocNode` tree in `document_model/document_tree.py` is the single source of 
 
 ### 3. UI phase is derived, never imperatively set
 
-`derivePoolPhase(artifacts)` examines what artifacts exist and returns the correct phase. All code dispatches the result of this function — never guess the phase. Transient async phases (VALIDATING, INTEGRATING, APPROVING) are the only exception. This rule extends to all future AppStore slices. See `expertise_ui_state.md` for the full phase sequence and POOL_PHASES registry.
+The phase is derived from what artifacts exist: `workflow.phases.derive_phase(artifacts)`, served by `workflow.engine.WorkflowEngine(dtxsid).state()` with the legal actions (`derivePoolPhase` is its old front-end name). All code dispatches the result — never guess or store the phase. Transient "in progress" states belong to a front-end alone. The rule extends to every derived state: section readiness, guards, currency, the publish gate. See `docs/ui-redesign/HANDOFF.md` §4.
 
 ## Domain Expertise and TODOs
 
@@ -66,7 +81,7 @@ Consult these memory files when working in unfamiliar areas:
 - `expertise_data_pipeline.md` — source-of-truth hierarchy, pivot data loss, integration lifecycle, bmdx-pipe dependency
 - `expertise_knowledge_base.md` — bmdx.duckdb schema, ToxKBQuerier, static artifact status
 - `expertise_document_tree.md` — DocNode structure, four-surface render IR (Typst dead), NIEHS fidelity gap
-- `expertise_ui_state.md` — AppStore architecture, phase derivation, migration status
+- `docs/ui-redesign/HANDOFF.md` — the workflow, its checkpoints and the requirements, for the new UI (the old `expertise_ui_state.md` is behind the wall)
 - `todo.md` — prioritized work items (CRITICAL/HIGH/MEDIUM/LONG-TERM)
 
 ## Agent skills
