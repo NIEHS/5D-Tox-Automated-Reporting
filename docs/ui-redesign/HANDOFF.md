@@ -5,9 +5,16 @@ interface for this application. It explains what the workflow is for, how it is
 implemented, where its checkpoints are, and what the people who use it need. It
 does this without describing the interfaces built before.
 
+**The interface's most important purpose is idiot-proofing** (the maintainer,
+2026-10-14). The workflow can already be driven step by step from a notebook. What
+a user interface adds is keeping a person who is not a programmer from going
+wrong. Judge every design choice by that first (§2).
+
 **Read `WALL.md` first.** The existing front-ends are off limits: the design comes
-from the workflow, not from them. The one exception is the **Bookshelf**, which
-is kept (§8).
+from the workflow, not from them. There are two exceptions:
+- the **Bookshelf**, which is kept (§8);
+- the **Jupyter notebook** (`notebooks/workflow_walkthrough.ipynb`), the direct
+  view of the workflow and its code.
 
 Companion files:
 - `WALL.md`: what is walled, and what is allowed;
@@ -15,8 +22,13 @@ Companion files:
 
 Further reading, in order:
 1. `CONTEXT.md`: purpose, glossary, why the architecture is shaped as it is;
-2. ADRs 0014, 0015, 0018, 0020, 0021, 0027, 0029;
-3. `docs/headless-report-generation.md`: the whole workflow driven from the
+2. **the notebook**, `notebooks/workflow_walkthrough.ipynb` (cells in
+   `notebooks/_nb_cells_*.py`). It is the workflow one step per cell, each
+   explained: purpose, implementation (module:function), reads → writes, how it
+   fails. It shows the workflow and its code with none of the guarding. Run it to
+   see every step's real output (§9).
+3. ADRs 0014, 0015, 0018, 0020, 0021, 0027, 0029;
+4. `docs/headless-report-generation.md`: the whole workflow driven from the
    command line and over HTTP.
 
 ---
@@ -55,6 +67,27 @@ These are the maintainer's stated requirements. They are the brief.
   interface is the durable, hand-off interface. Everything a step needs must be
   operable and explained in the browser.
 - **Other people trying it** on their own data (§9, workspaces).
+
+### What the interface is for: idiot-proofing
+
+**The interface's most important purpose is idiot-proofing.** Its users are not
+programmers, and the workflow's mistakes are expensive. Examples:
+- a wrong file classification flows into every table;
+- an unstated design fact silently becomes the standard default;
+- a stale LLM section gets published;
+- an approved section is overwritten;
+- a session is reset by accident.
+
+The backend already refuses much of this, through derived phases, legal actions,
+guards, currency and the publish gate (§4). The interface's job:
+- make the right next step obvious and the wrong ones impossible;
+- check what a person enters before anything runs (controlled vocabularies,
+  valid ids, required facts);
+- explain every refusal and every block in the person's terms;
+- confirm or undo destructive acts;
+- never let a default pass silently.
+
+The notebook is the same workflow without any of this.
 
 ### What the application is, and is not
 - **Not an editor** (ADR-0018). It generates, previews, lets a person
@@ -409,7 +442,8 @@ The command-line drivers are `tooling/report_compare.py` and `tooling/report_qc.
   - 9100: the maintainer's own JupyterLab. Leave it alone.
 - **Workspaces:** `tooling/workspace.sh <name>` gives another person their own
   sessions (so their own Bookshelf), their own outputs and an app on 9300.
-  - It also starts a JupyterLab on 9400, which is a walled front-end.
+  - It also starts a JupyterLab on 9400, on the workspace's copy of the notebook.
+    That copy builds the person's own uploaded data (its `uploads/` folder).
   - The person reaches a workspace by its ports; there is no authentication.
   - `tooling/workspace.sh <name> stop` stops it.
 - **Python:** `.venv/bin/python`. The venv's `jupyter*` launcher scripts point at
@@ -425,6 +459,10 @@ The command-line drivers are `tooling/report_compare.py` and `tooling/report_qc.
 
 Stated neutrally; none has an agreed answer.
 
+0. **How each step is made fool-proof** (the first question for every screen):
+   - what can a person get wrong there;
+   - what does the backend already refuse;
+   - what must the interface prevent, check or explain on top?
 1. **How the steps group for a person.** Steps 1–8 are data preparation (ending
    in the data approval), 9 is computation, and 10–13 are the document. Which
    are separate screens, which are automatic, and which need a person's

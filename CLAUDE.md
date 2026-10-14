@@ -2,18 +2,22 @@
 
 ## ★ Current direction (2026-10-14): a new user interface, behind a Chinese wall
 
-The maintainer is designing a **new user interface from scratch**. Read
-`docs/ui-redesign/HANDOFF.md` first: the workflow's rationale, code, checkpoints,
-the users' requirements and the open design questions.
+The maintainer is designing a **new user interface from scratch**. Its **most
+important purpose is idiot-proofing**. Read `docs/ui-redesign/HANDOFF.md` first: the
+workflow's rationale, code, checkpoints, the users' requirements and the open design
+questions.
 
 The existing front-ends are **off limits** (`docs/ui-redesign/WALL.md`):
 - `wizard-ui/`, `web_wizard/`, `web/`;
-- `notebooks/`;
 - the Compare page;
 - the docs and memory notes about them.
 
-`.claude/settings.local.json` denies them. The **Bookshelf** is the one exception;
-it is kept and in scope. Only the maintainer lifts the wall.
+`.claude/settings.local.json` denies them. Two things are in scope:
+- the **Bookshelf**, which is kept;
+- the **Jupyter notebook** (`notebooks/`), the direct view of the workflow and its
+  code.
+
+Only the maintainer lifts the wall.
 
 ## Package layout (read first)
 
