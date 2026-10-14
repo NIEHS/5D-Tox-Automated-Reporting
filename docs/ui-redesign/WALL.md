@@ -36,8 +36,15 @@ without them. Untracked data (`sessions/`, `assets/`, `output/`, `.venv`, …) i
 linked in from `/workspace/rlm-bmdx`. The app on port 9000 (and a workspace's on
 9300) runs from the worktree and serves no old front-end.
 
+The new interface is built by a team of agents (`TEAM.md`). Each coding agent
+works in its own sparse worktree under `/workspace/ui-team/`, made by
+`tooling/ui_team_worktree.sh` with this worktree's sparse-checkout rules, so the
+same paths are absent there. Agents never use worktree isolation: it branches from
+`main` with a full checkout.
+
 The Claude Code settings in both checkouts deny reading and editing these paths
-(`.claude/settings.local.json`). Shell commands that name them are blocked too.
+(`.claude/settings.local.json`); this worktree's settings also deny the Compare
+files under `/workspace/ui-team/`. Shell commands that name them are blocked too.
 
 What still reaches the old front-ends, and so is on you:
 - the main checkout (`/workspace/rlm-bmdx`): don't search or browse it;

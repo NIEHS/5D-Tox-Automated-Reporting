@@ -61,9 +61,10 @@ times*.ttf
 
 # Claude Code local state: ignore everything under .claude EXCEPT shared,
 # checked-in tooling (skills). settings.local.json / hooks / scheduled tasks
-# are per-user; skills/ is team-shared.
+# are per-user; skills/ and agents/ (the new-UI team's roles) are team-shared.
 .claude/*
 !.claude/skills/
+!.claude/agents/
 
 # Per-session data store (persisted working data + documents). NOT repo
 # content — it's the local mount / working mirror of the GCS session buckets

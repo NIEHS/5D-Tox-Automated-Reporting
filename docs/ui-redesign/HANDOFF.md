@@ -18,6 +18,8 @@ from the workflow, not from them. There are two exceptions:
 
 Companion files:
 - `WALL.md`: what is walled, and what is allowed;
+- `TEAM.md`: the team of agents that builds the interface, its flow and sign-offs
+  (`BOARD.md` is the state of the work);
 - `http-api.md`: the backend routes that exist today.
 
 Further reading, in order:
