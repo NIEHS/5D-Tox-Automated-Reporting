@@ -180,7 +180,7 @@ listed in `docs/writing-rules-inventory.md`.
 | 13 | Background, Summary | `generate_report.background`, `workflow.steps.materialize_summary` | – | ✓ (Background) | `background.json`, `summary.json` |
 | 14 | Publish gate | `WorkflowEngine.publish_readiness` | – | – | – |
 | 15 | Render | `rendering.preview_surface.render_preview` | – | – | `output/<DTXSID>/…` |
-| 16 | Compare | `rendering.bits_compare.compare` | – | – | `output/<DTXSID>/…-compare.html` |
+| 16 | Compare; the published book as a session | `rendering.bits_compare.compare`, `tooling.published_clone.build` | – | – | `output/<DTXSID>/…-compare.html`, `sessions/<SOURCE>_published/` |
 """)
 
 # ---------------------------------------------------------------------------
