@@ -37,9 +37,15 @@ maintainer signs off:
   explainer (a `StepError` or guard → plain words); the confirm-or-undo pattern
   for destructive acts; form fields bound to the controlled vocabularies; the
   "[… pending]" placeholder;
-- each module's **contract** (`modules/<m>/contract.md`), so a module builds
-  against mocks and waits for no one;
-- the app's skeleton: its directory, its build, how FastAPI serves it.
+- the **shared contracts** every module builds on: the state read model, the
+  error envelope, the confirm/dry-run shape, the run's event stream. Each module's
+  own `contract.md` (its endpoints and shapes) is then signed with its spec, against
+  these, so a module builds against mocks and waits for no one;
+- the app's skeleton: its directory, its build, how FastAPI serves it;
+- the **core-guarantees track**: the backend work that makes the workflow's
+  checkpoints (HANDOFF §4) hold, run as modules of their own (`MODULES.md` §2).
+
+The result is `MODULES.md`.
 
 ### Per module, independently
 
