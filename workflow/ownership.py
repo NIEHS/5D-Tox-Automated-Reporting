@@ -127,6 +127,63 @@ def is_user_owned(section: "dict | None") -> bool:
     return bool(section.get("user_edited"))
 
 
+# The `source` a section carries when a person's text came back from outside
+# the application (Word, Overleaf; C11). Reserved: nothing writes it yet.
+INGESTED_SOURCE = "ingested"
+
+
+def is_owned(section: "dict | None", *, report_published: bool = False) -> bool:
+    """THE ownership predicate (C2 §2): a machine may not replace this section's
+    text. One definition, so "protected" means one thing everywhere — the
+    machine guard (may_machine_write), the render mark (protection_level) and
+    the read model's `machine_may_write` all ask this.
+
+    Owned when any of these holds:
+      * a person approved it (`approved`);
+      * a person edited it (`user_edited`), or its text came back from outside
+        the application (`source == "ingested"`, C11);
+      * it holds a content-guarding fact (FINAL or PROTECTED). A released
+        section keeps PROTECTED (ADR-0015 §5; C2 D1), so it stays owned: only
+        a person's explicit act (regenerate, use run, restore) replaces it;
+      * the report is published (the ADR-0015 floor; no act sets it yet).
+    """
+    if report_published:
+        return True
+    if not isinstance(section, dict):
+        return False
+    if is_user_owned(section) or section.get("source") == INGESTED_SOURCE:
+        return True
+    return blocks_machine_regen(section_facts(section), user_edited=False)
+
+
+# The keys of a section file that are its STATE, not its content (C2 §2):
+# accepting, releasing, staling or numbering a section changes these and never
+# what it says. The write gate compares content with them removed
+# (content_hash), which is how "nothing changed" is decided.
+STATE_KEYS: frozenset[str] = frozenset({
+    "approved", "approved_at", "facts", "stale", "regenerated", "wording_review",
+    "review", "revised", "version", "saved_at",
+})
+
+
+def section_content(section: "dict | None") -> dict:
+    """The section's content: the dict without its STATE_KEYS."""
+    if not isinstance(section, dict):
+        return {}
+    return {k: v for k, v in section.items() if k not in STATE_KEYS}
+
+
+def content_hash(section: "dict | None") -> str:
+    """``sha256:<hex>`` of the section's content (STATE_KEYS removed), as
+    canonical JSON (sorted keys, no whitespace). Equal hashes = same text."""
+    import hashlib
+    import json
+
+    canonical = json.dumps(section_content(section), sort_keys=True,
+                           separators=(",", ":"), ensure_ascii=False, default=str)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # The predicate callers ask: may a machine overwrite this section?
 # ---------------------------------------------------------------------------
@@ -136,22 +193,18 @@ def may_machine_write(section: "dict | None", *, force: bool = False) -> bool:
 
     The single machine-guard predicate that replaces the scattered checks (the
     genomics `force`-flag reasoning, the 'return the store, full stop' comment,
-    the per-surface override presence test). Composes workflow.guard axis 1:
+    the per-surface override presence test):
 
       * `force=True` is the deliberate, user-triggered escape hatch (the
         Regenerate action) — it always permits the write (the human asked for it).
-      * otherwise refuse when the content is user-owned (approved/edited) — the
-        hard machine guard — regardless of staleness (a stale-but-owned section
-        must still not be clobbered; the user re-blesses it, the machine doesn't).
+      * otherwise refuse when the content is owned (is_owned: approved, edited,
+        ingested, FINAL or PROTECTED) — regardless of staleness (a stale-but-owned
+        section must still not be clobbered; the user re-blesses it, the machine
+        doesn't).
 
     Returns True = safe to (re)generate; False = refuse.
     """
-    if force:
-        return True
-    facts = section_facts(section)
-    user_edited = is_user_owned(section)
-    # blocks_machine_regen is True when we must NOT overwrite; invert for "may".
-    return not blocks_machine_regen(facts, user_edited=user_edited)
+    return force or not is_owned(section)
 
 
 # ---------------------------------------------------------------------------
@@ -163,20 +216,16 @@ def protection_level(section: "dict | None", *, report_published: bool = False) 
 
     Decided 2026-08-16: the rendered mark shows what the SYSTEM won't silently
     overwrite (the editor's original driver — "show what is protected content"),
-    NOT pure human-facing maturity. So the mark lights on OWNERSHIP (approved or
-    user-edited), which the approve path already records — visible value today —
-    rather than waiting for a `final`/`protected` fact the approve path doesn't
-    write yet. The report-grain `published` floor still applies (louder mark).
+    NOT pure human-facing maturity. So it lights exactly when is_owned does
+    (C2: `protection_level >= GUARDED` ⇔ `not may_machine_write`, invariant I7;
+    a released section holding PROTECTED is marked). The report-grain
+    `published` floor still applies (louder mark).
 
     OPEN when the section is neither owned nor in a published report → no mark.
     """
-    if is_user_owned(section):
-        level = GuardLevel.GUARDED
-    else:
-        level = GuardLevel.OPEN
-    if report_published and level < GuardLevel.PUBLISHED:
-        level = GuardLevel.PUBLISHED
-    return level
+    if report_published:
+        return GuardLevel.PUBLISHED
+    return GuardLevel.GUARDED if is_owned(section) else GuardLevel.OPEN
 
 
 def protection_map(
