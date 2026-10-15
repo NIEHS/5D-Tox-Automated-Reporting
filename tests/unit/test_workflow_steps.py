@@ -366,15 +366,38 @@ def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
 # --- materialize result sections (ADR-0018 Phase 1) ------------------------
 # These use a REAL tmp session (the sessions_dir fixture) because the transform
 # reads the _cache_sections file and writes bm2_*.json via save_section, both of
-# which resolve through the patched SESSIONS_DIR.
+# which resolve through the patched SESSIONS_DIR. Materializing is part of
+# Process (C1), so each session is seeded INTEGRATED first (_integrated_session).
+
+def _integrated_session(sessions_dir, dtxsid="DTXSID_VC"):
+    """A real session the phase derives INTEGRATED: a file, a clean validation
+    report and integrated.json."""
+    import json
+    d = sessions_dir / dtxsid
+    (d / "files").mkdir(parents=True)
+    (d / "files" / ".keep").write_text("")
+    (d / "validation_report.json").write_text(json.dumps(_CLEAN))
+    (d / "integrated.json").write_text("{}")
+    return d
+
+
+def test_materialize_is_refused_before_integration(sessions_dir):
+    from workflow.errors import PhaseRefusal
+    from workflow.steps import materialize_result_sections, materialize_summary
+    from workflow.store import DiskPoolStore
+    d = sessions_dir / "DTXSID_VC"
+    (d / "files").mkdir(parents=True)
+    (d / "files" / "bw.csv").write_text("x")
+    for step in (materialize_result_sections, materialize_summary):
+        with pytest.raises(PhaseRefusal):
+            step("DTXSID_VC", DiskPoolStore())
 
 def test_materialize_result_sections_writes_bm2_files(sessions_dir):
     import json
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     # Seed a sections cache the way Process would (two apical sections; one has a
     # narrative, one is table-only — both legitimate).
     (d / "_cache_sections_abc123.json").write_text(json.dumps({"sections": [
@@ -401,7 +424,7 @@ def test_materialize_result_sections_writes_bm2_files(sessions_dir):
 def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
-    (sessions_dir / "DTXSID_VC").mkdir(parents=True)
+    _integrated_session(sessions_dir)
     result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
     assert result == {"ok": True, "materialized": []}
 
@@ -430,8 +453,7 @@ def test_wording_review_stamped_on_flip_against_approved(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     # First materialize with direction "decreased", then the human approves it.
     _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
     materialize_result_sections("DTXSID_VC", DiskPoolStore())
@@ -457,8 +479,7 @@ def test_no_wording_review_when_never_approved(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
     materialize_result_sections("DTXSID_VC", DiskPoolStore())
     # NOT approved — just re-materialize with a flipped signature.
@@ -474,8 +495,7 @@ def test_no_wording_review_when_signature_unchanged(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     sig = {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}}
     _seed_cache(d, sig)
     materialize_result_sections("DTXSID_VC", DiskPoolStore())

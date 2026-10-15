@@ -666,6 +666,72 @@ def ensure_pin(dtxsid: str) -> dict:
     return pin
 
 
+def chosen_by_person(pin: dict | None) -> bool:
+    """Whether a person chose this pin (C1 D1): a pin written by default, or
+    none at all, is not a choice."""
+    return bool(pin) and pin.get("pinned_by") not in (None, "default")
+
+
+def require_person_pin(dtxsid: str) -> dict:
+    """The study's pin when a person chose it; else refuse (MethodNotChosen,
+    409 ``method_not_chosen``): Process never runs under a method nobody chose.
+    Writes nothing."""
+    from workflow.errors import MethodNotChosen
+
+    pin = read_pin(dtxsid)
+    if not chosen_by_person(pin):
+        raise MethodNotChosen(dtxsid, pin)
+    return pin
+
+
+def suggest_profile(dtxsid: str, *, count_mismatches=None) -> dict:
+    """The profile to propose to the person choosing a study's method (ADR-0027
+    §3; C1 D1 = B): ``{"name", "why"}``. A read with no side effects (no pin
+    written, no machine check run). The proposal is the profile of the study's
+    series whose expectations the dataset's recorded analyses (the .bm2
+    settings) contradict least; on a tie, or with no dataset, the newest. The
+    person confirms it; it is never applied for them.
+
+    `count_mismatches(settings) -> int | None` counts the dataset's
+    disagreements with resolved settings (None: no dataset, or one recording
+    no analyses). The read model passes its memoized count; by default the
+    dataset is read once here, without the in-memory cache."""
+    pin = read_pin(dtxsid) or {}
+    series = pin.get("series") or DEFAULT_SERIES
+    newest = newest_profile(series)
+    if count_mismatches is None:
+        from common.session_files import read_json_file
+        from pipeline.session_store import session_path
+        integrated = read_json_file(session_path(dtxsid) / "integrated.json")
+
+        def count_mismatches(settings):
+            if not isinstance(integrated, dict) or not integrated.get("bMDResult"):
+                return None
+            return len(recorded_mismatches(integrated, settings))
+    overlay = study_overlay(dtxsid)
+    candidates = sorted((p for p in list_profiles() if p["series"] == series),
+                        key=lambda p: p["effective"], reverse=True)       # newest first
+    counts = {p["name"]: count_mismatches(resolve(
+        p["name"], overlay=overlay, overlay_label=f"study:{dtxsid}", probe=False))
+        for p in candidates}
+    if any(c is None for c in counts.values()):
+        return {"name": newest, "why": f"the newest profile of the {series} series (the "
+                                       f"study has no recorded analyses to compare)"}
+    best = min(counts.values())
+    name = next(p["name"] for p in candidates if counts[p["name"]] == best)
+    if name != newest:
+        why = (f"it matches the analysis settings the study's .bm2 files record "
+               f"({best} difference(s); the newest, {newest}, has {counts[newest]})")
+    elif best == 0:
+        why = (f"the newest profile of the {series} series; the analysis settings the "
+               f"study's .bm2 files record agree with it")
+    else:
+        why = (f"the newest profile of the {series} series; no profile matches the "
+               f"analysis settings the study's .bm2 files record better "
+               f"({best} difference(s))")
+    return {"name": name, "why": why}
+
+
 def study_overlay(dtxsid: str) -> dict | None:
     """The `methods:` block of the study overlay (templates/studies/<dtxsid>/view.yaml)."""
     from document_model.view_config import load_study_view

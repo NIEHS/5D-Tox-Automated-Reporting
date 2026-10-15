@@ -59,8 +59,12 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
 
     Never overwrites a Summary a person approved or wrote (or one the LLM route
     saved): only an absent or previously generated, unapproved summary.json is
-    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``."""
+    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``.
+    Part of Process (C1: refused outside INTEGRATED / APPROVED)."""
     import json
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.PROCESS, store)
 
     from narrative.report_summary import build_report_summary
     from narrative.summary_llm import summary_inputs
@@ -103,9 +107,13 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     Idempotent: re-materializing overwrites with archive=False (a regenerate, not a
     new blessed version). Genomics is deterministic and is NOT materialized here (it
     is read-only, not an authorable/approvable section — ADR-0018). Returns
-    `{ok, materialized: [section_key, ...]}`.
+    `{ok, materialized: [section_key, ...]}`. Part of Process (C1: refused
+    outside INTEGRATED / APPROVED).
     """
     import json
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.PROCESS, store)
 
     from pipeline.session_db import _latest_cache
     from pipeline.session_store import bm2_slug, save_section

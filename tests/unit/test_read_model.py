@@ -309,6 +309,41 @@ def test_an_unpinned_method_says_which_profile_would_be_used(session):
     assert not (session / "method_profile.json").exists()   # read, never pinned
 
 
+def test_until_a_person_chooses_the_method_a_suggestion_is_served(session):
+    """C1 D1 = B: no person's pin → `suggestion` {name, why} (for M5 to
+    propose); a default pin is not a person's choice; a person's pin has none.
+    Reading it pins nothing."""
+    from pipeline.method_profile import newest_profile
+    method = study_state(ID, FakeStore(session))["pins"]["method"]
+    assert method["suggestion"]["name"] == newest_profile()
+    assert "newest" in method["suggestion"]["why"]
+    assert not (session / "method_profile.json").exists()
+
+    _pin_method(session, "ntp-5day-2025", mode="track", by="default")
+    method = study_state(ID, FakeStore(session))["pins"]["method"]
+    assert method["pinned_by"] == "default" and method["suggestion"]["name"]
+
+    _pin_method(session, "ntp-5day-2021")
+    assert "suggestion" not in study_state(ID, FakeStore(session))["pins"]["method"]
+
+
+def test_the_suggestion_follows_the_recorded_analyses(session):
+    """With a dataset, the profile whose expectations its recorded analyses
+    contradict least is suggested (here the 2021 one: 10% relative deviation)."""
+    integrated = {"bMDResult": [{"name": "rat_4D_LI_No0_BMD", "analysisInfo": {"notes": [
+        "Data Source: rat_4D_LI_No0", "BMR Type: Relative Deviation", "BMR Factor: 0.1",
+        "Model Averaging Method: x"]}}]}
+    (session / "integrated.json").write_text(json.dumps(integrated))
+    from pipeline import method_profile as mp
+    expected = {p["name"]: len(mp.recorded_mismatches(integrated, mp.resolve(p["name"], probe=False)))
+                for p in mp.list_profiles()}
+    best = min(expected.values())
+    suggestion = study_state(ID, FakeStore(session))["pins"]["method"]["suggestion"]
+    assert expected[suggestion["name"]] == best
+    if suggestion["name"] != mp.newest_profile():
+        assert "matches the analysis settings" in suggestion["why"]
+
+
 def test_a_changed_profile_is_reported_not_raised(session):
     _pin_method(session, "ntp-5day-2021", hash_="0000000000000000")
     method = study_state(ID, FakeStore(session))["pins"]["method"]
