@@ -138,8 +138,11 @@ the new file carries a `wording_review` flag.
 **Reads → writes.** `integrated.json`, the sidecars, `genomics.sidecar.json`,
 `_category_lookup.json`, `animal_report.json`, `method_profile.json`,
 `identity.json` → `_cache_*.json`, `.prepare_content.*`, `references.json`,
-`session.duckdb`, `bm2_<slug>.json`; `method_profile.json` and
-`document_definition.json` kept current.
+`session.duckdb`, `bm2_<slug>.json`; `document_definition.json` kept current,
+and a method profile that tracks the newest moved to it. Process refuses before
+it writes anything when the study is not `INTEGRATED` or `APPROVED`
+(`phase_not_allowed`), and when no person has chosen its method profile
+(`method_not_chosen`, step 10).
 
 **If it goes wrong.** Any failure in concern [1] raises `StepError` 500. An LLM
 failure in Methods leaves Methods empty. A content kind that fails is logged,
