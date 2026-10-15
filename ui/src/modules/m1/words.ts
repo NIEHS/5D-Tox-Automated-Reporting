@@ -136,3 +136,10 @@ export function appPath(href: string): { inApp: boolean; to: string } {
   if (href === '/app') return { inApp: true, to: '/' }
   return { inApp: false, to: href }
 }
+
+/** Why the format could not be read: the backend's note, or plain words when it sent none. */
+export function formatUnreadSay(s: StudyRow): string {
+  const note = s.notes.find((n) => n.code === 'damaged_session_file') ?? s.notes.find((n) => n.level === 'error')
+  return note?.say ?? "The report format of this session could not be read."
+}
+

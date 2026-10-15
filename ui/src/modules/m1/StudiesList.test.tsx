@@ -146,7 +146,7 @@ describe('S1 the studies list', () => {
   })
 
   it('review 1 (spec S1): a session whose format the backend could not read still lists: "[format pending]" with the note, and the warning icon', async () => {
-    const list = structuredClone(M1_STUDIES) as StudiesList
+    const list = structuredClone<StudiesList>(M1_STUDIES)
     const triclosan = list.chemicals.find((c) => c.dtxsid === 'DTXSID5032498')!.sessions[0]!
     triclosan.format = null
     triclosan.notes = [DAMAGED_NOTE('DTXSID5032498')]

@@ -97,7 +97,7 @@ describe('S3 the study page', () => {
   })
 
   it('review 1 (spec S1/S3): a study whose format could not be read still opens: the note, and "[format pending]" in the format card', async () => {
-    const d = structuredClone(M1_DETAILS['DTXSID5032498']!) as StudyDetail
+    const d = structuredClone<StudyDetail>(M1_DETAILS['DTXSID5032498']!)
     d.format = null
     d.detail.format = null
     d.notes = [DAMAGED_NOTE('DTXSID5032498')]
@@ -113,7 +113,7 @@ describe('S3 the study page', () => {
   })
 
   it('review 2: a report whose member folder is missing still opens; the member says it is missing, with no Open', async () => {
-    const d = structuredClone(M1_DETAILS['DTXSID1020431']!) as StudyDetail
+    const d = structuredClone<StudyDetail>(M1_DETAILS['DTXSID1020431']!)
     d.detail.members = d.detail.members!.map((m) => (m.id === 'DTXSID1020431_mouse' ? { id: m.id, key: 'mouse', exists: false as const } : m))
     server.use(http.get('/api/v2/studies/DTXSID1020431', () => HttpResponse.json(d)))
     await openStudyPage('DTXSID1020431')

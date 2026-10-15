@@ -9,7 +9,7 @@ import { PhaseTag } from '../../kit/PhaseTag'
 import { Refusal } from '../../kit/Refusal'
 import { useStudies } from './queries'
 import { UNASSIGNED_KEY, buildRows, searchRows, type ListRow } from './rows'
-import { KIND_COLOURS, childCount, exactTime, kindLabel, publishedLabel, relativeTime } from './words'
+import { KIND_COLOURS, childCount, exactTime, formatUnreadSay, kindLabel, publishedLabel, relativeTime } from './words'
 
 /**
  * S1 Studies list (M1 spec §3). One top-level row per chemical, in the
@@ -83,12 +83,6 @@ function SessionCell({ r, expanded }: { r: ListRow; expanded: boolean }) {
       {count && <Typography.Text type="secondary">{count}</Typography.Text>}
     </Space>
   )
-}
-
-/** Why the format could not be read: the backend's note, or plain words when it sent none. */
-export function formatUnreadSay(s: StudyRow): string {
-  const note = s.notes.find((n) => n.code === 'damaged_session_file') ?? s.notes.find((n) => n.level === 'error')
-  return note?.say ?? "The report format of this session could not be read."
 }
 
 function FormatCell({ s }: { s: StudyRow }) {

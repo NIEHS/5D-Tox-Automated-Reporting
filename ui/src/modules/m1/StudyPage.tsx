@@ -15,8 +15,8 @@ import { StudyWorkflowPanels } from '../../shell/StudyOverview'
 import { IdentityLookup } from './IdentityLookup'
 import { NoSuchStudy } from './NoSuchStudy'
 import { STUDIES_KEY, useStudyDetail } from './queries'
-import { BookshelfLink, NextLink, formatUnreadSay } from './StudiesList'
-import { KIND_COLOURS, appPath, dayOf, formatSourceSay, identitySourceSay, kindLabel } from './words'
+import { BookshelfLink, NextLink } from './StudiesList'
+import { KIND_COLOURS, appPath, dayOf, formatSourceSay, formatUnreadSay, identitySourceSay, kindLabel } from './words'
 
 /**
  * S3 Study page (M1 spec §3): the study's landing page. What it is, where it

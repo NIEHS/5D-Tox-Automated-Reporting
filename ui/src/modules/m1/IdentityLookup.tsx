@@ -7,7 +7,8 @@ import type { ChemicalLookup, StudyRow } from '../../api/types'
 import { Refusal } from '../../kit/Refusal'
 import { invalidateStudy } from '../../kit/useStudyState'
 import { useVocabularies } from '../../kit/useVocabularies'
-import { ChemicalCard, ConfirmChemical, identityGap } from './ChemicalCard'
+import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
+import { identityGap } from './identityGap'
 import { STUDIES_KEY, useChemicalLookup } from './queries'
 
 /**
