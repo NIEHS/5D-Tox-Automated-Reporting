@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse, Response
 
 from bmdx_pipe import bm2_cache
 from pipeline.session_store import session_dir
+from web_routes.studies_routes import refuse_data_act
 from pipeline.pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, serialize_table_rows,
     remove_old_file_entries, invalidate_pool_artifacts, pool_has_progressed,
@@ -92,6 +93,8 @@ async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
     # files/ directory so the file survives page reloads and server
     # restarts — no need to wait for approve to persist.
     dtxsid = request.query_params.get("dtxsid", "")
+    if refused := refuse_data_act(dtxsid):  # R6: no files into a companion or a report
+        return refused
     persist_dir = None
     if dtxsid:
         persist_dir = session_dir(dtxsid) / "files"
@@ -304,6 +307,8 @@ async def api_upload_csv(
 
     # Optional DTXSID for persistence and fingerprinting
     dtxsid = request.query_params.get("dtxsid", "")
+    if refused := refuse_data_act(dtxsid):  # R6: no files into a companion or a report
+        return refused
 
     # Check whether the pool has already been validated/integrated — if so,
     # uploading new files will require invalidation of downstream artifacts.
@@ -434,6 +439,8 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
     # If the client provides a DTXSID, persist .bm2 files to the session's
     # files/ directory immediately so they survive page reloads.
     dtxsid = request.query_params.get("dtxsid", "")
+    if refused := refuse_data_act(dtxsid):  # R6: no files into a companion or a report
+        return refused
     persist_dir = None
     if dtxsid:
         persist_dir = session_dir(dtxsid) / "files"
