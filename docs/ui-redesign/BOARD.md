@@ -21,16 +21,16 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
-| C1 legal actions enforced | spec ready, **awaiting the maintainer** (D1–D5) | | | | |
-| C2 owned content protected | spec rev. 2 ready, **awaiting the maintainer** (D1–D6) | | | | |
+| C1 legal actions enforced | building (`ui-c1-be`) | ui-backend-engineer | 2026-10-15 (D1 = B) | | |
+| C2 owned content protected | building (`ui-c2-be`); merges after C1 | ui-backend-engineer | 2026-10-15 | | C1 merge |
 | C3 saves merge and check | not started | | | | Q10 |
-| C4 side-effect-free reads | not started | | | | |
+| C4 side-effect-free reads | spec | ui-backend-engineer (spec stage) | | | |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | spec ready, **awaiting the maintainer** (14 questions) | | | | C4 |
-| M2 Study files | not started | | | | |
+| M1 Studies | building (`ui-m1-be`, `ui-m1-fe`) | ui-backend-engineer, ui-frontend-engineer | 2026-10-15 | | |
+| M2 Study files | spec | ui-interaction-designer | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started | | | | |
 | M4 Study facts | not started | | | | |
 | M5 Method and document pins | not started | | | | |
