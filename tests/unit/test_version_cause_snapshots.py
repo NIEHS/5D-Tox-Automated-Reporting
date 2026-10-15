@@ -139,6 +139,11 @@ class TestReprocessSnapshot:
         assert len(events) == 1
         assert events[0]["cause"] == "reprocess"
         assert events[0]["status"] == "needs-re-bless"
+        # C2 format 2: who did it and why; the text itself did not change.
+        e = events[0]
+        assert (e["v"], e["act"], e["actor"], e["reason"], e["changed"]) == (
+            2, "invalidate", "system", "data_changed", False)
+        assert e["prior_version"] == 1 and e["archived"].startswith("v0001-")
 
     def test_reprocess_now_produces_a_history_entry(self, approved_llm_section):
         # Before Phase 4 a reprocess archived nothing (plain write_text); now it
@@ -168,6 +173,7 @@ class TestReprocessSnapshot:
         events = read_version_history(dtxsid, "genomics_liver_male")
         assert [e["cause"] for e in events] == ["reprocess"]
         assert events[0]["status"] == "needs-re-bless"
+        assert (events[0]["act"], events[0]["actor"]) == ("invalidate", "system")
 
     def test_pool_admin_dry_run_records_nothing(self, approved_llm_section):
         from web_routes.pool_admin import invalidate_downstream
