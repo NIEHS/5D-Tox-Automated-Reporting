@@ -1,0 +1,60 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID5032498/delete-preview"
+  },
+  "status": 200,
+  "body": {
+    "confirm": {
+      "act": "delete_study",
+      "strength": "irreversible",
+      "deletes": [
+        {
+          "what": "files",
+          "say": "The study's 17 data files, and the 2 originals they were converted from"
+        },
+        {
+          "what": "sections",
+          "say": "5 report sections (Background, Body Weight, Organ Weight, unknown, Summary); none is approved"
+        },
+        {
+          "what": "dataset",
+          "say": "The integrated dataset and everything computed from it (statistics, BMDs, genomics, the query database)"
+        },
+        {
+          "what": "statements",
+          "say": "What people stated: front matter, study design"
+        },
+        {
+          "what": "identity",
+          "say": "The chemical's identity as recorded for this study"
+        },
+        {
+          "what": "pins",
+          "say": "The method profile pin (ntp-5day-2025, tracking)"
+        },
+        {
+          "what": "views",
+          "say": "The study's saved report views and its own structure or styles"
+        },
+        {
+          "what": "runs",
+          "say": "The saved language-model runs and comparisons of its texts"
+        }
+      ],
+      "keeps": [
+        {
+          "what": "output",
+          "say": "The deliverables already written to output/DTXSID5032498/ (8 files)"
+        }
+      ],
+      "approvals_lost": [],
+      "cost": {
+        "say": "151 MB will be freed."
+      },
+      "reason_required": false
+    },
+    "type_to_confirm": "DTXSID5032498",
+    "preview_token": "sha256:1a6b1afa095a3bdbe7343e2f5f7707feb0dc48ccb7abf8216a43cc07ed7a72ce"
+  }
+}

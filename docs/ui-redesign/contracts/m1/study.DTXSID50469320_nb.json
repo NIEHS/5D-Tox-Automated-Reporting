@@ -1,0 +1,102 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID50469320_nb"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID50469320_nb",
+    "kind": "other",
+    "chemical_dtxsid": "DTXSID50469320",
+    "chemical_dtxsid_from": "id_prefix",
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": [
+        "DTXSID50469320"
+      ]
+    },
+    "identity": {
+      "name": "Perfluorohexanesulfonamide",
+      "casrn": "41997-13-1",
+      "short_name": "PFHxSAm",
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "APPROVED",
+      "say": "Data reviewed",
+      "next": {
+        "say": "Review the report's sections",
+        "fix": "D1"
+      }
+    },
+    "processed": true,
+    "last_changed": "2026-10-13T13:46:23Z",
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies. A study under DTXSID50469320 would use NIEHS-10's format."
+    },
+    "published": null,
+    "bookshelf": {
+      "on_shelf": true,
+      "url": "/Bookshelf/DTXSID50469320_nb",
+      "say": "On the Bookshelf (draft)"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [
+      {
+        "level": "warn",
+        "code": "not_a_chemical_id",
+        "say": "Made by a tool; its id is not a chemical's DTXSID."
+      }
+    ],
+    "detail": {
+      "banner": {
+        "level": "warning",
+        "say": "This session's id, DTXSID50469320_nb, is not a chemical's DTXSID: it was made by a tool. Its report uses the format NIEHS Report, 2026; a study under DTXSID50469320 would use NIEHS-10's format.",
+        "links": [
+          {
+            "say": "The study DTXSID50469320",
+            "href": "/app/studies/DTXSID50469320"
+          }
+        ]
+      },
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies. A study under DTXSID50469320 would use NIEHS-10's format.",
+        "brings": [],
+        "pin": {
+          "mode": "track",
+          "pinned_at": "2026-10-13T13:45:31+00:00",
+          "pinned_by": "default"
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

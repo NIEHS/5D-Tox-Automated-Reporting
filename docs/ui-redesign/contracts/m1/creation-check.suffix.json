@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID50469320_v2/creation-check"
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "study_id_has_suffix",
+      "status": 400,
+      "message": "study id 'DTXSID50469320_v2' must match ^DTXSID\\d+$",
+      "say": "A study's id is the DTXSID alone. Ids with a suffix (…_rat, …_published) are made by the system.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID50469320_v2"
+      }
+    }
+  }
+}

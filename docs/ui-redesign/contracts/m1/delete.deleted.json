@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies/DTXSID5032498/delete",
+    "body": {
+      "confirm_id": "DTXSID5032498",
+      "preview_token": "sha256:1a6b1afa095a3bdbe7343e2f5f7707feb0dc48ccb7abf8216a43cc07ed7a72ce"
+    }
+  },
+  "status": 200,
+  "body": {
+    "deleted": "DTXSID5032498",
+    "kept": [
+      {
+        "what": "output",
+        "say": "The deliverables already written to output/DTXSID5032498/ (8 files)"
+      }
+    ],
+    "say": "DTXSID5032498 was deleted."
+  }
+}

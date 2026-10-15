@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/chemicals/DTXSID0000000001"
+  },
+  "status": 404,
+  "body": {
+    "error": {
+      "code": "identity_not_found",
+      "status": 404,
+      "message": "PubChem lookup failed for name 'DTXSID0000000001'; CTX API key not available — DTXSID and hazard data may be limited. Set CTX_API_KEY env var (free key from ccte_api@epa.gov).",
+      "say": "PubChem has no chemical with the DTXSID DTXSID0000000001. A single mistyped digit gives another chemical or none. Check the id on the CompTox dashboard.",
+      "fix": null,
+      "details": {
+        "service": "PubChem",
+        "id": "DTXSID0000000001"
+      }
+    }
+  }
+}
