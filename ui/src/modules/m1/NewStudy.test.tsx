@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { M1_CHECK_PFHXSAM } from '../../api/mocks/fixtures'
+import { M1_CHECK_PFHXSAM, M1_CHEMICALS } from '../../api/mocks/fixtures'
 import { removeMockStudy } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
 import { renderApp } from '../../test/render'
@@ -151,6 +151,41 @@ describe('S2 step 2: the chemical and the format', () => {
     expect(create).toBeEnabled()
     await user.click(confirm)
     expect(create).toBeDisabled()
+  })
+
+  it('review 3: a lookup with no CAS number offers no create: the tick is closed and the screen says why; no request is sent', async () => {
+    const bpa = structuredClone(M1_CHEMICALS['DTXSID7020182']!)
+    bpa.identity.casrn = null
+    bpa.dtxsid_matched = true
+    let posts = 0
+    server.use(
+      http.get('/api/v2/chemicals/DTXSID7020182', () => HttpResponse.json(bpa)),
+      http.post('/api/v2/studies', () => {
+        posts++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user } = await toStep2('DTXSID7020182')
+    const why = await screen.findByTestId('identity-incomplete')
+    expect(why).toHaveTextContent("PubChem gives no CAS number for this chemical, so a study can't be created from this lookup yet.")
+    const confirm = screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })
+    expect(confirm).toBeDisabled()
+    const create = screen.getByRole('button', { name: 'Create study' })
+    expect(create).toBeDisabled()
+    await user.click(create)
+    expect(posts).toBe(0)
+    // no field to type a CAS number in (a stated identity is ruled out, Q-M1-3)
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('review 3: a lookup whose CAS number fails its check digit offers no create either', async () => {
+    const bpa = structuredClone(M1_CHEMICALS['DTXSID7020182']!)
+    bpa.identity.casrn = '80-05-8'
+    bpa.dtxsid_matched = true
+    server.use(http.get('/api/v2/chemicals/DTXSID7020182', () => HttpResponse.json(bpa)))
+    await toStep2('DTXSID7020182')
+    expect(await screen.findByTestId('identity-incomplete')).toHaveTextContent('(80-05-8) is not a valid one')
+    expect(screen.getByRole('button', { name: 'Create study' })).toBeDisabled()
   })
 
   it('AC22: a DTXSID PubChem does not know: the error, Back to the id, no name, no way to create', async () => {

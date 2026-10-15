@@ -6,7 +6,8 @@ import type { ApiError } from '../../api/errors'
 import type { ChemicalLookup, StudyRow } from '../../api/types'
 import { Refusal } from '../../kit/Refusal'
 import { invalidateStudy } from '../../kit/useStudyState'
-import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
+import { useVocabularies } from '../../kit/useVocabularies'
+import { ChemicalCard, ConfirmChemical, identityGap } from './ChemicalCard'
 import { STUDIES_KEY, useChemicalLookup } from './queries'
 
 /**
@@ -50,6 +51,9 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
     onSuccess: () => onClose(),
   })
   const l = lookup.data
+  const casrnRule = useVocabularies().data?.patterns.casrn
+  // never offer a save the backend would refuse (identity_incomplete, invalid_casrn)
+  const gap = l ? identityGap(l, "this identity can't be saved", casrnRule) : null
   return (
     <Modal
       open
@@ -58,7 +62,7 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
       mask={{ closable: false }}
       onCancel={() => !save.isPending && onClose()}
       okText="Save this identity"
-      okButtonProps={{ disabled: !l || !confirmed || (!l.dtxsid_matched && !checked), loading: save.isPending }}
+      okButtonProps={{ disabled: !l || Boolean(gap) || !confirmed || (!l.dtxsid_matched && !checked), loading: save.isPending }}
       onOk={() => l && save.mutate(l)}
       cancelText="Cancel"
       destroyOnHidden
@@ -94,6 +98,7 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
               checked={checked}
               onConfirmed={setConfirmed}
               onChecked={setChecked}
+              blocked={gap}
               label={`This is the chemical studied under ${studyId}.`}
             />
             {save.error && <Refusal error={save.error} studyId={studyId} title="The identity was not saved" />}

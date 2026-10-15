@@ -9,7 +9,8 @@ import type { ChemicalLookup, CreationCheck, StudyRow } from '../../api/types'
 import { IdField } from '../../kit/IdField'
 import { moduleById, moduleRoute, studyRoute } from '../../kit/modules'
 import { Refusal } from '../../kit/Refusal'
-import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
+import { useVocabularies } from '../../kit/useVocabularies'
+import { ChemicalCard, ConfirmChemical, identityGap } from './ChemicalCard'
 import { FormatNotice } from './FormatNotice'
 import { STUDIES_KEY, useChemicalLookup, useCreationCheck, useStudyDetail } from './queries'
 import { kindLabel } from './words'
@@ -150,6 +151,7 @@ function StepConfirm({
   const [confirmed, setConfirmed] = useState(false)
   const [checked, setChecked] = useState(false)
   const [formatChanged, setFormatChanged] = useState(false)
+  const casrnRule = useVocabularies().data?.patterns.casrn
 
   const create = useMutation<StudyRow, ApiError, { lookup: ChemicalLookup; check: CreationCheck }>({
     mutationFn: ({ lookup: l, check: c }) =>
@@ -225,7 +227,9 @@ function StepConfirm({
   const c = check.data
   const formatWords = c ? c.format.title : null
   const confirmNeeds = !l.dtxsid_matched && !checked
-  const canCreate = Boolean(c) && confirmed && !confirmNeeds && !check.isFetching && !create.isPending
+  // never offer a create the backend would refuse (identity_incomplete, invalid_casrn)
+  const gap = identityGap(l, "a study can't be created", casrnRule)
+  const canCreate = !gap && Boolean(c) && confirmed && !confirmNeeds && !check.isFetching && !create.isPending
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%', maxWidth: 880 }}>
@@ -251,6 +255,7 @@ function StepConfirm({
           checked={checked}
           onConfirmed={setConfirmed}
           onChecked={setChecked}
+          blocked={gap}
           label={
             <span data-testid="confirm-label">
               This is the chemical I am studying, and the study will be written in <em>{formatWords}</em>.

@@ -2,7 +2,8 @@ import { CheckCircleFilled, ExportOutlined } from '@ant-design/icons'
 import { Alert, Card, Checkbox, Descriptions, Image, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { m1Paths } from '../../api/m1'
-import type { ChemicalLookup } from '../../api/types'
+import type { ChemicalLookup, IdPattern } from '../../api/types'
+import { checkId } from '../../kit/checkId'
 import { Pending } from '../../kit/Pending'
 
 /**
@@ -86,6 +87,37 @@ export function ChemicalCard({ lookup }: { lookup: ChemicalLookup }) {
 }
 
 /**
+ * Why a looked-up identity can't be used, or null when it can. The backend
+ * refuses a study or an identity without a name and a CAS number
+ * (`identity_incomplete`), or with a CAS number whose check digit fails
+ * (`invalid_casrn`); the screen never offers what it would refuse. No CAS
+ * number is typed in instead: a stated identity is ruled out (Q-M1-3).
+ * `outcome` finishes the sentence: "a study can't be created", "this
+ * identity can't be saved".
+ */
+export function identityGap(lookup: ChemicalLookup, outcome: string, casrnPattern?: IdPattern): string | null {
+  const { name, casrn } = lookup.identity
+  const svc = lookup.service
+  const missing = [!name?.trim() && 'name', !casrn?.trim() && 'CAS number'].filter(Boolean) as string[]
+  if (missing.length > 0) {
+    const what = missing.length === 2 ? 'no name and no CAS number' : `no ${missing[0]}`
+    return (
+      `${svc} gives ${what} for this chemical, so ${outcome} from this lookup yet. ` +
+      "A study needs the chemical's name and CAS number. Ask the maintainer how to go on."
+    )
+  }
+  // the pattern is the backend's; when it has not loaded, the backend decides
+  const c = casrnPattern ? checkId('casrn', (casrn ?? '').trim(), casrnPattern) : null
+  if (c && c.ok === false) {
+    return (
+      `The CAS number ${svc} gives for this chemical (${casrn}) is not a valid one, so ${outcome} ` +
+      'from this lookup yet. Ask the maintainer how to go on.'
+    )
+  }
+  return null
+}
+
+/**
  * The confirm tick(s) under the chemical. When the lookup could not match the
  * DTXSID, a second tick ("I checked…") must come first; the first stays
  * disabled until it does.
@@ -97,6 +129,7 @@ export function ConfirmChemical({
   checked,
   onConfirmed,
   onChecked,
+  blocked,
 }: {
   lookup: ChemicalLookup
   label: React.ReactNode
@@ -104,8 +137,20 @@ export function ConfirmChemical({
   checked: boolean
   onConfirmed: (v: boolean) => void
   onChecked: (v: boolean) => void
+  /** why the identity can't be used (identityGap); the ticks are then closed and this is said instead */
+  blocked?: string | null
 }) {
   const needsCheck = !lookup.dtxsid_matched
+  if (blocked) {
+    return (
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+        <Alert type="error" showIcon data-testid="identity-incomplete" title={blocked} />
+        <Checkbox checked={false} disabled>
+          {label}
+        </Checkbox>
+      </Space>
+    )
+  }
   return (
     <Space orientation="vertical" size="small">
       {needsCheck && (

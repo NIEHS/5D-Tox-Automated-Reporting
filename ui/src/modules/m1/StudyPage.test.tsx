@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { M1_DETAILS, STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
+import { M1_CHEMICALS, M1_DETAILS, STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
 import type { StudyDetail } from '../../api/types'
 import { emptyM1Db, removeMockStudy, touchMockStudy } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
@@ -148,6 +148,30 @@ describe('S3 the study page', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Perfluorooctanoic acid')
     expect(screen.getByTestId('identity-source')).toHaveTextContent('Confirmed by a person from a PubChem lookup')
     expect(screen.queryByRole('button', { name: 'Look up the chemical' })).not.toBeInTheDocument()
+  })
+
+  it('review 3: Look up the chemical, when PubChem gives no CAS number: Save is closed and the dialog says why', async () => {
+    const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
+    pfoa.identity.casrn = null
+    let puts = 0
+    server.use(
+      http.get('/api/v2/chemicals/DTXSID8031865', () => HttpResponse.json(pfoa)),
+      http.put('/api/v2/studies/DTXSID8031865_scratch/identity', () => {
+        puts++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user } = await openStudyPage('DTXSID8031865_scratch')
+    await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByTestId('identity-incomplete')).toHaveTextContent(
+      "PubChem gives no CAS number for this chemical, so this identity can't be saved from this lookup yet.",
+    )
+    expect(within(dialog).getByRole('checkbox', { name: /This is the chemical studied under/ })).toBeDisabled()
+    const save = within(dialog).getByRole('button', { name: 'Save this identity' })
+    expect(save).toBeDisabled()
+    await user.click(save)
+    expect(puts).toBe(0)
   })
 
   it('AC33: the lookup is not offered on a session that has an identity, nor on one whose id names no chemical', async () => {
