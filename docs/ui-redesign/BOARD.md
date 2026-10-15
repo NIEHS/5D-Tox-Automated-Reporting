@@ -21,15 +21,15 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
-| C1 legal actions enforced | building (`ui-c1-be`) | ui-backend-engineer | 2026-10-15 (D1 = B) | | |
-| C2 owned content protected | building (`ui-c2-be`); merges after C1 | ui-backend-engineer | 2026-10-15 | | C1 merge |
+| C1 legal actions enforced | **stopped (budget)** at step 7 of 9; steps 1–6 committed on `ui-c1-be`, step 7 uncommitted in the worktree | – | 2026-10-15 (D1 = B) | | API budget |
+| C2 owned content protected | **built** (`ui-c2-be` f44c6b0, 8 commits; smart/guard/full green but the known failure); merges after C1 | – | 2026-10-15 | | C1 merge |
 | C3 saves merge and check | not started | | | | Q10 |
-| C4 side-effect-free reads | spec | ui-backend-engineer (spec stage) | | | |
+| C4 side-effect-free reads | **stopped (budget)** before writing the spec; resume to get it | – | | | API budget |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | front-end built (`ui-m1-fe` e93455b, 210 tests); backend building (`ui-m1-be`) | ui-backend-engineer | 2026-10-15 | | |
+| M1 Studies | front-end built (`ui-m1-fe` e93455b); backend **stopped (budget)**: wip commit on `ui-m1-be`, fixtures uncommitted | – | 2026-10-15 | | API budget |
 | M2 Study files | spec | ui-interaction-designer | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started | | | | |
 | M4 Study facts | not started | | | | |
