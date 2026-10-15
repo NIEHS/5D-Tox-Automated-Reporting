@@ -63,7 +63,7 @@ describe('useStudyState', () => {
   })
 
   it('re-reads after invalidateStudy', async () => {
-    const after: ExistingStudyState = { ...STATE_INTEGRATED, phase: 'APPROVED', legal_actions: ['REPROCESS', 'RESET'] }
+    const after: ExistingStudyState = { ...STATE_INTEGRATED, phase: 'APPROVED', legal_actions: ['PROCESS', 'RESET'] }
     const calls = countingStateHandler([STATE_INTEGRATED, after])
     const { Wrapper, client } = wrapper()
     const { result } = renderHook(() => useStudyState(STATE_INTEGRATED.id), { wrapper: Wrapper })

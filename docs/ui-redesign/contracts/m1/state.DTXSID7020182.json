@@ -18,7 +18,9 @@
       "others": []
     },
     "phase": "EMPTY",
-    "legal_actions": [],
+    "legal_actions": [
+      "ADD_FILES"
+    ],
     "identity": {
       "name": "Bisphenol A",
       "casrn": "80-05-7",
@@ -38,7 +40,11 @@
           "no profile pinned; the newest, ntp-5day-2025.1, is used"
         ],
         "unchecked": [],
-        "mismatches": []
+        "mismatches": [],
+        "suggestion": {
+          "name": "ntp-5day-2025.1",
+          "why": "the newest profile of the ntp-5day series (the study has no recorded analyses to compare)"
+        }
       },
       "definition": {
         "pinned": false,
@@ -74,6 +80,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -101,6 +109,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -128,6 +138,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -155,6 +167,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -182,6 +196,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -209,6 +225,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -236,6 +254,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -263,6 +283,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -292,6 +314,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -319,6 +343,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -346,6 +372,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -373,6 +401,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -400,6 +430,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -430,6 +462,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,

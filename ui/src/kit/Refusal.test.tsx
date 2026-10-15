@@ -25,7 +25,7 @@ describe('<Refusal>', () => {
     await user.click(toggle)
     const details = screen.getByTestId('refusal-details')
     expect(details).toHaveTextContent('phase_not_allowed')
-    expect(details).toHaveTextContent('StepError: action INTEGRATE is not legal')
+    expect(details).toHaveTextContent('INTEGRATE refused for DTXSID1021952')
     expect(details).toHaveTextContent('"legal_actions"')
     await user.click(screen.getByRole('button', { name: /Hide the technical details/ }))
     expect(screen.queryByTestId('refusal-details')).not.toBeInTheDocument()

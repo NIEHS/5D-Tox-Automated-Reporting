@@ -2,9 +2,23 @@
   "id": "DTXSID1020431",
   "exists": true,
   "kind": "report",
+  "chemical_dtxsid": "DTXSID1020431",
+  "chemical_dtxsid_from": "id",
   "relations": {
     "parent": null,
-    "twin": null
+    "members": [
+      {
+        "key": "rat",
+        "id": "DTXSID1020431_rat"
+      },
+      {
+        "key": "mouse",
+        "id": "DTXSID1020431_mouse"
+      }
+    ],
+    "companion": "DTXSID1020431_published",
+    "twin": null,
+    "others": []
   },
   "phase": "EMPTY",
   "legal_actions": [],
@@ -27,7 +41,11 @@
         "no profile pinned; the newest, ntp-5day-2025.1, is used"
       ],
       "unchecked": [],
-      "mismatches": []
+      "mismatches": [],
+      "suggestion": {
+        "name": "ntp-5day-2025.1",
+        "why": "the newest profile of the ntp-5day series (the study has no recorded analyses to compare)"
+      }
     },
     "definition": {
       "pinned": false,
@@ -63,6 +81,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -90,6 +110,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -117,6 +139,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -144,6 +168,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -171,6 +197,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -198,6 +226,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -225,6 +255,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -252,6 +284,8 @@
       "model": "claude-sonnet-4-6",
       "version": 1,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": true,
@@ -281,6 +315,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -308,6 +344,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -335,6 +373,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -362,6 +402,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -389,6 +431,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -419,6 +463,8 @@
       "model": null,
       "version": null,
       "version_status": null,
+      "maturity": null,
+      "review": null,
       "machine_may_write": true,
       "accept": {
         "allowed": false,
@@ -481,5 +527,13 @@
         }
       }
     }
-  ]
+  ],
+  "stands": {
+    "phase": null,
+    "say": "A report over 2 studies",
+    "next": {
+      "say": "Review the report's sections",
+      "fix": "D1"
+    }
+  }
 }

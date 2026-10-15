@@ -4,12 +4,19 @@
     "id": "DTXSID9000001",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID9000001",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "EMPTY",
-    "legal_actions": [],
+    "legal_actions": [
+      "ADD_FILES"
+    ],
     "identity": {
       "name": null,
       "casrn": null,
@@ -29,7 +36,11 @@
           "no profile pinned; the newest, ntp-5day-2025.1, is used"
         ],
         "unchecked": [],
-        "mismatches": []
+        "mismatches": [],
+        "suggestion": {
+          "name": "ntp-5day-2025.1",
+          "why": "the newest profile of the ntp-5day series (the study has no recorded analyses to compare)"
+        }
       },
       "definition": {
         "pinned": false,
@@ -65,6 +76,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -92,6 +105,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -119,6 +134,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -146,6 +163,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -173,6 +192,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -200,6 +221,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -227,6 +250,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -254,6 +279,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -283,6 +310,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -310,6 +339,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -337,6 +368,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -364,6 +397,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -391,6 +426,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -421,6 +458,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -440,6 +479,14 @@
           }
         ],
         "items": []
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
       }
     }
   }

@@ -4,13 +4,20 @@
     "id": "DTXSID6024701",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID6024701",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "UPLOADED",
     "legal_actions": [
-      "CLEAR_FILES",
+      "ADD_FILES",
+      "REMOVE_FILE",
+      "RESET",
       "VALIDATE"
     ],
     "identity": {
@@ -70,6 +77,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -97,6 +106,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -124,6 +135,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -151,6 +164,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -178,6 +193,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -205,6 +222,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -232,6 +251,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -263,11 +284,13 @@
         "model": "claude-sonnet-4-6",
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -292,6 +315,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -319,6 +344,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -350,11 +377,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -381,11 +410,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -412,11 +443,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -443,11 +476,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -470,6 +505,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -497,6 +534,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -530,6 +569,8 @@
         "model": null,
         "version": 2,
         "version_status": "needs-re-bless",
+        "maturity": null,
+        "review": null,
         "machine_may_write": false,
         "accept": {
           "allowed": true,
@@ -558,6 +599,14 @@
             "fix": "D1"
           }
         ]
+      }
+    },
+    "stands": {
+      "phase": "UPLOADED",
+      "say": "Files brought in, not yet validated",
+      "next": {
+        "say": "Validate the files",
+        "fix": "M2"
       }
     }
   }

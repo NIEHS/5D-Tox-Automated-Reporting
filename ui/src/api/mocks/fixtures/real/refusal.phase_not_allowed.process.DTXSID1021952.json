@@ -1,0 +1,26 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "phase_not_allowed",
+      "status": 409,
+      "message": "PROCESS refused for DTXSID1021952: the study is in phase VALIDATION_ERRORS (allowed now: ADD_FILES, CONFIRM_CLASSIFICATION, REMOVE_FILE, RESET, RESOLVE, VALIDATE). Fix the validation errors, then validate again.",
+      "say": "Processing isn't possible yet. The file check found errors. Fix what it lists (remove or replace the files it names), then run the file check again.",
+      "fix": "M2",
+      "details": {
+        "action": "PROCESS",
+        "phase": "VALIDATION_ERRORS",
+        "legal_actions": [
+          "ADD_FILES",
+          "CONFIRM_CLASSIFICATION",
+          "REMOVE_FILE",
+          "RESET",
+          "RESOLVE",
+          "VALIDATE"
+        ],
+        "integration": null,
+        "next_action": "VALIDATE"
+      }
+    }
+  }
+}

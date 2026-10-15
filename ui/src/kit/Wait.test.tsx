@@ -166,7 +166,7 @@ describe('<Wait>', () => {
 
   it('treats a refusal before the run starts as the error', async () => {
     renderWithApp(<Wait studyId="DTXSID1021952" title="Processing the study" start={() => runProcess('DTXSID1021952')} onClose={vi.fn()} />)
-    expect(await screen.findByText(/data have not been combined/)).toBeInTheDocument()
+    expect(await screen.findByText(/Processing isn't possible yet/)).toBeInTheDocument()
   })
 
   it('treats a stream that stops without a result as an error, never as success', async () => {

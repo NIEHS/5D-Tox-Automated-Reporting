@@ -452,14 +452,17 @@ def test_the_kind_of_session_and_its_relations(sessions_dir, session):
     (session / "studies.json").write_text(json.dumps({"rat": f"{ID}_rat"}))
     (sessions_dir / f"{ID}_rat").mkdir()
     assert study_state(ID)["kind"] == "report"
+    assert study_state(ID)["legal_actions"] == []          # R6: its data is in its studies
     member = study_state(f"{ID}_rat")
     assert member["kind"] == "member" and member["relations"]["parent"] == ID
+    assert member["legal_actions"] == ["ADD_FILES"]
 
     companion = sessions_dir / f"{ID}_published"
     companion.mkdir()
     (companion / "published_clone.json").write_text(json.dumps({"report": "NIEHS-10", "twin": ID}))
     clone = study_state(f"{ID}_published")
     assert clone["kind"] == "companion" and clone["relations"]["twin"] == ID
+    assert clone["legal_actions"] == []                   # R6: read-only
 
     (sessions_dir / f"{ID}_nb").mkdir()
     assert study_state(f"{ID}_nb")["kind"] == "other"

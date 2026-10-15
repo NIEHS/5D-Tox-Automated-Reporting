@@ -97,7 +97,7 @@ function constructedStates(): Map<string, ExistingStudyState> {
   m.set('DTXSID1020431_published', {
     ...clone(STATE_COMPANION),
     id: 'DTXSID1020431_published',
-    relations: { parent: null, twin: 'DTXSID1020431' },
+    relations: { ...clone(STATE_COMPANION).relations, twin: 'DTXSID1020431' },
     identity: { name: '1,4-Dichlorobenzene', casrn: '106-46-7', dtxsid: 'DTXSID1020431_published', short_name: null },
   })
   for (const id of ['DTXSID_TEST', 'DTXSID8031865_scratch']) {

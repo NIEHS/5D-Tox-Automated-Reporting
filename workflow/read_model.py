@@ -590,6 +590,11 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
         "sections": sections_state(dtxsid, engine, store, session, catalog, tree),
         "readiness": {"publish": publish_readiness_state(engine)},
     }
+    if state["kind"] in ("companion", "report"):
+        # Every workflow action is a data act, and R6 refuses them all on a
+        # session whose data is not its own (workflow.studies.require_data_session):
+        # the read model offers nothing the step would refuse.
+        state["legal_actions"] = []
     members = members_state(dtxsid, store)
     if members is not None:
         state["members"] = members

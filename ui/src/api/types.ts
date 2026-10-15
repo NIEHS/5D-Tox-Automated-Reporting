@@ -22,8 +22,11 @@ export const PHASES = [
 ] as const
 export type Phase = (typeof PHASES)[number]
 
-/** workflow.phases.Action. */
-export const ACTIONS = ['VALIDATE', 'INTEGRATE', 'APPROVE', 'REPROCESS', 'RESET', 'CLEAR_FILES'] as const
+/** workflow.phases.Action (C1: the declared table of legal actions per phase). */
+export const ACTIONS = [
+  'ADD_FILES', 'REMOVE_FILE', 'RESET', 'VALIDATE', 'RESOLVE', 'CONFIRM_CLASSIFICATION',
+  'INTEGRATE', 'STATE_DATASET_FACTS', 'APPROVE', 'PROCESS',
+] as const
 export type Action = (typeof ACTIONS)[number]
 
 /** The module ids of MODULES.md §3; `fix` fields name one of these. */
@@ -67,7 +70,17 @@ export interface MethodPin {
   unchecked?: string[]
   /** where the dataset's recorded analyses disagree with the profile */
   mismatches?: MethodMismatch[]
+  /**
+   * Only while nothing is pinned (C1 D1 = B): the profile the application
+   * proposes and why. A person confirms it; Process refuses until one is pinned.
+   */
+  suggestion?: MethodSuggestion | null
   error?: PinError
+}
+
+export interface MethodSuggestion {
+  name: string
+  why: string
 }
 
 export interface MethodMismatch {
@@ -169,8 +182,22 @@ export interface SectionState {
   model: string | null
   version: number | null
   version_status: 'blessed' | 'needs-re-bless' | 'working' | (string & {}) | null
+  /** the maturity rung (workflow.labels): "final", "working_draft", "first_draft"; null with no file */
+  maturity: 'final' | 'working_draft' | 'first_draft' | (string & {}) | null
+  /** C2: why an approved section's printed content changed under it; null when it did not */
+  review: SectionReview | null
   machine_may_write: boolean
   accept: AcceptVerdict
+}
+
+export interface SectionReview {
+  /** the recorded reason code (e.g. "numbers_changed"); never shown */
+  why: string
+  since_version: number | null
+  /** the data-derived words that flipped */
+  flips: string[]
+  /** the reason in plain words: what a screen shows */
+  say: string
 }
 
 export type ReadinessLevel = 'block' | 'warn'
@@ -207,14 +234,14 @@ export type SessionKind = 'study' | 'report' | 'member' | 'companion' | 'other'
 export interface Relations {
   /** for a member: the report it belongs to */
   parent: string | null
+  /** for a report over several studies: its studies */
+  members: { key: string; id: string }[]
+  /** the published book's content built beside this study */
+  companion: string | null
   /** for a companion: the generated study it was built beside */
   twin: string | null
-  /** REQUESTED (M1 R1), not served in the state yet; served in the M1 study row */
-  members?: { key: string; id: string }[]
-  /** REQUESTED (M1 R1): the published book's content built beside this study */
-  companion?: string | null
-  /** REQUESTED (M1 R1): the other sessions of the same chemical */
-  others?: string[]
+  /** the other sessions of the same chemical */
+  others: string[]
 }
 
 /** One study of a report over several studies (studies.json). */
@@ -251,10 +278,12 @@ export interface ExistingStudyState {
   }
   /** only for a report over several studies */
   members?: MemberStudy[]
-  /** REQUESTED (M1 R1), not served yet: the chemical's DTXSID, null when the id names none */
-  chemical_dtxsid?: string | null
-  /** REQUESTED (M1 R2), not served yet: where the study stands, in plain words, and the next step */
-  stands?: Stands
+  /** the chemical's DTXSID, null when the id names none (M1 R1) */
+  chemical_dtxsid: string | null
+  /** how it was read from the id: the id itself, or its prefix before a suffix */
+  chemical_dtxsid_from: 'id' | 'id_prefix' | (string & {}) | null
+  /** where the study stands, in plain words, and the next step (M1 R2) */
+  stands: Stands
 }
 
 /** No session has this id. */

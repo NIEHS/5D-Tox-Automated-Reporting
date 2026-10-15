@@ -4,6 +4,7 @@ import type { ErrorEnvelope, ExistingStudyState, RunEvent } from '../types'
 import {
   DRY_RUNS_BY_ACT,
   REFUSAL_INVALID_STUDY_ID,
+  REFUSAL_PROCESS_NOT_ALLOWED,
   REFUSAL_RUN_IN_FLIGHT,
   STATES_BY_ID,
   STREAM_PROCESS_OK,
@@ -110,15 +111,14 @@ export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptio
         })
       }
       if (running.has(id)) return envelope(REFUSAL_RUN_IN_FLIGHT)
-      if (!state.legal_actions.includes('REPROCESS')) {
+      if (!state.legal_actions.includes('PROCESS')) {
+        // The backend's own refusal for a study that cannot be processed yet (C1).
+        if (id === 'DTXSID1021952') return envelope(REFUSAL_PROCESS_NOT_ALLOWED)
         return envelope({
           error: {
-            code: 'phase_not_allowed',
-            status: 409,
-            message: `StepError: action REPROCESS is not legal in phase ${state.phase}`,
-            say: 'The study cannot be processed yet: its data have not been combined.',
-            fix: 'M3',
-            details: { phase: state.phase, action: 'REPROCESS', legal_actions: state.legal_actions },
+            ...REFUSAL_PROCESS_NOT_ALLOWED.error,
+            message: `PROCESS refused for ${id}: the study is in phase ${state.phase}`,
+            details: { action: 'PROCESS', phase: state.phase, legal_actions: state.legal_actions },
           },
         })
       }

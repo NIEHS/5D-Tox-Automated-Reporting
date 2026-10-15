@@ -21,8 +21,16 @@
     },
     "phase": "APPROVED",
     "legal_actions": [
-      "REPROCESS",
-      "RESET"
+      "ADD_FILES",
+      "APPROVE",
+      "CONFIRM_CLASSIFICATION",
+      "INTEGRATE",
+      "PROCESS",
+      "REMOVE_FILE",
+      "RESET",
+      "RESOLVE",
+      "STATE_DATASET_FACTS",
+      "VALIDATE"
     ],
     "identity": {
       "name": "1,4-Dichlorobenzene",
@@ -77,6 +85,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -104,6 +114,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -131,6 +143,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -158,6 +172,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -185,6 +201,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -212,6 +230,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -239,6 +259,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -266,6 +288,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -293,6 +317,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -320,6 +346,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -347,6 +375,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -374,6 +404,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -401,6 +433,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -428,6 +462,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -455,6 +491,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -482,6 +520,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -509,6 +549,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -536,6 +578,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -563,6 +607,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -590,6 +636,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -617,6 +665,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -644,6 +694,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -671,6 +723,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -698,6 +752,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -728,6 +784,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,

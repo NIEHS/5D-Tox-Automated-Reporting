@@ -1,17 +1,12 @@
 import type { ErrorEnvelope, Noop } from '../../types'
+import rawIntegrateRefused from './real/refusal.phase_not_allowed.integrate.DTXSID1021952.json'
+import rawProcessRefused from './real/refusal.phase_not_allowed.process.DTXSID1021952.json'
 
 /** Refusals in the §4.2 envelope, mocked. */
 
-export const REFUSAL_PHASE_NOT_ALLOWED: ErrorEnvelope = {
-  error: {
-    code: 'phase_not_allowed',
-    status: 409,
-    message: "StepError: action INTEGRATE is not legal in phase VALIDATION_ERRORS (legal: ['RESET', 'VALIDATE'])",
-    say: 'The data cannot be combined while the files still have problems. Fix the problems with the files first.',
-    fix: 'M2',
-    details: { phase: 'VALIDATION_ERRORS', action: 'INTEGRATE', legal_actions: ['RESET', 'VALIDATE'] },
-  },
-}
+/** The backend's own refusals (C1's PhaseRefusal through workflow.refusals.explain), saved from the merged backend. */
+export const REFUSAL_PHASE_NOT_ALLOWED = (rawIntegrateRefused as { body: ErrorEnvelope }).body
+export const REFUSAL_PROCESS_NOT_ALLOWED = (rawProcessRefused as { body: ErrorEnvelope }).body
 
 export const REFUSAL_RUN_IN_FLIGHT: ErrorEnvelope = {
   error: {

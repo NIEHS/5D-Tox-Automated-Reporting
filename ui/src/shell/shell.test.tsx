@@ -62,12 +62,12 @@ describe('the study frame', () => {
 
   it.each<[string, ExistingStudyState, string, string]>([
     ['no files', STATE_EMPTY, "Bring in the study's files", 'Study files'],
-    ['files not checked', STATE_UPLOADED, 'Check the files', 'Study files'],
-    ['files with problems', STATE_VALIDATION_ERRORS, 'Check the files', 'Study files'],
-    ['files checked', STATE_VALIDATED, 'Combine the data', 'Combined data'],
-    ['combined data', STATE_INTEGRATED, 'Review the data', 'Data review'],
+    ['files not checked', STATE_UPLOADED, 'Validate the files', 'Study files'],
+    ['files with problems', STATE_VALIDATION_ERRORS, 'Fix the problems the validation found', 'Study files'],
+    ['files checked', STATE_VALIDATED, 'Integrate the data', 'Combined data'],
+    ['combined data, processed before', STATE_INTEGRATED, "Review the report's sections", 'Review the report'],
     ['processed, nothing found to block', STATE_APPROVED, "Review the report's sections", 'Review the report'],
-  ])('puts forward the next step from the legal actions (%s)', async (_name, state, label, module) => {
+  ])('puts forward the next step the backend serves (%s)', async (_name, state, label, module) => {
     await openHeader(state.id)
     const alert = screen.getByText('Next step:').closest('.ant-alert') as HTMLElement
     expect(alert).toHaveTextContent(label)
@@ -97,28 +97,32 @@ describe('the study frame', () => {
 
   it('lists every step, the legal ones as links and the rest visibly unavailable with the reason', async () => {
     await openStudy(STATE_VALIDATION_ERRORS.id)
-    for (const a of ['VALIDATE', 'RESET']) {
+    for (const a of STATE_VALIDATION_ERRORS.legal_actions) {
       expect(step(a)).toHaveAttribute('data-available', 'yes')
       expect(within(step(a)).getByRole('link')).toBeInTheDocument()
     }
-    for (const a of ['INTEGRATE', 'APPROVE', 'REPROCESS', 'CLEAR_FILES']) {
+    for (const a of ['INTEGRATE', 'STATE_DATASET_FACTS', 'APPROVE', 'PROCESS']) {
       expect(step(a)).toHaveAttribute('data-available', 'no')
       expect(within(step(a)).getByRole('button')).toBeDisabled()
       expect(step(a)).toHaveTextContent('Not available now: the study is at "The files have problems".')
     }
   })
 
-  it('offers nothing when the backend allows nothing', async () => {
+  it('offers only what the backend allows: bringing in files on an empty study', async () => {
     await openStudy(STATE_EMPTY.id)
-    for (const a of ['VALIDATE', 'INTEGRATE', 'APPROVE', 'REPROCESS', 'CLEAR_FILES', 'RESET']) {
+    expect(step('ADD_FILES')).toHaveAttribute('data-available', 'yes')
+    for (const a of ['VALIDATE', 'RESOLVE', 'REMOVE_FILE', 'RESET', 'INTEGRATE', 'APPROVE', 'PROCESS']) {
       expect(step(a)).toHaveAttribute('data-available', 'no')
     }
   })
 
   it('offers nothing, and says why, at a stage it does not know', async () => {
-    server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json({ ...STATE_INTEGRATED, phase: 'ARCHIVED' })))
+    // as the backend would serve it: workflow.studies.stands words an unknown phase "At the stage …"
+    const archived = { ...STATE_INTEGRATED, phase: 'ARCHIVED', stands: { phase: 'ARCHIVED', say: 'At the stage ARCHIVED', next: null } }
+    server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(archived)))
     await openHeader(STATE_INTEGRATED.id)
-    expect(screen.getByTestId('phase')).toHaveTextContent('Unknown stage')
+    expect(screen.getByTestId('phase')).toHaveAttribute('data-phase', 'ARCHIVED')
+    expect(screen.getByTestId('phase')).toHaveTextContent('At the stage ARCHIVED')
     expect(screen.getByText('This page cannot offer any step')).toBeInTheDocument()
     cleanup()
     await openStudy(STATE_INTEGRATED.id)
@@ -154,11 +158,13 @@ describe('the study frame', () => {
     const report: ExistingStudyState = {
       ...STATE_REPORT,
       members: (STATE_REPORT.members ?? []).map((m) => (m.key === 'mouse' ? { ...m, processed: false, phase: 'INTEGRATED' } : m)),
+      // as workflow.studies.stands serves it while a study is not processed
+      stands: { phase: null, say: 'A report over 2 studies; its studies are being prepared', next: { say: 'Finish the member studies', fix: 'M1' } },
     }
     server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(report)))
     renderApp(`/studies/${STATE_REPORT.id}/review`)
     const alert = (await screen.findByText('Next step:')).closest('.ant-alert') as HTMLElement
-    expect(alert).toHaveTextContent('Finish the studies this report covers')
+    expect(alert).toHaveTextContent('Finish the member studies')
     expect(alert).toHaveTextContent('mouse (DTXSID1020431_mouse)')
   })
 
@@ -248,13 +254,10 @@ describe('the routes', () => {
 })
 
 describe('nextStepOf', () => {
-  it('never suggests a destructive act', () => {
-    expect(nextStepOf({ ...STATE_VALIDATION_ERRORS, legal_actions: ['RESET'] })).toBeNull()
-    expect(nextStepOf({ ...STATE_VALIDATION_ERRORS, legal_actions: ['RESET', 'CLEAR_FILES'] })).toBeNull()
-  })
-
-  it('suggests processing only before the first run', () => {
-    expect(nextStepOf({ ...STATE_APPROVED, processed: false })).toMatchObject({ label: 'Process the study', module: 'P1' })
+  it('reads the next step the backend serves, and decides nothing itself', () => {
+    expect(nextStepOf({ ...STATE_APPROVED, stands: { phase: 'APPROVED', say: 'x', next: { say: 'Process the data', fix: 'P1' } } }))
+      .toEqual({ label: 'Process the data', module: 'P1' })
+    expect(nextStepOf({ ...STATE_APPROVED, stands: { phase: 'APPROVED', say: 'x', next: null } })).toBeNull()
   })
 
   it('never puts "publish" forward, even when nothing was found to block it', () => {

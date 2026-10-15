@@ -16,8 +16,13 @@ import { nextStepOf } from './nextStep'
  */
 
 function actionLabel(a: Action, state: ExistingStudyState): string {
-  if (a === 'REPROCESS' && state.processed) return 'Process the study again'
+  if (a === 'PROCESS' && state.processed) return 'Process the study again'
   return ACTION_WORDS[a].label
+}
+
+/** The first legal action, in the workflow's order, done in the module the next step names. */
+function firstLegalIn(module: string, state: ExistingStudyState): Action | undefined {
+  return ACTION_ORDER.find((a) => ACTION_WORDS[a].module === module && state.legal_actions.includes(a) && !ACTION_WORDS[a].destructive)
 }
 
 function Steps({ state }: { state: ExistingStudyState }) {
@@ -43,7 +48,7 @@ function Steps({ state }: { state: ExistingStudyState }) {
           const m = moduleById(w.module)
           const to = moduleRoute(w.module, state.id)
           const label = actionLabel(action, state)
-          const isNext = legal && next?.label === w.label
+          const isNext = legal && next?.module === w.module && next.module !== null && action === firstLegalIn(next.module, state)
           return (
             <Space orientation="vertical" size={0}>
               <Space>
