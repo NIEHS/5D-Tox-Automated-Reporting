@@ -29,7 +29,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | building (`ui-m1-be`, `ui-m1-fe`) | ui-backend-engineer, ui-frontend-engineer | 2026-10-15 | | |
+| M1 Studies | front-end built (`ui-m1-fe` e93455b, 210 tests); backend building (`ui-m1-be`) | ui-backend-engineer | 2026-10-15 | | |
 | M2 Study files | spec | ui-interaction-designer | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started | | | | |
 | M4 Study facts | not started | | | | |
