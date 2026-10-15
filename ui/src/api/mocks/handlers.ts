@@ -1,14 +1,18 @@
 import { HttpResponse, delay, http } from 'msw'
 import { API_V2 } from '../client'
-import type { ErrorEnvelope, RunEvent, StudyState } from '../types'
+import type { ErrorEnvelope, ExistingStudyState, RunEvent } from '../types'
 import {
   DRY_RUNS_BY_ACT,
+  REFUSAL_INVALID_STUDY_ID,
   REFUSAL_RUN_IN_FLIGHT,
   STATES_BY_ID,
   STREAM_PROCESS_OK,
   VOCABULARIES,
   stateNotFound,
 } from './fixtures'
+
+/** The backend's session-id gate (common.dtxsid.DTXSID_RE). */
+const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
 
 /**
  * The MSW handlers for the shared contracts (MODULES.md §4). A module's own
@@ -34,10 +38,11 @@ export function envelope(body: ErrorEnvelope): Response {
   return HttpResponse.json(body, { status: body.error.status })
 }
 
-function withRun(state: StudyState): StudyState {
+/** While a mock run is going, the state says so (the PROPOSED `run` of C5). */
+function withRun(state: ExistingStudyState): ExistingStudyState {
   const since = running.get(state.id)
-  if (!since || !state.run) return state
-  return { ...state, run: { ...state.run, in_flight: true, started_at: since } }
+  if (!since) return state
+  return { ...state, run: { in_flight: true, started_at: since, last: state.run?.last ?? null } }
 }
 
 /** An NDJSON response that sends `events` one by one. */
@@ -63,12 +68,16 @@ export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
   return [
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)
+      if (!SESSION_ID.test(id)) {
+        return envelope({ error: { ...REFUSAL_INVALID_STUDY_ID.error, message: `invalid session id '${id}'` } })
+      }
       const state = STATES_BY_ID[id]
       return HttpResponse.json(state ? withRun(state) : stateNotFound(id))
     }),
 
     http.get(`${API_V2}/vocabularies`, () => HttpResponse.json(VOCABULARIES)),
 
+    // PROPOSED (C8): no such route on the backend yet. Kept for <ConfirmAct>.
     http.get(`${API_V2}/studies/:id/dry-run/:act`, ({ params }) => {
       const dry = DRY_RUNS_BY_ACT[String(params.act)]
       if (dry) return HttpResponse.json(dry)
@@ -84,6 +93,7 @@ export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
       })
     }),
 
+    // PROPOSED (C5): no such route on the backend yet. Kept for <Wait>.
     http.post(`${API_V2}/studies/:id/process`, ({ params }) => {
       const id = String(params.id)
       const state = STATES_BY_ID[id]

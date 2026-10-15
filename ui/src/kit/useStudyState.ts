@@ -33,7 +33,10 @@ export function useStudyState(id: string | undefined) {
     queryKey: studyStateKey(id ?? ''),
     queryFn: ({ signal }) => getStudyState(id as string, signal),
     enabled: Boolean(id),
-    refetchInterval: (query) => (query.state.data?.run?.in_flight ? IN_FLIGHT_POLL_MS : false),
+    refetchInterval: (query) => {
+      const d = query.state.data
+      return d?.exists && d.run?.in_flight ? IN_FLIGHT_POLL_MS : false
+    },
   })
 }
 

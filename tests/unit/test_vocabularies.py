@@ -11,11 +11,26 @@ from workflow.vocabularies import id_patterns, vocabularies, vocabularies_payloa
 def test_the_vocabularies_are_bmdx_pipes_with_strain_by_species():
     from bmdx_pipe import VOCABULARIES
 
-    served = vocabularies()
-    assert set(served["vocabularies"]) == set(VOCABULARIES)
-    assert served["vocabularies"]["species"] == list(VOCABULARIES["species"])
-    assert served["vocabularies"]["strain"] == {k: list(v) for k, v in VOCABULARIES["strain"].items()}
-    assert served["dependent"] == {"strain": "species"}
+    served = vocabularies()["vocabularies"]
+    assert set(served) == set(VOCABULARIES)
+    assert served["species"] == {"label": "Species", "values": list(VOCABULARIES["species"])}
+    assert served["strain"] == {"label": "Strain", "depends_on": "species",
+                                "by": {k: list(v) for k, v in VOCABULARIES["strain"].items()}}
+
+
+def test_only_the_dependency_the_vocabulary_declares_is_served():
+    served = vocabularies()["vocabularies"]
+    assert {k: v["depends_on"] for k, v in served.items() if "depends_on" in v} == {"strain": "species"}
+    # No invented rule: the vehicle and the means of administration are flat lists.
+    for key in ("articleVehicle", "administrationMeans"):
+        assert "values" in served[key] and "depends_on" not in served[key]
+
+
+def test_every_vocabulary_has_a_label_from_the_bmdexpress_header_names():
+    from workflow.vocabularies import LABELS
+    served = vocabularies()["vocabularies"]
+    assert set(LABELS) == set(served)          # a new vocabulary needs its name added
+    assert served["articleRoute"]["label"] == "Article Route"
 
 
 def _matches(kind, value):
@@ -51,5 +66,5 @@ def test_every_pattern_has_an_example_it_accepts_and_words_for_a_person():
 def test_the_payload_is_json_ready():
     import json
     payload = vocabularies_payload()
-    assert set(payload) == {"vocabularies", "dependent", "patterns"}
+    assert set(payload) == {"vocabularies", "patterns"}
     json.dumps(payload)

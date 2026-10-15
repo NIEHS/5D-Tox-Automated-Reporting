@@ -1,0 +1,265 @@
+{
+  "status": 200,
+  "body": {
+    "vocabularies": {
+      "sex": {
+        "label": "Sex",
+        "values": [
+          "male",
+          "female",
+          "both",
+          "mixed",
+          "NA"
+        ]
+      },
+      "organ": {
+        "label": "Organ",
+        "values": [
+          "adrenal",
+          "bladder",
+          "blood",
+          "bone",
+          "bone marrow",
+          "brain",
+          "cecum",
+          "cervix",
+          "colon",
+          "duodenum",
+          "epididymis",
+          "esophagus",
+          "eye",
+          "gallbladder",
+          "harderian gland",
+          "heart",
+          "ileum",
+          "intestine",
+          "jejunum",
+          "kidney",
+          "larynx",
+          "liver",
+          "lung",
+          "lymph node",
+          "mammary gland",
+          "muscle",
+          "nasal cavity",
+          "nerve",
+          "ovary",
+          "oviduct",
+          "pancreas",
+          "parathyroid",
+          "pituitary",
+          "preputial gland",
+          "prostate",
+          "rectum",
+          "salivary gland",
+          "seminal vesicle",
+          "skin",
+          "spinal cord",
+          "spleen",
+          "sternum",
+          "stomach",
+          "testes",
+          "thymus",
+          "thyroid",
+          "tongue",
+          "trachea",
+          "ureter",
+          "uterus",
+          "vagina",
+          "Whole Body"
+        ]
+      },
+      "species": {
+        "label": "Species",
+        "values": [
+          "rat",
+          "mouse",
+          "human",
+          "rabbit",
+          "dog",
+          "monkey",
+          "zebrafish",
+          "guinea pig",
+          "hamster",
+          "pig"
+        ]
+      },
+      "strain": {
+        "label": "Strain",
+        "depends_on": "species",
+        "by": {
+          "rat": [
+            "Sprague-Dawley",
+            "Wistar",
+            "Long-Evans",
+            "Fischer 344",
+            "Brown Norway"
+          ],
+          "mouse": [
+            "C57BL/6",
+            "BALB/c",
+            "CD-1",
+            "FVB/N",
+            "129",
+            "DBA/2",
+            "NOD",
+            "SCID",
+            "B6C3F1",
+            "B6D2F1"
+          ]
+        }
+      },
+      "platform": {
+        "label": "Platform",
+        "values": [
+          "Body Weight",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration",
+          "Clinical",
+          "IVIVE",
+          "Generic",
+          "S1500+_rat",
+          "S1500+_mouse",
+          "S1500+_human",
+          "Affymetrix Drosophila Genome Array",
+          "Drosophila Genome 2.0 Array",
+          "Human HG-Focus Target Array",
+          "Human Genome U133A Array",
+          "Human Genome U133 Plus 2.0 Array",
+          "Human Genome U133A 2.0 Array",
+          "HT HG-U133+ PM Array Plate",
+          "HT MG-430 PM Array Plate",
+          "HT RG-230 PM Array Plate",
+          "Murine Genome U74A Array",
+          "Murine Genome U74A Version 2 Array",
+          "Mouse Expression 430A Array",
+          "Mouse Expression 430B Array",
+          "Mouse Genome 430A 2.0 Array",
+          "Mouse Genome 430 2.0 Array",
+          "Rat Expression 230A Array",
+          "Rat Expression 230B Array",
+          "Rat Genome 230 2.0 Array",
+          "Rat Genome U34 Array",
+          "Zebrafish Genome Array",
+          "Agilent-021791 D. melanogaster (FruitFly) Oligo Microarray - V2",
+          "Agilent-014850 Whole Human Genome Microarray 4x44K G4112F",
+          "Agilent-014868 Whole Mouse Genome Microarray 4x44K G4122F",
+          "Agilent-024196 Whole Rat Genome Microarray 4x44K",
+          "Agilent-026437 D. rerio (Zebrafish) Oligo Microarray V3"
+        ]
+      },
+      "provider": {
+        "label": "Provider",
+        "values": [
+          "Affymetrix",
+          "Agilent",
+          "BioSpyder",
+          "BMDExpress 3",
+          "RefSeq",
+          "Ensembl",
+          "Apical",
+          "Observations",
+          "Generic"
+        ]
+      },
+      "subjectType": {
+        "label": "Subject Type",
+        "values": [
+          "in vivo",
+          "in vitro",
+          "in silico"
+        ]
+      },
+      "articleRoute": {
+        "label": "Article Route",
+        "values": [
+          "gavage",
+          "oral",
+          "inhaled",
+          "transdermal"
+        ]
+      },
+      "articleVehicle": {
+        "label": "Article Vehicle",
+        "values": [
+          "corn oil",
+          "feed",
+          "water",
+          "aerosol",
+          "gas"
+        ]
+      },
+      "administrationMeans": {
+        "label": "Administration Means",
+        "values": [
+          "gavage",
+          "drinking water",
+          "dietary",
+          "whole-body",
+          "nose-only"
+        ]
+      },
+      "studyDuration": {
+        "label": "Study Duration",
+        "values": [
+          "5d",
+          "28d",
+          "3h",
+          "6h",
+          "9h",
+          "24h",
+          "1d",
+          "3d",
+          "7d",
+          "14d"
+        ]
+      },
+      "articleType": {
+        "label": "Article Type",
+        "values": [
+          "chemical",
+          "mixture",
+          "electromagnetic radiation"
+        ]
+      },
+      "dataType": {
+        "label": "Data Type",
+        "values": [
+          "tox_study",
+          "inferred",
+          "gene_expression"
+        ]
+      }
+    },
+    "patterns": {
+      "study_id": {
+        "pattern": "^DTXSID\\d+$",
+        "example": "DTXSID50469320",
+        "say": "A study is named by its chemical's DTXSID: “DTXSID” followed by digits only."
+      },
+      "session_id": {
+        "pattern": "^DTXSID[A-Za-z0-9_-]{1,64}$",
+        "example": "DTXSID1020431_rat",
+        "say": "Any study the application holds, including the ones it makes itself (for example a species' part of a report over several studies)."
+      },
+      "dtxsid": {
+        "pattern": "^DTXSID\\d+$",
+        "example": "DTXSID50469320",
+        "say": "A DTXSID is “DTXSID” followed by digits."
+      },
+      "casrn": {
+        "pattern": "^\\d{2,7}-\\d{2}-\\d$",
+        "example": "41997-13-1",
+        "say": "A CAS registry number is three groups of digits: 2–7, then 2, then 1 (e.g. 41997-13-1)."
+      },
+      "doi": {
+        "pattern": "^10\\.\\d{4,9}/\\S+$",
+        "example": "10.22427/NIEHS-DATA-NIEHS-10",
+        "say": "A DOI starts with “10.”, then the registrant, a slash and the rest (no https://doi.org/)."
+      }
+    }
+  }
+}

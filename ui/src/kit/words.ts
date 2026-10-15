@@ -55,15 +55,3 @@ export const ACTION_WORDS: Record<Action, ActionWords> = {
 
 /** The workflow's own order, for listing the steps. */
 export const ACTION_ORDER: readonly Action[] = ['VALIDATE', 'INTEGRATE', 'APPROVE', 'REPROCESS', 'CLEAR_FILES', 'RESET']
-
-/**
- * Which legal action to put forward as "next", when several are legal. The
- * backend decides what is legal; this only ranks: moving forward first,
- * re-checking the files after, never a destructive act. PROPOSED: the backend
- * could serve `next_action` and make this list unnecessary.
- */
-export const NEXT_PREFERENCE: readonly Action[] = ['INTEGRATE', 'APPROVE', 'REPROCESS', 'VALIDATE']
-
-export function nextAction(legal: readonly string[]): Action | null {
-  return NEXT_PREFERENCE.find((a) => legal.includes(a)) ?? null
-}

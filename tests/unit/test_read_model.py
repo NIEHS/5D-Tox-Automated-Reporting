@@ -14,6 +14,7 @@ import pytest
 
 from workflow.read_model import (
     PUBLISH_CHECKS,
+    PUBLISH_CHECKS_COMPLETE,
     ReadOnlyDiskPoolStore,
     ReadOnlyStoreError,
     study_state,
@@ -181,7 +182,8 @@ def test_section_rows_carry_what_is_on_disk(session):
     state = study_state(ID, FakeStore(session, sections=sections))
     summary = _row(state, "summary")
     assert summary["has_file"] and summary["stale"]
-    assert summary["regenerated"] == {"reason": "data_changed"}
+    assert summary["regenerated"]["reason"] == "data_changed"
+    assert "data changed" in summary["regenerated"]["say"]     # words, not the code
     assert summary["version"] == 3 and summary["version_status"] == "needs-re-bless"
     assert summary["machine_may_write"] is False       # PROTECTED stands after the demote
     assert summary["facts"] == ["protected"]
@@ -201,6 +203,30 @@ def test_section_rows_carry_what_is_on_disk(session):
     methods = _row(state, "methods")                   # catalog row, no file
     assert methods["has_file"] is False and methods["version"] is None
     assert methods["enabled"] is False and methods["blocked_by"] == ["processed"]
+
+
+def test_accept_says_whether_a_person_may_approve_now_and_why_not(session):
+    sections = {"background": {"approved": False, "version": 1},
+                "bm2_body-weight": {"version": 1}}
+    (session / "_cache_ntp_0.json").write_text("{}")   # processed: Methods unlocks
+    state = study_state(ID, FakeStore(session, sections=sections))
+
+    assert _row(state, "background")["accept"] == {"allowed": True, "code": None, "say": None}
+    assert _row(state, "bm2_body-weight")["accept"]["allowed"] is True
+
+    # Approvable in the catalog, unlocked, but no section file: never offered (C9).
+    for key in ("methods", "bmd_summary"):
+        row = _row(state, key)
+        assert row["approvable"] and row["enabled"] and not row["has_file"]
+        assert row["accept"]["allowed"] is False
+        assert row["accept"]["code"] == "not_saved_as_section" and row["accept"]["say"]
+
+    summary = _row(state, "summary")                    # waits on an approval
+    assert summary["accept"]["code"] == "blocked"
+    assert "Background is approved" in summary["accept"]["say"]
+
+    foreword = _row(state, "foreword")                  # supplied front matter
+    assert foreword["accept"]["code"] == "not_approvable" and "supplied" in foreword["accept"]["say"]
 
 
 def test_sections_follow_the_rendering_tree_and_list_cache_only_interpretations(session):
@@ -226,7 +252,10 @@ def test_publish_readiness_is_a_checklist_of_stale_llm_sections(session):
     state = study_state(ID, FakeStore(session, sections=sections))
     publish = state["readiness"]["publish"]
     assert publish["ready"] is False
-    assert publish["checks"] == list(PUBLISH_CHECKS)
+    # What "ready" covered, in words, and that it is not everything (until C6).
+    assert [c["id"] for c in publish["checks"]] == list(PUBLISH_CHECKS) == ["stale_llm_sections"]
+    assert all(c["say"] for c in publish["checks"])
+    assert publish["complete"] is PUBLISH_CHECKS_COMPLETE is False
     by_section = {i["section"]: i for i in publish["items"]}
     assert set(by_section) == {"methods", "summary"}
     for item in publish["items"]:
@@ -359,7 +388,7 @@ def test_members_are_listed_with_their_own_publish_readiness(sessions_dir, sessi
     state = study_state(ID)
     rat_m, mouse_m = state["members"]
     assert (rat_m["key"], rat_m["id"], rat_m["exists"]) == ("rat", f"{ID}_rat", True)
-    assert rat_m["phase"] == "EMPTY"
+    assert rat_m["phase"] == "EMPTY" and rat_m["processed"] is False
     assert rat_m["readiness"]["publish"]["ready"] is False
     assert [i["section"] for i in rat_m["readiness"]["publish"]["items"]] == ["summary"]
     assert mouse_m == {"key": "mouse", "id": f"{ID}_mouse", "exists": False}
@@ -370,3 +399,27 @@ def test_members_are_listed_with_their_own_publish_readiness(sessions_dir, sessi
 
 def test_a_single_study_has_no_members_key(session):
     assert "members" not in study_state(ID, FakeStore(session))
+
+
+# ---------------------------------------------------------------------------
+# The kind of session
+# ---------------------------------------------------------------------------
+
+def test_the_kind_of_session_and_its_relations(sessions_dir, session):
+    assert study_state(ID)["kind"] == "study"
+    assert study_state(ID)["relations"] == {"parent": None, "twin": None}
+
+    (session / "studies.json").write_text(json.dumps({"rat": f"{ID}_rat"}))
+    (sessions_dir / f"{ID}_rat").mkdir()
+    assert study_state(ID)["kind"] == "report"
+    member = study_state(f"{ID}_rat")
+    assert member["kind"] == "member" and member["relations"]["parent"] == ID
+
+    companion = sessions_dir / f"{ID}_published"
+    companion.mkdir()
+    (companion / "published_clone.json").write_text(json.dumps({"report": "NIEHS-10", "twin": ID}))
+    clone = study_state(f"{ID}_published")
+    assert clone["kind"] == "companion" and clone["relations"]["twin"] == ID
+
+    (sessions_dir / f"{ID}_nb").mkdir()
+    assert study_state(f"{ID}_nb")["kind"] == "other"

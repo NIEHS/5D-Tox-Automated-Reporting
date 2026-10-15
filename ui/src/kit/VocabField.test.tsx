@@ -45,9 +45,9 @@ describe('<VocabField>', () => {
   it('offers exactly the vocabulary, and starts with no value chosen', async () => {
     const onChange = vi.fn()
     const { user } = renderWithApp(<VocabField vocab="articleRoute" onChange={onChange} />)
-    const box = await screen.findByRole('combobox', { name: 'Route' })
+    const box = await screen.findByRole('combobox', { name: 'Article Route' })
     await waitFor(() => expect(box).toBeEnabled())
-    expect(screen.getByText('Choose the route')).toBeInTheDocument()
+    expect(screen.getByText('Choose the article route')).toBeInTheDocument()
     await user.click(box)
     await waitFor(() => expect(optionTexts()).toEqual(['gavage', 'oral', 'inhaled', 'transdermal']))
     await user.click(listbox().getByTitle('inhaled'))
@@ -84,6 +84,14 @@ describe('<VocabField>', () => {
     renderWithApp(<SpeciesStrain initialSpecies="mouse" initialStrain="Sprague-Dawley" />)
     expect(await screen.findByText('"Sprague-Dawley" is not an allowed strain for mouse. Choose another.')).toBeInTheDocument()
     expect(screen.getByTestId('values')).toHaveTextContent('"strain":"Sprague-Dawley"')
+  })
+
+  it('offers the vehicle as the flat list the backend serves: no dependency on the route is invented', async () => {
+    const { user } = renderWithApp(<VocabField vocab="articleVehicle" />)
+    const box = await screen.findByRole('combobox', { name: 'Article Vehicle' })
+    await waitFor(() => expect(box).toBeEnabled())
+    await user.click(box)
+    await waitFor(() => expect(optionTexts()).toEqual(['corn oil', 'feed', 'water', 'aerosol', 'gas']))
   })
 
   it('says so when the parent allows nothing', async () => {

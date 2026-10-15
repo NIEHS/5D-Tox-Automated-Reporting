@@ -5,6 +5,8 @@ The new interface learns everything about a study's workflow from this one read
 model (``GET /api/v2/studies/{id}/state``; the command line and the notebook can
 call ``study_state`` directly). It composes what the core already derives:
 
+  * what kind of session it is (a study, a report over several studies, a
+    member of one, a published book's companion) and its relations;
   * the phase and its legal actions (``WorkflowEngine.state``);
   * the identity (``identity.json``; the abbreviation is the short name);
   * the two pins: the method profile (``pipeline.method_profile``: the pin, the
@@ -15,7 +17,9 @@ call ``study_state`` directly). It composes what the core already derives:
   * the sections: the catalog of the tree that renders, the readiness, and per
     section what is on disk (approved, facts, stale, regenerated, wording_review,
     source, version, the version manifest's status, the machine guard);
-  * the publish readiness (``WorkflowEngine.publish_readiness``) as a checklist;
+  * the publish readiness (``WorkflowEngine.publish_readiness``) as a checklist,
+    with what it checked (``checks``) and whether that is everything publishing
+    needs (``complete``: not until C6);
   * for a report over several studies (``studies.json``), each member's publish
     readiness, side by side (not folded into the report's verdict: that is C6).
 
@@ -264,6 +268,65 @@ def _interpretation_instances(session: Path) -> list[str]:
     return sorted(keys)
 
 
+# Why a section cannot be accepted now, in the order they are checked. The
+# unlock groups of workflow.section_catalog.KIND_UNLOCK, in plain words.
+_UNLOCK_SAY = {
+    "processed": "the study has been processed",
+    "knowledge_base": "the knowledge base is available",
+    "background": "the Background is approved",
+    "results": "at least one result section is approved",
+}
+# Why a section is not approved on its own, by who writes it (the catalog's kind).
+_NOT_APPROVABLE_SAY = {
+    "authored": ("This is supplied or standard text, not text the application writes, so "
+                 "it is not approved here."),
+    "llm": ("This text can't be approved yet: it is kept only with the Process results, "
+            "not as a section of its own."),
+    "programmatic": ("This text is built from the data by the program and shown with its "
+                     "tables; it is not approved on its own."),
+}
+_NOT_APPROVABLE_DEFAULT = "This part of the report is not approved on its own."
+# A section with no saved text has nothing to accept (accept_section_step
+# refuses it). Methods and the apical BMD summary are approvable in the catalog
+# but are never saved as sections today (their text lives only in the Process
+# cache, MODULES.md C9), so for them it is not "not yet written".
+_CACHE_ONLY_KEYS = frozenset({"methods", "bmd_summary"})
+_CACHE_ONLY_SAY = ("This section can't be approved yet: its text is kept only with the "
+                   "Process results, not as a section of its own.")
+_NO_SAVED_TEXT_SAY = "There is no text for this section yet, so there is nothing to approve."
+
+
+def _accept_verdict(key: str, kind: str, approvable: bool, enabled: bool, blocked_by: list[str],
+                    has_file: bool) -> dict:
+    """Whether a person may accept (approve) the section now, and if not, why:
+    ``{"allowed", "code", "say"}``. Derived from the catalog (kind, approvable),
+    the readiness (enabled, blocked_by) and whether there is a saved text to
+    accept (accept_section_step refuses a section with no file). The interface
+    offers "approve" only when ``allowed``, and shows ``say`` otherwise."""
+    if not approvable:
+        return {"allowed": False, "code": "not_approvable",
+                "say": _NOT_APPROVABLE_SAY.get(kind, _NOT_APPROVABLE_DEFAULT)}
+    if not enabled:
+        waits = " or ".join(_UNLOCK_SAY.get(g, g) for g in blocked_by) or "what it depends on is ready"
+        return {"allowed": False, "code": "blocked",
+                "say": f"This section can be approved only once {waits}."}
+    if not has_file:
+        if key in _CACHE_ONLY_KEYS:
+            return {"allowed": False, "code": "not_saved_as_section", "say": _CACHE_ONLY_SAY}
+        return {"allowed": False, "code": "no_saved_text", "say": _NO_SAVED_TEXT_SAY}
+    return {"allowed": True, "code": None, "say": None}
+
+
+def _regenerated(raw) -> dict | None:
+    """Why the machine rewrote a section, as recorded (``{"reason": code}``,
+    pipeline.pool_state), with the plain words for that reason (``say``): the
+    interface shows ``say`` and never the code. None when it was not rewritten."""
+    if not isinstance(raw, dict):
+        return None
+    reason = raw.get("reason")
+    return {**raw, "say": _STALE_SAY.get(reason, _STALE_SAY_DEFAULT)}
+
+
 def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: dict,
                  title: str | None) -> dict:
     """One section as the interface sees it: the catalog's identity, the
@@ -289,13 +352,15 @@ def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: d
         "facts": sorted(f.value for f in section_facts(d)),
         "user_edited": bool((d or {}).get("user_edited")),
         "stale": bool((d or {}).get("stale")),
-        "regenerated": regenerated if isinstance(regenerated, dict) else None,
+        "regenerated": _regenerated(regenerated),
         "wording_review": list(wording) if isinstance(wording, list) else [],
         "source": (d or {}).get("source"),
         "model": (d or {}).get("model_used"),
         "version": (d or {}).get("version") if d else None,
         "version_status": current_version_status(dtxsid, key) if d else None,
         "machine_may_write": may_machine_write(d),
+        "accept": _accept_verdict(key, spec.kind, spec.approvable, r.get("enabled", True),
+                                  list(r.get("blocked_by", [])), d is not None),
     }
 
 
@@ -338,7 +403,16 @@ def sections_state(dtxsid: str, engine, store: PoolStore, session: Path,
 # What the publish verdict covers today (WorkflowEngine.publish_readiness): only
 # the LLM sections a data change left stale. Served so the interface can say what
 # "ready" has and has not checked; C6 adds the rest.
-PUBLISH_CHECKS = ("stale_llm_sections",)
+PUBLISH_CHECKS: dict[str, str] = {
+    "stale_llm_sections": ("Whether any section written by the language model is out of "
+                           "date with the study's data."),
+}
+
+# Whether PUBLISH_CHECKS is everything publishing needs. It is not, until C6
+# (unapproved sections, pending placeholders, member studies, pins and
+# deviations are not checked). While it is False, ``ready`` means only "nothing
+# found by these checks", and the interface must never say "ready to publish".
+PUBLISH_CHECKS_COMPLETE = False
 
 _STALE_SAY = {
     "data_changed": ("The study's data changed after this section was written. Read it "
@@ -360,7 +434,8 @@ def publish_readiness_state(engine) -> dict:
         "say": _STALE_SAY.get(b.get("reason"), _STALE_SAY_DEFAULT),
         "fix": "D1",
     } for b in verdict.get("blocking", [])]
-    return {"ready": bool(verdict.get("can_publish")), "checks": list(PUBLISH_CHECKS),
+    return {"ready": bool(verdict.get("can_publish")), "complete": PUBLISH_CHECKS_COMPLETE,
+            "checks": [{"id": k, "say": v} for k, v in PUBLISH_CHECKS.items()],
             "items": items}
 
 
@@ -370,7 +445,7 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
     None for a single-study session."""
     from common.dtxsid import is_valid_dtxsid
     from rendering.report_compose import member_sessions
-    from workflow.engine import WorkflowEngine
+    from workflow.engine import WorkflowEngine, _is_processed
 
     members = member_sessions(dtxsid)
     if not members:
@@ -384,10 +459,55 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
             engine = WorkflowEngine(member_id, store)
             entry["exists"] = True
             entry["phase"] = engine.state().phase.value
+            entry["processed"] = _is_processed(store.session_dir(member_id))
             entry["readiness"] = {
                 "publish": publish_readiness_state(engine)}
         out.append(entry)
     return out
+
+
+# ---------------------------------------------------------------------------
+# What kind of session this is
+# ---------------------------------------------------------------------------
+
+def session_kind(dtxsid: str, sessions_root: Path) -> dict:
+    """What the session is, and the sessions it belongs with (the rule of the M1
+    contract §3, first match wins):
+
+      * ``companion``: a published book's content (``published_clone.json``);
+        ``twin`` is the generated study it was built beside;
+      * ``report``: a report over several studies (``studies.json``);
+      * ``member``: listed in another session's ``studies.json``; ``parent`` is
+        that report;
+      * ``study``: the id is a bare DTXSID (a chemical's own study);
+      * ``other``: anything else (a suffixed working copy, say).
+
+    ``{"kind", "relations": {"parent", "twin"}}``. A screen uses it to offer only
+    what makes sense for the session: a companion is read-only, a report has no
+    files of its own (its members do)."""
+    import re
+    from rendering.published_clone import CLONE_FILE
+    from rendering.report_compose import STUDIES_FILE
+
+    session = sessions_root / dtxsid
+    relations: dict = {"parent": None, "twin": None}
+    clone = _read_json(session / CLONE_FILE)
+    if clone is not None:
+        twin = clone.get("twin") if isinstance(clone, dict) else None
+        relations["twin"] = twin if isinstance(twin, str) else None
+        return {"kind": "companion", "relations": relations}
+    if (session / STUDIES_FILE).is_file():
+        return {"kind": "report", "relations": relations}
+    for listing in sorted(sessions_root.glob(f"*/{STUDIES_FILE}")):
+        try:
+            stated = json.loads(listing.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # that report's own read reports its damaged file
+        if isinstance(stated, dict) and dtxsid in stated.values():
+            relations["parent"] = listing.parent.name
+            return {"kind": "member", "relations": relations}
+    kind = "study" if re.fullmatch(r"DTXSID\d+", dtxsid) else "other"
+    return {"kind": kind, "relations": relations}
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +541,7 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     state: dict = {
         "id": dtxsid,
         "exists": True,
+        **session_kind(dtxsid, session.parent),
         "phase": wf.phase.value,
         "legal_actions": sorted(a.value for a in wf.legal_actions),
         "identity": _identity(session),

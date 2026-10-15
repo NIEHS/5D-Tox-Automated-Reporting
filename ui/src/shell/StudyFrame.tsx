@@ -1,10 +1,11 @@
 import { MenuOutlined } from '@ant-design/icons'
-import { Alert, Button, Drawer, Grid, Layout, Menu, Result, Spin } from 'antd'
+import { Alert, Button, Drawer, Grid, Layout, Menu, Result, Space, Spin, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, Outlet, useParams } from 'react-router'
 import { MODULES, moduleRoute, studyRoute } from '../kit/modules'
 import { Refusal } from '../kit/Refusal'
 import { useStudyState } from '../kit/useStudyState'
+import { useVocabularies } from '../kit/useVocabularies'
 import { RunInFlight } from '../kit/Wait'
 import { StudyHeader } from './StudyHeader'
 
@@ -34,12 +35,33 @@ function StudyMenu({ studyId, current, onPick }: { studyId: string; current?: st
 /** The frame around every study page: the menu, the header, the "already running" wait. */
 export function StudyFrame() {
   const { id = '', module } = useParams()
-  const { data, error, isPending, refetch, isFetching } = useStudyState(id)
+  // An id the backend's own session-id rule (served with the vocabularies)
+  // refuses is never sent: the person is told at once, in the backend's words.
+  // If the rule cannot be loaded, the backend is asked and decides.
+  const vocab = useVocabularies()
+  const rule = vocab.data?.patterns.session_id
+  const malformed = rule ? !new RegExp(rule.pattern).test(id) : false
+  const { data, error, isPending, refetch, isFetching } = useStudyState(vocab.isPending || malformed ? undefined : id)
   // a side menu on a wide window; behind a button on a narrow one
   const wide = Grid.useBreakpoint().lg !== false
   const [menuOpen, setMenuOpen] = useState(false)
 
-  if (isPending) {
+  if (malformed) {
+    return (
+      <Result
+        status="warning"
+        title="This is not a study id"
+        subTitle={
+          <Space orientation="vertical" size={2}>
+            <Typography.Text code>{id}</Typography.Text>
+            <Typography.Text>{vocab.data?.patterns.study_id?.say ?? rule?.say}</Typography.Text>
+          </Space>
+        }
+        extra={<Link to="/studies">Go to the studies</Link>}
+      />
+    )
+  }
+  if (vocab.isPending || isPending) {
     return (
       <Spin size="large" description="Reading the study">
         <div style={{ minHeight: 200 }} />
@@ -51,7 +73,7 @@ export function StudyFrame() {
       <Refusal
         error={error}
         studyId={id}
-        title="The study could not be read"
+        title={error?.code === 'invalid_study_id' ? 'This is not a study id' : 'The study could not be read'}
         action={
           <Button onClick={() => void refetch()} loading={isFetching}>
             Try again
@@ -65,7 +87,7 @@ export function StudyFrame() {
       <Result
         status="404"
         title="There is no study with this id"
-        subTitle={id}
+        subTitle={<Typography.Text code>{id}</Typography.Text>}
         extra={<Link to="/studies">Go to the studies</Link>}
       />
     )

@@ -171,8 +171,9 @@ def test_vocabularies_route(api):
     resp = api.get("/api/v2/vocabularies")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["dependent"] == {"strain": "species"}
-    assert "rat" in body["vocabularies"]["strain"]
+    assert body["vocabularies"]["strain"]["depends_on"] == "species"
+    assert "rat" in body["vocabularies"]["strain"]["by"]
+    assert body["vocabularies"]["species"]["label"] == "Species"
     assert body["patterns"]["study_id"]["pattern"] == r"^DTXSID\d+$"
 
 

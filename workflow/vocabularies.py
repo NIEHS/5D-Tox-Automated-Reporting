@@ -9,12 +9,21 @@ with the same pattern the backend checks. Both are served from here, so the
 browser keeps no copy of either, and the command line and the notebook read the
 same lists.
 
-Dependent vocabularies are served as the mapping they are: ``strain`` is
-``{species: [strains]}``, and ``dependent`` names the field each one depends on.
-Only the dependencies the vocabulary itself declares are served; the vocabulary
-declares no mapping from the route to the vehicle or the means of
-administration, so none is served (the study-design check does not hold one
-either).
+Each vocabulary is served as one self-describing entry, so a field needs
+nothing else to work:
+
+    {"label": "Species", "values": ["rat", "mouse", …]}
+    {"label": "Strain", "depends_on": "species", "by": {"rat": […], "mouse": […]}}
+
+Only the dependencies the vocabulary itself declares are served (strains are
+listed per species); the vocabulary declares no mapping from the route to the
+vehicle or the means of administration, so none is served (the study-design
+check does not hold one either).
+
+The labels are not written here: they are the names BMDExpress 3 gives these
+fields in a data file's metadata header (``ExperimentDescriptionParser``, the
+same vocabulary bmdx_pipe mirrors), so a person sees a field under the name
+their files use. A vocabulary with no such name is labelled by its key.
 """
 
 from __future__ import annotations
@@ -76,22 +85,51 @@ def id_patterns() -> dict[str, dict]:
     }
 
 
-def vocabularies() -> dict:
-    """The controlled vocabularies (ADR-0019) and which ones depend on another.
+# The field names of a BMDExpress 3 metadata header (BMDExpress-3
+# src/main/java/com/sciome/bmdexpress2/util/ExperimentDescriptionParser.java:
+# the names parseVocabularyField reports a field under; "Strain" from its
+# STRAIN_KEYS). Keyed by the bmdx_pipe.VOCABULARIES field.
+LABELS: dict[str, str] = {
+    "sex": "Sex",
+    "organ": "Organ",
+    "species": "Species",
+    "strain": "Strain",
+    "platform": "Platform",
+    "provider": "Provider",
+    "subjectType": "Subject Type",
+    "articleRoute": "Article Route",
+    "articleVehicle": "Article Vehicle",
+    "administrationMeans": "Administration Means",
+    "studyDuration": "Study Duration",
+    "articleType": "Article Type",
+    "dataType": "Data Type",
+}
 
-    ``{"vocabularies": {field: [values] | {parent value: [values]}},
-       "dependent": {field: parent field}}``
+
+def vocabularies() -> dict:
+    """The controlled vocabularies (ADR-0019), one entry per field:
+
+    ``{"vocabularies": {field: {"label", "values"}
+                               | {"label", "depends_on", "by": {parent value: [values]}}}}``
     """
     from bmdx_pipe import VOCABULARIES
 
-    vocabs = {
-        key: ({k: list(v) for k, v in values.items()} if isinstance(values, dict) else list(values))
-        for key, values in VOCABULARIES.items()
-    }
-    # The one dependency the vocabulary declares: strains are listed per species.
-    dependent = {key: "species" for key, values in VOCABULARIES.items()
-                 if isinstance(values, dict) and set(values) <= set(VOCABULARIES["species"])}
-    return {"vocabularies": vocabs, "dependent": dependent}
+    out: dict[str, dict] = {}
+    for key, values in VOCABULARIES.items():
+        entry: dict = {"label": LABELS.get(key, key)}
+        if isinstance(values, dict):
+            # The one kind of dependency the vocabulary declares: a list per
+            # value of another field (strains per species).
+            parent = next((p for p, pv in VOCABULARIES.items()
+                           if isinstance(pv, (list, tuple)) and set(values) <= set(pv)), None)
+            if parent is None:
+                raise ValueError(f"vocabulary {key!r} is keyed by values of no other vocabulary")
+            entry["depends_on"] = parent
+            entry["by"] = {k: list(v) for k, v in values.items()}
+        else:
+            entry["values"] = list(values)
+        out[key] = entry
+    return {"vocabularies": out}
 
 
 def vocabularies_payload() -> dict:

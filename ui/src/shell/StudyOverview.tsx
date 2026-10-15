@@ -1,7 +1,8 @@
-import { Button, Card, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
 import { Link, useParams } from 'react-router'
-import type { Action, Readiness, StudyState } from '../api/types'
+import type { Action, ExistingStudyState, Readiness } from '../api/types'
 import { ItemList } from '../kit/ItemList'
+import { PublishReadiness } from '../kit/PublishReadiness'
 import { moduleById, moduleRoute } from '../kit/modules'
 import { useStudyState } from '../kit/useStudyState'
 import { ACTION_ORDER, ACTION_WORDS, phaseWords } from '../kit/words'
@@ -13,12 +14,12 @@ import { nextStepOf } from './nextStep'
  * reason; then what needs attention, as the backend's readiness lists it.
  */
 
-function actionLabel(a: Action, state: StudyState): string {
+function actionLabel(a: Action, state: ExistingStudyState): string {
   if (a === 'REPROCESS' && state.processed) return 'Process the study again'
   return ACTION_WORDS[a].label
 }
 
-function Steps({ state }: { state: StudyState }) {
+function Steps({ state }: { state: ExistingStudyState }) {
   const words = phaseWords(state.phase)
   const next = nextStepOf(state)
   const rows = ACTION_ORDER.map((a) => ({
@@ -109,22 +110,118 @@ function ReadinessCard({ title, readiness, studyId, emptySay }: { title: string;
 export function StudyOverview() {
   const { id = '' } = useParams()
   const { data } = useStudyState(id)
-  if (!data) return null
+  if (!data || !data.exists) return null
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Steps state={data} />
+      {data.kind === 'companion' ? null : data.kind === 'report' ? (
+        <Card title="Steps" size="small">
+          <Typography.Text>
+            A report over several studies has no files of its own: each study it covers is brought in, checked and processed on its
+            own page (the links above).
+          </Typography.Text>
+        </Card>
+      ) : (
+        <Steps state={data} />
+      )}
       <ReadinessCard
         title="The data: what to look at"
-        readiness={data.readiness?.data_approval}
+        readiness={data.readiness.data_approval}
         studyId={id}
         emptySay="Nothing to look at in the data."
       />
-      <ReadinessCard
-        title="What stops the report being published"
-        readiness={data.readiness?.publish}
-        studyId={id}
-        emptySay="Nothing stops the report being published."
-      />
+      {data.kind !== 'companion' && (
+        <Card title="What stops the report being published" size="small">
+          <PublishReadiness readiness={data.readiness.publish} studyId={id} />
+        </Card>
+      )}
+      {/* Published content is never processed: no method or definition to choose. */}
+      {data.kind !== 'companion' && <PinsCard state={data} />}
     </Space>
   )
+}
+
+/** The method and the report definition, as the backend reports them: never a silent default. */
+function PinsCard({ state }: { state: ExistingStudyState }) {
+  const method = state.pins.method
+  const definition = state.pins.definition
+  if (!method && !definition) return null
+  const m5 = moduleById('M5')
+  const to = moduleRoute('M5', state.id)
+  return (
+    <Card title="Method and report definition" size="small" extra={m5 && to ? <Link to={to}>Go to {m5.title}</Link> : null}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+        {method && (
+          <div data-testid="pin-method">
+            <Typography.Text strong>Analysis method: </Typography.Text>
+            {method.error ? (
+              <Typography.Text type="danger">{method.error.say}</Typography.Text>
+            ) : method.pinned ? (
+              <>
+                <Typography.Text code>{method.name}</Typography.Text>{' '}
+                <Tag>{method.mode === 'fixed' ? 'fixed' : method.mode === 'track' ? 'follows the newest' : (method.mode ?? 'mode not recorded')}</Tag>
+                {method.pinned_by === 'default' ? <Tag color="gold">chosen by default, not by a person</Tag> : null}
+              </>
+            ) : (
+              <Tag color="gold">not chosen</Tag>
+            )}
+            {[...(method.deviations ?? []), ...(method.unchecked ?? [])].length > 0 && (
+              <ul style={{ margin: '4px 0 0', paddingInlineStart: 20 }}>
+                {(method.deviations ?? []).map((d) => (
+                  <li key={d}>
+                    <Typography.Text>{d}</Typography.Text>
+                  </li>
+                ))}
+                {(method.unchecked ?? []).map((d) => (
+                  <li key={d}>
+                    <Typography.Text type="secondary">{d}</Typography.Text>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(method.mismatches ?? []).length > 0 && (
+              <Alert
+                style={{ marginTop: 4 }}
+                type="warning"
+                showIcon
+                title="The analyses recorded in the data disagree with this method"
+                description={
+                  <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                    {(method.mismatches ?? []).map((x) => (
+                      <li key={`${x.analysis}-${x.setting}`}>{x.message}</li>
+                    ))}
+                  </ul>
+                }
+              />
+            )}
+          </div>
+        )}
+        {definition && (
+          <div data-testid="pin-definition">
+            <Typography.Text strong>Report definition: </Typography.Text>
+            {definition.error ? (
+              <Typography.Text type="danger">{definition.error.say}</Typography.Text>
+            ) : (
+              <>
+                <Typography.Text code>{definition.name ?? 'not known'}</Typography.Text>{' '}
+                <Tag>{DEFINITION_SOURCE[definition.source] ?? definition.source}</Tag>
+                {definition.pinned ? (
+                  <Tag>{definition.mode === 'fixed' ? 'fixed' : 'follows the newest'}</Tag>
+                ) : (
+                  <Tag color="gold">not pinned: follows the files</Tag>
+                )}
+              </>
+            )}
+            {definition.drift && <Alert style={{ marginTop: 4 }} type="warning" showIcon title={definition.drift} />}
+          </div>
+        )}
+      </Space>
+    </Card>
+  )
+}
+
+const DEFINITION_SOURCE: Record<string, string> = {
+  session: "this study's own definition",
+  study: "the study's definition",
+  era: 'the standard definition for its period',
+  template: 'a template',
 }

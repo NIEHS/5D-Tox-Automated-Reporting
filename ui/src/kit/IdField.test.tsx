@@ -7,7 +7,7 @@ import { renderWithApp } from '../test/render'
 import { casrnCheckDigitOk, checkId } from './checkId'
 import { IdField } from './IdField'
 
-const P = VOCABULARIES.patterns ?? {}
+const P = VOCABULARIES.patterns
 
 describe('checkId', () => {
   it('accepts a bare DTXSID', () => {
@@ -43,10 +43,13 @@ describe('checkId', () => {
     expect(checkId('doi', '22427/NIEHS-10', P.doi)).toMatchObject({ ok: false })
   })
 
-  it('checks a date exists', () => {
-    expect(checkId('date', '2026-10-14', P.date)).toEqual({ ok: true })
-    expect(checkId('date', '2026-02-30', P.date)).toMatchObject({ ok: false, say: 'There is no such date.' })
-    expect(checkId('date', '14/10/2026', P.date)).toMatchObject({ ok: false })
+  it('checks a study id with the backend\'s own study-id rule (a bare DTXSID)', () => {
+    expect(checkId('study_id', 'DTXSID50469320', P.study_id)).toEqual({ ok: true })
+    expect(checkId('study_id', 'DTXSID1020431_rat', P.study_id)).toMatchObject({ ok: false, say: expect.stringMatching(/made by the application/) as unknown })
+  })
+
+  it('serves no date rule, so none is checked (none is invented)', () => {
+    expect(Object.keys(P).sort()).toEqual(['casrn', 'doi', 'dtxsid', 'session_id', 'study_id'])
   })
 
   it('never calls an id good when its rule is missing or broken', () => {

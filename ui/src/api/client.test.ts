@@ -2,7 +2,7 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { getDryRun, getStudyState, getVocabularies, noopOf, readEvents, runProcess, sendJson } from './client'
 import { ApiError, errorFromResponse, isErrorEnvelope } from './errors'
-import { STATE_APPROVED_STALE_SUMMARY, STREAM_PROCESS_OK, DRY_RUN_RESET, REFUSAL_PHASE_NOT_ALLOWED, UNEXPECTED_HTML_500, toNdjson } from './mocks/fixtures'
+import { REFUSAL_INVALID_STUDY_ID, STATE_APPROVED, STREAM_PROCESS_OK, DRY_RUN_RESET, REFUSAL_PHASE_NOT_ALLOWED, UNEXPECTED_HTML_500, toNdjson } from './mocks/fixtures'
 import { createHandlers } from './mocks/handlers'
 import { server } from './mocks/node'
 import type { RunEvent } from './types'
@@ -26,8 +26,18 @@ function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
 describe('the typed fetch functions', () => {
   it('read the state read model', async () => {
     const s = await getStudyState('DTXSID50469320')
+    if (!s.exists) throw new Error('expected the study')
     expect(s.phase).toBe('APPROVED')
-    expect(s.sections?.map((x) => x.key)).toEqual(STATE_APPROVED_STALE_SUMMARY.sections?.map((x) => x.key))
+    expect(s.sections.map((x) => x.key)).toEqual(STATE_APPROVED.sections.map((x) => x.key))
+  })
+
+  it('reads a missing study as {exists: false}, and refuses a malformed id with the backend\'s envelope', async () => {
+    expect(await getStudyState('DTXSID9999999')).toEqual({ id: 'DTXSID9999999', exists: false })
+    const e = (await getStudyState('not-a-study').catch((x: unknown) => x)) as ApiError
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e.code).toBe(REFUSAL_INVALID_STUDY_ID.error.code)
+    expect(e.status).toBe(400)
+    expect(e.fix).toBe('M1')
   })
 
   it('read the vocabularies and the dry run', async () => {
@@ -137,14 +147,16 @@ describe('the run event stream (NDJSON)', () => {
     server.use(...createHandlers({ stepDelayMs: 20 }))
     const first = runProcess('DTXSID50469320')
     expect((await first.next()).value).toMatchObject({ event: 'step', unit: 'ntp' })
-    expect((await getStudyState('DTXSID50469320')).run?.in_flight).toBe(true)
+    const during = await getStudyState('DTXSID50469320')
+    expect(during.exists && during.run?.in_flight).toBe(true)
     const second = (await collect(runProcess('DTXSID50469320')).catch((x: unknown) => x)) as ApiError
     expect(second).toBeInstanceOf(ApiError)
     expect(second.code).toBe('run_in_flight')
     const rest: RunEvent[] = []
     for await (const e of { [Symbol.asyncIterator]: () => first }) rest.push(e)
     expect(rest.at(-1)).toMatchObject({ event: 'result', ok: true })
-    expect((await getStudyState('DTXSID50469320')).run?.in_flight).toBe(false)
+    const after = await getStudyState('DTXSID50469320')
+    expect(after.exists && after.run?.in_flight).toBeFalsy()
   })
 
   it('refuses Process before the run starts when the phase does not allow it', async () => {

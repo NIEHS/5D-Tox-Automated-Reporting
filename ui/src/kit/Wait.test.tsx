@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '../api/client'
 import { ApiError } from '../api/errors'
-import { STATE_APPROVED_STALE_SUMMARY, STATE_RUNNING, STREAM_PROCESS_FAILED, STREAM_PROCESS_OK, STREAM_TRUNCATED } from '../api/mocks/fixtures'
+import { STATE_APPROVED, STATE_RUNNING, STREAM_PROCESS_FAILED, STREAM_PROCESS_OK, STREAM_TRUNCATED } from '../api/mocks/fixtures'
 import { createHandlers } from '../api/mocks/handlers'
 import { server } from '../api/mocks/node'
 import type { RunEvent } from '../api/types'
@@ -13,7 +13,7 @@ import { formatElapsed } from './elapsed'
 import { useStudyState } from './useStudyState'
 import { RunInFlight, Wait, type WaitOutcome } from './Wait'
 
-const ID = STATE_APPROVED_STALE_SUMMARY.id
+const ID = STATE_APPROVED.id
 
 /** A stream the test feeds by hand. */
 function controlledStream() {
@@ -115,7 +115,7 @@ describe('<Wait>', () => {
     server.use(
       http.get('/api/v2/studies/:id/state', () => {
         stateReads++
-        return HttpResponse.json(STATE_APPROVED_STALE_SUMMARY)
+        return HttpResponse.json(STATE_APPROVED)
       }),
     )
     const outcomes: WaitOutcome[] = []
@@ -218,7 +218,7 @@ describe('<RunInFlight>, the "already running" state', () => {
 
   it('ends by itself when the run does', async () => {
     let inFlight = true
-    server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(inFlight ? STATE_RUNNING : STATE_APPROVED_STALE_SUMMARY)))
+    server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(inFlight ? STATE_RUNNING : STATE_APPROVED)))
     renderWithApp(<RunInFlight studyId={ID} />)
     await screen.findByRole('dialog')
     inFlight = false

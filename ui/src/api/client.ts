@@ -138,9 +138,9 @@ export { SAY_BROKEN_STREAM }
 export const paths = {
   studyState: (id: string) => `${API_V2}/studies/${enc(id)}/state`,
   vocabularies: () => `${API_V2}/vocabularies`,
-  /** PROPOSED: the dry run of an act (§4.3); a side-effect-free read. */
+  /** PROPOSED (C8), NOT ON THE BACKEND YET: the dry run of an act (§4.3); a side-effect-free read. Mocked only. */
   dryRun: (id: string, act: string) => `${API_V2}/studies/${enc(id)}/dry-run/${enc(act)}`,
-  /** PROPOSED: the one guarded Process endpoint, streaming §4.4 events (C5). */
+  /** PROPOSED (C5), NOT ON THE BACKEND YET: the one guarded Process endpoint, streaming §4.4 events. Mocked only. */
   process: (id: string) => `${API_V2}/studies/${enc(id)}/process`,
 }
 
@@ -152,10 +152,12 @@ export function getVocabularies(signal?: AbortSignal): Promise<Vocabularies> {
   return getJson<Vocabularies>(paths.vocabularies(), signal)
 }
 
+/** PROPOSED (C8): the backend has no dry-run route yet; only the mocks answer. */
 export function getDryRun(id: string, act: string, signal?: AbortSignal): Promise<DryRun> {
   return getJson<DryRun>(paths.dryRun(id, act), signal)
 }
 
+/** PROPOSED (C5): the backend has no Process stream route yet; only the mocks answer. */
 export function runProcess(id: string): AsyncGenerator<RunEvent> {
   return streamRun(paths.process(id))
 }

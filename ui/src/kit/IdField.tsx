@@ -6,7 +6,7 @@ import { ID_LABELS, checkId, type IdCheck } from './checkId'
 import { useVocabularies } from './useVocabularies'
 
 /**
- * An id typed by a person: a bare DTXSID, a CAS number, a DOI or a date
+ * An id typed by a person: a study id (a bare DTXSID), a CAS number or a DOI
  * (MODULES.md §4.5). Checked as it is typed, with the backend's pattern; the
  * reason it is wrong is shown under it. Controlled, for antd Form.Item.
  *

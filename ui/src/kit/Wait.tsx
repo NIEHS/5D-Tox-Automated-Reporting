@@ -215,7 +215,7 @@ export function Wait({ studyId, title, note, start, onFinish, onClose }: WaitPro
 export function RunInFlight({ studyId }: { studyId: string }) {
   const { data } = useStudyState(studyId)
   const here = useWaitingHere(studyId)
-  const run = data?.run
+  const run = data?.exists ? data.run : undefined
   const startedAt = run?.in_flight ? run.started_at : null
   const startMs = startedAt && !Number.isNaN(Date.parse(startedAt)) ? Date.parse(startedAt) : null
   const elapsed = useElapsed(run?.in_flight ? startMs : null)

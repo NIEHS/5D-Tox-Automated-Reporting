@@ -4,17 +4,22 @@ import type { IdKind, IdPattern } from '../api/types'
  * Checking an id as it is typed (MODULES.md §4.5). The pattern is the
  * backend's (served with the vocabularies); the extra checks below catch the
  * mistakes a pattern alone would only call "wrong": a suffixed study id, a
- * DOI pasted as a link, a CAS number with a bad check digit, a date that does
- * not exist. Nothing is corrected silently: the person is told and retypes.
+ * DOI pasted as a link, a CAS number with a bad check digit. Nothing is
+ * corrected silently: the person is told and retypes.
+ *
+ * The backend serves a pattern for each IdKind. There is no date kind: no
+ * backend rule for a date exists (a report's date is stated as "April 2026"),
+ * and the front-end does not invent one.
  */
 
 export type IdCheck = { ok: true } | { ok: false; say: string } | { ok: null; say: string }
 
 export const ID_LABELS: Record<IdKind, string> = {
+  study_id: 'study id',
+  session_id: 'study id',
   dtxsid: 'DTXSID',
   casrn: 'CAS number',
   doi: 'DOI',
-  date: 'date',
 }
 
 /** CAS check digit: the weighted sum of the other digits, right to left, mod 10. */
@@ -26,14 +31,6 @@ export function casrnCheckDigitOk(value: string): boolean {
   let sum = 0
   for (let i = 0; i < body.length; i++) sum += Number(body[body.length - 1 - i]) * (i + 1)
   return sum % 10 === check
-}
-
-function realDate(value: string): boolean {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!m) return false
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  const dt = new Date(Date.UTC(y, mo - 1, d))
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d
 }
 
 function compile(p: IdPattern): RegExp | null {
@@ -51,7 +48,7 @@ export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefi
   if (value === '') return { ok: false, say: `Type the ${ID_LABELS[kind]}, for example ${pattern.example}.` }
   if (value !== value.trim()) return { ok: false, say: 'Remove the spaces before or after it.' }
 
-  if (kind === 'dtxsid') {
+  if (kind === 'dtxsid' || kind === 'study_id') {
     if (/^dtxsid/i.test(value) && !value.startsWith('DTXSID')) return { ok: false, say: 'Write DTXSID in capital letters.' }
     const suffixed = /^DTXSID\d+[_-]/.exec(value)
     if (suffixed) {
@@ -72,9 +69,6 @@ export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefi
 
   if (kind === 'casrn' && !casrnCheckDigitOk(value)) {
     return { ok: false, say: 'The last digit (the check digit) does not match the others: the number has a typing mistake.' }
-  }
-  if (kind === 'date' && !realDate(value)) {
-    return { ok: false, say: 'There is no such date.' }
   }
   return { ok: true }
 }

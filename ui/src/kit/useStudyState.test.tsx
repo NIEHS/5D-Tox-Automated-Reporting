@@ -3,8 +3,9 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/errors'
-import { STATE_APPROVED_STALE_SUMMARY, STATE_INTEGRATED, REFUSAL_PHASE_NOT_ALLOWED } from '../api/mocks/fixtures'
+import { STATE_APPROVED, STATE_INTEGRATED, REFUSAL_PHASE_NOT_ALLOWED } from '../api/mocks/fixtures'
 import { server } from '../api/mocks/node'
+import type { ExistingStudyState, StudyState } from '../api/types'
 import { testQueryClient } from '../test/render'
 import { invalidateStudy, useStudyMutation, useStudyState } from './useStudyState'
 
@@ -14,6 +15,9 @@ function wrapper(client = testQueryClient()) {
     Wrapper: ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   }
 }
+
+const phaseOf = (s: StudyState | undefined) => (s?.exists ? s.phase : undefined)
+const inFlight = (s: StudyState | undefined) => Boolean(s?.exists && s.run?.in_flight)
 
 function countingStateHandler(states: Array<typeof STATE_INTEGRATED>) {
   let calls = 0
@@ -32,7 +36,7 @@ describe('useStudyState', () => {
     const { Wrapper } = wrapper()
     const { result } = renderHook(() => useStudyState('DTXSID50469320'), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data).toBeDefined())
-    expect(result.current.data).toEqual(STATE_APPROVED_STALE_SUMMARY)
+    expect(result.current.data).toEqual(STATE_APPROVED)
   })
 
   it('does not read anything without an id', () => {
@@ -59,13 +63,13 @@ describe('useStudyState', () => {
   })
 
   it('re-reads after invalidateStudy', async () => {
-    const after = { ...STATE_INTEGRATED, phase: 'APPROVED', legal_actions: ['REPROCESS', 'RESET'] }
+    const after: ExistingStudyState = { ...STATE_INTEGRATED, phase: 'APPROVED', legal_actions: ['REPROCESS', 'RESET'] }
     const calls = countingStateHandler([STATE_INTEGRATED, after])
     const { Wrapper, client } = wrapper()
     const { result } = renderHook(() => useStudyState(STATE_INTEGRATED.id), { wrapper: Wrapper })
-    await waitFor(() => expect(result.current.data?.phase).toBe('INTEGRATED'))
+    await waitFor(() => expect(phaseOf(result.current.data)).toBe('INTEGRATED'))
     await act(() => invalidateStudy(client, STATE_INTEGRATED.id))
-    await waitFor(() => expect(result.current.data?.phase).toBe('APPROVED'))
+    await waitFor(() => expect(phaseOf(result.current.data)).toBe('APPROVED'))
     expect(calls()).toBe(2)
   })
 
@@ -94,12 +98,12 @@ describe('useStudyState', () => {
   })
 
   it('polls while a run is in flight, and stops when it ends', async () => {
-    const running = { ...STATE_APPROVED_STALE_SUMMARY, run: { in_flight: true, started_at: '2026-10-14T09:00:00Z', last: null } }
-    const calls = countingStateHandler([running, STATE_APPROVED_STALE_SUMMARY])
+    const running: ExistingStudyState = { ...STATE_APPROVED, run: { in_flight: true, started_at: '2026-10-14T09:00:00Z', last: null } }
+    const calls = countingStateHandler([running, STATE_APPROVED])
     const { Wrapper } = wrapper()
     const { result } = renderHook(() => useStudyState(running.id), { wrapper: Wrapper })
-    await waitFor(() => expect(result.current.data?.run?.in_flight).toBe(true))
-    await waitFor(() => expect(result.current.data?.run?.in_flight).toBe(false), { timeout: 6000 })
+    await waitFor(() => expect(inFlight(result.current.data)).toBe(true))
+    await waitFor(() => expect(inFlight(result.current.data)).toBe(false), { timeout: 6000 })
     const n = calls()
     await new Promise((r) => setTimeout(r, 3500))
     expect(calls()).toBe(n)
