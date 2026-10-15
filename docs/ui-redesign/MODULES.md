@@ -204,6 +204,28 @@ Fields not served yet are absent, not guessed. The hook re-reads after every
 mutating call and after a run ends. `readiness.*.items[].fix` names the module that
 fixes the item, so every block links to the place it is cleared.
 
+**As built (wave 0, merged 2026-10-15).** The served shape is the reference:
+`docs/ui-redesign/contracts/state.*.json` (real responses) and `ui/src/api/types.ts`,
+kept in step by `ui/src/api/contract.test.ts`. Additions to the sketch above:
+- `kind` (study / report / member / companion / other) and `relations {parent, twin}`;
+- `members[]`: `{key, id, exists, phase, processed, readiness}` for a report over
+  several studies;
+- `sections[]` carries `title, instance_of, region, has_file, enabled, facts,
+  user_edited, model`, and `accept {allowed, code, say}`, so no screen works out
+  approvability itself;
+- `regenerated.say` beside the reason code;
+- `readiness.publish` has `checks: [{id, say}]` (what was actually checked) and
+  `complete` (false until C6). No screen says "ready to publish" while
+  `complete` is false;
+- pins carry `pinned, hash, pinned_at`, `unchecked`, and `error` (an envelope
+  body) when a pin no longer resolves; `definition.source` adds `template`;
+- vocabularies: `{vocabularies: {key: {label, values} | {label, depends_on, by}},
+  patterns: {study_id, session_id, dtxsid, casrn, doi}}`. Labels are BMDExpress 3's
+  header names. Only strain ← species is a declared dependency.
+
+Still absent, served later: `readiness.data_approval` (C6), `run` (C5), `stands`
+/ next step (M1; until then `ui/src/shell/nextStep.ts`, one function).
+
 ### 4.2 The refusal explainer
 
 **One error envelope** for every new or changed route (NEW; existing routes are
