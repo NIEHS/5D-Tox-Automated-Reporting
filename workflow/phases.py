@@ -8,12 +8,14 @@ single Python source of truth for:
   * compute_section_completeness(matrix)  — per-platform readiness from coverage
   * is_node_complete(node_id, ..., tree)  — document-tree node readiness
 
-The JS remains the source of truth until ADR-0014 migration step 3 deletes the
-derivation functions from pool_state.js. Until then the characterization gate
-(tests/unit/test_workflow_phase_characterization.py) pins these three functions
-to the JS oracle. Do NOT change observable behavior here without changing it at
-the JS source and regenerating the oracle first (see the contract's
-`_EVOLVING_THIS_CONTRACT`).
+The characterization gate (tests/unit/test_workflow_phase_characterization.py)
+pins these three functions to the committed oracle. It was generated from the
+JS; since C1 decision D2 (2026-10-15, the maintainer) this module is the source
+of truth for `derive_phase`: the rule "a stale section sends the phase to
+UPLOADED" was dropped here and its two oracle cases edited by hand (see the
+case table's `_EVOLVING_THIS_CONTRACT`). Change observable behaviour only as a
+deliberate, signed decision, with the case table and the oracle in the same
+commit.
 
 The legal-action table (`LEGAL_ACTIONS`, with `NEXT_STEP`) is NOT a port: since
 C1 it is the workflow's own declared table of acts, and every mutating step
@@ -120,16 +122,16 @@ def derive_phase(artifacts: dict) -> str:
     """Derive the settled pool phase from artifact presence flags.
 
     artifacts keys (all optional; absent == falsy):
-      hasFiles, hasStale, validationReport, hasValidationErrors,
-      hasIntegrated, hasAnimalReport.
+      hasFiles, validationReport, hasValidationErrors, hasIntegrated,
+      hasAnimalReport. (hasStale is accepted and ignored since C1 D2.)
     """
     # No files → nothing to do
     if not artifacts.get("hasFiles"):
         return "EMPTY"
 
-    # Pool mutated after approval/validation (stale sections) → re-validate
-    if artifacts.get("hasStale"):
-        return "UPLOADED"
+    # (A stale section no longer moves the phase, C1 D2: staleness is a
+    # section matter — currency and the publish gate. A file change already
+    # deletes the validation report, which gives UPLOADED below.)
 
     # Files exist but haven't been validated yet (JS: any object is truthy)
     if artifacts.get("validationReport") is None:

@@ -264,3 +264,16 @@ def test_add_files_is_refused_nowhere(sessions_dir):
         src.write_text("x")
         import_files(d.name, [src], _disk())
         assert (d / "files" / src.name).exists()
+
+
+def test_a_stale_section_is_no_dead_end(sessions_dir):
+    """C1 D2: a stale genomics section no longer holds the phase at UPLOADED,
+    so integration is not refused until a person re-accepts prose about the
+    old data (spec §4). Staleness stays a section matter (the publish gate)."""
+    import json
+    from workflow.store import DiskPoolStore
+    d = _seed(sessions_dir, "VALIDATED")
+    (d / "genomics_liver_male.json").write_text(json.dumps({"approved": True, "stale": True}))
+    st = WorkflowEngine("DTXSID_LEGAL", DiskPoolStore()).state()
+    assert st.artifacts["hasStale"] is True
+    assert st.phase is Phase.VALIDATED and Action.INTEGRATE in st.legal_actions

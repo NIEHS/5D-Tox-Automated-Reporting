@@ -1,9 +1,11 @@
 """
 Characterization test for the workflow phase machine (ADR-0014).
 
-This is the GATE for porting the pool phase logic out of web/js/pool_state.js
-into a UI-agnostic Python `workflow/` package. The JS is the source of truth; the
-port must reproduce its behavior byte-for-byte.
+This was the GATE for porting the pool phase logic out of web/js/pool_state.js
+into a UI-agnostic Python `workflow/` package, and stays the pin on its
+behaviour. Since C1 decision D2 (2026-10-15) workflow/phases.py is the source of
+truth for derive_phase: two cases were edited by hand when rule 2 (stale
+sections → UPLOADED) was dropped (see the case table's _EVOLVING_THIS_CONTRACT).
 
 Two layers, one file:
 
