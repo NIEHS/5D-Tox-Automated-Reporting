@@ -283,7 +283,9 @@ already accepted.
   section's version history without minting a new version.
 - `workflow.steps.release_section_step(dtxsid, key, store, reason=…)` reopens
   one: `approved: false`, FINAL withdrawn (PROTECTED stays), and the reason
-  recorded.
+  recorded. The reason is required (it is refused with `reason_required`
+  without one). PROTECTED means no machine replaces the text; only a person's
+  explicit act does (C2).
 
 **Reads → writes.** Section files (only when accepting or releasing).
 """)
@@ -298,7 +300,7 @@ for key, sec in sorted(store.read_section_dicts(DTXSID).items()):
 readiness = WorkflowEngine(DTXSID, store).publish_readiness()
 print("\ncan publish:", readiness["can_publish"], readiness["blocking"] or "")
 # accept_section_step(DTXSID, "bm2_body-weight", store)    # approve one section
-# release_section_step(DTXSID, "bm2_body-weight", store)   # and reopen it
+# release_section_step(DTXSID, "bm2_body-weight", store, reason="check the wording")   # and reopen it
 """)
 
 # ---------------------------------------------------------------------------

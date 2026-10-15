@@ -181,7 +181,8 @@ workflow. It reads and never computes. The backend serves one read model per stu
   "legal_actions": ["PROCESS", "RESET", "…"],
   "identity": {"name": "…", "casrn": "…", "dtxsid": "…", "short_name": "…"},
   "pins": {
-    "method":     {"name": "ntp-5day-2021", "mode": "fixed", "pinned_by": "person|default", "deviations": [], "mismatches": []},
+    "method":     {"name": "ntp-5day-2021", "mode": "fixed", "pinned_by": "person|default", "deviations": [], "mismatches": [],
+                   "suggestion": {"name": "…", "why": "…"}},
     "definition": {"name": "studies/DTXSID50469320/document", "mode": "track", "drift": null, "source": "study|era|session"}
   },
   "processed": true,
@@ -223,8 +224,19 @@ kept in step by `ui/src/api/contract.test.ts`. Additions to the sketch above:
   patterns: {study_id, session_id, dtxsid, casrn, doi}}`. Labels are BMDExpress 3's
   header names. Only strain ← species is a declared dependency.
 
-Still absent, served later: `readiness.data_approval` (C6), `run` (C5), `stands`
-/ next step (M1; until then `ui/src/shell/nextStep.ts`, one function).
+**Wave 1 (merged 2026-10-15, 623f003)** added:
+- `legal_actions` takes C1's ten actions (`ADD_FILES, REMOVE_FILE, RESET, VALIDATE,
+  RESOLVE, CONFIRM_CLASSIFICATION, INTEGRATE, STATE_DATASET_FACTS, APPROVE,
+  PROCESS`; `REPROCESS` and `CLEAR_FILES` are gone), enforced by every step; `[]`
+  on a companion or a report (R6);
+- `chemical_dtxsid`, `chemical_dtxsid_from`, `relations {parent, members,
+  companion, twin, others}`, and `stands {phase, say, next {say, fix}}` (M1):
+  the next step is the backend's, `ui/src/shell/nextStep.ts` only reads it;
+- `pins.method.suggestion {name, why}` while nothing is pinned (C1 D1 = B: the
+  interface proposes, a person confirms, Process refuses until then);
+- `sections[].maturity` and `sections[].review {why, since_version, flips, say}` (C2).
+
+Still absent, served later: `readiness.data_approval` (C6), `run` (C5).
 
 ### 4.2 The refusal explainer
 

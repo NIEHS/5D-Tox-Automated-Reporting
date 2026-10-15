@@ -21,6 +21,19 @@
   (2026-09-14). This ADR's caveat #3 ("one living bundle, MUTABLE FOREVER … one
   snapshot, no version tree") was in tension with ADR-0016's version framing; ADR-0020
   settles it in FAVOR of this ADR — one evolving report with history, no version tree.
+- **Legal actions amended-by:** C1 of the new interface (2026-10-15,
+  `docs/ui-redesign/modules/c1/spec.md`). The table below is the 2026-08 original.
+  The live table is `workflow.phases.LEGAL_ACTIONS`, typed as the workflow's rule
+  rather than transcribed from a screen's buttons. It has ten actions: `ADD_FILES,
+  REMOVE_FILE, RESET, VALIDATE, RESOLVE, CONFIRM_CLASSIFICATION, INTEGRATE,
+  STATE_DATASET_FACTS, APPROVE, PROCESS`. `REPROCESS` became `PROCESS`, and
+  `CLEAR_FILES` is gone. EMPTY allows `ADD_FILES`; INTEGRATED and APPROVED allow
+  everything (Process is not gated on the data approval). Two further changes:
+  - the "every mutating method guards on legality first" promise below is now
+    built: `workflow.engine.require_legal`, called by every step, raises
+    `PhaseRefusal` (`phase_not_allowed`, 409);
+  - a stale section no longer moves the phase, and an integration built from a
+    different validation reads VALIDATED (`workflow.integration_basis`).
 
 > **Implementation status (2026-08-16).** The engine was BUILT to the widened
 > six-kind model below, in the order set by

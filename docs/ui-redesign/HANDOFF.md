@@ -220,20 +220,37 @@ completeness}` (also `GET /api/workflow/{id}/state`). The phase is
 `derive_phase(artifacts)`; the first rule that matches wins:
 
 1. no files → **EMPTY**;
-2. stale sections, or never validated → **UPLOADED**;
+2. never validated (a file change deletes the validation report) → **UPLOADED**;
 3. validation errors → **VALIDATION_ERRORS**;
-4. not integrated → **VALIDATED**;
+4. not integrated, or integrated from a different validation → **VALIDATED**;
 5. integrated, no `animal_report.json` → **INTEGRATED**;
 6. otherwise → **APPROVED**.
 
+Since C1 (2026-10-15) a stale section no longer moves the phase (staleness is a
+section matter: currency and the publish gate). Rule 4's "integrated from a
+different validation" is `workflow/integration_basis.py`: integration records the
+basis it was built from in `integration_basis.json` (step 5), and the state reads
+`integration: current | out_of_date | unrecorded`.
+
+**The legal actions are enforced** (C1): every step and route calls
+`workflow.engine.require_legal`, which refuses with `PhaseRefusal`
+(`phase_not_allowed`, 409, in the §4.2 envelope) naming the phase, what is
+allowed now and the next step. The table is `workflow.phases.LEGAL_ACTIONS`:
+
 | phase | legal actions |
 |---|---|
-| EMPTY | — |
-| UPLOADED | CLEAR_FILES, VALIDATE |
-| VALIDATION_ERRORS | RESET, VALIDATE |
-| VALIDATED | INTEGRATE, RESET |
-| INTEGRATED | APPROVE, REPROCESS, RESET, VALIDATE |
-| APPROVED | REPROCESS, RESET |
+| EMPTY | ADD_FILES |
+| UPLOADED | ADD_FILES, REMOVE_FILE, RESET, VALIDATE |
+| VALIDATION_ERRORS | the above + RESOLVE, CONFIRM_CLASSIFICATION |
+| VALIDATED | the above + INTEGRATE |
+| INTEGRATED | everything: + STATE_DATASET_FACTS, APPROVE, PROCESS |
+| APPROVED | everything |
+
+Process is legal from INTEGRATED on: the data approval informs and gates nothing
+(decision Q3). On a published book's companion or a report over several studies,
+every data act is refused first (`workflow.studies.require_data_session`, M1 R6:
+`read_only_session`, `report_has_no_data`), and the read model serves
+`legal_actions: []` for them.
 
 `completeness`, from the validation coverage matrix, gives each platform's
 readiness and what it is missing. For example, an apical platform needs both
@@ -270,6 +287,18 @@ derives the consequence, the **guard**, on two axes:
 `ownership.may_machine_write` is the one predicate. Accepting a section is
 `accept_section_step`; reopening it is `release_section_step` with a reason, and
 the reason is kept in the version trail.
+
+**Since C2 (2026-10-15) every write to a section file goes through one gate,**
+`workflow.section_writes.write_section`. A machine's write over content a person
+owns (approved, PROTECTED, edited, ingested: `ownership.is_owned`) is held and
+recorded, never applied. For an apical result section whose numbers changed, the
+approval is withdrawn with a `review` marker instead (the deliverable already
+prints the new numbers). An unchanged write writes nothing. A person's write over
+locked content needs an explicit, reasoned act. Restoring a past version is
+`restore_section_step`; discarding is `discard_section_step` (old route and pool
+reset only). Every event is one line of `history/<key>/index.jsonl`, the source
+of the report changelog (C11). The read model serves each section's `maturity`,
+`review` and `version_status`.
 
 ### 4.4 Currency and the publish gate (`workflow/currency.py`, `reprocess.py`)
 
