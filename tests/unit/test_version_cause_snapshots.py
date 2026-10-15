@@ -101,8 +101,9 @@ class TestSaveSectionCauseMarker:
         assert _VERSION_EVENT_KEY not in current
 
     def test_no_marker_writes_no_manifest(self, sessions_dir):
-        # An unmarked save (auto-save / unapprove / restore) is byte-unaffected:
-        # no manifest is written at all.
+        # An unmarked save of the primitive writes no manifest line. (Since C2
+        # every section act goes through workflow.section_writes, which always
+        # marks its saves; only the primitive itself saves unmarked.)
         dtxsid = "DTXSID_VC"
         save_section(dtxsid, "background", {"paragraphs": ["hi"]}, archive=False)
         assert read_version_history(dtxsid, "background") == []
@@ -345,16 +346,16 @@ class TestReviseWithReason:
         accept_section_step(dtxsid, "genomics_liver_male", store)
         assert _load(d, "genomics_liver_male.json")["facts"] == ["final", "protected"]
 
-    def test_revise_without_reason_still_records_the_reopen(self, approved_llm_section):
+    def test_revise_without_reason_is_refused(self, approved_llm_section):
+        # C2 D3: reopening an approved section needs a reason; without one
+        # nothing changes and nothing is recorded.
+        from workflow.errors import StepError
         from workflow.steps import release_section_step
         from workflow.store import DiskPoolStore
-        dtxsid, _d = approved_llm_section
+        dtxsid, d = approved_llm_section
 
-        release_section_step(dtxsid, "genomics_liver_male", DiskPoolStore())
-
-        events = read_version_history(dtxsid, "genomics_liver_male")
-        revise = [e for e in events if e["cause"] == "revise"]
-        assert len(revise) == 1
-        # No reason given → the key is simply absent (byte-identical to a
-        # pre-reason manifest), but the reopen is still on the trail.
-        assert "reason" not in revise[0]
+        with pytest.raises(StepError) as ei:
+            release_section_step(dtxsid, "genomics_liver_male", DiskPoolStore())
+        assert ei.value.code == "reason_required"
+        assert read_version_history(dtxsid, "genomics_liver_male") == []
+        assert _load(d, "genomics_liver_male.json")["approved"] is True

@@ -658,114 +658,199 @@ def _promote_to_final(data: dict) -> None:
 
 @step_provenance
 def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
-    """Approve (lock) an existing report section.
+    """Approve (lock) an existing report section. A state change: its text is
+    never touched (C2: accepting changes the state, never the content).
 
-    Mirrors the persistence half of POST /api/session/approve: stamp
-    `approved=True` + `approved_at`, and clear any `stale` flag (set by
-    invalidate_pool_artifacts when the pool mutated after approval — re-approval
-    clears it). Re-saved in place (archive=False) so a lock flip is not a new
-    history version, exactly as /api/session/unapprove already does for the
-    reverse flip; the approve route's own archiving happens when the CONTENT is
-    saved, not on this pure lock transition.
+    Stamps `approved=True` + `approved_at`, promotes the facts to FINAL (which
+    sets PROTECTED), and clears what a person's reading answers: `stale` (the
+    pool changed after approval), `wording_review` (data-derived words flipped
+    under approved wording) and `review` (Process changed what an approved
+    apical section prints: C2 D2/A1). Saved in place (archive=False) with one
+    `edit/blessed` event against the SAME version, so a re-accept after a
+    reprocess flips needs-re-bless → blessed without minting a version.
 
-    /api/session/approve also reports whether the approved text differs from
-    the generated original (`user_edited`); that needs the request payload, so
-    it stays in the route. This step lifts ONLY the state change.
+    Accepting a section that is already approved, carries no stale/review
+    marker, and whose version is blessed changes nothing: ``noop
+    already_accepted``, no event.
 
-    Raises StepError(400) with no dtxsid/section_key, StepError(404) if the
-    section file does not exist (nothing to approve — content is written by the
-    generation/save path first).
+    Returns ``{ok, section_key, approved: True, version, version_status,
+    noop?}``. Raises section_key_invalid (400), section_not_found (404).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "approve")
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if not isinstance(data, dict):
-        raise StepError(
-            f"No '{section_key}' section to approve", status_code=404
-        )
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": True, "version": version,
+              "version_status": "blessed"}
+    if (data.get("approved") and not data.get("stale") and not data.get("review")
+            and not data.get("wording_review")
+            and sw.version_status(dtxsid, section_key, version, store) == "blessed"):
+        return {**result, "noop": _noop("already_accepted")}
 
     data["approved"] = True
     data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
-    data.pop("stale", None)
-    # The Phase 3b wording-review inform-signal is answered by exactly this act:
-    # the human has read the prose against the refreshed data and re-blessed it.
-    # Clearing it here (and in the route twin) is what lets a LATER flip be a
-    # fresh signal instead of noise that never goes away.
-    data.pop("wording_review", None)
+    for marker in ("stale", "wording_review", "review"):
+        data.pop(marker, None)
     _promote_to_final(data)
-
-    # Phase 4: record this acceptance as an "edit"/"blessed" version event. This
-    # is the pure re-bless path — the content already exists on disk and only the
-    # lock flips — so it uses archive=False: save_section PRESERVES the version
-    # number and the manifest line lands against the SAME version. That is exactly
-    # what "re-accept transitions needs-re-bless → blessed WITHOUT minting a new
-    # version" needs: after a reprocess minted (say) v2 born needs-re-bless, the
-    # human re-accept appends a v2/edit/blessed line, so v2's current status flips
-    # to blessed with no duplicate version. The marker is transient (save_section
-    # pops it); stamping it on `data` keeps this step store-mediated — no direct
-    # disk I/O and no new store-method signature (the injected store just persists
-    # `data`).
-    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
-
-    # archive=False: a lock flip is not a content change worth a new history
-    # FILE (matches how unapprove flips the flag). save_section stamps `version`
-    # and appends the manifest line above.
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="edit", status="blessed", act="accept", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data))
+    # archive=False: a lock flip is not a content change worth a history FILE;
+    # save_section keeps the version and appends the event above.
     store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {
-        "ok": True,
-        "section_key": section_key,
-        "approved": True,
-        "version": data.get("version", 1),
-    }
+    return {**result, "version": data.get("version", version)}
 
 
 @step_provenance
 def release_section_step(
     dtxsid: str, section_key: str, store: PoolStore, *, reason: str = "",
 ) -> dict:
-    """REVISE (reopen) a report section for editing, preserving its content.
+    """REVISE (reopen) an approved report section, preserving its content.
 
-    This is the VOLUNTARY human down-ratchet — the "Revise" action, renamed from
-    the old bare "Unapprove". It:
-      * flips `approved=False` (unlocks the editor),
-      * runs the HUMAN_RELEASE demote on the section's facts
-        (labels.demote_for_human_release: FINAL withdrawn, PROTECTED stands — the
-        content stops claiming finality but stays guarded until re-accepted), and
-      * records the human's free-text `reason` on a Phase-4 version-trail entry
-        (cause="revise"), so WHY a person reopened a blessed section is auditable
-        alongside the system's cause="reprocess" entries.
+    The voluntary human down-ratchet: `approved=False`, FINAL withdrawn,
+    PROTECTED stands (C2 D1: a released section stays protected from machines;
+    only a person's explicit act replaces it). The reason is required (C2 D3)
+    and kept on the version trail (`revise/working`) and the `revised` marker.
 
-    The reason is provenance (the version trail + `revised` marker), NOT a fact —
-    facts are categorical. Content is preserved (archive=False for the flag flip;
-    the trail entry captures the transition). No-op-safe: absent section → ok.
-
-    Raises StepError(400) with no dtxsid/section_key.
+    Returns ``{ok, section_key, approved: False, version, version_status,
+    noop?}``; a section that is not approved changes nothing (``noop
+    not_approved``, no event). Raises section_key_invalid (400),
+    section_not_found (404), reason_required (400).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "reopen")
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": False, "version": version}
+    if not data.get("approved"):
+        return {**result, "version_status": sw.version_status(dtxsid, section_key, version, store),
+                "noop": _noop("not_approved")}
+    reason = sw.require_reason(reason, section_key, "reopen")
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if isinstance(data, dict):
-        data["approved"] = False
-        _demote_for_revise(data, reason)
-        store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {"ok": True, "section_key": section_key, "approved": False}
+    data["approved"] = False
+    _demote_for_revise(data, reason)
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="revise", status="working", act="release", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data), reason=reason)
+    store.save_section(dtxsid, section_key, data, archive=False)
+    return {**result, "version_status": "working"}
 
 
 def _demote_for_revise(data: dict, reason: str) -> None:
-    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place, and stamp
-    the version-trail event. Withdraws FINAL (PROTECTED stands), records the human
-    reason as provenance (`revised` marker + the trail entry's reason). A no-op on
-    a section holding no maturity fact leaves facts untouched but STILL records the
-    reopen on the trail — reopening an un-blessed draft is a real, auditable act."""
+    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place: FINAL
+    withdrawn (PROTECTED stands), the human reason kept as the `revised`
+    marker. Shared with the old /api/session/unapprove route's history."""
     from workflow.labels import demote_for_human_release
     from workflow.ownership import section_facts, store_content_facts
 
     store_content_facts(data, demote_for_human_release(section_facts(data)))
-    data["revised"] = {"reason": reason} if reason else {"reason": ""}
-    data[_VERSION_EVENT_KEY] = {
-        "cause": "revise", "status": "working", "reason": reason,
-    }
+    data["revised"] = {"reason": reason}
+
+
+# The no-op answers of the section steps (MODULES.md §4.2: a success that did
+# nothing says so). The words are the C2 contract's.
+_NOOPS = {
+    "already_accepted": "This section is already accepted and nothing has changed since.",
+    "not_approved": "This section isn't approved, so there is nothing to reopen.",
+    "already_current": "That version is already the current one.",
+}
+
+
+def _noop(code: str) -> dict:
+    return {"code": code, "say": _NOOPS[code]}
+
+
+# The state keys a restore carries over from the CURRENT file, never from the
+# version it brings back: restoring never clears currency (C2 §4.8).
+_CURRENCY_KEYS = ("stale", "regenerated", "review", "wording_review")
+
+
+@step_provenance
+def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStore, *,
+                         reason: str = "") -> dict:
+    """Bring a past version of a section back as the current one (C2 §4.8, D3).
+
+    The version is found in the archives (or is the current file); it works
+    when the current file is absent (after a discard). The current file is
+    archived first; the restored text becomes the next version, never its old
+    number. It comes back as a DRAFT a person owns: not approved, PROTECTED
+    (no machine replaces it; accepting it is a separate act). Restoring never
+    clears currency: a stale or under-review current file passes its markers on.
+    The reason is required (D3) and kept on the `restore` event with
+    `from_version`.
+
+    Returns ``{ok, section_key, version, from_version, approved: False,
+    version_status: "working", noop?}``; restoring the current version is
+    ``noop already_current``. Raises section_key_invalid (400),
+    version_not_found (404), version_content_missing (409), reason_required (400).
+    """
+    from workflow import section_writes as sw
+    from workflow.labels import Fact
+    from workflow.ownership import STATE_KEYS, store_content_facts
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    target = sw.read_version(dtxsid, section_key, version, store)
+    noop = {"ok": True, "section_key": section_key, "version": version, "from_version": version,
+            "approved": bool(current and current.get("approved")),
+            "version_status": sw.version_status(dtxsid, section_key, version, store),
+            "noop": _noop("already_current")}
+    if current is not None and current.get("version") == version:
+        return noop
+    reason = sw.require_reason(reason, section_key, "restore")
+
+    data = {k: v for k, v in target.items() if k not in STATE_KEYS}
+    data["approved"] = False
+    store_content_facts(data, {Fact.PROTECTED})
+    for k in _CURRENCY_KEYS:
+        if current is not None and current.get(k):
+            data[k] = current[k]
+    out = sw.write_section(
+        dtxsid, section_key, data, store, act="restore", actor="person",
+        author=sw.author_of(target), force=True, reason=reason, cause="restore",
+        status="working", extra_event={"from_version": version})
+    if out["outcome"] == "unchanged":
+        return {**noop, "version": out["version"]}
+    return {"ok": True, "section_key": section_key, "version": out["version"],
+            "from_version": version, "approved": False, "version_status": "working"}
+
+
+@step_provenance
+def discard_section_step(dtxsid: str, section_key: str, store: PoolStore, *,
+                         reason: str = "") -> dict:
+    """Discard a section's current text (C2 §4.7, D4: behind the old route and
+    pool reset only; the new interface does not offer it). The file is archived,
+    then deleted, and a `discard/discarded` event recorded; the version counter
+    stays monotonic and restore still reaches the text.
+
+    Returns ``{ok, section_key, archived, version}``. Raises
+    section_key_invalid (400), section_not_found (404), section_owned (409:
+    an approved section is released first) and reason_required (400).
+    """
+    from workflow import section_writes as sw
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    if current is None:
+        raise sw.not_found(section_key, "discard")
+    if sw.is_locked(current):
+        raise sw.owned(section_key, "discard")
+    reason = sw.require_reason(reason, section_key, "discard")
+    out = sw.discard(dtxsid, section_key, store, act="discard", actor="person", reason=reason)
+    return {"ok": True, "section_key": section_key, "archived": out["archived"],
+            "version": out["version"]}

@@ -109,6 +109,17 @@ def test_a_person_s_write_over_owned_content_is_refused():
     assert body["code"] == "section_owned" and body["fix"] == "D1"
 
 
+def test_a_person_s_explicit_act_replaces_a_released_section():
+    # D1 + D6: released = PROTECTED stands (no machine replaces it), but the
+    # person who released it may now replace it; the released text is archived.
+    released = {"paragraphs": ["mine"], "approved": False, "facts": ["protected"], "version": 2}
+    store = FakeSectionStore({"summary": released})
+    out = _w(store, actor="person", act="use_run", author="model")
+    assert out["outcome"] == "written" and out["version"] == 3
+    assert store.archives["summary"][0][1] == released
+    assert "forced" not in store.last_event("summary")
+
+
 # --- rule 6: force needs a reason --------------------------------------------
 
 @pytest.mark.parametrize("reason", [None, "", "   "])

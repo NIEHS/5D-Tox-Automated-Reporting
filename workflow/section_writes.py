@@ -14,7 +14,9 @@ machine's, calls ``write_section``, which:
      that changed nothing leaves every section file untouched);
   4. holds a machine's write over owned content (or, for an apical result
      section, knocks the approval down with a record: C2 D2/A1), and records it;
-  5. refuses a person's write over owned content unless forced;
+  5. refuses a person's write over content that is locked (approved, edited by a
+     person, ingested) unless forced; a released section, which keeps PROTECTED,
+     is replaced by a person's explicit act (that is what releasing it is for);
   6. requires a reason for a forced write;
   7. otherwise archives the prior text and writes, and records one version event.
 
@@ -92,6 +94,18 @@ def version_content_missing(key: str, version: int) -> SectionRefusal:
         "version_content_missing",
         f"Version {version} of '{key}' is recorded but its text was not kept", 409,
         key=key, version=version)
+
+
+def is_locked(section: dict | None) -> bool:
+    """Whether a PERSON's unforced act may not replace this section: it is
+    approved, a person edited it, or its text came back from outside the
+    application. A released section (approved withdrawn, PROTECTED standing) is
+    owned — no machine replaces it — but not locked: a person's explicit act
+    (use a run, restore, regenerate) may, archiving it first."""
+    from workflow.ownership import INGESTED_SOURCE
+    return isinstance(section, dict) and bool(
+        section.get("approved") or section.get("user_edited")
+        or section.get("source") == INGESTED_SOURCE)
 
 
 def require_reason(reason, key: str, verb: str) -> str:
@@ -250,7 +264,7 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
     Returns ``{key, outcome, version, prior_version, archived, event}`` where
     outcome is ``written`` | ``unchanged`` | ``held`` | ``needs_review``.
     Raises SectionRefusal ``section_key_invalid``, ``section_owned`` (a person's
-    write over owned content without force) or ``reason_required`` (a forced
+    write over locked content without force) or ``reason_required`` (a forced
     write over owned content without a reason).
 
     ``content`` is the new file as the caller wants it (its state keys
@@ -267,6 +281,7 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
 
     data = dict(content)
     owned_now = prior is not None and is_owned(prior)
+    forced = owned_now and force
     if owned_now and not force:
         if actor == "system" and on_owned == REVIEW:
             return _knock_down(dtxsid, key, prior, data, store, act=act, author=author,
@@ -279,9 +294,12 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
                          extra={**(extra_event or {}), "held_hash": new_hash})
             record(dtxsid, key, prior_version, line, store)
             return {**outcome, "outcome": "held", "version": prior_version, "event": line}
-        # Rule 5.
-        raise owned(key, act)
-    if owned_now:
+        # Rule 5. A released section (only PROTECTED stands: C2 D1) is replaced
+        # by a person's explicit act — that is what releasing it was for (D6:
+        # "release first"); Process still never replaces it.
+        if is_locked(prior):
+            raise owned(key, act)
+    if forced:
         reason = require_reason(reason, key, act)       # rule 6
 
     # A review marker (D2/A1) stands until a person re-accepts: a later machine
@@ -292,7 +310,7 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
     # Rule 7 (and 2, and 6 after its reason): archive the prior, write, record.
     line = event(key=key, cause=cause, status=status, act=act, actor=actor, author=author,
                  prior_version=prior_version, changed=True, chash=new_hash, reason=reason,
-                 extra={**(extra_event or {}), **({"forced": True} if owned_now else {})})
+                 extra={**(extra_event or {}), **({"forced": True} if forced else {})})
     data[_VERSION_EVENT_KEY] = line
     data.pop("version", None)
     store.save_section(dtxsid, key, data, archive=True)
@@ -435,6 +453,6 @@ def read_version(dtxsid: str, key: str, version, store: PoolStore) -> dict:
 
 __all__ = [
     "SectionRefusal", "write_section", "discard", "section_history", "read_version",
-    "validate_section_key", "section_key_patterns", "author_of", "version_status",
+    "validate_section_key", "section_key_patterns", "author_of", "version_status", "is_locked",
     "event", "record", "require_reason", "HOLD", "REVIEW", "STATE_KEYS", "section_content",
 ]
