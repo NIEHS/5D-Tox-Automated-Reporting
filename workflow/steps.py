@@ -689,9 +689,7 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     version = data.get("version", 1)
     result = {"ok": True, "section_key": section_key, "approved": True, "version": version,
               "version_status": "blessed"}
-    if (data.get("approved") and not data.get("stale") and not data.get("review")
-            and not data.get("wording_review")
-            and sw.version_status(dtxsid, section_key, version, store) == "blessed"):
+    if sw.already_accepted(data, sw.version_status(dtxsid, section_key, version, store)):
         return {**result, "noop": _noop("already_accepted")}
 
     data["approved"] = True

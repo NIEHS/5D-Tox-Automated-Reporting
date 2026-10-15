@@ -15,8 +15,9 @@ call ``study_state`` directly). It composes what the core already derives:
     the pin, its drift, and which definition renders);
   * whether the study was processed;
   * the sections: the catalog of the tree that renders, the readiness, and per
-    section what is on disk (approved, facts, stale, regenerated, wording_review,
-    source, version, the version manifest's status, the machine guard);
+    section what is on disk (approved, facts, maturity, stale, regenerated,
+    wording_review, review, source, version, the version's status, the machine
+    guard: workflow.ownership, C2);
   * the publish readiness (``WorkflowEngine.publish_readiness``) as a checklist,
     with what it checked (``checks``) and whether that is everything publishing
     needs (``complete``: not until C6);
@@ -299,8 +300,11 @@ _CACHE_ONLY_SAY = ("This section can't be approved yet: its text is kept only wi
 _NO_SAVED_TEXT_SAY = "There is no text for this section yet, so there is nothing to approve."
 
 
+_ALREADY_ACCEPTED_SAY = "This section is already accepted and nothing has changed since."
+
+
 def _accept_verdict(key: str, kind: str, approvable: bool, enabled: bool, blocked_by: list[str],
-                    has_file: bool) -> dict:
+                    has_file: bool, accepted: bool = False) -> dict:
     """Whether a person may accept (approve) the section now, and if not, why:
     ``{"allowed", "code", "say"}``. Derived from the catalog (kind, approvable),
     the readiness (enabled, blocked_by) and whether there is a saved text to
@@ -317,6 +321,11 @@ def _accept_verdict(key: str, kind: str, approvable: bool, enabled: bool, blocke
         if key in _CACHE_ONLY_KEYS:
             return {"allowed": False, "code": "not_saved_as_section", "say": _CACHE_ONLY_SAY}
         return {"allowed": False, "code": "no_saved_text", "say": _NO_SAVED_TEXT_SAY}
+    if accepted:
+        # accept_section_step would change nothing (C2: noop already_accepted).
+        # A section under review, stale, or approved under an unrecorded
+        # status IS acceptable: accepting answers it.
+        return {"allowed": False, "code": "already_accepted", "say": _ALREADY_ACCEPTED_SAY}
     return {"allowed": True, "code": None, "say": None}
 
 
@@ -330,17 +339,46 @@ def _regenerated(raw) -> dict | None:
     return {**raw, "say": _STALE_SAY.get(reason, _STALE_SAY_DEFAULT)}
 
 
+def _maturity(d: dict | None) -> str | None:
+    """The section's maturity rung (workflow.labels): "final", "working_draft",
+    "first_draft", or None when it holds none."""
+    from workflow.labels import maturity_rung
+    from workflow.ownership import section_facts
+    rung = maturity_rung(section_facts(d))
+    return rung.value if rung is not None else None
+
+
+def _review(raw) -> dict | None:
+    """Why an approved section's printed content changed under it (C2 D2/A1:
+    ``{why, since_version, flips}``), with the plain words (``say``). None
+    when there is no such marker."""
+    if not isinstance(raw, dict):
+        return None
+    return {**raw, "say": _REVIEW_SAY.get(raw.get("why"), _REVIEW_SAY_DEFAULT)}
+
+
+_REVIEW_SAY = {
+    "numbers_changed": ("The study's data changed the numbers this section prints since it "
+                        "was approved. Read it again, then approve it again."),
+    "wording_changed": ("The study's data changed words this section's text depends on since "
+                        "it was approved. Read it again, then approve it again."),
+}
+_REVIEW_SAY_DEFAULT = "This section changed since it was approved. Read it again, then approve it again."
+
+
 def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: dict,
                  title: str | None) -> dict:
     """One section as the interface sees it: the catalog's identity, the
     readiness, and what its file on disk says (nothing, when it has none)."""
     from pipeline.session_store import current_version_status
     from workflow.ownership import may_machine_write, section_facts
+    from workflow.section_writes import already_accepted
 
     r = readiness.get(key, {})
     d = section if isinstance(section, dict) else None
     regenerated = (d or {}).get("regenerated")
     wording = (d or {}).get("wording_review")
+    status = current_version_status(dtxsid, key) if d else None
     return {
         "key": key,
         "title": (d or {}).get("title") or title,
@@ -360,10 +398,13 @@ def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: d
         "source": (d or {}).get("source"),
         "model": (d or {}).get("model_used"),
         "version": (d or {}).get("version") if d else None,
-        "version_status": current_version_status(dtxsid, key) if d else None,
+        "version_status": status,
+        "maturity": _maturity(d),
+        "review": _review((d or {}).get("review")),
         "machine_may_write": may_machine_write(d),
         "accept": _accept_verdict(key, spec.kind, spec.approvable, r.get("enabled", True),
-                                  list(r.get("blocked_by", [])), d is not None),
+                                  list(r.get("blocked_by", [])), d is not None,
+                                  already_accepted(d, status)),
     }
 
 

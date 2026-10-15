@@ -108,6 +108,15 @@ def is_locked(section: dict | None) -> bool:
         or section.get("source") == INGESTED_SOURCE)
 
 
+def already_accepted(section: dict | None, status: str | None) -> bool:
+    """Whether accepting the section would change nothing: it is approved,
+    carries no stale / review / wording_review marker, and its current
+    version's status is blessed. The accept step answers noop then, and the
+    read model does not offer accepting."""
+    return isinstance(section, dict) and bool(section.get("approved")) and not any(
+        section.get(k) for k in ("stale", "review", "wording_review")) and status == "blessed"
+
+
 def require_reason(reason, key: str, verb: str) -> str:
     """The reason, stripped; a SectionRefusal when it is empty (C2 D3)."""
     text = reason.strip() if isinstance(reason, str) else ""
@@ -454,5 +463,6 @@ def read_version(dtxsid: str, key: str, version, store: PoolStore) -> dict:
 __all__ = [
     "SectionRefusal", "write_section", "discard", "section_history", "read_version",
     "validate_section_key", "section_key_patterns", "author_of", "version_status", "is_locked",
+    "already_accepted",
     "event", "record", "require_reason", "HOLD", "REVIEW", "STATE_KEYS", "section_content",
 ]

@@ -423,3 +423,43 @@ def test_the_kind_of_session_and_its_relations(sessions_dir, session):
 
     (sessions_dir / f"{ID}_nb").mkdir()
     assert study_state(f"{ID}_nb")["kind"] == "other"
+
+
+# ---------------------------------------------------------------------------
+# C2: maturity, review, the version's status, and accept under the new rules
+# ---------------------------------------------------------------------------
+
+def test_c2_section_rows_carry_maturity_review_and_the_owned_guard(session):
+    from pipeline.session_store import _VERSION_EVENT_KEY, save_section
+    sections = {
+        # approved and blessed: nothing left to accept
+        "background": {"approved": True, "facts": ["final", "protected"], "source": "model"},
+        # knocked down by Process (C2 D2/A1): under review, acceptable
+        "bm2_body-weight": {"approved": False, "facts": ["protected"], "source": "generated",
+                            "review": {"why": "numbers_changed", "since_version": 1, "flips": []}},
+        # released: not approved, still protected from the machine
+        "summary": {"approved": False, "facts": ["protected"], "revised": {"reason": "r"},
+                    "source": "generated"},
+    }
+    events = {"background": ("edit", "blessed"), "bm2_body-weight": ("reprocess", "needs-re-bless"),
+              "summary": ("revise", "working")}
+    for key, d in sections.items():
+        cause, status = events[key]
+        save_section(ID, key, {**d, _VERSION_EVENT_KEY: {"cause": cause, "status": status}})
+    on_disk = {k: json.loads((session / f"{k}.json").read_text()) for k in sections}
+    state = study_state(ID, FakeStore(session, sections=on_disk))
+
+    bg = _row(state, "background")
+    assert bg["maturity"] == "final" and bg["review"] is None
+    assert bg["version_status"] == "blessed" and bg["machine_may_write"] is False
+    assert bg["accept"]["allowed"] is False and bg["accept"]["code"] == "already_accepted"
+
+    bw = _row(state, "bm2_body-weight")
+    assert bw["maturity"] is None and bw["version_status"] == "needs-re-bless"
+    assert bw["review"]["why"] == "numbers_changed" and "data changed" in bw["review"]["say"]
+    assert bw["machine_may_write"] is False
+    assert bw["accept"] == {"allowed": True, "code": None, "say": None}
+
+    summary = _row(state, "summary")
+    assert summary["approved"] is False and summary["machine_may_write"] is False   # D1
+    assert summary["version_status"] == "working"

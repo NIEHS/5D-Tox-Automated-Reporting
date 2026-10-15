@@ -298,7 +298,12 @@ class TestBackCompat:
 class TestLiveApproveRoute:
 
     def test_approve_route_records_edit_event(self, client, sessions_dir):
+        # Fenced (C2 D5): the route accepts the section file as it is; it no
+        # longer creates one from the posted content.
         dtxsid = "DTXSID_ROUTE"
+        (sessions_dir / dtxsid).mkdir(parents=True)
+        (sessions_dir / dtxsid / "background.json").write_text(
+            json.dumps({"paragraphs": ["a body paragraph"], "version": 1}))
         resp = client.post("/api/session/approve", json={
             "dtxsid": dtxsid,
             "section_type": "background",
