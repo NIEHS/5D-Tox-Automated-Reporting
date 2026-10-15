@@ -21,15 +21,15 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
-| C1 legal actions enforced | building, resumed at step 7 (`ui-c1-be`) | ui-backend-engineer | 2026-10-15 (D1 = B) | | |
-| C2 owned content protected | **built** (`ui-c2-be` f44c6b0, 8 commits; smart/guard/full green but the known failure); merges after C1 | – | 2026-10-15 | | C1 merge |
+| C1 legal actions enforced | **merged** into `ui-redesign` (623f003, wave 1) | – | 2026-10-15 (D1 = B) | orchestrator-verified (full suite: only the known docx failure; guard 11/11); maintainer demo pending | |
+| C2 owned content protected | **merged** (623f003, wave 1); its section tests now seed INTEGRATED studies (C1 refuses Process before integration) | – | 2026-10-15 | orchestrator-verified; maintainer demo pending | |
 | C3 saves merge and check | not started | | | | Q10 |
-| C4 side-effect-free reads | spec, resumed | ui-backend-engineer (spec stage) | | | |
+| C4 side-effect-free reads | spec ready (`modules/c4/`), **awaiting the maintainer** (D1–D7) | | | | C1 merged ✓ |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | both halves built (`ui-m1-fe` e93455b, `ui-m1-be` 6b3553a, 128 backend tests); merges after C1 and C2, then test + review | – | 2026-10-15 | | |
+| M1 Studies | **merged** (623f003, wave 1; demo on 9200); adversarial test + review running | ui-adversarial-tester, ui-reviewer | 2026-10-15 | | |
 | M2 Study files | spec ready, **awaiting the maintainer** (Q-M2-1…11) | | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started | | | | |
 | M4 Study facts | not started | | | | |
