@@ -310,6 +310,16 @@ app.include_router(compare_routes.router)
 import web_routes.supplemental_routes as supplemental_routes
 app.include_router(supplemental_routes.router)
 
+# The new interface (MODULES.md §4, §5): its shared routes under /api/v2/ (the
+# study state read model, the vocabularies; every failure in the §4.2 error
+# envelope), and its built bundle (ui/dist) served at /app. Nothing at / or
+# /workflow changes.
+import web_routes.v2_routes as v2_routes
+app.include_router(v2_routes.router)
+
+import web_routes.app_mount as app_mount
+app.include_router(app_mount.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI

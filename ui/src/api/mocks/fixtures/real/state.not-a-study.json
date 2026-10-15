@@ -1,0 +1,13 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "invalid_study_id",
+      "status": 400,
+      "message": "invalid session id 'not-a-study': expected 'DTXSID' followed by 1-64 letters, digits, '_' or '-'",
+      "say": "That is not a valid study id. A study is named by its chemical's DTXSID: “DTXSID” followed by digits, for example DTXSID50469320.",
+      "fix": "M1",
+      "details": {}
+    }
+  }
+}
