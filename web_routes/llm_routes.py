@@ -635,6 +635,12 @@ async def api_generate_genomics_narrative(request: Request):
     """
     body = await request.json()
     identity = body.get("identity", {})
+    # C2 §4.12 (b), D3: force bypasses the stored narrative, a person's act;
+    # it needs a reason.
+    force = bool(body.get("force", False))
+    if force and not str(body.get("reason") or "").strip():
+        return JSONResponse({"error": "A reason is required to regenerate 'genomics narrative'",
+                             "code": "reason_required"}, status_code=400)
     result = await generate_genomics_narrative_async(
         dtxsid=body.get("dtxsid", ""),
         compound=identity.get("name", "the test article"),
@@ -645,7 +651,7 @@ async def api_generate_genomics_narrative(request: Request):
         all_genes=body.get("all_genes", []),
         total_responsive=body.get("total_responsive_genes", 0),
         dose_unit=body.get("dose_unit", "mg/kg"),
-        force=bool(body.get("force", False)),
+        force=force,
         subject=_study_subject(body.get("dtxsid", "")),
         model=body.get("model", ""),
     )
@@ -682,7 +688,12 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
       4. Aggregate the per-sex results into per-organ paragraph lists via the
          shared helper (overrides=None — we just cleared them).
 
-    Input JSON:  {"organ": "liver"}
+    Before the person's text is cleared it is archived to
+    history/genomics_<organ>_<sex>/ with a `discard` event (C2 §4.12 a), so it
+    can be read back. When the organ has a person's text, a reason is required
+    (C2 D3).
+
+    Input JSON:  {"organ": "liver", "reason": "…"}
     Returns:     {"organ": "liver", "gene_set": [...], "gene_bmd": [...]}
                  — the two narratives to drop straight into the client's
                  `by_organ_llm[organ]` slots.
@@ -755,6 +766,20 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
     # the override tier (which wins on render) would mask the new LLM text.
     overrides_path = session_dir / "genomics_narrative_overrides.json"
     if overrides_path.exists():
+        from pipeline.session_store import read_narrative_overrides
+        from workflow.section_writes import archive_genomics_overrides
+        held = read_narrative_overrides(session_dir)
+        sexes = sorted({(genomics_cache[k].get("sex") or k.split("_", 1)[1]).lower()
+                        for k in organ_keys})
+        has_text = any(o.lower() == organ and paras for kind in ("gene_set", "gene_bmd")
+                       for o, paras in (held.get(kind) or {}).items())
+        reason = str(body.get("reason") or "").strip()
+        if has_text and not reason:
+            return JSONResponse(
+                {"error": f"A reason is required to regenerate 'genomics_{organ}'",
+                 "code": "reason_required"}, status_code=400)
+        archive_genomics_overrides(dtxsid, organ, held, act="regenerate", actor="person",
+                                   reason=reason or None, sexes=sexes)
         try:
             raw = json.loads(overrides_path.read_text())
             for kind in ("gene_set", "gene_bmd"):

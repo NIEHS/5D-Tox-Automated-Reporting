@@ -85,6 +85,28 @@ class PoolStore(Protocol):
         """Persist a report section (versioned, archived-before-overwrite).
         `data` is mutated in place with its `version` (see session_store)."""
 
+    # --- section history (C2: workflow.section_writes) ------------------
+    def archive_section(self, dtxsid: str, key: str) -> str | None:
+        """Copy the section's current file into its history; the archive's
+        name, or None when there is no current file."""
+
+    def delete_section(self, dtxsid: str, key: str) -> None:
+        """Delete the section's current file (history is kept). Called only
+        after archive_section (discard, pool reset)."""
+
+    def read_version_history(self, dtxsid: str, key: str) -> list:
+        """The section's version events (history/<key>/index.jsonl), oldest
+        first; [] when there are none."""
+
+    def record_version_event(self, dtxsid: str, key: str, version: int, event: dict) -> None:
+        """Append one version event without writing the section."""
+
+    def list_archived(self, dtxsid: str, key: str) -> list:
+        """Every archived version as (archive name, content), by version."""
+
+    def read_archived(self, dtxsid: str, key: str, version: int) -> dict | None:
+        """The archived content of one version, or None."""
+
     def read_section_states(self, dtxsid: str) -> dict[str, bool]:
         """Map every report-section file present on disk to its `approved` flag.
 
@@ -174,6 +196,31 @@ class DiskPoolStore:
     def save_section(self, dtxsid: str, key: str, data: dict, archive: bool = True) -> None:
         from pipeline.session_store import save_section
         save_section(dtxsid, key, data, archive=archive)
+
+    def archive_section(self, dtxsid: str, key: str) -> str | None:
+        from pipeline.session_store import archive_current
+        return archive_current(dtxsid, key)
+
+    def delete_section(self, dtxsid: str, key: str) -> None:
+        from pipeline.session_store import delete_section
+        delete_section(dtxsid, key)
+
+    def read_version_history(self, dtxsid: str, key: str) -> list:
+        from pipeline.session_store import read_version_history
+        return read_version_history(dtxsid, key)
+
+    def record_version_event(self, dtxsid: str, key: str, version: int, event: dict) -> None:
+        from pipeline.session_store import append_version_event
+        append_version_event(dtxsid, key, version, event)
+
+    def list_archived(self, dtxsid: str, key: str) -> list:
+        from pipeline.session_store import list_archived
+        return list_archived(dtxsid, key)
+
+    def read_archived(self, dtxsid: str, key: str, version: int) -> dict | None:
+        from pipeline.session_store import read_archived
+        found = read_archived(dtxsid, key, version)
+        return found[1] if found else None
 
     def _iter_section_dicts(self, dtxsid: str):
         """Yield (stem, dict) for every report-section file on disk. Shared by

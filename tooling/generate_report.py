@@ -438,10 +438,19 @@ def summary(dtxsid: str, store) -> None:
          else "  nothing to summarize")
 
 
-def background(dtxsid: str, identity: dict, model: str, store) -> None:
+def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = False,
+               reason: str | None = None) -> None:
     """Generate + save the Background section (LLM over ATSDR/IRIS/PubChem data),
-    mirroring POST /api/generate + /api/session/save-section. Saved UNAPPROVED,
-    as the UI does."""
+    UNAPPROVED, through the section write gate (C2 §4.10): the operator asked,
+    so it is a person's act. A Background a person approved or edited is never
+    replaced: the refusal is printed and nothing is saved, unless --force with
+    a --reason (the prior text is then archived)."""
+    from workflow.section_writes import read_prior, is_locked
+    if is_locked(read_prior(dtxsid, "background", store)) and not force:
+        # Refuse before the LLM runs: its answer could not be saved.
+        _log("  REFUSED: 'background' is approved or protected; generating it again would "
+             "replace its text. Release it first, with a reason (or pass --force --reason).")
+        return
     from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
     from narrative.chem_resolver import ChemicalIdentity
     from narrative.data_gatherer import gather_all
@@ -475,15 +484,23 @@ def background(dtxsid: str, identity: dict, model: str, store) -> None:
         # empty) is not a Background — its [n] citations would point nowhere.
         _log("  WARNING: background has no references (sources unreachable?) — not saved")
         return
-    store.save_section(dtxsid, "background", {
-        "paragraphs": paragraphs,
-        "references": result.get("references", []),
-        "citation_report": result.get("citation_report"),
-        "abstract_background": result.get("abstract_background", ""),
-        "model_used": result.get("model_used", model),
-        "approved": False,
-    }, archive=False)
-    _log(f"  {len(paragraphs)} paragraph(s), {len(result.get('references', []))} reference(s)")
+    from workflow.section_writes import write_section
+    from workflow.errors import StepError
+    try:
+        out = write_section(dtxsid, "background", {
+            "paragraphs": paragraphs,
+            "references": result.get("references", []),
+            "citation_report": result.get("citation_report"),
+            "abstract_background": result.get("abstract_background", ""),
+            "model_used": result.get("model_used", model),
+            "approved": False,
+        }, store, act="background", actor="person", author="model", force=force,
+            reason=reason, extra_event={"model": result.get("model_used", model)})
+    except StepError as e:
+        _log(f"  REFUSED ({getattr(e, 'code', e.status_code)}): {e.message} — nothing saved")
+        return
+    _log(f"  {len(paragraphs)} paragraph(s), {len(result.get('references', []))} reference(s)"
+         f" — {out['outcome']}, version {out['version']}")
 
 
 # ---------------------------------------------------------------------------
@@ -616,6 +633,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--background", action="store_true",
                     help="also generate the Background section (LLM + external lookups)")
     ap.add_argument("--model", default="", help="LLM model for --background")
+    ap.add_argument("--force", action="store_true",
+                    help="--background: replace a Background a person approved or edited "
+                         "(its text is archived first); needs --reason")
+    ap.add_argument("--reason", default=None,
+                    help="why --force replaces a person's Background (kept in its history)")
     ap.add_argument("--stop-after", choices=STEPS,
                     help="stop after this pipeline step (no render)")
     ap.add_argument("--render-only", action="store_true",
@@ -745,7 +767,8 @@ def main(argv: list[str] | None = None) -> int:
                 process(dtxsid, params, store)
             if args.background:
                 with _Timer("background (LLM)"):
-                    background(dtxsid, identity, args.model, store)
+                    background(dtxsid, identity, args.model, store, force=args.force,
+                               reason=args.reason)
             with _Timer("summary"):
                 summary(dtxsid, store)
             if args.stop_after == "process":

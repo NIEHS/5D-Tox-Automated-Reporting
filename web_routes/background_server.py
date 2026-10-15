@@ -316,6 +316,8 @@ app.include_router(supplemental_routes.router)
 # /workflow changes.
 import web_routes.v2_routes as v2_routes
 app.include_router(v2_routes.router)
+import web_routes.v2_section_routes as v2_section_routes  # C2
+app.include_router(v2_section_routes.router)
 
 import web_routes.app_mount as app_mount
 app.include_router(app_mount.router)

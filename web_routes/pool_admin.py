@@ -212,12 +212,11 @@ def invalidate_downstream(session_dir: Path, dry_run: bool = False) -> list[str]
                     # session dir name is the DTXSID (find_session_dir builds
                     # SESSIONS_DIR/{dtxsid}); save_section resolves the same
                     # path from session_store.SESSIONS_DIR.
+                    from pipeline.pool_state import invalidation_event
                     from pipeline.session_store import (
                         save_section, _VERSION_EVENT_KEY,
                     )
-                    data[_VERSION_EVENT_KEY] = {
-                        "cause": "reprocess", "status": "needs-re-bless",
-                    }
+                    data[_VERSION_EVENT_KEY] = invalidation_event(section_stem, data)
                     save_section(session_dir.name, section_stem, data)
                 actions.append(
                     f"{'Would mark' if dry_run else 'Marked'} stale: {section_file.name}"
