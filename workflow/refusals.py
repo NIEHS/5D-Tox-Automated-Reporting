@@ -55,6 +55,56 @@ REFUSALS: dict[str, Refusal] = {
     "invalid_study_id": Refusal(400, (
         "That is not a valid study id. A study is named by its chemical's DTXSID: "
         "“DTXSID” followed by digits, for example DTXSID50469320."), "M1"),
+    "study_id_has_suffix": Refusal(400, (
+        "A study's id is the DTXSID alone. Ids with a suffix (…_rat, …_published) are "
+        "made by the system."), None),
+    "study_exists": Refusal(409, (
+        "A study of this chemical already exists ({id}). Open it instead."), "M1"),
+    "study_not_found": Refusal(404, (
+        "There is no study {id}. It may have been deleted."), "M1"),
+    "identity_not_found": Refusal(404, (
+        "{service} has no chemical with the DTXSID {id}. A single mistyped digit gives "
+        "another chemical or none. Check the id on the CompTox dashboard."), None),
+    "identity_lookup_unreachable": Refusal(503, (
+        "The chemical lookup service ({service}) could not be reached. Nothing was "
+        "created. Try again in a minute."), None),
+    "identity_unconfirmed": Refusal(400, (
+        "Confirm the chemical before going on: tick the box that says it is the chemical "
+        "you are studying."), None),
+    "identity_changed": Refusal(409, (
+        "The lookup now gives a different chemical than the one you confirmed. Look it "
+        "up again."), None),
+    "identity_incomplete": Refusal(400, (
+        "A name and a CASRN are needed."), None),
+    "invalid_casrn": Refusal(400, (
+        "This CASRN's check digit doesn't match; a digit is probably mistyped."), None),
+    "identity_exists": Refusal(409, (
+        "This study already has its chemical's identity. Changing it is not done here."),
+        None),
+    "format_changed": Refusal(409, (
+        "The report format this id brings changed since you looked. Review it again."),
+        None),
+    "structure_unavailable": Refusal(404, (
+        "PubChem did not return a structure picture."), None),
+    "read_only_session": Refusal(409, (
+        "This is the published book's own content, made by a tool. It can't be changed "
+        "or deleted here."), None),
+    "report_has_no_data": Refusal(409, (
+        "This is a report over several studies: it has no files or data of its own. "
+        "Its data is prepared in each of its studies; open one of them."), "M1"),
+    "member_of_report": Refusal(409, (
+        "This is the {species} study of the report {parent}. Deleting it would break "
+        "that report."), "M1"),
+    "run_in_flight": Refusal(409, (
+        "Process is running on this study (since {time}). Wait for it to finish."), "P1"),
+    "confirm_mismatch": Refusal(400, (
+        "The id you typed doesn't match this study's id. Nothing was deleted."), None),
+    "changed_since_preview": Refusal(409, (
+        "The study changed after you reviewed what would be deleted. Nothing was "
+        "deleted; review the list again."), None),
+    "list_failed": Refusal(500, (
+        "The list of studies can't be read: the folder that holds them is missing or "
+        "unreadable. Tell the maintainer."), None),
     "no_files": Refusal(404, (
         "This study has no data files yet. Add the study's files first."), "M2"),
     "files_not_recognised": Refusal(400, (
@@ -215,7 +265,11 @@ def _class_names(exc: BaseException) -> set[str]:
 
 def _details(exc: BaseException, code: str) -> dict:
     """What the interface may show beside the message: the damaged file's name,
-    a request's field errors."""
+    a request's field errors, or what a refusal naming its own code carries
+    (``details``: the study id, the parent report …)."""
+    own = getattr(exc, "details", None)
+    if isinstance(own, dict) and getattr(exc, "code", None) == code:
+        return dict(own)
     if code == "damaged_session_file":
         path = getattr(exc, "path", None)
         return {"file": f"{path.parent.name}/{path.name}"} if path is not None else {}
@@ -258,7 +312,9 @@ def _message(exc: BaseException) -> str:
 
 # What a `say` shows when its rule captured nothing for a field (a refusal that
 # named its own code, say).
-_FIELD_DEFAULTS = {"key": "this", "file": "the details name it"}
+_FIELD_DEFAULTS = {"key": "this", "file": "the details name it", "id": "with this id",
+                   "service": "the lookup service", "species": "member",
+                   "parent": "it belongs to", "time": "a time not recorded"}
 
 
 class _Fields(dict):

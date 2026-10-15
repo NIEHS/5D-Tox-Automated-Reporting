@@ -6,7 +6,9 @@ model (``GET /api/v2/studies/{id}/state``; the command line and the notebook can
 call ``study_state`` directly). It composes what the core already derives:
 
   * what kind of session it is (a study, a report over several studies, a
-    member of one, a published book's companion) and its relations;
+    member of one, a published book's companion), the chemical it is about and
+    its relations, and where it stands with the next step (``stands``): the
+    derivations of workflow.studies, the same the studies list serves;
   * the phase and its legal actions (``WorkflowEngine.state``);
   * the identity (``identity.json``; the abbreviation is the short name);
   * the two pins: the method profile (``pipeline.method_profile``: the pin, the
@@ -467,47 +469,15 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
 
 
 # ---------------------------------------------------------------------------
-# What kind of session this is
+# What kind of session this is (one derivation, workflow.studies)
 # ---------------------------------------------------------------------------
 
 def session_kind(dtxsid: str, sessions_root: Path) -> dict:
-    """What the session is, and the sessions it belongs with (the rule of the M1
-    contract §3, first match wins):
-
-      * ``companion``: a published book's content (``published_clone.json``);
-        ``twin`` is the generated study it was built beside;
-      * ``report``: a report over several studies (``studies.json``);
-      * ``member``: listed in another session's ``studies.json``; ``parent`` is
-        that report;
-      * ``study``: the id is a bare DTXSID (a chemical's own study);
-      * ``other``: anything else (a suffixed working copy, say).
-
-    ``{"kind", "relations": {"parent", "twin"}}``. A screen uses it to offer only
-    what makes sense for the session: a companion is read-only, a report has no
-    files of its own (its members do)."""
-    import re
-    from rendering.published_clone import CLONE_FILE
-    from rendering.report_compose import STUDIES_FILE
-
-    session = sessions_root / dtxsid
-    relations: dict = {"parent": None, "twin": None}
-    clone = _read_json(session / CLONE_FILE)
-    if clone is not None:
-        twin = clone.get("twin") if isinstance(clone, dict) else None
-        relations["twin"] = twin if isinstance(twin, str) else None
-        return {"kind": "companion", "relations": relations}
-    if (session / STUDIES_FILE).is_file():
-        return {"kind": "report", "relations": relations}
-    for listing in sorted(sessions_root.glob(f"*/{STUDIES_FILE}")):
-        try:
-            stated = json.loads(listing.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue  # that report's own read reports its damaged file
-        if isinstance(stated, dict) and dtxsid in stated.values():
-            relations["parent"] = listing.parent.name
-            return {"kind": "member", "relations": relations}
-    kind = "study" if re.fullmatch(r"DTXSID\d+", dtxsid) else "other"
-    return {"kind": kind, "relations": relations}
+    """What the session is and the sessions it belongs with: the derivation of
+    ``workflow.studies.session_kind`` (the M1 contract §3), kept importable here.
+    ``{"kind", "chemical_dtxsid", "chemical_dtxsid_from", "relations"}``."""
+    from workflow.studies import session_kind as derive
+    return derive(dtxsid, sessions_root)
 
 
 # ---------------------------------------------------------------------------
@@ -524,6 +494,7 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     """
     from common.dtxsid import validate_dtxsid
     from workflow.engine import WorkflowEngine, _is_processed
+    from workflow.studies import stands
 
     validate_dtxsid(dtxsid)
     store = store if store is not None else ReadOnlyDiskPoolStore()
@@ -553,6 +524,8 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     members = members_state(dtxsid, store)
     if members is not None:
         state["members"] = members
+    state["stands"] = stands(state["kind"], state["phase"], state["processed"],
+                             member_states=members, publish=state["readiness"]["publish"])
     return state
 
 
