@@ -1,0 +1,85 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID1021952",
+    "kind": "study",
+    "chemical_dtxsid": "DTXSID1021952",
+    "chemical_dtxsid_from": "id",
+    "identity": {
+      "name": "Triphenyl Phosphate",
+      "casrn": "115-86-6",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "VALIDATION_ERRORS",
+      "say": "The files have problems to fix",
+      "next": {
+        "say": "Fix the problems the validation found",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-12T11:22:31Z",
+    "format": {
+      "definition": "studies/DTXSID1021952/document",
+      "source": "study",
+      "era": "eras/ntp-rr-2018",
+      "title": "NTP Research Report, as published in December 2018 (RR-8)",
+      "title_short": "NTP Research Report, 2018",
+      "changes": 0,
+      "say": "This chemical has a published report, RR-8 (December 2018). The study is written in that book's format: the NTP Research Report as published in 2018, unaltered."
+    },
+    "published": {
+      "report": "RR-8",
+      "date": "2018-12",
+      "nbk": "NBK535511"
+    },
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the study has no report (it has not been processed)"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": "DTXSID1021952_published",
+      "twin": null,
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": null,
+      "format": {
+        "definition": "studies/DTXSID1021952/document",
+        "source": "study",
+        "era": "eras/ntp-rr-2018",
+        "title": "NTP Research Report, as published in December 2018 (RR-8)",
+        "title_short": "NTP Research Report, 2018",
+        "changes": 0,
+        "say": "This chemical has a published report, RR-8 (December 2018). The study is written in that book's format: the NTP Research Report as published in 2018, unaltered.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

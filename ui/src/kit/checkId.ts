@@ -41,22 +41,55 @@ function compile(p: IdPattern): RegExp | null {
   }
 }
 
+/** The DTXSID kinds: a chemical's id, and a study's id (which is the chemical's DTXSID alone). */
+export function isDtxsidKind(kind: IdKind): boolean {
+  return kind === 'dtxsid' || kind === 'study_id'
+}
+
+/**
+ * The mistakes a DTXSID is typed with, named before the pattern only says
+ * "wrong" (M1 spec §4, rules 3 to 6). Never corrected here: the person is
+ * told and retypes.
+ */
+function dtxsidProblem(value: string, example: string): string | null {
+  if (!value.startsWith('DTXSID')) {
+    if (/^dtxsid/i.test(value)) return 'Write DTXSID in capital letters.'
+    return `A DTXSID starts with 'DTXSID', for example ${example}.`
+  }
+  const rest = value.slice('DTXSID'.length)
+  const suffix = /[_-]/.exec(rest)
+  if (suffix) {
+    const base = value.slice(0, 'DTXSID'.length + suffix.index)
+    const named = /^DTXSID\d+$/.test(base) ? ` (${base})` : ''
+    return `A study's id is the DTXSID alone${named}. Ids with a suffix (…_rat, …_published) are made by the system.`
+  }
+  const lookAlike = /[OIL]/i.exec(rest)
+  if (lookAlike) {
+    const position = 'DTXSID'.length + lookAlike.index + 1
+    return `Character ${position} is the letter ${lookAlike[0].toUpperCase()}. A DTXSID has only digits after 'DTXSID'.`
+  }
+  return null
+}
+
+/** Every DTXSID in a piece of pasted text (a CompTox address, a sentence), upper case, without repeats. */
+export function dtxsidsIn(text: string): string[] {
+  return [...new Set(text.toUpperCase().match(/DTXSID\d+/g) ?? [])]
+}
+
 export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefined): IdCheck {
   if (!pattern) return { ok: null, say: `The rule for a ${ID_LABELS[kind]} could not be loaded, so this cannot be checked yet.` }
   const re = compile(pattern)
   if (!re) return { ok: null, say: `The rule for a ${ID_LABELS[kind]} is broken, so this cannot be checked. Tell whoever looks after the application.` }
-  if (value === '') return { ok: false, say: `Type the ${ID_LABELS[kind]}, for example ${pattern.example}.` }
+  if (value === '') {
+    if (kind === 'dtxsid') return { ok: false, say: "Enter the chemical's DTXSID." }
+    return { ok: false, say: `Type the ${ID_LABELS[kind]}, for example ${pattern.example}.` }
+  }
   if (value !== value.trim()) return { ok: false, say: 'Remove the spaces before or after it.' }
 
-  if (kind === 'dtxsid' || kind === 'study_id') {
-    if (/^dtxsid/i.test(value) && !value.startsWith('DTXSID')) return { ok: false, say: 'Write DTXSID in capital letters.' }
-    const suffixed = /^DTXSID\d+[_-]/.exec(value)
-    if (suffixed) {
-      return {
-        ok: false,
-        say: `A study you create is named by the chemical's DTXSID alone (${value.slice(0, suffixed[0].length - 1)}). Names with a suffix, like "_rat" or "_published", are made by the application itself.`,
-      }
-    }
+  if (isDtxsidKind(kind)) {
+    const problem = dtxsidProblem(value, pattern.example)
+    if (problem) return { ok: false, say: problem }
+    if (!re.test(value)) return { ok: false, say: `After 'DTXSID' come digits only, for example ${pattern.example}.` }
   }
   if (kind === 'doi' && /^(https?:\/\/)?(dx\.)?doi\.org\//i.test(value)) {
     return { ok: false, say: 'Type the DOI without the link part: start at "10.".' }
@@ -68,7 +101,7 @@ export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefi
   if (!re.test(value)) return { ok: false, say: `${pattern.say} For example: ${pattern.example}.` }
 
   if (kind === 'casrn' && !casrnCheckDigitOk(value)) {
-    return { ok: false, say: 'The last digit (the check digit) does not match the others: the number has a typing mistake.' }
+    return { ok: false, say: "This CAS number's check digit doesn't match the other digits; a digit is probably mistyped." }
   }
   return { ok: true }
 }

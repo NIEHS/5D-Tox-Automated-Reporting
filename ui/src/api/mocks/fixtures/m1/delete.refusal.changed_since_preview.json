@@ -1,0 +1,13 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "changed_since_preview",
+      "status": 409,
+      "message": "preview token sha256:9a03… does not match sha256:b71e…",
+      "say": "The study changed after you reviewed what would be deleted. Nothing was deleted; review the list again.",
+      "fix": null,
+      "details": {}
+    }
+  }
+}

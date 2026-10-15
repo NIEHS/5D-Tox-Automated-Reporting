@@ -1,0 +1,85 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID1022477",
+    "kind": "study",
+    "chemical_dtxsid": "DTXSID1022477",
+    "chemical_dtxsid_from": "id",
+    "identity": {
+      "name": "2,3-Benzofluorene",
+      "casrn": "243-17-4",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "UPLOADED",
+      "say": "Files brought in, not yet validated",
+      "next": {
+        "say": "Validate the files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-14T09:12:00Z",
+    "format": {
+      "definition": "studies/DTXSID1022477/document",
+      "source": "study",
+      "era": "eras/niehs-2023",
+      "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+      "title_short": "NIEHS Report, March 2023",
+      "changes": 0,
+      "say": "This chemical has a published report, NIEHS-09 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered."
+    },
+    "published": {
+      "report": "NIEHS-09",
+      "date": "2023-03",
+      "nbk": "NBK589973"
+    },
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the study has no report (it has not been processed)"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": null,
+      "format": {
+        "definition": "studies/DTXSID1022477/document",
+        "source": "study",
+        "era": "eras/niehs-2023",
+        "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+        "title_short": "NIEHS Report, March 2023",
+        "changes": 0,
+        "say": "This chemical has a published report, NIEHS-09 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

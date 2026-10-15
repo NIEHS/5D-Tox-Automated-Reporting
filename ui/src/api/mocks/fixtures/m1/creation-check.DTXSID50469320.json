@@ -1,0 +1,60 @@
+{
+  "status": 200,
+  "body": {
+    "dtxsid": "DTXSID50469320",
+    "exists": true,
+    "existing": {
+      "id": "DTXSID50469320",
+      "kind": "study"
+    },
+    "related_sessions": [
+      {
+        "id": "DTXSID50469320_published",
+        "kind": "companion",
+        "say": "The published book's content"
+      },
+      {
+        "id": "DTXSID50469320_nb",
+        "kind": "other",
+        "say": "Other session, made by a tool"
+      }
+    ],
+    "format": {
+      "definition": "studies/DTXSID50469320/document",
+      "source": "study",
+      "era": "eras/niehs-2023",
+      "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+      "title_short": "NIEHS Report, March 2023",
+      "changes": 0,
+      "say": "This chemical has a published report, NIEHS-10 (March 2023). A study under this id is written in that book's format: the NIEHS Report as published in March 2023, unaltered.",
+      "brings": [
+        {
+          "what": "document_definition",
+          "path": "templates/studies/DTXSID50469320/document.yaml",
+          "say": "the book's structure and wording"
+        },
+        {
+          "what": "report_view",
+          "path": "templates/studies/DTXSID50469320/view.yaml",
+          "say": "the book's choice of organs and endpoints for its tables (for example liver only for organ weights; liver and kidney for the gene sets)"
+        },
+        {
+          "what": "deposit",
+          "path": "templates/studies/DTXSID50469320/deposit.yaml",
+          "say": "the book's captions for its deposited files and its data DOI, 10.22427/NIEHS-DATA-NIEHS-10"
+        },
+        {
+          "what": "authored_content",
+          "path": "templates/studies/DTXSID50469320/appendix-a.html",
+          "say": "Appendix A's text as published"
+        }
+      ],
+      "hash": "[the composed definition's hash]"
+    },
+    "published": {
+      "report": "NIEHS-10",
+      "date": "2023-03",
+      "nbk": "NBK589955"
+    }
+  }
+}

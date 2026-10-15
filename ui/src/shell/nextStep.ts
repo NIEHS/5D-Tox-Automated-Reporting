@@ -25,6 +25,11 @@ export interface NextStep {
 const NEXT_PREFERENCE = ['INTEGRATE', 'APPROVE', 'REPROCESS', 'VALIDATE'] as const
 
 export function nextStepOf(state: ExistingStudyState): NextStep | null {
+  // Served (M1 R2): the backend's own next step, from the same function as the studies list.
+  if (state.stands) {
+    const next = state.stands.next
+    return next ? { label: next.say, module: (next.fix as ModuleId | null) ?? null } : null
+  }
   // Published content and reports over several studies have their own next steps.
   if (state.kind === 'companion') return null
   if (state.kind === 'report') {

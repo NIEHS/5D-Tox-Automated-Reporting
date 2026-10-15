@@ -1,0 +1,13 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "study_id_has_suffix",
+      "status": 400,
+      "message": "study id 'DTXSID50469320_v2' must match ^DTXSID\\d+$",
+      "say": "A study's id is the DTXSID alone. Ids with a suffix are made by the system.",
+      "fix": null,
+      "details": {}
+    }
+  }
+}

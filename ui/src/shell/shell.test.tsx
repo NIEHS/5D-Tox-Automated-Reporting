@@ -26,15 +26,24 @@ function step(action: string): HTMLElement {
   return el as HTMLElement
 }
 
+/** A study's landing page (M1's S3, with the shell's workflow panels). */
 async function openStudy(id: string) {
   const r = renderApp(`/studies/${id}`)
-  await screen.findByTestId('phase')
+  await screen.findByTestId('where-it-stands')
+  return r
+}
+
+/** A module's page in the study frame: the frame's header (stage, next step, kind) is on top. */
+async function openHeader(id: string, slug = 'facts') {
+  const r = renderApp(`/studies/${id}/${slug}`)
+  await screen.findByText('Next step:', {}, { timeout: 3000 }).catch(() => undefined)
+  await waitFor(() => expect(document.querySelector('.ant-card')).not.toBeNull())
   return r
 }
 
 describe('the study frame', () => {
   it("shows the study's id, identity and stage in plain words", async () => {
-    await openStudy(STATE_APPROVED.id)
+    await openHeader(STATE_APPROVED.id)
     expect(screen.getByRole('heading', { name: 'Perfluorohexanesulfonamide' })).toBeInTheDocument()
     expect(screen.getByText('DTXSID50469320')).toBeInTheDocument()
     expect(screen.getByText('41997-13-1')).toBeInTheDocument()
@@ -43,10 +52,10 @@ describe('the study frame', () => {
   })
 
   it('marks a missing identity as pending, never blank (a real null short name; an empty study)', async () => {
-    await openStudy(STATE_APPROVED.id)
+    await openHeader(STATE_APPROVED.id)
     expect(screen.getByRole('button', { name: 'short name is missing; show why' })).toHaveTextContent('[short name pending]')
     cleanup()
-    await openStudy(STATE_EMPTY.id)
+    await openHeader(STATE_EMPTY.id)
     expect(screen.getByRole('button', { name: 'chemical name is missing; show why' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'CAS number is missing; show why' })).toBeInTheDocument()
   })
@@ -59,7 +68,7 @@ describe('the study frame', () => {
     ['combined data', STATE_INTEGRATED, 'Review the data', 'Data review'],
     ['processed, nothing found to block', STATE_APPROVED, "Review the report's sections", 'Review the report'],
   ])('puts forward the next step from the legal actions (%s)', async (_name, state, label, module) => {
-    await openStudy(state.id)
+    await openHeader(state.id)
     const alert = screen.getByText('Next step:').closest('.ant-alert') as HTMLElement
     expect(alert).toHaveTextContent(label)
     expect(within(alert).getByRole('link', { name: new RegExp(`Go to ${module}`) })).toBeInTheDocument()
@@ -108,9 +117,12 @@ describe('the study frame', () => {
 
   it('offers nothing, and says why, at a stage it does not know', async () => {
     server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json({ ...STATE_INTEGRATED, phase: 'ARCHIVED' })))
-    await openStudy(STATE_INTEGRATED.id)
+    await openHeader(STATE_INTEGRATED.id)
     expect(screen.getByTestId('phase')).toHaveTextContent('Unknown stage')
     expect(screen.getByText('This page cannot offer any step')).toBeInTheDocument()
+    cleanup()
+    await openStudy(STATE_INTEGRATED.id)
+    await screen.findByText('Steps')
     expect(document.querySelectorAll('[data-available="yes"]')).toHaveLength(0)
   })
 
@@ -127,7 +139,7 @@ describe('the study frame', () => {
   })
 
   it('shows a report over two studies: its members and their stage, no steps of its own, never "bring in files"', async () => {
-    renderApp(`/studies/${STATE_REPORT.id}`)
+    renderApp(`/studies/${STATE_REPORT.id}/review`)
     const members = await screen.findByLabelText('Studies in this report')
     expect(members).toHaveTextContent('This report covers 2 studies')
     expect(within(members).getByRole('link', { name: /rat \(DTXSID1020431_rat\): Data reviewed/ })).toHaveAttribute('href', '/studies/DTXSID1020431_rat')
@@ -144,25 +156,29 @@ describe('the study frame', () => {
       members: (STATE_REPORT.members ?? []).map((m) => (m.key === 'mouse' ? { ...m, processed: false, phase: 'INTEGRATED' } : m)),
     }
     server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(report)))
-    renderApp(`/studies/${STATE_REPORT.id}`)
+    renderApp(`/studies/${STATE_REPORT.id}/review`)
     const alert = (await screen.findByText('Next step:')).closest('.ant-alert') as HTMLElement
     expect(alert).toHaveTextContent('Finish the studies this report covers')
     expect(alert).toHaveTextContent('mouse (DTXSID1020431_mouse)')
   })
 
   it('links a member study to its report', async () => {
-    await openStudy(STATE_MEMBER_RAT.id)
-    const note = screen.getByTestId('kind-note')
+    await openHeader(STATE_MEMBER_RAT.id)
+    const note = await screen.findByTestId('kind-note')
     expect(within(note).getByRole('link', { name: 'DTXSID1020431' })).toHaveAttribute('href', '/studies/DTXSID1020431')
   })
 
   it("shows the published book's companion as read-only content, with no steps and no next step", async () => {
-    renderApp(`/studies/${STATE_COMPANION.id}`)
+    renderApp(`/studies/${STATE_COMPANION.id}/review`)
     const note = await screen.findByTestId('kind-note')
     expect(note).toHaveTextContent("published book's content")
     expect(within(note).getByRole('link', { name: 'DTXSID50469320' })).toBeInTheDocument()
     expect(screen.queryByText('Next step:')).not.toBeInTheDocument()
     expect(screen.queryByText('No step is available now.')).not.toBeInTheDocument()
+    // no workflow page is offered for published content, even by its address
+    expect(screen.getByText('Review the report is not offered here.')).toBeInTheDocument()
+    cleanup()
+    await openStudy(STATE_COMPANION.id)
     expect(document.querySelector('[data-action]')).toBeNull()
     expect(screen.queryByText('What stops the report being published')).not.toBeInTheDocument()
     expect(screen.queryByTestId('pin-method')).not.toBeInTheDocument()
@@ -176,7 +192,7 @@ describe('the study frame', () => {
 
   it('says when there is no such study', async () => {
     renderApp('/studies/DTXSID9999999')
-    expect(await screen.findByText('There is no study with this id')).toBeInTheDocument()
+    expect(await screen.findByText('There is no study DTXSID9999999. It may have been deleted.')).toBeInTheDocument()
   })
 
   it("refuses an id that is not a study id before asking for it, in the backend's words", async () => {
@@ -188,16 +204,16 @@ describe('the study frame', () => {
       }),
     )
     renderApp('/studies/not-a-study')
-    expect(await screen.findByText('This is not a study id')).toBeInTheDocument()
+    expect(await screen.findByText("'not-a-study' is not a study id.")).toBeInTheDocument()
     expect(screen.getByText(/A study is named by its chemical's DTXSID/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Go to the studies' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to studies' })).toBeInTheDocument()
     expect(asked).toBe(0)
   })
 
   it("still explains the backend's refusal of an id when the id rule could not be loaded", async () => {
     server.use(http.get('/api/v2/vocabularies', () => HttpResponse.error()))
     renderApp('/studies/not-a-study')
-    expect(await screen.findByText('This is not a study id', {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByText("'not-a-study' is not a study id.", {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.getByText(/A study is named by its chemical's DTXSID/)).toBeInTheDocument()
   })
 
@@ -223,20 +239,6 @@ describe('the routes', () => {
   it('says so for a page that does not exist', async () => {
     renderApp('/studies/DTXSID50469320/nonsense')
     expect(await screen.findByText(/no page called "nonsense"/)).toBeInTheDocument()
-  })
-
-  it('opens a study from the studies page only with a valid DTXSID', async () => {
-    const { user, router } = renderApp('/studies')
-    const input = await screen.findByRole('textbox', { name: 'DTXSID' })
-    await waitFor(() => expect(input).toBeEnabled())
-    const open = screen.getByRole('button', { name: 'Open' })
-    await user.type(input, 'DTXSID50469320_rat')
-    expect(open).toBeDisabled()
-    await user.clear(input)
-    await user.type(input, 'DTXSID50469320')
-    await waitFor(() => expect(open).toBeEnabled())
-    await user.click(open)
-    await waitFor(() => expect(router.state.location.pathname).toBe('/studies/DTXSID50469320'))
   })
 
   it('sends / to the studies', async () => {

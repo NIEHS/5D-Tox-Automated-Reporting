@@ -209,6 +209,12 @@ export interface Relations {
   parent: string | null
   /** for a companion: the generated study it was built beside */
   twin: string | null
+  /** REQUESTED (M1 R1), not served in the state yet; served in the M1 study row */
+  members?: { key: string; id: string }[]
+  /** REQUESTED (M1 R1): the published book's content built beside this study */
+  companion?: string | null
+  /** REQUESTED (M1 R1): the other sessions of the same chemical */
+  others?: string[]
 }
 
 /** One study of a report over several studies (studies.json). */
@@ -245,6 +251,10 @@ export interface ExistingStudyState {
   }
   /** only for a report over several studies */
   members?: MemberStudy[]
+  /** REQUESTED (M1 R1), not served yet: the chemical's DTXSID, null when the id names none */
+  chemical_dtxsid?: string | null
+  /** REQUESTED (M1 R2), not served yet: where the study stands, in plain words, and the next step */
+  stands?: Stands
 }
 
 /** No session has this id. */
@@ -301,6 +311,15 @@ export interface DryRun {
   approvals_lost: string[]
   cost?: { say: string } | null
   reason_required: boolean
+  /**
+   * REQUESTED (M1 R4): a fingerprint of what this dry run listed. The act is
+   * sent with it and refuses with `changed_since_preview` when the study
+   * changed after the person reviewed the list. Today M1's delete preview
+   * serves it beside the object; the client puts it here.
+   */
+  preview_token?: string
+  /** what the person must type to confirm an irreversible act (the study id when absent) */
+  type_to_confirm?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -366,4 +385,213 @@ export interface Vocabularies {
 
 export function isDependentVocabulary(v: Vocabulary): v is DependentVocabulary {
   return 'depends_on' in v
+}
+
+// ---------------------------------------------------------------------------
+// M1 Studies (docs/ui-redesign/modules/m1/contract.md §2)
+// ---------------------------------------------------------------------------
+
+/** Where a session stands, in plain words, and the next step (contract §3, `stands`). */
+export interface Stands {
+  /** null for published content and for a report over several studies */
+  phase: Phase | (string & {}) | null
+  say: string
+  /** null when there is no next step (published content) */
+  next: { say: string; fix: ModuleId | (string & {}) | null } | null
+}
+
+export interface IdentitySource {
+  kind: 'lookup' | 'stated' | 'unknown' | (string & {})
+  service: string | null
+  confirmed_at: string | null
+}
+
+export interface StudyIdentity {
+  name: string | null
+  casrn: string | null
+  short_name: string | null
+  source: IdentitySource
+}
+
+/** The report format a session renders in (contract §2.1, FormatSummary). */
+export interface FormatSummary {
+  definition: string
+  source: 'study' | 'default' | 'session' | 'pinned' | (string & {})
+  era: string | null
+  title: string
+  title_short: string
+  changes: number
+  say: string
+}
+
+/** What a study definition brings with it besides its structure. */
+export interface FormatBrings {
+  what: 'document_definition' | 'report_view' | 'deposit' | 'authored_content' | (string & {})
+  path: string
+  say: string
+}
+
+export interface FormatDetail extends FormatSummary {
+  brings: FormatBrings[]
+  pin?: { mode: 'track' | 'fixed' | (string & {}) | null; pinned_at: string | null; pinned_by: string | null }
+  chosen_by?: string
+  /** served by the creation check: the composed definition's hash, sent back as `format_seen` */
+  hash?: string
+}
+
+export interface PublishedReport {
+  report: string
+  /** "2023-03"; null when the book records none */
+  date: string | null
+  nbk: string | null
+}
+
+export interface Bookshelf {
+  on_shelf: boolean
+  url: string | null
+  say: string
+}
+
+export interface StudyRelations {
+  parent: string | null
+  members: { key: string; id: string }[]
+  companion: string | null
+  twin: string | null
+  others: string[]
+}
+
+/** Whether an act on the session is allowed, and if not, why (served). */
+export interface Allowed {
+  allowed: boolean
+  code?: string | null
+  say?: string | null
+}
+
+export interface StudyNote {
+  level: 'warn' | 'error' | (string & {})
+  code: string
+  say: string
+}
+
+/** One session, as the studies list serves it (contract §2.1). */
+export interface StudyRow {
+  id: string
+  kind: SessionKind | (string & {})
+  chemical_dtxsid: string | null
+  chemical_dtxsid_from: 'id' | 'id_prefix' | (string & {}) | null
+  identity: StudyIdentity
+  stands: Stands
+  processed: boolean
+  last_changed: string | null
+  format: FormatSummary
+  published: PublishedReport | null
+  bookshelf: Bookshelf
+  relations: StudyRelations
+  actions: { open: Allowed; delete: Allowed }
+  notes: StudyNote[]
+}
+
+export interface ChemicalGroup {
+  dtxsid: string
+  name: string | null
+  casrn: string | null
+  /** the chemical's study or report; null when it has none */
+  primary: string | null
+  can_create: boolean
+  /** the primary first, then members, the companion, other sessions */
+  sessions: StudyRow[]
+}
+
+/** GET /api/v2/studies */
+export interface StudiesList {
+  chemicals: ChemicalGroup[]
+  /** sessions whose id names no chemical */
+  unassigned: StudyRow[]
+  generated_at: string
+}
+
+export interface StudyBanner {
+  level: 'info' | 'warning' | (string & {})
+  say: string
+  links: { say: string; href: string }[]
+}
+
+/** GET /api/v2/studies/{id} (contract §2.2) */
+export interface StudyDetail extends StudyRow {
+  detail: {
+    banner: StudyBanner | null
+    format: FormatDetail
+    /** only for a report over several studies */
+    members?: StudyRow[]
+  }
+}
+
+/** GET /api/v2/studies/{dtxsid}/creation-check (contract §2.4) */
+export interface CreationCheck {
+  dtxsid: string
+  exists: boolean
+  existing: { id: string; kind: SessionKind | (string & {}) } | null
+  related_sessions: { id: string; kind: SessionKind | (string & {}); say: string }[]
+  format: FormatDetail
+  published: PublishedReport | null
+}
+
+export interface ChemicalIdentity {
+  name: string
+  casrn: string | null
+  pubchem_cid: number | null
+  molecular_formula: string | null
+  molecular_weight: number | null
+  iupac_name: string | null
+  inchikey: string | null
+}
+
+/** GET /api/v2/chemicals/{dtxsid} (contract §2.5) */
+export interface ChemicalLookup {
+  dtxsid: string
+  identity: ChemicalIdentity
+  /** PubChem (or CTX) lists this DTXSID for the compound */
+  dtxsid_matched: boolean
+  service: string
+  say_source: string
+  structure_url: string | null
+  looked_up_at: string
+}
+
+/** The identity a person confirmed (contract §2.6 `identity`). */
+export interface ConfirmedIdentity {
+  name: string
+  casrn: string | null
+  pubchem_cid: number | null
+  source: { kind: 'lookup'; service: string; looked_up_at: string }
+}
+
+/** POST /api/v2/studies (contract §2.6) */
+export interface CreateStudyRequest {
+  dtxsid: string
+  identity: ConfirmedIdentity
+  confirmed: true
+  dtxsid_checked_by_person: boolean
+  format_seen: { definition: string; hash: string | null }
+}
+
+/** PUT /api/v2/studies/{id}/identity (contract §2.7) */
+export interface RecordIdentityRequest {
+  identity: ConfirmedIdentity
+  confirmed: true
+  dtxsid_checked_by_person: boolean
+}
+
+/** GET /api/v2/studies/{id}/delete-preview, as served (contract §2.8) */
+export interface DeletePreview {
+  confirm: DryRun
+  type_to_confirm: string
+  preview_token: string
+}
+
+/** POST /api/v2/studies/{id}/delete (contract §2.9) */
+export interface DeleteResult {
+  deleted: string
+  kept: DryRunItem[]
+  say: string
 }
