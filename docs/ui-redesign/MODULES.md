@@ -178,7 +178,7 @@ workflow. It reads and never computes. The backend serves one read model per stu
   "id": "DTXSID50469320",
   "exists": true,
   "phase": "APPROVED",
-  "legal_actions": ["REPROCESS", "RESET"],
+  "legal_actions": ["PROCESS", "RESET", "…"],
   "identity": {"name": "…", "casrn": "…", "dtxsid": "…", "short_name": "…"},
   "pins": {
     "method":     {"name": "ntp-5day-2021", "mode": "fixed", "pinned_by": "person|default", "deviations": [], "mismatches": []},
@@ -437,8 +437,8 @@ question number.
 
 These do not block wave 0 (the kit, the skeleton, C1, C2, C4).
 - **The method profile.** Is a change of method profile a factual change that stales
-  AI text? How is a study's profile chosen before its first Process: pre-selected
-  and confirmed by a person, or never defaulted? (C7, M5, P1)
+  AI text? (C7). *Decided 2026-10-15:* a person chooses the profile before the first
+  Process; the interface suggests one and the person confirms it (C1 D1 = B).
 - **Moving `published_report`.** Two ways:
   - rebuild it, unwalled, from what the Bookshelf uses and the data it must come
     from, without opening the walled file;

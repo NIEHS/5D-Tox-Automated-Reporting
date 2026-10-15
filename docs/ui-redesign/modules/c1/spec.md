@@ -627,3 +627,20 @@ C1 does **not** wait on D1. It is built with today's behaviour on a legal Proces
 - **D5: archive a withdrawn approval** under `history/_data_approval/` (§3.3)
   rather than deleting it. Today invalidation deletes the approval with no trace
   (`pool_state.py:173-175`); C8 may extend the archive to that path too.
+
+---
+
+## Signed (2026-10-15, the maintainer)
+
+The recommendations were accepted, with **option B for D1**:
+- **D1 = B.** A person chooses the method profile; the interface suggests one (the
+  newest of the series, or the profile matching the `.bm2`'s recorded settings) and
+  the person confirms it. The core behaves as in option A: Process refuses
+  `method_not_chosen` until a person has pinned a profile (`pinned_by` a person,
+  never `default`). The command line needs `--method-profile`. The suggestion is a
+  read for M5.
+- **D2.** Phase rule 2 (a stale section sends the phase to UPLOADED) is dropped; the
+  characterization case table and oracle are edited by hand.
+- **D3.** `REPROCESS` is renamed `PROCESS`; `CLEAR_FILES` merges into `RESET`.
+- **D4.** A re-validation never deletes the dataset (§3.1).
+- **D5.** A withdrawn data approval is archived under `history/_data_approval/`.

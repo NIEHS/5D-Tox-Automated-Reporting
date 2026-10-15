@@ -615,3 +615,26 @@ means a copy of the maintainer's 32 session folders.
 **Everywhere**
 41. Every refusal shows plain words, and a "Details" toggle with the backend's own
     message. The word "wizard" appears on no M1 screen.
+
+---
+
+## Signed (2026-10-15, the maintainer)
+
+The recommendations of §11 were accepted (Q-M1-1, 3, 4, 5, 6, 7, 10, 11), and the
+requests of §10. So:
+- suffixed sessions are listed under their chemical: published content read-only,
+  member studies not deleted alone, other sessions opened with a warning;
+- creating a study needs a successful lookup (no stated identity);
+- deleting is permanent, after typing the id; deleting a report deletes the report
+  only; deliverables in `output/<id>/` are kept;
+- the formats get the declared titles of Q-M1-6;
+- creation pins nothing; changing an existing identity is not in M1.
+
+**Still open** (no recommendation was made; none blocks the build):
+- **Q-M1-2:** a new study of a published chemical inherits that book's definition,
+  view, deposit wording and authored text. The build keeps today's behaviour (the
+  DTXSID decides) and the screens say so.
+- **Q-M1-8:** where a report over several studies is started (outside M1).
+- **Q-M1-9:** whether `DTXSID50469320_nb` and `DTXSID_TEST` are meant to be in the store.
+- **Q-M1-12:** in test and prod, may the server look a chemical up in PubChem? (In dev
+  it may.)

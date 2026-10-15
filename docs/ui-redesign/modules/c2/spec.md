@@ -258,3 +258,23 @@ Until C9, Process rewrites Methods and the apical-BMD narrative silently. C2 doe
 6. Routes: fence the old routes onto the steps (D5, D6); add the v2 section routes. Integration tests.
 7. CLI `background` through the gate; genomics archive-before-clear.
 8. Run `smart`, then `guard`; update the HANDOFF §4.3 text and `http-api.md` (orchestrator).
+
+---
+
+## Signed (2026-10-15, the maintainer)
+
+The recommendations of §9 were accepted:
+- **D1 (a).** A released section stays protected: PROTECTED stands (ADR-0015).
+- **D2 A1.** An approved apical section whose content changed on Process is knocked
+  down with a record: archived, `approved: false`, FINAL withdrawn, a `review`
+  marker, `needs-re-bless`.
+- **D3.** Restore brings a version back as a draft (owned, not approved; accept is a
+  separate act). A non-empty reason is required for release, restore, discard and
+  every forced machine write.
+- **D4 (b).** Discard is not offered by the new interface; the step exists behind the
+  old route and pool reset.
+- **D5.** The old write routes are fenced (§4.5, §4.6), not retired.
+- **D6 (a).** "Use run" (or a regenerate) over an approved Summary is refused: release
+  it first, with a reason.
+
+Draft 1 (`spec-draft1.md`, `contract-draft1.md`) is background only.
