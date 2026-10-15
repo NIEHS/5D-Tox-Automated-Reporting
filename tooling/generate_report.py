@@ -183,7 +183,10 @@ def import_files(dtxsid: str, paths: list[Path], store) -> None:
     files to a pool that has already progressed invalidates its downstream
     artifacts, exactly as an upload through the API does."""
     from pipeline.pool_state import invalidate_pool_artifacts, pool_has_progressed
+    from workflow.engine import require_legal
+    from workflow.phases import Action
 
+    require_legal(dtxsid, Action.ADD_FILES, store)
     files_dir = store.session_dir(dtxsid) / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
     progressed = pool_has_progressed(dtxsid)
@@ -255,6 +258,9 @@ def apply_design(dtxsid: str, design_path: Path | dict, store) -> None:
     errors = design_field_errors(fields, VOCABULARIES)
     if errors:
         raise SystemExit("--design: " + "; ".join(errors))
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.STATE_DATASET_FACTS, store)   # C1: on a usable dataset
     if not store.artifact_exists(dtxsid, "integrated.json"):
         raise SystemExit("--design needs an integrated session")
     store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})

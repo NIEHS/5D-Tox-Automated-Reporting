@@ -32,6 +32,7 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from web_routes.dtxsid_param import Dtxsid
+from workflow.errors import StepError
 
 # Imported for its NAME, not for use here: tests/conftest.py's mock_bmdx_pipe
 # patches `web_routes.session_routes.bm2_cache` at this import site (the Java
@@ -1463,6 +1464,8 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
             None, approve_experiment_metadata, dtxsid, metadata_by_name)
     except LookupError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
+    except StepError as e:  # the phase guard (C1)
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
     updated_count, bm2_ok = result["updated"], result["bm2_exported"]
 
     return JSONResponse({
@@ -1490,6 +1493,8 @@ async def api_pool_remove_file(dtxsid: Dtxsid, filename: str):
         result = remove_pool_file(dtxsid, filename)
     except PoolFileError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+    except StepError as e:  # the phase guard (C1)
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
     return JSONResponse({"ok": True, **result})
 
 
@@ -1543,6 +1548,14 @@ async def api_pool_reset(dtxsid: Dtxsid):
             {"error": f"No session found for {dtxsid}"},
             status_code=404,
         )
+    # C1: a study with no files has nothing to reset (the logic is inline
+    # here until C8 moves it into the core with its dry run).
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    try:
+        require_legal(dtxsid, Action.RESET)
+    except StepError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
 
     deleted_items = []
 

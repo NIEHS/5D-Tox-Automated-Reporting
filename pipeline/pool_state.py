@@ -315,6 +315,9 @@ def remove_pool_file(dtxsid: str, filename: str) -> dict:
     if name.endswith(_SIDECAR_SUFFIX):
         raise PoolFileError(
             f"{name} is companion metadata for a data file; remove the data file instead")
+    from workflow.engine import require_legal       # lazy: workflow imports pipeline
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.REMOVE_FILE)       # C1: PhaseRefusal at EMPTY
 
     d = _session_dir(dtxsid)
     files_dir = d / "files"

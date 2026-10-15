@@ -168,3 +168,99 @@ def test_empty_allows_nothing_but_adding_files():
     with pytest.raises(PhaseRefusal) as ei:
         require_legal("DTX", "VALIDATE", PhaseStore("EMPTY"))
     assert "(allowed now: ADD_FILES)" in ei.value.message
+
+
+# ---------------------------------------------------------------------------
+# The inventory: every mutating entry point refuses out of phase (spec §2.2).
+# Each is driven at a phase where its act is illegal, on a real scratch
+# session, and must raise PhaseRefusal and leave the session exactly as it was.
+# Adding a mutating entry point means adding it here.
+# ---------------------------------------------------------------------------
+
+def _seed(sessions_dir, phase):
+    """A real session at `phase` (VALIDATED or earlier: no dataset)."""
+    import json
+    d = sessions_dir / "DTXSID_LEGAL"
+    d.mkdir(parents=True)
+    if phase != "EMPTY":
+        (d / "files").mkdir()
+        (d / "files" / "bw.csv").write_text("x")
+    if phase == "VALIDATION_ERRORS":
+        (d / "validation_report.json").write_text(json.dumps(
+            {"issues": [{"severity": "error"}], "coverage_matrix": {}}))
+    elif phase == "VALIDATED":
+        (d / "validation_report.json").write_text(json.dumps(
+            {"issues": [], "coverage_matrix": {}}))
+    return d
+
+
+def _run(coro_or_value):
+    import asyncio
+    import inspect
+    return asyncio.run(coro_or_value) if inspect.iscoroutine(coro_or_value) else coro_or_value
+
+
+def _disk():
+    from workflow.store import DiskPoolStore
+    return DiskPoolStore()
+
+
+_ENTRY_POINTS = [
+    # (name, phase where it is refused, call(dtxsid))
+    ("remove_pool_file", "EMPTY",
+     lambda d: __import__("pipeline.pool_state", fromlist=["x"]).remove_pool_file(d, "bw.csv")),
+    ("validate_step", "EMPTY",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).validate_step(d, _disk())),
+    ("resolve_step", "UPLOADED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).resolve_step(d, 0, "fid", _disk())),
+    ("confirm_metadata_step", "UPLOADED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).confirm_metadata_step(d, {}, _disk())),
+    ("integrate_step", "VALIDATION_ERRORS",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).integrate_step(d, None, _disk())),
+    ("approve_experiment_metadata", "VALIDATED",
+     lambda d: __import__("pipeline.metadata_approval", fromlist=["x"])
+     .approve_experiment_metadata(d, {"x": {"organ": "liver"}})),
+    ("apply_design", "VALIDATED",
+     lambda d: __import__("tooling.generate_report", fromlist=["x"])
+     .apply_design(d, {"species": "rat"}, _disk())),
+    ("generate_animal_report_step", "VALIDATED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).generate_animal_report_step(d, _disk())),
+    ("run_process", "VALIDATED",
+     lambda d: __import__("pipeline.process_integrated", fromlist=["x"]).run_process(d, {}, _disk())),
+    ("run_document", "VALIDATED",
+     lambda d: __import__("pipeline.process_integrated", fromlist=["x"]).run_document(d, {}, _disk())),
+    ("process_step", "UPLOADED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).process_step(d, {}, _disk())),
+    ("document_step", "UPLOADED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).document_step(d, {}, _disk())),
+    ("materialize_result_sections", "VALIDATED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).materialize_result_sections(d, _disk())),
+    ("materialize_summary", "VALIDATED",
+     lambda d: __import__("workflow.steps", fromlist=["x"]).materialize_summary(d, _disk())),
+]
+
+
+def _snapshot(root):
+    return {str(p.relative_to(root)): (p.stat().st_size, p.stat().st_mtime_ns)
+            for p in sorted(root.rglob("*"))}
+
+
+@pytest.mark.parametrize("name,phase,call", _ENTRY_POINTS, ids=[e[0] for e in _ENTRY_POINTS])
+def test_every_mutating_entry_point_refuses_out_of_phase(name, phase, call, sessions_dir):
+    d = _seed(sessions_dir, phase)
+    before = _snapshot(d)
+    with pytest.raises(PhaseRefusal) as ei:
+        _run(call("DTXSID_LEGAL"))
+    assert ei.value.details["phase"] == phase
+    assert _snapshot(d) == before, f"{name} wrote before refusing"
+
+
+def test_add_files_is_refused_nowhere(sessions_dir):
+    from tooling.generate_report import import_files
+    for phase in ("EMPTY", "VALIDATED"):
+        d = sessions_dir / f"DTXSID_ADD_{phase}"
+        d.mkdir(parents=True)
+        src = sessions_dir.parent / f"in_{phase}.csv"
+        src.write_text("x")
+        import_files(d.name, [src], _disk())
+        assert (d / "files" / src.name).exists()

@@ -35,7 +35,10 @@ def test_approval_stores_descriptions_and_reconciles_the_genomics_sidecar(sessio
 
     d = "DTXSID1020431"
     s = sessions_dir / d
-    s.mkdir(parents=True)
+    (s / "files").mkdir(parents=True)                 # an INTEGRATED study (C1): files,
+    (s / "files" / ".keep").write_text("")             # a clean validation report and
+    (s / "validation_report.json").write_text(         # the dataset the facts go onto
+        json.dumps({"issues": [], "coverage_matrix": {}}))
     (s / "integrated.json").write_text(json.dumps(_integrated("blood")))
     (s / "genomics.sidecar.json").write_text(json.dumps(
         {"experiments": [{"name": HE, "organ": "Blood", "sex": "Female", "genes": []}]}))
@@ -49,6 +52,29 @@ def test_approval_stores_descriptions_and_reconciles_the_genomics_sidecar(sessio
     assert record["metadata"][HE]["organ"] == "heart"
     sidecar = json.loads((s / "genomics.sidecar.json").read_text())
     assert sidecar["experiments"][0]["organ"] == "Heart"
+
+
+@pytest.mark.integration
+def test_approving_metadata_is_refused_while_validation_errors_stand(sessions_dir):
+    """C1: the facts are written onto the dataset; a dataset a later file check
+    found errors in is inert, so stating facts on it is refused (409)."""
+    from fastapi.testclient import TestClient
+    from web_routes.background_server import app
+
+    d = "DTXSID1020431"
+    s = sessions_dir / d
+    (s / "files").mkdir(parents=True)
+    (s / "files" / "bw.csv").write_text("x")
+    (s / "validation_report.json").write_text(json.dumps(
+        {"issues": [{"severity": "error"}], "coverage_matrix": {}}))
+    (s / "integrated.json").write_text(json.dumps(_integrated("blood")))
+    before = (s / "integrated.json").read_text()
+    r = TestClient(app).post(f"/api/experiment-metadata/{d}",
+                             json={"metadata": {HE: {"organ": "heart"}}})
+    assert r.status_code == 409
+    assert "STATE_DATASET_FACTS refused" in r.json()["error"]
+    assert (s / "integrated.json").read_text() == before
+    assert not (s / "metadata_approved.json").exists()
 
 
 @pytest.mark.integration
