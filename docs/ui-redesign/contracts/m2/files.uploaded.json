@@ -1,0 +1,943 @@
+{
+ "id": "DTXSID9000001",
+ "phase": "UPLOADED",
+ "takes_files": {
+  "allowed": true,
+  "code": null,
+  "say": null
+ },
+ "files_token": "sha256:e2a831b8a3f35250",
+ "progress": [
+  {
+   "step": "bring_in",
+   "status": "done",
+   "say": "15 file(s) in the study"
+  },
+  {
+   "step": "check",
+   "status": "todo",
+   "say": "Not checked yet"
+  },
+  {
+   "step": "confirm",
+   "status": "waiting",
+   "say": "After the check"
+  },
+  {
+   "step": "conflicts",
+   "status": "waiting",
+   "say": "After the check"
+  }
+ ],
+ "next": {
+  "act": "VALIDATE",
+  "say": "Check the files",
+  "fix": "M2"
+ },
+ "acts": {
+  "add": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "check": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "resolve": {
+   "allowed": false,
+   "code": "phase_not_allowed",
+   "say": "Run the file check first: conflicts are found by the check."
+  },
+  "classify": {
+   "allowed": false,
+   "code": "phase_not_allowed",
+   "say": "Run the file check first: it says what each file is."
+  },
+  "remove": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "reset": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  }
+ },
+ "files": [
+  {
+   "name": "DTXSID50469320_genomic.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 8220917,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:78c28445f9d27ba5",
+   "companions": [],
+   "units": null,
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6387,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:12c09dc24d6b2706",
+   "companions": [
+    {
+     "name": "body_weight_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6140,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:ae099871437a1ffb",
+   "companions": [
+    {
+     "name": "body_weight_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "clin_chem_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 4854,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:436bed26713911ea",
+   "companions": [
+    {
+     "name": "clin_chem_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Alanine aminotransferase": "IU/L",
+     "Albumin": "g/dL",
+     "Alkaline phosphatase": "IU/L",
+     "Aspartate Aminotransferase": "IU/L",
+     "Bile salts/acids": "µmol/L",
+     "Cholesterol": "mg/dL",
+     "Creatine kinase": "IU/L",
+     "Creatinine": "mg/dL",
+     "Direct Bilirubin": "mg/dL",
+     "Globulin": "g/dL",
+     "Glucose": "mg/dL",
+     "Indirect Bilirubin": "mg/dL",
+     "Sorbitol dehydrogenase": "IU/L",
+     "Total Bilirubin": "mg/dL",
+     "Total protein": "g/dL",
+     "Triglycerides": "mg/dL",
+     "Urea Nitrogen": "mg/dL"
+    },
+    "say": "17 unit(s), from clin_chem_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "clin_chem_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 4796,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:afba98d393cd85e7",
+   "companions": [
+    {
+     "name": "clin_chem_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Alanine aminotransferase": "IU/L",
+     "Albumin": "g/dL",
+     "Alkaline phosphatase": "IU/L",
+     "Aspartate Aminotransferase": "IU/L",
+     "Bile salts/acids": "µmol/L",
+     "Cholesterol": "mg/dL",
+     "Creatine kinase": "IU/L",
+     "Creatinine": "mg/dL",
+     "Direct Bilirubin": "mg/dL",
+     "Globulin": "g/dL",
+     "Glucose": "mg/dL",
+     "Indirect Bilirubin": "mg/dL",
+     "Sorbitol dehydrogenase": "IU/L",
+     "Total Bilirubin": "mg/dL",
+     "Total protein": "g/dL",
+     "Triglycerides": "mg/dL",
+     "Urea Nitrogen": "mg/dL"
+    },
+    "say": "17 unit(s), from clin_chem_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "clinical_obs_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 17810,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:380bf250903ce534",
+   "companions": [],
+   "units": null,
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "clinical_obs_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 17388,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:57d678438e9e6f1c",
+   "companions": [],
+   "units": null,
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "hematology_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 5397,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:26c8c0062c608bd4",
+   "companions": [
+    {
+     "name": "hematology_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Basophil count": "K/uL",
+     "Eosinophil count": "K/uL",
+     "Erythrocyte Count": "M/uL",
+     "Hematocrit": "%",
+     "Hemoglobin": "g/dL",
+     "Large Unstained Cell count": "K/µL",
+     "Leukocyte Count": "K/uL",
+     "Lymphocyte count": "K/uL",
+     "Manual hematocrit": "%",
+     "Mean Cell Hemoglobin": "pg",
+     "Mean Cell HGB Concentration": "g/dL",
+     "Mean Cell Volume": "fL",
+     "Monocyte count": "K/uL",
+     "Neutrophil Count": "K/uL",
+     "Platelet count": "K/uL",
+     "Reticulocyte count": "K/uL"
+    },
+    "say": "16 unit(s), from hematology_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "hematology_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 5148,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:847fdeff79594835",
+   "companions": [
+    {
+     "name": "hematology_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Basophil count": "K/uL",
+     "Eosinophil count": "K/uL",
+     "Erythrocyte Count": "M/uL",
+     "Hematocrit": "%",
+     "Hemoglobin": "g/dL",
+     "Large Unstained Cell count": "K/µL",
+     "Leukocyte Count": "K/uL",
+     "Lymphocyte count": "K/uL",
+     "Manual hematocrit": "%",
+     "Mean Cell Hemoglobin": "pg",
+     "Mean Cell HGB Concentration": "g/dL",
+     "Mean Cell Volume": "fL",
+     "Monocyte count": "K/uL",
+     "Neutrophil Count": "K/uL",
+     "Platelet count": "K/uL",
+     "Reticulocyte count": "K/uL"
+    },
+    "say": "16 unit(s), from hematology_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "hormones_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 2046,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:98f9c8c15607fbe7",
+   "companions": [
+    {
+     "name": "hormones_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Free Thyroxine": "ng/dL",
+     "Thyroid Stimulating Hormone": "ng/ml",
+     "Total Thyroxine": "ug/dL",
+     "Triiodothyronine": "ng/dL"
+    },
+    "say": "4 unit(s), from hormones_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "hormones_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 1722,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:9d8a92690a386d47",
+   "companions": [
+    {
+     "name": "hormones_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Free Thyroxine": "ng/dL",
+     "Thyroid Stimulating Hormone": "ng/ml",
+     "Total Thyroxine": "ug/dL",
+     "Triiodothyronine": "ng/dL"
+    },
+    "say": "4 unit(s), from hormones_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "organ_weights_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 3566,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:01fd6fd867ed7222",
+   "companions": [
+    {
+     "name": "organ_weights_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Heart": "grams",
+     "Kidney-Left": "grams",
+     "Kidney-Right": "grams",
+     "Liver": "grams",
+     "Terminal Body Weight": "grams"
+    },
+    "say": "5 unit(s), from organ_weights_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "organ_weights_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 3559,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:4379d1bd24a51c90",
+   "companions": [
+    {
+     "name": "organ_weights_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Heart": "grams",
+     "Kidney-Left": "grams",
+     "Kidney-Right": "grams",
+     "Liver": "grams",
+     "Terminal Body Weight": "grams"
+    },
+    "say": "5 unit(s), from organ_weights_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "tissue_conc_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 963,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:aa7a8da50fce83ed",
+   "companions": [
+    {
+     "name": "tissue_conc_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Plasma 2 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 2 Hour Perfluorohexanesulfonamide LOQ": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide LOQ": "ug/ml"
+    },
+    "say": "4 unit(s), from tissue_conc_truth_female.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  },
+  {
+   "name": "tissue_conc_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 943,
+   "added_at": "2026-10-15T09:12:00Z",
+   "content_hash": "sha256:7bee0616e7f86adc",
+   "companions": [
+    {
+     "name": "tissue_conc_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Plasma 2 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 2 Hour Perfluorohexanesulfonamide LOQ": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide LOQ": "ug/ml"
+    },
+    "say": "4 unit(s), from tissue_conc_truth_male.units.json"
+   },
+   "tables": [],
+   "bm2": null,
+   "study_number": null,
+   "checked": false,
+   "classification": {
+    "platform": null,
+    "data_type": null,
+    "say": "[not checked yet]",
+    "detected": null,
+    "stated": null,
+    "status": "not_checked",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": false,
+     "code": "not_validated",
+     "say": "Run the file check first: it says what each file is."
+    }
+   }
+  }
+ ],
+ "check": null,
+ "issues": [],
+ "conflicts": [],
+ "coverage": [],
+ "removed": [],
+ "integration": null,
+ "classification_choices": {
+  "table": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   },
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ],
+  "workbook": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   }
+  ],
+  "bm2": [
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ]
+ },
+ "limits": {
+  "max_file_bytes": 536870912,
+  "accepted": [
+   ".bm2",
+   ".csv",
+   ".txt",
+   ".xlsx",
+   ".zip",
+   ".units.json"
+  ]
+ }
+}

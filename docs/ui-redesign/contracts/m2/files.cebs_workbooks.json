@@ -1,0 +1,1614 @@
+{
+ "id": "DTXSID9000003",
+ "phase": "VALIDATED",
+ "takes_files": {
+  "allowed": true,
+  "code": null,
+  "say": null
+ },
+ "files_token": "sha256:cc9fe73b2a68719d",
+ "progress": [
+  {
+   "step": "bring_in",
+   "status": "done",
+   "say": "9 file(s) in the study"
+  },
+  {
+   "step": "check",
+   "status": "done",
+   "say": "Checked 2026-10-15: nothing blocks"
+  },
+  {
+   "step": "confirm",
+   "status": "todo",
+   "say": "9 of 9 file(s) not yet confirmed"
+  },
+  {
+   "step": "conflicts",
+   "status": "not_needed",
+   "say": "No conflicts"
+  }
+ ],
+ "next": {
+  "act": "CONFIRM_CLASSIFICATION",
+  "say": "Confirm what each file is",
+  "fix": "M2"
+ },
+ "acts": {
+  "add": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "check": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "resolve": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "classify": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "remove": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "reset": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  }
+ },
+ "files": [
+  {
+   "name": "C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 40485229,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:001192ddaea6ca8f",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
+     "sexes": [],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 8,
+      "0.15": 5,
+      "0.5": 4,
+      "1.4": 5,
+      "4.0": 4,
+      "12.0": 3,
+      "37.0": 4,
+      "111.0": 3,
+      "333.0": 5,
+      "1000.0": 4
+     },
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [
+     "Kidney_2,3-Benzofluorene_Female",
+     "Kidney_2,3-Benzofluorene_Male",
+     "Kidney_6-1 FTOH_Female",
+     "Kidney_6-1 FTOH_Male",
+     "Kidney_10-2 FTOH_Female",
+     "Kidney_10-2 FTOH_Male",
+     "Kidney_PFHxSAm_Female",
+     "Kidney_PFHxSAm_Male",
+     "Liver_2,3-Benzofluorene_Female",
+     "Liver_2,3-Benzofluorene_Male",
+     "Liver_6-1 FTOH_Female",
+     "Liver_6-1 FTOH_Male",
+     "Liver_10-2 FTOH_Female",
+     "Liver_10-2 FTOH_Male",
+     "Liver_PFHxSAm_Female",
+     "Liver_PFHxSAm_Male"
+    ],
+    "species": "Rattus norvegicus",
+    "test_articles": [
+     "10-2 FTOH",
+     "2,3-Benzofluorene",
+     "6-1 FTOH",
+     "PFHxSAm"
+    ]
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": [
+     {
+      "code": "several_test_articles",
+      "level": "warn",
+      "say": "This BMDExpress project holds experiments of 4 test articles (10-2 FTOH, 2,3-Benzofluorene, 6-1 FTOH, PFHxSAm). Only this study's belong in it."
+     }
+    ]
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 12751,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:a6b949e1c942d702",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 122,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 16,
+      "12.0": 10,
+      "37.0": 16,
+      "111.0": 10,
+      "333.0": 10,
+      "1000.0": 10
+     },
+     "measurements": 2,
+     "measurement_sample": [
+      "Body Weight",
+      "Observation Day"
+     ],
+     "selection_groups": [
+      "Biosampling Animals",
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_efba216a3f",
+    "iss_b52c1770b7"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 14176,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:e5e16e035858833d",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 90,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 10,
+      "12.0": 10,
+      "37.0": 10,
+      "111.0": 10
+     },
+     "measurements": 18,
+     "measurement_sample": [
+      "Alanine aminotransferase",
+      "Albumin",
+      "Alkaline phosphatase",
+      "Aspartate Aminotransferase",
+      "Bile salts/acids"
+     ],
+     "selection_groups": [
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "tox_study",
+    "say": "Clinical Chemistry · the study's own measurements",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_f9827ba915",
+    "iss_cd41568f17",
+    "iss_2582316524",
+    "iss_2b689326af"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 25387,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:11ed5a211d2e9602",
+   "companions": [],
+   "units": {
+    "state": "not_needed",
+    "values": {},
+    "say": "Observations are counted; they have no units"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 122,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 16,
+      "12.0": 10,
+      "37.0": 16,
+      "111.0": 10,
+      "333.0": 10,
+      "1000.0": 10
+     },
+     "measurements": 5,
+     "measurement_sample": [
+      "Modifier",
+      "Observation",
+      "Observation Day",
+      "Severity",
+      "Site"
+     ],
+     "selection_groups": [
+      "Biosampling Animals",
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Clinical",
+    "data_type": "tox_study",
+    "say": "Clinical observations · the study's own measurements",
+    "detected": {
+     "platform": "Clinical",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_9703cf8312",
+    "iss_8ca98484b7"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Hematology_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 14791,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:2672964d3d7d93cf",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Hematology_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 90,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 10,
+      "12.0": 10,
+      "37.0": 10,
+      "111.0": 10
+     },
+     "measurements": 18,
+     "measurement_sample": [
+      "Basophil count",
+      "Eosinophil count",
+      "Erythrocyte Count",
+      "Hematocrit",
+      "Hemoglobin"
+     ],
+     "selection_groups": [
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "tox_study",
+    "say": "Hematology · the study's own measurements",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_e6134c6b75",
+    "iss_b2182174d2",
+    "iss_ac919a006b",
+    "iss_50295689f8"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Hormone_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 8157,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:ec9fce4bc7569da8",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Hormone_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 75,
+     "animals_by_dose": {
+      "0.0": 15,
+      "0.15": 7,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 8,
+      "12.0": 8,
+      "37.0": 7,
+      "111.0": 10
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Free Thyroxine",
+      "Thyroid Stimulating Hormone",
+      "Total Thyroxine",
+      "Triiodothyronine"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "tox_study",
+    "say": "Hormones · the study's own measurements",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_5383a84c74",
+    "iss_47646c3a52",
+    "iss_f8a17a97f6",
+    "iss_56b055a362"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 10360,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:e1bce1c28a6a5c51",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 110,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 10,
+      "12.0": 10,
+      "37.0": 10,
+      "111.0": 10,
+      "333.0": 10,
+      "1000.0": 10
+     },
+     "measurements": 6,
+     "measurement_sample": [
+      "Heart",
+      "Kidney-Left",
+      "Kidney-Right",
+      "Liver",
+      "Removal Day"
+     ],
+     "selection_groups": [
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "tox_study",
+    "say": "Organ Weight · the study's own measurements",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_b69e22a46b",
+    "iss_95a484d01d",
+    "iss_f567ebcb58",
+    "iss_21654ae285"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 5711,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:51dbb9a9a860beb9",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      4.0,
+      37.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 12,
+     "animals_by_dose": {
+      "4.0": 6,
+      "37.0": 6
+     },
+     "measurements": 6,
+     "measurement_sample": [
+      "Day",
+      "Phase",
+      "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+      "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+      "Plasma 24 Hour Perfluorohexanesulfonamide Concentration"
+     ],
+     "selection_groups": [
+      "Biosampling Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Tissue Concentration",
+    "data_type": "tox_study",
+    "say": "Tissue Concentration · the study's own measurements",
+    "detected": {
+     "platform": "Tissue Concentration",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_9ce0461659",
+    "iss_54c272adac"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "C20022-01_Kidney_PFHxSAm_Female.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 1093839,
+   "added_at": "2026-10-15T12:18:27Z",
+   "content_hash": "sha256:88344f990ce9dfbf",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "C20022-01_Kidney_PFHxSAm_Female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": 2660,
+     "measurement_sample": [
+      "Chip File Creation Date: 07/19/19",
+      "Log Transformation: BASE2",
+      "BMDExpress2 Version: BMDExpress 2.30.0485 BETA",
+      "Timestamp: 11/18/2020 12:50.59",
+      "Something"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  }
+ ],
+ "check": {
+  "run_at": "2026-10-15T12:20:12Z",
+  "current": true,
+  "why_not_current": null,
+  "counts": {
+   "fix": 0,
+   "look": 7,
+   "expected": 15
+  },
+  "not_shown": null
+ },
+ "issues": [
+  {
+   "id": "iss_f9827ba915",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "say": "32 of the 122 female animals in the study's roster are not in C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx, for example 192, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx (Female): 90/122 animals — missing 32 (192, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Female",
+    "file_count": 90,
+    "roster_count": 122,
+    "missing_count": 32
+   }
+  },
+  {
+   "id": "iss_e6134c6b75",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "say": "32 of the 122 female animals in the study's roster are not in C20022-01_Individual_Animal_Hematology_Data.xlsx, for example 192, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Hematology_Data.xlsx (Female): 90/122 animals — missing 32 (192, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Female",
+    "file_count": 90,
+    "roster_count": 122,
+    "missing_count": 32
+   }
+  },
+  {
+   "id": "iss_5383a84c74",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "say": "47 of the 122 female animals in the study's roster are not in C20022-01_Individual_Animal_Hormone_Data.xlsx, for example 174, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Hormone_Data.xlsx (Female): 75/122 animals — missing 47 (174, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Female",
+    "file_count": 75,
+    "roster_count": 122,
+    "missing_count": 47
+   }
+  },
+  {
+   "id": "iss_b69e22a46b",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "say": "12 of the 122 female animals in the study's roster are not in C20022-01_Individual_Animal_Organ_Weight_Data.xlsx, for example 541, 545, 546, 547, 550. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx (Female): 110/122 animals — missing 12 (541, 545, 546, 547, 550)",
+   "details": {
+    "sex": "Female",
+    "file_count": 110,
+    "roster_count": 122,
+    "missing_count": 12
+   }
+  },
+  {
+   "id": "iss_cd41568f17",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "say": "32 of the 122 male animals in the study's roster are not in C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx, for example 192, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx (Male): 90/122 animals — missing 32 (192, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Male",
+    "file_count": 90,
+    "roster_count": 122,
+    "missing_count": 32
+   }
+  },
+  {
+   "id": "iss_b2182174d2",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "say": "32 of the 122 male animals in the study's roster are not in C20022-01_Individual_Animal_Hematology_Data.xlsx, for example 192, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Hematology_Data.xlsx (Male): 90/122 animals — missing 32 (192, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Male",
+    "file_count": 90,
+    "roster_count": 122,
+    "missing_count": 32
+   }
+  },
+  {
+   "id": "iss_47646c3a52",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "say": "47 of the 122 male animals in the study's roster are not in C20022-01_Individual_Animal_Hormone_Data.xlsx, for example 174, 194, 199, 541, 545. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Hormone_Data.xlsx (Male): 75/122 animals — missing 47 (174, 194, 199, 541, 545)",
+   "details": {
+    "sex": "Male",
+    "file_count": 75,
+    "roster_count": 122,
+    "missing_count": 47
+   }
+  },
+  {
+   "id": "iss_95a484d01d",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "say": "12 of the 122 male animals in the study's roster are not in C20022-01_Individual_Animal_Organ_Weight_Data.xlsx, for example 541, 545, 546, 547, 550. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx (Male): 110/122 animals — missing 12 (541, 545, 546, 547, 550)",
+   "details": {
+    "sex": "Male",
+    "file_count": 110,
+    "roster_count": 122,
+    "missing_count": 12
+   }
+  },
+  {
+   "id": "iss_efba216a3f",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
+   ],
+   "say": "Body Weight|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_b52c1770b7",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Body Weight. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_2582316524",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "say": "Clinical Chemistry|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_2b689326af",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Clinical Chemistry. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_9703cf8312",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Clinical",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx"
+   ],
+   "say": "Clinical|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_8ca98484b7",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Clinical",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Clinical observations. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_ac919a006b",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Hematology",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "say": "Hematology|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_50295689f8",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hematology_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Hematology. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_f8a17a97f6",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Hormones",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "say": "Hormones|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_56b055a362",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Hormone_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Hormones. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_f567ebcb58",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Organ Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "say": "Organ Weight|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_21654ae285",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Organ Weight. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_9ce0461659",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Tissue Concentration",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
+   ],
+   "say": "Tissue Concentration|tox_study: no txt/csv (BMDExpress input) found",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Tissue Concentration|tox_study: no txt/csv (BMDExpress input) found",
+   "details": {}
+  },
+  {
+   "id": "iss_54c272adac",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Tissue Concentration",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
+   ],
+   "say": "No BMDExpress project (.bm2) for Tissue Concentration. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Tissue Concentration|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  }
+ ],
+ "conflicts": [],
+ "coverage": [
+  {
+   "key": "gene_expression",
+   "platform": null,
+   "label": "Gene expression",
+   "data_type": "gene_expression",
+   "data_type_say": "gene-expression data",
+   "workbook": null,
+   "tables": [
+    "C20022-01_Kidney_PFHxSAm_Female.txt"
+   ],
+   "bm2": "C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project holds the gene-expression analysis."
+  },
+  {
+   "key": "Body Weight|tox_study",
+   "platform": "Body Weight",
+   "label": "Body Weight",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  },
+  {
+   "key": "Clinical Chemistry|tox_study",
+   "platform": "Clinical Chemistry",
+   "label": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  },
+  {
+   "key": "Clinical|tox_study",
+   "platform": "Clinical",
+   "label": "Clinical observations",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook; clinical observations are read from their CSV files."
+  },
+  {
+   "key": "Hematology|tox_study",
+   "platform": "Hematology",
+   "label": "Hematology",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Hematology_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  },
+  {
+   "key": "Hormones|tox_study",
+   "platform": "Hormones",
+   "label": "Hormones",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Hormone_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  },
+  {
+   "key": "Organ Weight|tox_study",
+   "platform": "Organ Weight",
+   "label": "Organ Weight",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Organ_Weight_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  },
+  {
+   "key": "Tissue Concentration|tox_study",
+   "platform": "Tissue Concentration",
+   "label": "Tissue Concentration",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx",
+   "tables": [],
+   "bm2": null,
+   "level": "warn",
+   "say": "Only the study workbook. Combining from a workbook alone left out measurement sets without an error in a test; bring in the tables made from it too."
+  }
+ ],
+ "removed": [],
+ "integration": null,
+ "classification_choices": {
+  "table": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   },
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ],
+  "workbook": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   }
+  ],
+  "bm2": [
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ]
+ },
+ "limits": {
+  "max_file_bytes": 536870912,
+  "accepted": [
+   ".bm2",
+   ".csv",
+   ".txt",
+   ".xlsx",
+   ".zip",
+   ".units.json"
+  ]
+ }
+}

@@ -1,0 +1,2615 @@
+{
+ "id": "DTXSID50469320",
+ "phase": "APPROVED",
+ "takes_files": {
+  "allowed": true,
+  "code": null,
+  "say": null
+ },
+ "files_token": "sha256:019b4f4277ff1534",
+ "progress": [
+  {
+   "step": "bring_in",
+   "status": "done",
+   "say": "15 file(s) in the study"
+  },
+  {
+   "step": "check",
+   "status": "done",
+   "say": "Checked 2026-10-12: nothing blocks"
+  },
+  {
+   "step": "confirm",
+   "status": "todo",
+   "say": "15 of 15 file(s) not yet confirmed"
+  },
+  {
+   "step": "conflicts",
+   "status": "not_needed",
+   "say": "No conflicts"
+  }
+ ],
+ "next": {
+  "act": "CONFIRM_CLASSIFICATION",
+  "say": "Confirm what each file is",
+  "fix": "M2"
+ },
+ "acts": {
+  "add": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "check": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "resolve": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "classify": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "remove": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "reset": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  }
+ },
+ "files": [
+  {
+   "name": "DTXSID50469320_genomic.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 8220917,
+   "added_at": "2026-10-12T11:37:22Z",
+   "content_hash": "sha256:78c28445f9d27ba5",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "DTXSID50469320_genomic.bm2",
+     "sexes": [],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [
+     "Kidney_PFHxSAm_Female",
+     "Kidney_PFHxSAm_Male",
+     "Liver_PFHxSAm_Female",
+     "Liver_PFHxSAm_Male"
+    ],
+    "species": "Rattus norvegicus",
+    "test_articles": [
+     "PFHxSAm"
+    ]
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_80305858cc"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6387,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:12c09dc24d6b2706",
+   "companions": [
+    {
+     "name": "body_weight_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "body_weight_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "body_weight_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "body_weight_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Body Weight Gain",
+      "SD0",
+      "SD1",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_9806f3fd4a",
+    "iss_85742f13aa",
+    "iss_e14d185915"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6140,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:ae099871437a1ffb",
+   "companions": [
+    {
+     "name": "body_weight_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "body_weight_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "body_weight_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "body_weight_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Body Weight Gain",
+      "SD0",
+      "SD1",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_98312c5e35",
+    "iss_85742f13aa",
+    "iss_e14d185915"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "clin_chem_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 4854,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:436bed26713911ea",
+   "companions": [
+    {
+     "name": "clin_chem_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "clin_chem_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "clin_chem_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Alanine aminotransferase": "IU/L",
+     "Albumin": "g/dL",
+     "Alkaline phosphatase": "IU/L",
+     "Aspartate Aminotransferase": "IU/L",
+     "Bile salts/acids": "µmol/L",
+     "Cholesterol": "mg/dL",
+     "Creatine kinase": "IU/L",
+     "Creatinine": "mg/dL",
+     "Direct Bilirubin": "mg/dL",
+     "Globulin": "g/dL",
+     "Glucose": "mg/dL",
+     "Indirect Bilirubin": "mg/dL",
+     "Sorbitol dehydrogenase": "IU/L",
+     "Total Bilirubin": "mg/dL",
+     "Total protein": "g/dL",
+     "Triglycerides": "mg/dL",
+     "Urea Nitrogen": "mg/dL"
+    },
+    "say": "17 unit(s), from clin_chem_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "clin_chem_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 14,
+     "measurement_sample": [
+      "Alanine aminotransferase",
+      "Albumin",
+      "Alkaline phosphatase",
+      "Aspartate Aminotransferase",
+      "Bile salts/acids"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "tox_study",
+    "say": "Clinical Chemistry · the study's own measurements",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_09f64507c9",
+    "iss_d9a38acc3c",
+    "iss_5b93af592e"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "clin_chem_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 4796,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:afba98d393cd85e7",
+   "companions": [
+    {
+     "name": "clin_chem_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "clin_chem_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "clin_chem_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Alanine aminotransferase": "IU/L",
+     "Albumin": "g/dL",
+     "Alkaline phosphatase": "IU/L",
+     "Aspartate Aminotransferase": "IU/L",
+     "Bile salts/acids": "µmol/L",
+     "Cholesterol": "mg/dL",
+     "Creatine kinase": "IU/L",
+     "Creatinine": "mg/dL",
+     "Direct Bilirubin": "mg/dL",
+     "Globulin": "g/dL",
+     "Glucose": "mg/dL",
+     "Indirect Bilirubin": "mg/dL",
+     "Sorbitol dehydrogenase": "IU/L",
+     "Total Bilirubin": "mg/dL",
+     "Total protein": "g/dL",
+     "Triglycerides": "mg/dL",
+     "Urea Nitrogen": "mg/dL"
+    },
+    "say": "17 unit(s), from clin_chem_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "clin_chem_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 44,
+     "animals_by_dose": {
+      "0.0": 9,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 14,
+     "measurement_sample": [
+      "Alanine aminotransferase",
+      "Albumin",
+      "Alkaline phosphatase",
+      "Aspartate Aminotransferase",
+      "Bile salts/acids"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "tox_study",
+    "say": "Clinical Chemistry · the study's own measurements",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_b22a70d0fe",
+    "iss_d9a38acc3c",
+    "iss_5b93af592e"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "clinical_obs_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 17810,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:380bf250903ce534",
+   "companions": [],
+   "units": {
+    "state": "not_needed",
+    "values": {},
+    "say": "Observations are counted; they have no units"
+   },
+   "tables": [
+    {
+     "name": "clinical_obs_truth_female.csv",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 61,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 8,
+      "12.0": 5,
+      "37.0": 8,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 0,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical",
+    "data_type": "tox_study",
+    "say": "Clinical observations · the study's own measurements",
+    "detected": {
+     "platform": "Clinical",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_1c157879fa",
+    "iss_1f2a07b693"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "clinical_obs_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 17388,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:57d678438e9e6f1c",
+   "companions": [],
+   "units": {
+    "state": "not_needed",
+    "values": {},
+    "say": "Observations are counted; they have no units"
+   },
+   "tables": [
+    {
+     "name": "clinical_obs_truth_male.csv",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 61,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 8,
+      "12.0": 5,
+      "37.0": 8,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 0,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical",
+    "data_type": "tox_study",
+    "say": "Clinical observations · the study's own measurements",
+    "detected": {
+     "platform": "Clinical",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_1c157879fa",
+    "iss_1f2a07b693"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "hematology_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 5397,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:26c8c0062c608bd4",
+   "companions": [
+    {
+     "name": "hematology_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "hematology_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "hematology_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Basophil count": "K/uL",
+     "Eosinophil count": "K/uL",
+     "Erythrocyte Count": "M/uL",
+     "Hematocrit": "%",
+     "Hemoglobin": "g/dL",
+     "Large Unstained Cell count": "K/µL",
+     "Leukocyte Count": "K/uL",
+     "Lymphocyte count": "K/uL",
+     "Manual hematocrit": "%",
+     "Mean Cell Hemoglobin": "pg",
+     "Mean Cell HGB Concentration": "g/dL",
+     "Mean Cell Volume": "fL",
+     "Monocyte count": "K/uL",
+     "Neutrophil Count": "K/uL",
+     "Platelet count": "K/uL",
+     "Reticulocyte count": "K/uL"
+    },
+    "say": "16 unit(s), from hematology_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "hematology_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 38,
+     "animals_by_dose": {
+      "0.0": 8,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 3,
+      "4.0": 4,
+      "12.0": 4,
+      "37.0": 4,
+      "111.0": 5
+     },
+     "measurements": 17,
+     "measurement_sample": [
+      "Basophil count",
+      "Eosinophil count",
+      "Erythrocyte Count",
+      "Hematocrit",
+      "Hemoglobin"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "tox_study",
+    "say": "Hematology · the study's own measurements",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_951792ea79",
+    "iss_fd582eb4cb",
+    "iss_1c85ebe75c"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "hematology_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 5148,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:847fdeff79594835",
+   "companions": [
+    {
+     "name": "hematology_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "hematology_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "hematology_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Basophil count": "K/uL",
+     "Eosinophil count": "K/uL",
+     "Erythrocyte Count": "M/uL",
+     "Hematocrit": "%",
+     "Hemoglobin": "g/dL",
+     "Large Unstained Cell count": "K/µL",
+     "Leukocyte Count": "K/uL",
+     "Lymphocyte count": "K/uL",
+     "Manual hematocrit": "%",
+     "Mean Cell Hemoglobin": "pg",
+     "Mean Cell HGB Concentration": "g/dL",
+     "Mean Cell Volume": "fL",
+     "Monocyte count": "K/uL",
+     "Neutrophil Count": "K/uL",
+     "Platelet count": "K/uL",
+     "Reticulocyte count": "K/uL"
+    },
+    "say": "16 unit(s), from hematology_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "hematology_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 31,
+     "animals_by_dose": {
+      "0.0": 6,
+      "0.15": 3,
+      "0.5": 4,
+      "1.4": 4,
+      "4.0": 5,
+      "12.0": 3,
+      "37.0": 2,
+      "111.0": 4
+     },
+     "measurements": 17,
+     "measurement_sample": [
+      "Basophil count",
+      "Eosinophil count",
+      "Erythrocyte Count",
+      "Hematocrit",
+      "Hemoglobin"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "tox_study",
+    "say": "Hematology · the study's own measurements",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_bb5997fa26",
+    "iss_fd582eb4cb",
+    "iss_1c85ebe75c"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "hormones_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 2046,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:98f9c8c15607fbe7",
+   "companions": [
+    {
+     "name": "hormones_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "hormones_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "hormones_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Free Thyroxine": "ng/dL",
+     "Thyroid Stimulating Hormone": "ng/ml",
+     "Total Thyroxine": "ug/dL",
+     "Triiodothyronine": "ng/dL"
+    },
+    "say": "4 unit(s), from hormones_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "hormones_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 40,
+     "animals_by_dose": {
+      "0.0": 9,
+      "0.15": 4,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 4,
+      "12.0": 4,
+      "37.0": 4,
+      "111.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Free Thyroxine",
+      "Thyroid Stimulating Hormone",
+      "Total Thyroxine",
+      "Triiodothyronine"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "tox_study",
+    "say": "Hormones · the study's own measurements",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_cb03971019",
+    "iss_b07ee0f461",
+    "iss_1c7d9fd0e6"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "hormones_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 1722,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:9d8a92690a386d47",
+   "companions": [
+    {
+     "name": "hormones_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "hormones_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "hormones_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Free Thyroxine": "ng/dL",
+     "Thyroid Stimulating Hormone": "ng/ml",
+     "Total Thyroxine": "ug/dL",
+     "Triiodothyronine": "ng/dL"
+    },
+    "say": "4 unit(s), from hormones_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "hormones_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 35,
+     "animals_by_dose": {
+      "0.0": 6,
+      "0.15": 3,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 4,
+      "12.0": 4,
+      "37.0": 3,
+      "111.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Free Thyroxine",
+      "Thyroid Stimulating Hormone",
+      "Total Thyroxine",
+      "Triiodothyronine"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "tox_study",
+    "say": "Hormones · the study's own measurements",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_c771822c7b",
+    "iss_b07ee0f461",
+    "iss_1c7d9fd0e6"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "organ_weights_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 3566,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:01fd6fd867ed7222",
+   "companions": [
+    {
+     "name": "organ_weights_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "organ_weights_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "organ_weights_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Heart": "grams",
+     "Kidney-Left": "grams",
+     "Kidney-Right": "grams",
+     "Liver": "grams",
+     "Terminal Body Weight": "grams"
+    },
+    "say": "5 unit(s), from organ_weights_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "organ_weights_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 5,
+     "measurement_sample": [
+      "Heart",
+      "Kidney-Left",
+      "Kidney-Right",
+      "Liver",
+      "Terminal Body Weight"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "tox_study",
+    "say": "Organ Weight · the study's own measurements",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_f7bd23ffea",
+    "iss_4735f14969",
+    "iss_a95b371b08"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "organ_weights_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 3559,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:4379d1bd24a51c90",
+   "companions": [
+    {
+     "name": "organ_weights_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "organ_weights_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "organ_weights_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Heart": "grams",
+     "Kidney-Left": "grams",
+     "Kidney-Right": "grams",
+     "Liver": "grams",
+     "Terminal Body Weight": "grams"
+    },
+    "say": "5 unit(s), from organ_weights_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "organ_weights_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 5,
+     "measurement_sample": [
+      "Heart",
+      "Kidney-Left",
+      "Kidney-Right",
+      "Liver",
+      "Terminal Body Weight"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "tox_study",
+    "say": "Organ Weight · the study's own measurements",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_892717d995",
+    "iss_4735f14969",
+    "iss_a95b371b08"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "tissue_conc_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 963,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:aa7a8da50fce83ed",
+   "companions": [
+    {
+     "name": "tissue_conc_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "tissue_conc_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "tissue_conc_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Plasma 2 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 2 Hour Perfluorohexanesulfonamide LOQ": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide LOQ": "ug/ml"
+    },
+    "say": "4 unit(s), from tissue_conc_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "tissue_conc_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      4.0,
+      37.0
+     ],
+     "dose_unit": null,
+     "animals": 6,
+     "animals_by_dose": {
+      "4.0": 3,
+      "37.0": 3
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+      "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+      "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+      "Plasma 24 Hour Perfluorohexanesulfonamide LOQ"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Tissue Concentration",
+    "data_type": "tox_study",
+    "say": "Tissue Concentration · the study's own measurements",
+    "detected": {
+     "platform": "Tissue Concentration",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_539a4ef70a",
+    "iss_7837db7cb0"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "tissue_conc_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 943,
+   "added_at": "2026-10-12T11:37:20Z",
+   "content_hash": "sha256:7bee0616e7f86adc",
+   "companions": [
+    {
+     "name": "tissue_conc_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "tissue_conc_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "tissue_conc_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Plasma 2 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 2 Hour Perfluorohexanesulfonamide LOQ": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide Concentration": "ug/ml",
+     "Plasma 24 Hour Perfluorohexanesulfonamide LOQ": "ug/ml"
+    },
+    "say": "4 unit(s), from tissue_conc_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "tissue_conc_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      4.0,
+      37.0
+     ],
+     "dose_unit": null,
+     "animals": 6,
+     "animals_by_dose": {
+      "4.0": 3,
+      "37.0": 3
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+      "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+      "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+      "Plasma 24 Hour Perfluorohexanesulfonamide LOQ"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Tissue Concentration",
+    "data_type": "tox_study",
+    "say": "Tissue Concentration · the study's own measurements",
+    "detected": {
+     "platform": "Tissue Concentration",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_539a4ef70a",
+    "iss_7837db7cb0"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  }
+ ],
+ "check": {
+  "run_at": "2026-10-12T11:37:28Z",
+  "current": true,
+  "why_not_current": null,
+  "counts": {
+   "fix": 0,
+   "look": 7,
+   "expected": 25
+  },
+  "not_shown": {
+   "count": 8,
+   "fix": "M5",
+   "say": "Checks of the analysis method are shown with the method, in Method and report definition."
+  }
+ },
+ "issues": [
+  {
+   "id": "iss_9806f3fd4a",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "body_weight_truth_female.csv"
+   ],
+   "tables": [
+    "body_weight_truth_female.txt"
+   ],
+   "say": "6 of the 61 female animals in the study's roster are not in body_weight_truth_female.csv, for example 544, 545, 546, 550, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "body_weight_truth_female.txt (Female): 55/61 animals — missing 6 (544, 545, 546, 550, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 55,
+    "roster_count": 61,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_09f64507c9",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "clin_chem_truth_female.csv"
+   ],
+   "tables": [
+    "clin_chem_truth_female.txt"
+   ],
+   "say": "16 of the 61 female animals in the study's roster are not in clin_chem_truth_female.csv, for example 198, 207, 208, 544, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "clin_chem_truth_female.txt (Female): 45/61 animals — missing 16 (198, 207, 208, 544, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 45,
+    "roster_count": 61,
+    "missing_count": 16
+   }
+  },
+  {
+   "id": "iss_951792ea79",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "hematology_truth_female.csv"
+   ],
+   "tables": [
+    "hematology_truth_female.txt"
+   ],
+   "say": "23 of the 61 female animals in the study's roster are not in hematology_truth_female.csv, for example 160, 167, 207, 209, 546. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "hematology_truth_female.txt (Female): 38/61 animals — missing 23 (160, 167, 207, 209, 546)",
+   "details": {
+    "sex": "Female",
+    "file_count": 38,
+    "roster_count": 61,
+    "missing_count": 23
+   }
+  },
+  {
+   "id": "iss_cb03971019",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "hormones_truth_female.csv"
+   ],
+   "tables": [
+    "hormones_truth_female.txt"
+   ],
+   "say": "21 of the 61 female animals in the study's roster are not in hormones_truth_female.csv, for example 127, 159, 167, 207, 209. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "hormones_truth_female.txt (Female): 40/61 animals — missing 21 (127, 159, 167, 207, 209)",
+   "details": {
+    "sex": "Female",
+    "file_count": 40,
+    "roster_count": 61,
+    "missing_count": 21
+   }
+  },
+  {
+   "id": "iss_f7bd23ffea",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "organ_weights_truth_female.csv"
+   ],
+   "tables": [
+    "organ_weights_truth_female.txt"
+   ],
+   "say": "6 of the 61 female animals in the study's roster are not in organ_weights_truth_female.csv, for example 544, 545, 546, 550, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "organ_weights_truth_female.txt (Female): 55/61 animals — missing 6 (544, 545, 546, 550, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 55,
+    "roster_count": 61,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_98312c5e35",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "body_weight_truth_male.txt"
+   ],
+   "say": "6 of the 61 male animals in the study's roster are not in body_weight_truth_male.csv, for example 541, 542, 543, 547, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "body_weight_truth_male.txt (Male): 55/61 animals — missing 6 (541, 542, 543, 547, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 55,
+    "roster_count": 61,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_b22a70d0fe",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "clin_chem_truth_male.csv"
+   ],
+   "tables": [
+    "clin_chem_truth_male.txt"
+   ],
+   "say": "17 of the 61 male animals in the study's roster are not in clin_chem_truth_male.csv, for example 201, 202, 204, 541, 547. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "clin_chem_truth_male.txt (Male): 44/61 animals — missing 17 (201, 202, 204, 541, 547)",
+   "details": {
+    "sex": "Male",
+    "file_count": 44,
+    "roster_count": 61,
+    "missing_count": 17
+   }
+  },
+  {
+   "id": "iss_bb5997fa26",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "hematology_truth_male.csv"
+   ],
+   "tables": [
+    "hematology_truth_male.txt"
+   ],
+   "say": "30 of the 61 male animals in the study's roster are not in hematology_truth_male.csv, for example 103, 109, 122, 142, 202. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "hematology_truth_male.txt (Male): 31/61 animals — missing 30 (103, 109, 122, 142, 202)",
+   "details": {
+    "sex": "Male",
+    "file_count": 31,
+    "roster_count": 61,
+    "missing_count": 30
+   }
+  },
+  {
+   "id": "iss_c771822c7b",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "hormones_truth_male.csv"
+   ],
+   "tables": [
+    "hormones_truth_male.txt"
+   ],
+   "say": "26 of the 61 male animals in the study's roster are not in hormones_truth_male.csv, for example 103, 122, 191, 202, 548. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "hormones_truth_male.txt (Male): 35/61 animals — missing 26 (103, 122, 191, 202, 548)",
+   "details": {
+    "sex": "Male",
+    "file_count": 35,
+    "roster_count": 61,
+    "missing_count": 26
+   }
+  },
+  {
+   "id": "iss_892717d995",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "organ_weights_truth_male.csv"
+   ],
+   "tables": [
+    "organ_weights_truth_male.txt"
+   ],
+   "say": "6 of the 61 male animals in the study's roster are not in organ_weights_truth_male.csv, for example 541, 542, 543, 547, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "organ_weights_truth_male.txt (Male): 55/61 animals — missing 6 (541, 542, 543, 547, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 55,
+    "roster_count": 61,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_80305858cc",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "gene_expression",
+   "data_type": null,
+   "sex": null,
+   "files": [
+    "DTXSID50469320_genomic.bm2"
+   ],
+   "tables": [
+    "DTXSID50469320_genomic.bm2"
+   ],
+   "say": "No gene-expression tables beside the BMDExpress project. The project already holds the analysis.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "gene_expression: no txt/csv gene expression input data found",
+   "details": {}
+  },
+  {
+   "id": "iss_85742f13aa",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "body_weight_truth_female.txt",
+    "body_weight_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Body Weight. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_e14d185915",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "body_weight_truth_female.txt",
+    "body_weight_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Body Weight. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_d9a38acc3c",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "clin_chem_truth_female.csv",
+    "clin_chem_truth_male.csv"
+   ],
+   "tables": [
+    "clin_chem_truth_female.txt",
+    "clin_chem_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Clinical Chemistry. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_5b93af592e",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "clin_chem_truth_female.csv",
+    "clin_chem_truth_male.csv"
+   ],
+   "tables": [
+    "clin_chem_truth_female.txt",
+    "clin_chem_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Clinical Chemistry. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_1c157879fa",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "clinical_obs_truth_female.csv",
+    "clinical_obs_truth_male.csv"
+   ],
+   "tables": [
+    "clinical_obs_truth_female.csv",
+    "clinical_obs_truth_male.csv"
+   ],
+   "say": "No study workbook (.xlsx) for Clinical observations. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_1f2a07b693",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Clinical",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "clinical_obs_truth_female.csv",
+    "clinical_obs_truth_male.csv"
+   ],
+   "tables": [
+    "clinical_obs_truth_female.csv",
+    "clinical_obs_truth_male.csv"
+   ],
+   "say": "No BMDExpress project (.bm2) for Clinical observations. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_fd582eb4cb",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "hematology_truth_female.csv",
+    "hematology_truth_male.csv"
+   ],
+   "tables": [
+    "hematology_truth_female.txt",
+    "hematology_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Hematology. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_1c85ebe75c",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "hematology_truth_female.csv",
+    "hematology_truth_male.csv"
+   ],
+   "tables": [
+    "hematology_truth_female.txt",
+    "hematology_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Hematology. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_b07ee0f461",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "hormones_truth_female.csv",
+    "hormones_truth_male.csv"
+   ],
+   "tables": [
+    "hormones_truth_female.txt",
+    "hormones_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Hormones. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_1c7d9fd0e6",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "hormones_truth_female.csv",
+    "hormones_truth_male.csv"
+   ],
+   "tables": [
+    "hormones_truth_female.txt",
+    "hormones_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Hormones. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_4735f14969",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "organ_weights_truth_female.csv",
+    "organ_weights_truth_male.csv"
+   ],
+   "tables": [
+    "organ_weights_truth_female.txt",
+    "organ_weights_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Organ Weight. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_a95b371b08",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "organ_weights_truth_female.csv",
+    "organ_weights_truth_male.csv"
+   ],
+   "tables": [
+    "organ_weights_truth_female.txt",
+    "organ_weights_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Organ Weight. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_539a4ef70a",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Tissue Concentration",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "tissue_conc_truth_female.csv",
+    "tissue_conc_truth_male.csv"
+   ],
+   "tables": [
+    "tissue_conc_truth_female.txt",
+    "tissue_conc_truth_male.txt"
+   ],
+   "say": "No study workbook (.xlsx) for Tissue Concentration. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Tissue Concentration|tox_study: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_7837db7cb0",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Tissue Concentration",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "tissue_conc_truth_female.csv",
+    "tissue_conc_truth_male.csv"
+   ],
+   "tables": [
+    "tissue_conc_truth_female.txt",
+    "tissue_conc_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Tissue Concentration. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Tissue Concentration|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_8c7b9d9534",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Body Weight",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Body Weight: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Body Weight, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_c217aae24f",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Clinical",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Clinical observations: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Clinical observations, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_ce11b45f3a",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Clinical Chemistry: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Clinical Chemistry, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_b7a158ae17",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Hematology: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Hematology, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_333fff5817",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Hormones: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Hormones, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_6756e844bc",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Organ Weight: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Organ Weight, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  },
+  {
+   "id": "iss_b123714e0d",
+   "type": "unverified_derived_data",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Tissue Concentration",
+   "data_type": null,
+   "sex": null,
+   "files": [],
+   "tables": [],
+   "say": "Tissue Concentration: there is no study workbook (.xlsx) to check the tables' values against, so they are used as given, unverified.",
+   "what_to_do": "If you have the study's Individual Animal workbook for Tissue Concentration, add it: every value is then checked against it.",
+   "feeds": null,
+   "fix": null,
+   "message": "Tissue Concentration: using derived tox_study data with no original NTP study xlsx to cross-check it against. Values cannot be verified against the source study.",
+   "details": {}
+  }
+ ],
+ "conflicts": [],
+ "coverage": [
+  {
+   "key": "gene_expression",
+   "platform": null,
+   "label": "Gene expression",
+   "data_type": "gene_expression",
+   "data_type_say": "gene-expression data",
+   "workbook": null,
+   "tables": [],
+   "bm2": "DTXSID50469320_genomic.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project holds the gene-expression analysis."
+  },
+  {
+   "key": "Body Weight|tox_study",
+   "platform": "Body Weight",
+   "label": "Body Weight",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  },
+  {
+   "key": "Clinical Chemistry|tox_study",
+   "platform": "Clinical Chemistry",
+   "label": "Clinical Chemistry",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "clin_chem_truth_female.csv",
+    "clin_chem_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  },
+  {
+   "key": "Clinical|tox_study",
+   "platform": "Clinical",
+   "label": "Clinical observations",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "clinical_obs_truth_female.csv",
+    "clinical_obs_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "Observations are counted and tabulated; they are not modelled."
+  },
+  {
+   "key": "Hematology|tox_study",
+   "platform": "Hematology",
+   "label": "Hematology",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "hematology_truth_female.csv",
+    "hematology_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  },
+  {
+   "key": "Hormones|tox_study",
+   "platform": "Hormones",
+   "label": "Hormones",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "hormones_truth_female.csv",
+    "hormones_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  },
+  {
+   "key": "Organ Weight|tox_study",
+   "platform": "Organ Weight",
+   "label": "Organ Weight",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "organ_weights_truth_female.csv",
+    "organ_weights_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  },
+  {
+   "key": "Tissue Concentration|tox_study",
+   "platform": "Tissue Concentration",
+   "label": "Tissue Concentration",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": null,
+   "tables": [
+    "tissue_conc_truth_female.csv",
+    "tissue_conc_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  }
+ ],
+ "removed": [],
+ "integration": {
+  "state": "unrecorded",
+  "made_at": "2026-10-12T11:38:01Z",
+  "fix": "M3",
+  "say": "The files were combined into one dataset on 2026-10-12."
+ },
+ "classification_choices": {
+  "table": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   },
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ],
+  "workbook": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   }
+  ],
+  "bm2": [
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ]
+ },
+ "limits": {
+  "max_file_bytes": 536870912,
+  "accepted": [
+   ".bm2",
+   ".csv",
+   ".txt",
+   ".xlsx",
+   ".zip",
+   ".units.json"
+  ]
+ }
+}

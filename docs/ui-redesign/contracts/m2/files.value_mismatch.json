@@ -1,0 +1,597 @@
+{
+ "id": "DTXSID9000005",
+ "phase": "VALIDATION_ERRORS",
+ "takes_files": {
+  "allowed": true,
+  "code": null,
+  "say": null
+ },
+ "files_token": "sha256:4db6ef2509b65ba0",
+ "progress": [
+  {
+   "step": "bring_in",
+   "status": "done",
+   "say": "3 file(s) in the study"
+  },
+  {
+   "step": "check",
+   "status": "blocked",
+   "say": "Checked 2026-10-15: 1 problem(s) to fix"
+  },
+  {
+   "step": "confirm",
+   "status": "todo",
+   "say": "3 of 3 file(s) not yet confirmed"
+  },
+  {
+   "step": "conflicts",
+   "status": "not_needed",
+   "say": "No conflicts"
+  }
+ ],
+ "next": {
+  "act": "CONFIRM_CLASSIFICATION",
+  "say": "Confirm what each file is",
+  "fix": "M2"
+ },
+ "acts": {
+  "add": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "check": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "resolve": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "classify": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "remove": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "reset": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  }
+ },
+ "files": [
+  {
+   "name": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+   "kind": "workbook",
+   "type": "xlsx",
+   "size": 12751,
+   "added_at": "2026-10-15T12:18:04Z",
+   "content_hash": "sha256:a6b949e1c942d702",
+   "companions": [],
+   "units": {
+    "state": "not_read",
+    "values": {},
+    "say": "[units pending]: the workbook states them in its Key sheet, but they are not read from a workbook yet"
+   },
+   "tables": [
+    {
+     "name": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+     "sexes": [
+      "Female",
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": "mg/kg",
+     "animals": 122,
+     "animals_by_dose": {
+      "0.0": 20,
+      "0.15": 10,
+      "0.5": 10,
+      "1.4": 10,
+      "4.0": 16,
+      "12.0": 10,
+      "37.0": 16,
+      "111.0": 10,
+      "333.0": 10,
+      "1000.0": 10
+     },
+     "measurements": 2,
+     "measurement_sample": [
+      "Body Weight",
+      "Observation Day"
+     ],
+     "selection_groups": [
+      "Biosampling Animals",
+      "Core Animals"
+     ]
+    }
+   ],
+   "bm2": null,
+   "study_number": "C20022-01",
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_cbe5488466",
+    "iss_97192be6fa",
+    "iss_d7f953ae8c"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_female.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6387,
+   "added_at": "2026-10-15T12:18:04Z",
+   "content_hash": "sha256:8d3d64112b278025",
+   "companions": [
+    {
+     "name": "body_weight_truth_female.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "body_weight_truth_female.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "body_weight_truth_female.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_female.units.json"
+   },
+   "tables": [
+    {
+     "name": "body_weight_truth_female.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Body Weight Gain",
+      "SD0",
+      "SD1",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_cbe5488466",
+    "iss_97192be6fa",
+    "iss_d7f953ae8c"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "body_weight_truth_male.csv",
+   "kind": "table",
+   "type": "csv",
+   "size": 6140,
+   "added_at": "2026-10-15T12:18:04Z",
+   "content_hash": "sha256:ae099871437a1ffb",
+   "companions": [
+    {
+     "name": "body_weight_truth_male.units.json",
+     "role": "units",
+     "say": "its measurement units"
+    },
+    {
+     "name": "body_weight_truth_male.txt",
+     "role": "table",
+     "say": "the table the check made from it, one column per animal, for BMDExpress"
+    },
+    {
+     "name": "body_weight_truth_male.sidecar.json",
+     "role": "sidecar",
+     "say": "what the table can't hold: each animal's group, day and terminal flag"
+    }
+   ],
+   "units": {
+    "state": "stated",
+    "values": {
+     "Body Weight": "grams"
+    },
+    "say": "1 unit(s), from body_weight_truth_male.units.json"
+   },
+   "tables": [
+    {
+     "name": "body_weight_truth_male.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0,
+      333.0,
+      1000.0
+     ],
+     "dose_unit": null,
+     "animals": 55,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5,
+      "333.0": 5,
+      "1000.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Body Weight Gain",
+      "SD0",
+      "SD1",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "tox_study",
+    "say": "Body Weight · the study's own measurements",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "tox_study",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_cbe5488466",
+    "iss_97192be6fa",
+    "iss_d7f953ae8c"
+   ],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  }
+ ],
+ "check": {
+  "run_at": "2026-10-15T12:18:06Z",
+  "current": true,
+  "why_not_current": null,
+  "counts": {
+   "fix": 1,
+   "look": 1,
+   "expected": 1
+  },
+  "not_shown": null
+ },
+ "issues": [
+  {
+   "id": "iss_cbe5488466",
+   "type": "missing_tier",
+   "severity": "warning",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.txt",
+    "body_weight_truth_male.txt"
+   ],
+   "say": "No BMDExpress project (.bm2) for Body Weight. Process computes its benchmark doses itself.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+   "details": {}
+  },
+  {
+   "id": "iss_97192be6fa",
+   "type": "animal_count_mismatch",
+   "severity": "warning",
+   "group": "look",
+   "platform": "Body Weight",
+   "data_type": "tox_study",
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.txt",
+    "body_weight_truth_male.txt"
+   ],
+   "say": "Body Weight: the workbook has 122 animals and the tables 110, so 12 of the workbook's animals are not in the tables. The data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "Body Weight|tox_study: txt/csv files have 110 unique animals vs 122 in xlsx (12 excluded)",
+   "details": {
+    "xlsx_count": 122,
+    "txt_csv_count": 110
+   }
+  },
+  {
+   "id": "iss_d7f953ae8c",
+   "type": "value_mismatch",
+   "severity": "error",
+   "group": "fix",
+   "platform": "Body Weight",
+   "data_type": null,
+   "sex": null,
+   "files": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "tables": [
+    "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+    "body_weight_truth_female.txt",
+    "body_weight_truth_male.txt"
+   ],
+   "say": "Body Weight: 1 of 243 values in the tables differ from the study workbook (for example animal 111, SD0, Body Weight: workbook 215.9, table 251.9). A table must be an exact copy of the workbook's data.",
+   "what_to_do": "Remove the table that differs (the workbook alone is enough), or replace it with one made from the workbook.",
+   "feeds": null,
+   "fix": "M2",
+   "message": "Body Weight: 1 of 243 records in the derived CSV differ from the source NTP xlsx (value_mismatch; e.g. animal 111 SD0 'Body Weight': xlsx='215.9' csv='251.9'). Derived data must trace back to the source study.",
+   "details": {
+    "count": 1,
+    "total_compared": 243,
+    "examples": [
+     {
+      "sex": "Female",
+      "animal_id": "111",
+      "endpoint": "Body Weight",
+      "day": "SD0",
+      "xlsx": "215.9",
+      "csv": "251.9"
+     }
+    ]
+   }
+  }
+ ],
+ "conflicts": [],
+ "coverage": [
+  {
+   "key": "Body Weight|tox_study",
+   "platform": "Body Weight",
+   "label": "Body Weight",
+   "data_type": "tox_study",
+   "data_type_say": "the study's own measurements",
+   "workbook": "C20022-01_Individual_Animal_Body_Weight_Data.xlsx",
+   "tables": [
+    "body_weight_truth_female.csv",
+    "body_weight_truth_male.csv"
+   ],
+   "bm2": null,
+   "level": "ok",
+   "say": "The study's own measurements: the NTP statistics and Process's benchmark doses are computed from them."
+  }
+ ],
+ "removed": [],
+ "integration": null,
+ "classification_choices": {
+  "table": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   },
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ],
+  "workbook": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   }
+  ],
+  "bm2": [
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ]
+ },
+ "limits": {
+  "max_file_bytes": 536870912,
+  "accepted": [
+   ".bm2",
+   ".csv",
+   ".txt",
+   ".xlsx",
+   ".zip",
+   ".units.json"
+  ]
+ }
+}

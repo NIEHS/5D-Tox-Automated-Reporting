@@ -1,0 +1,2233 @@
+{
+ "id": "DTXSID9000002",
+ "phase": "VALIDATED",
+ "takes_files": {
+  "allowed": true,
+  "code": null,
+  "say": null
+ },
+ "files_token": "sha256:787d553a44c36bb1",
+ "progress": [
+  {
+   "step": "bring_in",
+   "status": "done",
+   "say": "20 file(s) in the study"
+  },
+  {
+   "step": "check",
+   "status": "done",
+   "say": "Checked 2026-10-15: nothing blocks"
+  },
+  {
+   "step": "confirm",
+   "status": "todo",
+   "say": "20 of 20 file(s) not yet confirmed"
+  },
+  {
+   "step": "conflicts",
+   "status": "not_needed",
+   "say": "No conflicts"
+  }
+ ],
+ "next": {
+  "act": "CONFIRM_CLASSIFICATION",
+  "say": "Confirm what each file is",
+  "fix": "M2"
+ },
+ "acts": {
+  "add": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "check": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "resolve": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "classify": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "remove": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  },
+  "reset": {
+   "allowed": true,
+   "code": null,
+   "say": null
+  }
+ },
+ "files": [
+  {
+   "name": "Body weight.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 11042,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:a36a41e722fd8e9f",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Body weight.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "inferred",
+    "say": "Body Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "inferred",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_28aa444f02"
+   ],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Clinical Chemistry.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 43272,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:0910e7cac334d478",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Clinical Chemistry.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "inferred",
+    "say": "Clinical Chemistry · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "inferred",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_0d577741cc"
+   ],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Gene Expression-Perflourohexane Sulfonamide.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 10083726,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:99fb6882bfb1ea4f",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Gene Expression-Perflourohexane Sulfonamide.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Hematology.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 42749,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:a774bce0cdab834f",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Hematology.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "inferred",
+    "say": "Hematology · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "inferred",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_84549b2324"
+   ],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Hormones.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 31108,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:dd8c150a40878a3b",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Hormones.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "inferred",
+    "say": "Hormones · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "inferred",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_74f756003d"
+   ],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Kidney_PFHxSAm_Female_No0.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 892728,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:049646d5136136c5",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Kidney_PFHxSAm_Female_No0.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 2025,
+     "measurement_sample": [
+      "AADAC_7934",
+      "AARS_7935",
+      "AASS_7936",
+      "AATF_32691",
+      "ABAT_32557"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Kidney_PFHxSAm_Male_No0.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 885696,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:d6e23522901fb0b4",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Kidney_PFHxSAm_Male_No0.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 2006,
+     "measurement_sample": [
+      "AADAC_7934",
+      "AARS_7935",
+      "AASS_7936",
+      "AATF_32691",
+      "ABAT_32557"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Liver_PFHxSAm_Female_No0.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 749988,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:20f2b2b73f04afa1",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Liver_PFHxSAm_Female_No0.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 44,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 4,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 1720,
+     "measurement_sample": [
+      "A1BG_7930",
+      "A2M_7932",
+      "AADAC_7934",
+      "AARS_7935",
+      "AASS_7936"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Liver_PFHxSAm_Male_No0.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 766329,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:8b14e401f07f13e7",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Liver_PFHxSAm_Male_No0.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 1717,
+     "measurement_sample": [
+      "A2M_7932",
+      "AADAC_7934",
+      "AARS_7935",
+      "AASS_7936",
+      "AATF_32691"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": null,
+    "data_type": "gene_expression",
+    "say": "Gene expression · gene-expression data",
+    "detected": {
+     "platform": null,
+     "data_type": "gene_expression",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [],
+   "pending": [],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "Organ Weights.bm2",
+   "kind": "bm2",
+   "type": "bm2",
+   "size": 20004,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:98ddffaa3d2b0052",
+   "companions": [],
+   "units": null,
+   "tables": [
+    {
+     "name": "Organ Weights.bm2",
+     "sexes": [],
+     "doses": [],
+     "dose_unit": null,
+     "animals": 0,
+     "animals_by_dose": {},
+     "measurements": null,
+     "measurement_sample": [],
+     "selection_groups": []
+    }
+   ],
+   "bm2": {
+    "experiments": [],
+    "species": null,
+    "test_articles": []
+   },
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "inferred",
+    "say": "Organ Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "inferred",
+     "basis": "bm2_experiments",
+     "say": "From the experiment names inside the BMDExpress project"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_4c202fbccb"
+   ],
+   "pending": [
+    {
+     "what": "contents",
+     "say": "[contents not read: its doses and animals were not compared with the other files]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "female_body_weight.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 975,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:e4b280aac437fc42",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "female_body_weight.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 51,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 8,
+      "12.0": 5,
+      "37.0": 8,
+      "111.0": 5
+     },
+     "measurements": 2,
+     "measurement_sample": [
+      "SD0",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "inferred",
+    "say": "Body Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_28aa444f02"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "female_clin_chem.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 2826,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:1080978d56b2a608",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "female_clin_chem.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 14,
+     "measurement_sample": [
+      "Alanine aminotransferase",
+      "Albumin",
+      "Alkaline phosphatase",
+      "Aspartate Aminotransferase",
+      "Bile salts/acids"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "inferred",
+    "say": "Clinical Chemistry · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_19468dbe59",
+    "iss_0d577741cc"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "female_hematology.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 3494,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:8b1a792c53a9dc79",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "female_hematology.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 37,
+     "animals_by_dose": {
+      "0.0": 8,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 3,
+      "4.0": 3,
+      "12.0": 4,
+      "37.0": 4,
+      "111.0": 5
+     },
+     "measurements": 17,
+     "measurement_sample": [
+      "Basophil count",
+      "Eosinophil count",
+      "Erythrocyte Count",
+      "Hematocrit",
+      "Hemoglobin"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "inferred",
+    "say": "Hematology · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_14ce35605e",
+    "iss_84549b2324"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "female_hormone_data.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 1134,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:82d280e40e3d6910",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "female_hormone_data.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 40,
+     "animals_by_dose": {
+      "0.0": 9,
+      "0.15": 4,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 4,
+      "12.0": 4,
+      "37.0": 4,
+      "111.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Free Thyroxine",
+      "Thyroid Stimulating Hormone",
+      "Total Thyroxine",
+      "Triiodiodothyronine"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "inferred",
+    "say": "Hormones · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_1451e0a69c",
+    "iss_74f756003d"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "female_organ_weights.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 1547,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:889436c43d0f3ae5",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "female_organ_weights.txt",
+     "sexes": [
+      "Female"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 5,
+     "measurement_sample": [
+      "Heart",
+      "Kidney-Left",
+      "Kidney-Right",
+      "Liver",
+      "Terminal Body Weight"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "inferred",
+    "say": "Organ Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_3a67c8f90f",
+    "iss_4c202fbccb"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "male_body_weight.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 975,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:c9619a28ec095731",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "male_body_weight.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 51,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 8,
+      "12.0": 5,
+      "37.0": 8,
+      "111.0": 5
+     },
+     "measurements": 2,
+     "measurement_sample": [
+      "SD0",
+      "SD5"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Body Weight",
+    "data_type": "inferred",
+    "say": "Body Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Body Weight",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_28aa444f02"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "male_clin_chem.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 2827,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:c6cd6d267861525f",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "male_clin_chem.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 44,
+     "animals_by_dose": {
+      "0.0": 9,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 14,
+     "measurement_sample": [
+      "Alanine aminotransferase",
+      "Albumin",
+      "Alkaline phosphatase",
+      "Aspartate Aminotransferase",
+      "Bile salts/acids"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Clinical Chemistry",
+    "data_type": "inferred",
+    "say": "Clinical Chemistry · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Clinical Chemistry",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_f767f7b03b",
+    "iss_0d577741cc"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "male_hematology.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 2882,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:86566e2e0057bade",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "male_hematology.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 30,
+     "animals_by_dose": {
+      "0.0": 6,
+      "0.15": 2,
+      "0.5": 4,
+      "1.4": 4,
+      "4.0": 5,
+      "12.0": 3,
+      "37.0": 2,
+      "111.0": 4
+     },
+     "measurements": 17,
+     "measurement_sample": [
+      "Basophil count",
+      "Eosinophil count",
+      "Erythrocyte Count",
+      "Hematocrit",
+      "Hemoglobin"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hematology",
+    "data_type": "inferred",
+    "say": "Hematology · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hematology",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_c6a8763391",
+    "iss_84549b2324"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "male_hormone_data.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 994,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:b245221b7b3f16bc",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "male_hormone_data.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 35,
+     "animals_by_dose": {
+      "0.0": 6,
+      "0.15": 3,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 4,
+      "12.0": 4,
+      "37.0": 3,
+      "111.0": 5
+     },
+     "measurements": 4,
+     "measurement_sample": [
+      "Free Thyroxine",
+      "Thyroid Stimulating Hormone",
+      "Total Thyroxine",
+      "Triiodiodothyronine"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Hormones",
+    "data_type": "inferred",
+    "say": "Hormones · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Hormones",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_7b545cbc60",
+    "iss_74f756003d"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  },
+  {
+   "name": "male_organ_weights.txt",
+   "kind": "table",
+   "type": "txt",
+   "size": 1569,
+   "added_at": "2026-10-15T12:17:39Z",
+   "content_hash": "sha256:e84a676c435921f1",
+   "companions": [],
+   "units": {
+    "state": "missing",
+    "values": {},
+    "say": "[units pending]: no units file came with this file"
+   },
+   "tables": [
+    {
+     "name": "male_organ_weights.txt",
+     "sexes": [
+      "Male"
+     ],
+     "doses": [
+      0.0,
+      0.15,
+      0.5,
+      1.4,
+      4.0,
+      12.0,
+      37.0,
+      111.0
+     ],
+     "dose_unit": null,
+     "animals": 45,
+     "animals_by_dose": {
+      "0.0": 10,
+      "0.15": 5,
+      "0.5": 5,
+      "1.4": 5,
+      "4.0": 5,
+      "12.0": 5,
+      "37.0": 5,
+      "111.0": 5
+     },
+     "measurements": 5,
+     "measurement_sample": [
+      "Heart",
+      "Kidney-Left",
+      "Kidney-Right",
+      "Liver",
+      "Terminal Body Weight"
+     ],
+     "selection_groups": []
+    }
+   ],
+   "bm2": null,
+   "study_number": null,
+   "checked": true,
+   "classification": {
+    "platform": "Organ Weight",
+    "data_type": "inferred",
+    "say": "Organ Weight · gap-filled values prepared for BMD modelling",
+    "detected": {
+     "platform": "Organ Weight",
+     "data_type": "inferred",
+     "basis": "file_name",
+     "say": "From the file name"
+    },
+    "stated": null,
+    "status": "unconfirmed",
+    "flags": []
+   },
+   "issues": [
+    "iss_ba4c951664",
+    "iss_4c202fbccb"
+   ],
+   "pending": [
+    {
+     "what": "units",
+     "say": "[units pending]",
+     "fix": "M2"
+    }
+   ],
+   "acts": {
+    "remove": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    },
+    "classify": {
+     "allowed": true,
+     "code": null,
+     "say": null
+    }
+   }
+  }
+ ],
+ "check": {
+  "run_at": "2026-10-15T14:28:52Z",
+  "current": true,
+  "why_not_current": null,
+  "counts": {
+   "fix": 0,
+   "look": 0,
+   "expected": 13
+  },
+  "not_shown": null
+ },
+ "issues": [
+  {
+   "id": "iss_19468dbe59",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "female_clin_chem.txt"
+   ],
+   "tables": [
+    "female_clin_chem.txt"
+   ],
+   "say": "6 of the 51 female animals in the study's roster are not in female_clin_chem.txt, for example 544, 545, 550, 551, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "female_clin_chem.txt (Female): 45/51 animals — missing 6 (544, 545, 550, 551, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 45,
+    "roster_count": 51,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_14ce35605e",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "female_hematology.txt"
+   ],
+   "tables": [
+    "female_hematology.txt"
+   ],
+   "say": "14 of the 51 female animals in the study's roster are not in female_hematology.txt, for example 113, 159, 160, 544, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "female_hematology.txt (Female): 37/51 animals — missing 14 (113, 159, 160, 544, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 37,
+    "roster_count": 51,
+    "missing_count": 14
+   }
+  },
+  {
+   "id": "iss_1451e0a69c",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "female_hormone_data.txt"
+   ],
+   "tables": [
+    "female_hormone_data.txt"
+   ],
+   "say": "11 of the 51 female animals in the study's roster are not in female_hormone_data.txt, for example 113, 127, 159, 544, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "female_hormone_data.txt (Female): 40/51 animals — missing 11 (113, 127, 159, 544, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 40,
+    "roster_count": 51,
+    "missing_count": 11
+   }
+  },
+  {
+   "id": "iss_3a67c8f90f",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Female",
+   "files": [
+    "female_organ_weights.txt"
+   ],
+   "tables": [
+    "female_organ_weights.txt"
+   ],
+   "say": "6 of the 51 female animals in the study's roster are not in female_organ_weights.txt, for example 544, 545, 550, 551, 552. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "female_organ_weights.txt (Female): 45/51 animals — missing 6 (544, 545, 550, 551, 552)",
+   "details": {
+    "sex": "Female",
+    "file_count": 45,
+    "roster_count": 51,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_f767f7b03b",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "male_clin_chem.txt"
+   ],
+   "tables": [
+    "male_clin_chem.txt"
+   ],
+   "say": "7 of the 51 male animals in the study's roster are not in male_clin_chem.txt, for example 103, 541, 542, 548, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "male_clin_chem.txt (Male): 44/51 animals — missing 7 (103, 541, 542, 548, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 44,
+    "roster_count": 51,
+    "missing_count": 7
+   }
+  },
+  {
+   "id": "iss_c6a8763391",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "male_hematology.txt"
+   ],
+   "tables": [
+    "male_hematology.txt"
+   ],
+   "say": "21 of the 51 male animals in the study's roster are not in male_hematology.txt, for example 109, 142, 161, 164, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "male_hematology.txt (Male): 30/51 animals — missing 21 (109, 142, 161, 164, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 30,
+    "roster_count": 51,
+    "missing_count": 21
+   }
+  },
+  {
+   "id": "iss_7b545cbc60",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "male_hormone_data.txt"
+   ],
+   "tables": [
+    "male_hormone_data.txt"
+   ],
+   "say": "16 of the 51 male animals in the study's roster are not in male_hormone_data.txt, for example 101, 125, 164, 172, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "male_hormone_data.txt (Male): 35/51 animals — missing 16 (101, 125, 164, 172, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 35,
+    "roster_count": 51,
+    "missing_count": 16
+   }
+  },
+  {
+   "id": "iss_ba4c951664",
+   "type": "roster_subset",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": null,
+   "sex": "Male",
+   "files": [
+    "male_organ_weights.txt"
+   ],
+   "tables": [
+    "male_organ_weights.txt"
+   ],
+   "say": "6 of the 51 male animals in the study's roster are not in male_organ_weights.txt, for example 541, 542, 543, 548, 549. Animals that died early or were kept for blood sampling are often missing from some measurements; the data review accounts for each one.",
+   "what_to_do": null,
+   "feeds": "M6",
+   "fix": null,
+   "message": "male_organ_weights.txt (Male): 45/51 animals — missing 6 (541, 542, 543, 548, 549)",
+   "details": {
+    "sex": "Male",
+    "file_count": 45,
+    "roster_count": 51,
+    "missing_count": 6
+   }
+  },
+  {
+   "id": "iss_28aa444f02",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Body Weight",
+   "data_type": "inferred",
+   "sex": null,
+   "files": [
+    "female_body_weight.txt",
+    "male_body_weight.txt",
+    "Body weight.bm2"
+   ],
+   "tables": [
+    "female_body_weight.txt",
+    "male_body_weight.txt",
+    "Body weight.bm2"
+   ],
+   "say": "No study workbook (.xlsx) for Body Weight. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Body Weight|inferred: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_0d577741cc",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Clinical Chemistry",
+   "data_type": "inferred",
+   "sex": null,
+   "files": [
+    "female_clin_chem.txt",
+    "male_clin_chem.txt",
+    "Clinical Chemistry.bm2"
+   ],
+   "tables": [
+    "female_clin_chem.txt",
+    "male_clin_chem.txt",
+    "Clinical Chemistry.bm2"
+   ],
+   "say": "No study workbook (.xlsx) for Clinical Chemistry. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Clinical Chemistry|inferred: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_84549b2324",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hematology",
+   "data_type": "inferred",
+   "sex": null,
+   "files": [
+    "female_hematology.txt",
+    "male_hematology.txt",
+    "Hematology.bm2"
+   ],
+   "tables": [
+    "female_hematology.txt",
+    "male_hematology.txt",
+    "Hematology.bm2"
+   ],
+   "say": "No study workbook (.xlsx) for Hematology. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hematology|inferred: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_74f756003d",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Hormones",
+   "data_type": "inferred",
+   "sex": null,
+   "files": [
+    "female_hormone_data.txt",
+    "male_hormone_data.txt",
+    "Hormones.bm2"
+   ],
+   "tables": [
+    "female_hormone_data.txt",
+    "male_hormone_data.txt",
+    "Hormones.bm2"
+   ],
+   "say": "No study workbook (.xlsx) for Hormones. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Hormones|inferred: no xlsx (study team raw data) found",
+   "details": {}
+  },
+  {
+   "id": "iss_4c202fbccb",
+   "type": "missing_tier",
+   "severity": "info",
+   "group": "expected",
+   "platform": "Organ Weight",
+   "data_type": "inferred",
+   "sex": null,
+   "files": [
+    "female_organ_weights.txt",
+    "male_organ_weights.txt",
+    "Organ Weights.bm2"
+   ],
+   "tables": [
+    "female_organ_weights.txt",
+    "male_organ_weights.txt",
+    "Organ Weights.bm2"
+   ],
+   "say": "No study workbook (.xlsx) for Organ Weight. Its tables are used as they are.",
+   "what_to_do": null,
+   "feeds": null,
+   "fix": null,
+   "message": "Organ Weight|inferred: no xlsx (study team raw data) found",
+   "details": {}
+  }
+ ],
+ "conflicts": [],
+ "coverage": [
+  {
+   "key": "Body Weight|inferred",
+   "platform": "Body Weight",
+   "label": "Body Weight",
+   "data_type": "inferred",
+   "data_type_say": "gap-filled values prepared for BMD modelling",
+   "workbook": null,
+   "tables": [
+    "female_body_weight.txt",
+    "male_body_weight.txt"
+   ],
+   "bm2": "Body weight.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project's benchmark doses are used."
+  },
+  {
+   "key": "Clinical Chemistry|inferred",
+   "platform": "Clinical Chemistry",
+   "label": "Clinical Chemistry",
+   "data_type": "inferred",
+   "data_type_say": "gap-filled values prepared for BMD modelling",
+   "workbook": null,
+   "tables": [
+    "female_clin_chem.txt",
+    "male_clin_chem.txt"
+   ],
+   "bm2": "Clinical Chemistry.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project's benchmark doses are used."
+  },
+  {
+   "key": "gene_expression",
+   "platform": null,
+   "label": "Gene expression",
+   "data_type": "gene_expression",
+   "data_type_say": "gene-expression data",
+   "workbook": null,
+   "tables": [
+    "Kidney_PFHxSAm_Female_No0.txt",
+    "Kidney_PFHxSAm_Male_No0.txt",
+    "Liver_PFHxSAm_Female_No0.txt",
+    "Liver_PFHxSAm_Male_No0.txt"
+   ],
+   "bm2": "Gene Expression-Perflourohexane Sulfonamide.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project holds the gene-expression analysis."
+  },
+  {
+   "key": "Hematology|inferred",
+   "platform": "Hematology",
+   "label": "Hematology",
+   "data_type": "inferred",
+   "data_type_say": "gap-filled values prepared for BMD modelling",
+   "workbook": null,
+   "tables": [
+    "female_hematology.txt",
+    "male_hematology.txt"
+   ],
+   "bm2": "Hematology.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project's benchmark doses are used."
+  },
+  {
+   "key": "Hormones|inferred",
+   "platform": "Hormones",
+   "label": "Hormones",
+   "data_type": "inferred",
+   "data_type_say": "gap-filled values prepared for BMD modelling",
+   "workbook": null,
+   "tables": [
+    "female_hormone_data.txt",
+    "male_hormone_data.txt"
+   ],
+   "bm2": "Hormones.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project's benchmark doses are used."
+  },
+  {
+   "key": "Organ Weight|inferred",
+   "platform": "Organ Weight",
+   "label": "Organ Weight",
+   "data_type": "inferred",
+   "data_type_say": "gap-filled values prepared for BMD modelling",
+   "workbook": null,
+   "tables": [
+    "female_organ_weights.txt",
+    "male_organ_weights.txt"
+   ],
+   "bm2": "Organ Weights.bm2",
+   "level": "ok",
+   "say": "The BMDExpress project's benchmark doses are used."
+  }
+ ],
+ "removed": [],
+ "integration": null,
+ "classification_choices": {
+  "table": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   },
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ],
+  "workbook": [
+   {
+    "data_type": "tox_study",
+    "label": "The study's own measurements",
+    "say": "Each animal's values as measured, gaps included. The NTP statistics are computed from these.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration",
+     "Clinical"
+    ]
+   }
+  ],
+  "bm2": [
+   {
+    "data_type": "inferred",
+    "label": "Gap-filled for BMD modelling",
+    "say": "Values prepared for BMDExpress: gaps filled, dose groups with no survivors dropped. Used for benchmark doses, never for the NTP statistics.",
+    "platforms": [
+     "Body Weight",
+     "Clinical Chemistry",
+     "Hematology",
+     "Hormones",
+     "Organ Weight",
+     "Tissue Concentration"
+    ]
+   },
+   {
+    "data_type": "gene_expression",
+    "label": "Gene expression",
+    "say": "Transcriptomic data: expression tables, or a BMDExpress project holding the gene analysis.",
+    "platforms": []
+   }
+  ]
+ },
+ "limits": {
+  "max_file_bytes": 536870912,
+  "accepted": [
+   ".bm2",
+   ".csv",
+   ".txt",
+   ".xlsx",
+   ".zip",
+   ".units.json"
+  ]
+ }
+}
