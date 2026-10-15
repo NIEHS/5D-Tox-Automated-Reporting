@@ -18,7 +18,9 @@ Layout:
             files/                             — uploaded .bm2 files
             history/
                 {section_key}/
-                    {iso_timestamp}.json       — previous versions
+                    v{version:04d}-{timestamp}.json — previous versions (older
+                                                  sessions: {iso_timestamp}.json)
+                    index.jsonl                — the version events
 
 Note: the LMDB bm2 cache lives at /tmp/_bm2_cache (not under sessions/)
 because LMDB's mmap()/flock() are incompatible with GCS FUSE mounts.
@@ -228,6 +230,128 @@ def iter_section_files(session_dir: "Path"):
 # Section persistence — write/read/delete session JSON files
 # ---------------------------------------------------------------------------
 
+# A section key becomes a file name under sessions/<id>/ and a directory under
+# history/. Which keys a report HAS is the section catalog's business
+# (workflow.section_writes); this is only the path gate, the second layer
+# behind it, so no caller can build a path out of the session from a key.
+_SECTION_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
+
+
+class InvalidSectionKey(ValueError):
+    """A section key that cannot name a file in the session directory."""
+
+
+def validate_section_key(section_key) -> str:
+    """Return ``section_key`` unchanged if it can name a section file, else
+    raise InvalidSectionKey (no separator, no dot, nothing empty)."""
+    if not isinstance(section_key, str) or not _SECTION_KEY_RE.match(section_key):
+        raise InvalidSectionKey(f"Invalid section key: {str(section_key)[:40]!r}")
+    return section_key
+
+
+def _history_dir(dtxsid: str, section_key: str) -> Path:
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / "history" / validate_section_key(section_key)
+
+
+def _read_dict(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def list_archived(dtxsid: str, section_key: str) -> list[tuple[str, dict]]:
+    """Every archived version of a section, as (archive file name, content),
+    oldest first. Archives written since C2 are named ``v{version:04d}-{ts}.json``
+    and so sort by version then time; older ones are named after a timestamp.
+    Both are read the same way: the version is the ``version`` the content
+    carries, and the list is ordered by it (then by name, which for the new
+    names is the time). Unreadable archives are skipped."""
+    hist = _history_dir(dtxsid, section_key)
+    if not hist.is_dir():
+        return []
+    found = []
+    for f in hist.glob("*.json"):
+        data = _read_dict(f)
+        if data is not None:
+            v = data.get("version")
+            found.append((v if isinstance(v, int) else 0, f.name, data))
+    found.sort(key=lambda t: (t[0], t[1]))
+    return [(name, data) for _v, name, data in found]
+
+
+def read_archived(dtxsid: str, section_key: str, version: int) -> tuple[str, dict] | None:
+    """The archived content of one version, as (archive file name, content), or
+    None when no archive holds it. When a version was archived twice (the
+    approved text, then the same version knocked down), the latest wins."""
+    match = None
+    for name, data in list_archived(dtxsid, section_key):
+        if data.get("version") == version:
+            match = (name, data)
+    return match
+
+
+def next_section_version(dtxsid: str, section_key: str) -> int:
+    """The number the next new version of a section gets: one above every
+    version already seen, in the current file, the archives and the version
+    events. Monotonic: a discard or an old archive-name collision never makes a
+    number come round again (a restarted counter would make the version events
+    describe the wrong text)."""
+    seen = [0]
+    current = _read_dict(SESSIONS_DIR / validate_dtxsid(dtxsid) / f"{validate_section_key(section_key)}.json")
+    if current is not None and isinstance(current.get("version"), int):
+        seen.append(current["version"])
+    seen += [d.get("version") for _n, d in list_archived(dtxsid, section_key)
+             if isinstance(d.get("version"), int)]
+    seen += [e.get("version") for e in read_version_history(dtxsid, section_key)
+             if isinstance(e.get("version"), int)]
+    return max(seen) + 1
+
+
+def _write_archive(history_dir: Path, content: dict) -> str:
+    """Write one archive under a name no other archive can take, and return the
+    name: the archived content's own version, then the time to the microsecond,
+    then a counter should two archives of one version land in one microsecond."""
+    history_dir.mkdir(parents=True, exist_ok=True)
+    version = content.get("version") if isinstance(content.get("version"), int) else 0
+    stem = f"v{version:04d}-{now_iso().replace(':', '-')}"
+    name, n = f"{stem}.json", 1
+    while (history_dir / name).exists():
+        n += 1
+        name = f"{stem}-{n}.json"
+    (history_dir / name).write_text(json.dumps(content, indent=2, default=str), encoding="utf-8")
+    return name
+
+
+def archive_current(dtxsid: str, section_key: str) -> str | None:
+    """Copy a section's current file into its history, unchanged, and return the
+    archive's file name; None when there is no current file. Used before a
+    discard or a reset deletes the file, and by the write gate before it
+    replaces it, so every version's text stays retrievable."""
+    current = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"{validate_section_key(section_key)}.json"
+    if not current.exists():
+        return None
+    data = json.loads(current.read_text(encoding="utf-8"))
+    return _write_archive(_history_dir(dtxsid, section_key), data)
+
+
+def archive_document(dtxsid: str, history_key: str, content: dict) -> tuple[str, int]:
+    """Archive a document that is not (yet) a section file under
+    ``history/<history_key>/`` as that key's next version (the genomics
+    narrative overrides, until C9 makes them section files). Returns
+    (archive file name, version)."""
+    version = next_section_version(dtxsid, history_key)
+    name = _write_archive(_history_dir(dtxsid, history_key), {**content, "version": version})
+    return name, version
+
+
+def append_version_event(dtxsid: str, section_key: str, version: int, event: dict) -> None:
+    """Append one line to a section's version events without writing the
+    section (a hold, a discard). Same line format as save_section's."""
+    _record_version_event(_history_dir(dtxsid, section_key), version, dict(event))
+
+
 def save_section(
     dtxsid: str,
     section_key: str,
@@ -259,51 +383,51 @@ def save_section(
     unmarked callers (auto-save, unapprove, restore) are byte-unaffected.
 
     Version history layout:
-        sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json  — versions
-        sessions/{dtxsid}/history/{section_key}/index.jsonl            — cause log
+        sessions/{dtxsid}/history/{section_key}/v{version:04d}-{ts}.json — versions
+        sessions/{dtxsid}/history/{section_key}/index.jsonl             — cause log
+
+    The version number is monotonic (next_section_version): one above every
+    version the section has had, so it never repeats after a discard.
     The current file ({section_key}.json) is always the latest version.
     """
     # Pull the transient cause marker off `data` before anything is written so
     # it never lands in the persisted section JSON (or an archived copy).
     version_event = data.pop(_VERSION_EVENT_KEY, None)
 
+    validate_section_key(section_key)
     d = session_dir(dtxsid)
     current_path = d / f"{section_key}.json"
     history_dir = d / "history" / section_key
 
+    archived_name = None
+    prior_version = None
     if archive:
         # --- Archive the current version before overwriting (if it exists) ---
-        # Preserves every previously-approved version as a timestamped file
-        # in the history/ subdirectory.  First-ever approve has no file to archive.
+        # Under a name no other archive can take (its own version, then the
+        # time): naming archives after `approved_at` made a later version
+        # overwrite an earlier one's archive (the version keeps its approved_at
+        # through an invalidation). First-ever save has nothing to archive.
         if current_path.exists():
             existing = json.loads(current_path.read_text(encoding="utf-8"))
-            # Use the existing file's approved_at as the archive filename
-            # so timestamps reflect when that version was actually approved
-            ts = existing.get("approved_at", now_iso())
-            # Replace colons with hyphens so the filename is filesystem-safe
-            # (ISO 8601 timestamps contain colons, e.g. "2026-03-02T19:23:59+00:00")
-            safe_ts = ts.replace(":", "-")
-            history_dir.mkdir(parents=True, exist_ok=True)
-            (history_dir / f"{safe_ts}.json").write_text(
-                json.dumps(existing, indent=2, default=str), encoding="utf-8",
-            )
+            prior_version = existing.get("version")
+            archived_name = _write_archive(history_dir, existing)
 
-        # --- Compute the version number for this new save ---
-        # Count existing history files (previous versions) and add 1 for the
-        # new version.  First approve = 0 history files → version 1.
-        version_count = len(list(history_dir.glob("*.json"))) if history_dir.exists() else 0
-        data["version"] = version_count + 1
+        # --- The version number for this new save: one above every version
+        # seen (current file, archives, version events), never a count of the
+        # archives, which restarts after a discard.
+        data["version"] = next_section_version(dtxsid, section_key)
     else:
         # In-place update: keep the version number from the prior file if
-        # one exists; otherwise stamp version=1.  No history entry written.
+        # one exists; otherwise the next number.  No history entry written.
         if current_path.exists():
             try:
                 existing = json.loads(current_path.read_text(encoding="utf-8"))
+                prior_version = existing.get("version")
                 data.setdefault("version", existing.get("version", 1))
             except (json.JSONDecodeError, OSError):
-                data.setdefault("version", 1)
+                data.setdefault("version", next_section_version(dtxsid, section_key))
         else:
-            data.setdefault("version", 1)
+            data.setdefault("version", next_section_version(dtxsid, section_key))
 
     # --- Write the new version as the canonical current file ---
     current_path.write_text(
@@ -325,6 +449,9 @@ def save_section(
     # audit line can't be appended — the caller's try/except is the outer net,
     # this is the inner one).
     if version_event:
+        if archived_name:
+            version_event.setdefault("archived", archived_name)
+            version_event.setdefault("prior_version", prior_version)
         _record_version_event(
             history_dir, data.get("version", 1), version_event,
         )
@@ -333,7 +460,8 @@ def save_section(
 def _record_version_event(history_dir: Path, version: int, event: dict) -> None:
     """Append one cause-tagged line to the section's version manifest.
 
-    `event` is the caller's {"cause", "status", reason?} intent; the line also
+    `event` is the caller's {"cause", "status", reason?, …} intent (the format-2
+    fields of workflow.section_writes ride along as given); the line also
     carries the version number it describes and a fresh timestamp.  A `reason`
     (the human's free-text for a "revise", or the auto reason for a currency
     down-step) is recorded only when non-empty, so entries without one stay
@@ -352,6 +480,11 @@ def _record_version_event(history_dir: Path, version: int, event: dict) -> None:
         reason = event.get("reason")
         if reason:
             entry["reason"] = reason
+        # Format 2 (C2): who did what, written by whom, to which version
+        # (workflow.section_writes). Carried as the caller gives them.
+        for key, value in event.items():
+            if key not in ("cause", "status", "reason", "version", "ts"):
+                entry[key] = value
         with (history_dir / _VERSION_INDEX).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     except Exception as e:  # pragma: no cover — defensive, audit must not abort work
@@ -368,7 +501,7 @@ def read_version_history(dtxsid: str, section_key: str) -> list[dict]:
     (old, pre-Phase-4 sessions, or a section that never minted a tagged version)
     — a section with only un-tagged archives is not an error.  Corrupt lines are
     skipped, never raised."""
-    idx = SESSIONS_DIR / validate_dtxsid(dtxsid) / "history" / section_key / _VERSION_INDEX
+    idx = _history_dir(dtxsid, section_key) / _VERSION_INDEX
     if not idx.exists():
         return []
     events: list[dict] = []
@@ -395,7 +528,7 @@ def current_version_status(dtxsid: str, section_key: str) -> str | None:
     needs-re-bless is superseded by a later re-accept's blessed against the same
     version).  None when the section or its manifest is absent, or the current
     version was never tagged (missing cause = unknown provenance, not a crash)."""
-    current = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"{section_key}.json"
+    current = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"{validate_section_key(section_key)}.json"
     if not current.exists():
         return None
     try:
@@ -413,10 +546,11 @@ def delete_section(dtxsid: str, section_key: str) -> None:
     """
     Remove sessions/{dtxsid}/{section_key}.json if it exists.
 
-    Called when the user clicks "Try Again" to unapprove a section.
-    The .bm2 file in files/ is kept — it's still useful for reprocessing.
+    A primitive: only the gate's discard (workflow.section_writes, which
+    archives the file first) and the resets call it. The .bm2 file in files/
+    is kept — it's still useful for reprocessing.
     """
     d = SESSIONS_DIR / validate_dtxsid(dtxsid)
-    section_path = d / f"{section_key}.json"
+    section_path = d / f"{validate_section_key(section_key)}.json"
     if section_path.exists():
         section_path.unlink()
