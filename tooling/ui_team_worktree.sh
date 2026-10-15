@@ -17,6 +17,7 @@
 #
 # Usage:
 #   tooling/ui_team_worktree.sh add NAME [BASE]
+#   tooling/ui_team_worktree.sh relink NAME   (add the data links an older worktree lacks)
 #   tooling/ui_team_worktree.sh remove NAME
 #   tooling/ui_team_worktree.sh list
 set -euo pipefail
@@ -26,7 +27,26 @@ ROOT=/workspace/ui-team
 CMD="${1:-}"
 NAME="${2:-}"
 
-usage() { echo "usage: $0 add NAME [BASE] | remove NAME | list" >&2; exit 2; }
+usage() { echo "usage: $0 add NAME [BASE] | relink NAME | remove NAME | list" >&2; exit 2; }
+
+# The orchestrator's links to untracked data, at any depth, as "path<TAB>target"
+# (git's own and the dependency folders skipped; .claude/ has its own rules).
+data_links() {
+  (cd "$SRC" && find . \( -path ./.git -o -path ./.venv -o -path ./ui/node_modules -o -path ./.claude \) -prune \
+       -o -type l -printf '%P\t%l\n')
+}
+
+# Link them into worktree $1: never over a path that exists, never where git
+# tracks the path.
+link_data() {
+  local wt="$1" link target
+  data_links | while IFS=$'\t' read -r link target; do
+    [[ -e "$wt/$link" || -L "$wt/$link" ]] && continue
+    git -C "$wt" ls-files --error-unmatch -- "$link" >/dev/null 2>&1 && continue
+    mkdir -p "$wt/$(dirname "$link")"
+    ln -s "$target" "$wt/$link"
+  done
+}
 
 case "$CMD" in
   list)
@@ -49,22 +69,29 @@ case "$CMD" in
        "$(git -C "$WT" rev-parse --git-path info/sparse-checkout)"
     git -C "$WT" reset --hard -q "$BRANCH"
 
-    # The same links to untracked data as the orchestrator's worktree.
-    find "$SRC" -maxdepth 1 -type l -printf '%f\t%l\n' |
-      while IFS=$'\t' read -r link target; do
-        [[ -e "$WT/$link" ]] || ln -s "$target" "$WT/$link"
-      done
+    # The same links to untracked data as the orchestrator's worktree, at any
+    # depth (assets/cebs/_bookshelf, the CEBS packages, …): the code reads them
+    # by path. Each keeps its target; a path git tracks is never replaced.
+    link_data "$WT"
 
     echo "worktree  $WT  (branch $BRANCH, from $BASE)"
     echo "scratch   $ROOT/_scratch/$NAME  (SESSIONS_DIR=…/sessions OUTPUT_DIR=…/output)"
+    ;;
+  relink)
+    # Add the data links an older worktree lacks (nested ones came later).
+    [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]] || usage
+    WT="$ROOT/$NAME"
+    [[ -d "$WT" ]] || { echo "no worktree $WT" >&2; exit 1; }
+    link_data "$WT"
     ;;
   remove)
     [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]] || usage
     WT="$ROOT/$NAME"
     # Drop the data links `add` made (they read as untracked files); anything
     # else uncommitted still makes `git worktree remove` refuse, as it should.
-    find "$SRC" -maxdepth 1 -type l -printf '%f\n' |
-      while read -r link; do [[ -L "$WT/$link" ]] && rm "$WT/$link"; done
+    data_links | while IFS=$'\t' read -r link _; do
+      [[ -L "$WT/$link" ]] && rm "$WT/$link"
+    done
     git -C "$SRC" worktree remove "$WT"
     echo "removed $ROOT/$NAME (branch ui-$NAME kept)"
     ;;
