@@ -172,7 +172,8 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     # re-integrating.
     for name in ("validation_report.json", "precedence.json",
                  "integrated.json", "_category_lookup.json",
-                 "genomics.sidecar.json", "animal_report.json"):
+                 "genomics.sidecar.json", "animal_report.json",
+                 "integration_basis.json"):
         p = d / name
         if p.exists():
             p.unlink()

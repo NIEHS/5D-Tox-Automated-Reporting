@@ -1559,6 +1559,7 @@ async def api_pool_reset(dtxsid: Dtxsid):
     for artifact in ("integrated.json", "integrated.bm2",
                      "metadata_approved.json", "validation_report.json",
                      "precedence.json", "animal_report.json",
+                     "integration_basis.json",
                      "_fingerprints.json", "_category_lookup.json",
                      "genomics.sidecar.json", "session.duckdb",
                      ".session_db.fingerprint", ".prepare_content.fingerprint",

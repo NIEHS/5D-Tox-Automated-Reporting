@@ -355,7 +355,17 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     summary payload (not the full integrated JSON — it can exceed response caps).
     Raises StepError(404) with no files, StepError(400) if validation hasn't run,
     StepError(500) if integration itself fails.
+
+    C1: refused outside VALIDATED / INTEGRATED / APPROVED (PhaseRefusal), and
+    when the validation it would pair with the fingerprints no longer matches
+    them (ValidationOutOfDate, the restart trap). A successful merge withdraws
+    the data approval (archived under history/_data_approval/) and records the
+    basis it was built from; it pins no method profile.
     """
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.INTEGRATE, store)
+
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
     if not files_dir.exists():
@@ -375,6 +385,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     coverage_matrix = report.get("coverage_matrix", {}) if isinstance(report, dict) else {}
     if not coverage_matrix:
         raise StepError("No coverage matrix found -- run validation first", status_code=400)
+    _check_validation_matches(dtxsid, fps, report)
 
     # Load user precedence decisions (may be empty if no conflicts resolved)
     precedence = store.read_json(dtxsid, "precedence.json")
@@ -425,8 +436,17 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         logger.exception("Pool integration failed for %s", dtxsid)
         raise StepError(f"Integration failed: {e}", status_code=500)
 
+    # The dataset changed, so the data approval made on the old one no longer
+    # holds (C1 D5: archived, never deleted). A failed merge leaves it alone.
+    approval_withdrawn = _withdraw_data_approval(dtxsid, store)
+
     # Cache in memory for the process-integrated endpoint
     store.set_integrated(dtxsid, integrated)
+
+    # What this dataset was built from (workflow.integration_basis): a later
+    # validation that no longer matches it reads as "integrate again".
+    from workflow.integration_basis import record_basis
+    record_basis(dtxsid, store)
 
     # Study-design facts a person stated (generate_report --design): integration
     # re-infers every experiment's metadata, and the stated design must win.
@@ -458,8 +478,9 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # re-extracts from the new sidecar on next process. (invalidate_pool_artifacts
     # DOES delete the sidecar, because that path tears down integrated.json too.)
 
-    # The study's analysis method (ADR-0027): pin the newest profile when the
-    # study has none, and check what the .bm2 analyses record against it.
+    # The study's analysis method (ADR-0027): check what the .bm2 analyses
+    # record against the profile a person pinned. Integration pins nothing
+    # (C1 D1: a person chooses the method; Process refuses until they have).
     method_summary = _pin_and_check_method(dtxsid, integrated, store)
 
     # Build the lightweight summary (see the route docstring for why).
@@ -481,6 +502,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         "bmd_result_count": len(integrated.get("bMDResult", [])),
         "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
         "method": method_summary,
+        "approval_withdrawn": approval_withdrawn,
         "experiments": [
             {
                 "name": exp.get("name", ""),
@@ -518,15 +540,17 @@ def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
 
 
 def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> dict:
-    """Pin a method profile if the study has none, and report every recorded
-    analysis setting that disagrees with it as a `method_mismatch` warning in
-    the validation report (ADR-0027 §5).  Returns {profile, pinned_by,
-    deviations, mismatches}."""
-    from pipeline.method_profile import ensure_pin, pin_mode, recorded_mismatches, session_method
+    """Report every recorded analysis setting that disagrees with the study's
+    pinned method profile as a `method_mismatch` warning in the validation
+    report (ADR-0027 §5).  Pins nothing (C1): with no profile pinned there is
+    nothing to compare against, so the stale warnings are removed and the
+    summary is empty.  Returns {profile, pinned_by, mode, deviations,
+    mismatches}.  (The name is kept for its callers.)"""
+    from pipeline.method_profile import pin_mode, read_pin, recorded_mismatches, session_method
 
-    pin = ensure_pin(dtxsid)
-    method = session_method(dtxsid)
-    mismatches = recorded_mismatches(integrated, method)
+    pin = read_pin(dtxsid)
+    method = session_method(dtxsid) if pin else None
+    mismatches = recorded_mismatches(integrated, method) if pin else []
     report = store.read_json(dtxsid, "validation_report.json")
     if isinstance(report, dict):
         issues = [i for i in report.get("issues", []) if i.get("issue_type") != "method_mismatch"]
@@ -536,8 +560,63 @@ def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> di
                    for m in mismatches]
         report["issues"] = issues
         store.write_json(dtxsid, "validation_report.json", report)
+    if not pin:
+        return {"profile": None, "pinned_by": None, "mode": None, "deviations": [],
+                "mismatches": []}
     return {"profile": pin["name"], "pinned_by": pin["pinned_by"], "mode": pin_mode(pin),
             "deviations": list(method.deviations), "mismatches": [m["message"] for m in mismatches]}
+
+
+def _fp_field(fp, key: str):
+    """A fingerprint field, whether a FileFingerprint or a plain dict."""
+    return fp.get(key) if isinstance(fp, dict) else getattr(fp, key, None)
+
+
+def _check_validation_matches(dtxsid: str, fps: dict, report: dict) -> None:
+    """Refuse (ValidationOutOfDate) when the fingerprints integration would use
+    no longer match the validation report it pairs them with: a file id in the
+    coverage matrix is not among them (a cold re-scan minted new ids), or the
+    files they name differ from the report's. Refuses; never repairs.
+    Classification corrections are not compared (C1 spec §3.2; C3)."""
+    from workflow.errors import ValidationOutOfDate
+
+    cov_ids: set = set()
+    for tiers in (report.get("coverage_matrix") or {}).values():
+        for v in (tiers or {}).values():
+            if isinstance(v, list):
+                cov_ids.update(i for i in v if i)
+            elif isinstance(v, str) and v:
+                cov_ids.add(v)
+    missing_ids = len(cov_ids - set(fps))
+    added: set = set()
+    missing: set = set()
+    if isinstance(report.get("fingerprints"), dict):
+        held = {n for n in (_fp_field(fp, "filename") for fp in fps.values()) if n}
+        checked = {n for n in (_fp_field(fp, "filename")
+                               for fp in report["fingerprints"].values()) if n}
+        added, missing = held - checked, checked - held
+    if missing_ids or added or missing:
+        raise ValidationOutOfDate(dtxsid, missing_ids, sorted(added), sorted(missing))
+
+
+DATA_APPROVAL_HISTORY = "history/_data_approval"
+
+
+def _withdraw_data_approval(dtxsid: str, store: PoolStore) -> bool:
+    """Move animal_report.json (the data approval) to
+    history/_data_approval/<stamp>-animal_report.json; True when there was one.
+    The approval was of the dataset integration just replaced (C1 D5)."""
+    if not store.artifact_exists(dtxsid, "animal_report.json"):
+        return False
+    from common.clock import now_iso
+
+    sdir = store.session_dir(dtxsid)
+    archive = sdir / DATA_APPROVAL_HISTORY
+    archive.mkdir(parents=True, exist_ok=True)
+    stamp = now_iso().replace(":", "")
+    (sdir / "animal_report.json").replace(archive / f"{stamp}-animal_report.json")
+    logger.info("Data approval of %s withdrawn by re-integration (archived)", dtxsid)
+    return True
 
 
 # ---------------------------------------------------------------------------

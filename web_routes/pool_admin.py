@@ -60,6 +60,7 @@ DOWNSTREAM_ARTIFACTS = [
     "integrated.json",
     "_category_lookup.json",
     "animal_report.json",
+    "integration_basis.json",
 ]
 
 # Cache file prefixes to delete.  BMDS caches are content-hash keyed
