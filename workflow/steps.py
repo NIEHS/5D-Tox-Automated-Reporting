@@ -189,7 +189,14 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the ValidationReport as a plain dict (also persisted to
     validation_report.json). Raises StepError(404) if the session has no files.
+
+    Never deletes the dataset or the data approval (C1 D4): a validation that
+    finds errors leaves them inert (the phase refuses their use), and one that
+    no longer matches the integration's basis reads "integrate again".
     """
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.VALIDATE, store)
     files_dir = store.session_dir(dtxsid) / "files"
     if not files_dir.exists():
         raise StepError("No files directory found for this session", status_code=404)
@@ -239,6 +246,9 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
         raise StepError(
             "dtxsid, issue_index, and chosen_file_id are required", status_code=400
         )
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.RESOLVE, store)
 
     precedence = store.read_json(dtxsid, "precedence.json")
     if not isinstance(precedence, list):
@@ -263,7 +273,11 @@ def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dic
 
     `confirmed` maps file_id -> {platform, data_type}. Returns
     {ok, updated} where `updated` counts files whose headers were rewritten.
+    A correction made after integration takes effect at the next integration.
     """
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.CONFIRM_CLASSIFICATION, store)
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
 
@@ -629,7 +643,11 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the AnimalReport as a plain dict. Raises StepError(404) with no
     files, StepError(400) if nothing fingerprinted, StepError(500) on failure.
+    Refused before integration (C1: APPROVE is legal at INTEGRATED/APPROVED).
     """
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.APPROVE, store)
     session_path = store.session_dir(dtxsid)
     files_dir = session_path / "files"
     if not files_dir.exists():

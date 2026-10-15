@@ -126,11 +126,14 @@ def _validated(**docs):
 
 # --- validate --------------------------------------------------------------
 
-def test_validate_step_no_files_raises_404():
+def test_validate_step_no_files_is_refused_409():
+    # C1: no files → EMPTY, where only ADD_FILES is legal (it was a 404).
+    from workflow.errors import PhaseRefusal
     store = FakeStore(files_exist=False)
-    with pytest.raises(StepError) as ei:
+    with pytest.raises(PhaseRefusal) as ei:
         validate_step("DTXSID_VC", store)
-    assert ei.value.status_code == 404
+    assert ei.value.status_code == 409
+    assert ei.value.details["phase"] == "EMPTY"
 
 
 def test_validate_step_persists_and_returns_report():
@@ -161,7 +164,8 @@ def test_resolve_step_requires_all_three_inputs():
 
 
 def test_resolve_step_appends_to_precedence():
-    store = FakeStore(docs={"precedence.json": [{"issue_index": 0, "chosen_file_id": "old"}]})
+    store = FakeStore(docs=_validated(**{"precedence.json": [{"issue_index": 0,
+                                                              "chosen_file_id": "old"}]}))
     result = resolve_step("DTXSID_VC", 1, "new-fid", store)
     assert result == {"ok": True}
     prec = store.read_json("DTXSID_VC", "precedence.json")
@@ -170,7 +174,7 @@ def test_resolve_step_appends_to_precedence():
 
 
 def test_resolve_step_starts_fresh_when_no_precedence_file():
-    store = FakeStore()
+    store = FakeStore(docs=_validated())
     resolve_step("DTXSID_VC", 0, "fid", store)
     assert len(store.read_json("DTXSID_VC", "precedence.json")) == 1
 
@@ -334,13 +338,23 @@ def test_integration_refused_at_validation_errors():
     assert ei.value.details["phase"] == "VALIDATION_ERRORS"
 
 
+def test_resolve_and_confirm_are_refused_before_validation():
+    from workflow.errors import PhaseRefusal
+    for call in (lambda st: resolve_step("DTXSID_VC", 0, "fid", st),
+                 lambda st: confirm_metadata_step("DTXSID_VC", {}, st)):
+        store = FakeStore()                      # files, never validated: UPLOADED
+        with pytest.raises(PhaseRefusal):
+            call(store)
+        assert store._docs == {}                 # nothing written
+
+
 # --- confirm-metadata ------------------------------------------------------
 
 def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
     # dict-style fingerprint that is NOT txt/csv → no header write, but the
     # correction is applied and fingerprints are re-persisted through the store.
     fps = {"f1": {"filename": "gene.bm2", "file_type": "bm2", "platform": "?"}}
-    store = FakeStore(fingerprints=fps)
+    store = FakeStore(fingerprints=fps, docs=_validated())
     result = confirm_metadata_step(
         "DTXSID_VC", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
     )
