@@ -11,8 +11,8 @@ These tests pin that contract:
   * process_step runs the full pipeline via an injected PoolStore and returns
     the same 12-key payload the route returns — with NOTHING imported from
     web_routes / fastapi to reach it;
-  * a session that was never integrated raises StepError(400) (not a 500, and
-    not a swallowed exception).
+  * a session that was never integrated is refused (409, phase_not_allowed)
+    before it writes anything (C1).
 
 Non-determinism is pinned exactly as the golden oracle pins it (Java/pybmds via
 mock_bmdx_pipe; the two live LLM calls monkeypatched), so this stays fast and
@@ -100,14 +100,21 @@ async def test_process_step_tolerates_empty_params(
 
 
 @pytest.mark.asyncio
-async def test_process_step_raises_steperror_400_when_not_integrated(
+async def test_process_step_is_refused_409_when_not_integrated(
     sessions_dir,
 ):
-    """A session with no integrated.json raises StepError(400) — the missing-
-    data guard is OUTSIDE the try/except that maps failures to 500, so callers
-    get a clean 'run integration first' signal."""
-    (sessions_dir / DTXSID / "files").mkdir(parents=True, exist_ok=True)
-    with pytest.raises(StepError) as exc:
+    """A study that is not integrated is refused by the phase guard (C1,
+    phase_not_allowed) before anything is written: no pin, no definition, no
+    rescanned fingerprints."""
+    from workflow.errors import PhaseRefusal
+
+    session = sessions_dir / DTXSID
+    (session / "files").mkdir(parents=True, exist_ok=True)
+    (session / "files" / "bw.csv").write_text("x")
+    with pytest.raises(PhaseRefusal) as exc:
         await process_step(DTXSID, {}, DiskPoolStore())
-    assert exc.value.status_code == 400
-    assert "run integration first" in exc.value.message
+    assert exc.value.status_code == 409
+    assert exc.value.details["phase"] == "UPLOADED"
+    for name in ("method_profile.json", "document_definition.json",
+                 "document_definition.yaml", "_fingerprints.json"):
+        assert not (session / name).exists(), name

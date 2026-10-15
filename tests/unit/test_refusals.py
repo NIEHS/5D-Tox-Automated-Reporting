@@ -157,13 +157,13 @@ def test_a_foreign_status_code_is_not_passed_to_the_client():
 
 
 def test_an_exception_naming_a_listed_code_is_taken_at_its_word():
-    exc = StepError("Process is not legal in phase UPLOADED (legal: CLEAR_FILES, VALIDATE)", 409)
+    exc = StepError("Process is not legal in phase UPLOADED (legal: RESET, VALIDATE)", 409)
     exc.code = "phase_not_allowed"
     exc.phase = "UPLOADED"
-    exc.legal_actions = ["CLEAR_FILES", "VALIDATE"]
+    exc.legal_actions = ["RESET", "VALIDATE"]
     body = explain(exc)["error"]
     assert (body["code"], body["status"]) == ("phase_not_allowed", 409)
-    assert body["details"] == {"phase": "UPLOADED", "legal_actions": ["CLEAR_FILES", "VALIDATE"]}
+    assert body["details"] == {"phase": "UPLOADED", "legal_actions": ["RESET", "VALIDATE"]}
 
     exc.code = "not_a_listed_code"
     assert classify(exc)[0] != "not_a_listed_code"

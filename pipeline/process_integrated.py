@@ -1793,6 +1793,20 @@ _CONTENT_PAYLOAD_KEYS = (
 )
 
 
+def _require_processable(dtxsid: str, store) -> None:
+    """C1: refuse Process before it writes anything — outside INTEGRATED and
+    APPROVED (PhaseRefusal), and until a person has chosen the method profile
+    (MethodNotChosen: D1, the method is never chosen for them).
+    `_build_process_context` pins the definition and rewrites the
+    fingerprints, so this runs first."""
+    from pipeline.method_profile import require_person_pin
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+
+    require_legal(dtxsid, Action.PROCESS, store)
+    require_person_pin(dtxsid)
+
+
 async def run_process(dtxsid: str, params: dict, store) -> dict:
     """
     HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
@@ -1811,6 +1825,7 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
     run_data + run_document; this function stays the single eager pass the route
     and the golden oracle drive, so the 12-key payload is unchanged.
     """
+    _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
 
     try:
@@ -1871,6 +1886,7 @@ async def run_document(dtxsid: str, params: dict, store) -> dict:
     the seam the eager document_step is built on, and the future home of a lazy /
     on-demand content regeneration path.
     """
+    _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
     try:
         await run_data(ctx)

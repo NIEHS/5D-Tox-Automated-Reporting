@@ -11,7 +11,8 @@ call ``study_state`` directly). It composes what the core already derives:
   * the identity (``identity.json``; the abbreviation is the short name);
   * the two pins: the method profile (``pipeline.method_profile``: the pin, the
     deviations, the LIVE mismatches between the dataset's recorded analyses and
-    the profile) and the document definition (``document_model.definition_pin``:
+    the profile, and, until a person has chosen one, the ``suggestion`` to
+    propose) and the document definition (``document_model.definition_pin``:
     the pin, its drift, and which definition renders);
   * whether the study was processed;
   * the sections: the catalog of the tree that renders, the readiness, and per
@@ -165,7 +166,31 @@ def method_pin_state(dtxsid: str, session: Path) -> dict:
     out["deviations"] = list(settings.deviations)
     out["unchecked"] = list(settings.unchecked)
     out["mismatches"] = _live_mismatches(session / "integrated.json", settings)
+    if not mp.chosen_by_person(pin):
+        # C1 D1: Process waits for a person's choice; the interface (M5)
+        # proposes this one and the person confirms it.
+        out["suggestion"] = _method_suggestion(dtxsid, session)
     return out
+
+
+def _method_suggestion(dtxsid: str, session: Path) -> dict | None:
+    """``{name, why}``: the profile to propose (pipeline.method_profile.
+    suggest_profile), comparing each candidate with the dataset through the
+    memoized live mismatches. None when no profile can be suggested."""
+    from pipeline import method_profile as mp
+
+    integrated = session / "integrated.json"
+    if not integrated.is_file():
+        def count(settings):               # no dataset: nothing recorded to compare
+            return None
+    else:
+        def count(settings):
+            return len(_live_mismatches(integrated, settings))
+    try:
+        return mp.suggest_profile(dtxsid, count_mismatches=count)
+    except mp.MethodProfileError as exc:
+        logger.warning("No method profile to suggest for %s: %s", dtxsid, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------

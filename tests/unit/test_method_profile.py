@@ -148,9 +148,36 @@ def test_footnotes_name_the_tests_the_profile_ran():
     assert mp.marker_legend(s) == "*Statistically significant at p ≤ 0.05; **p ≤ 0.01."
 
 
-def test_integration_pins_and_flags_recorded_disagreements(tmp_path, monkeypatch):
-    """integrate_step's method hook: pins the newest profile when none is pinned,
-    and puts each recorded-vs-profile disagreement in the validation report."""
+def test_integration_pins_nothing_and_drops_stale_mismatches(tmp_path, monkeypatch):
+    """C1: with no profile pinned, integration pins none and compares against
+    none: the stale method_mismatch warnings are removed."""
+    import common.paths
+    from workflow.steps import _pin_and_check_method
+
+    monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path)
+    (tmp_path / "DTXSIDX").mkdir()
+
+    class Store:
+        report = {"issues": [{"issue_type": "method_mismatch", "message": "stale"},
+                             {"issue_type": "roster_subset", "message": "kept"}]}
+
+        def read_json(self, dtxsid, name):
+            return self.report
+
+        def write_json(self, dtxsid, name, data):
+            self.report = data
+
+    store = Store()
+    summary = _pin_and_check_method("DTXSIDX", {"bMDResult": []}, store)
+    assert summary == {"profile": None, "pinned_by": None, "mode": None,
+                       "deviations": [], "mismatches": []}
+    assert not (tmp_path / "DTXSIDX" / mp.PIN_FILE).exists()
+    assert [i["issue_type"] for i in store.report["issues"]] == ["roster_subset"]
+
+
+def test_integration_flags_recorded_disagreements(tmp_path, monkeypatch):
+    """integrate_step's method hook: puts each recorded-vs-profile disagreement
+    with the pinned profile in the validation report."""
     import common.paths
     from workflow.steps import _pin_and_check_method
 
@@ -228,3 +255,50 @@ def test_a_fixed_pin_stays_and_newest_switches_back_to_tracking(tmp_path, monkey
 def test_pins_written_before_modes_keep_their_meaning():
     assert mp.pin_mode({"name": "x", "pinned_by": "user"}) == mp.FIXED
     assert mp.pin_mode({"name": "x", "pinned_by": "default"}) == mp.TRACK
+
+
+# ---------------------------------------------------------------------------
+# C1 D1 = B: a person chooses the method; the core suggests, never applies
+# ---------------------------------------------------------------------------
+
+def test_require_person_pin_refuses_none_and_default(tmp_path, monkeypatch):
+    import common.paths
+    from workflow.errors import MethodNotChosen
+    from workflow.refusals import explain
+
+    monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path)
+    (tmp_path / "DTXSIDX").mkdir()
+    with pytest.raises(MethodNotChosen) as ei:
+        mp.require_person_pin("DTXSIDX")
+    assert not (tmp_path / "DTXSIDX" / mp.PIN_FILE).exists()     # nothing written
+    body = explain(ei.value)["error"]
+    assert (body["code"], body["status"], body["fix"]) == ("method_not_chosen", 409, "M5")
+    assert body["details"] == {"pin": None}
+    assert "absent" in body["message"]
+
+    mp.pin_profile("DTXSIDX", "newest", by="default")
+    with pytest.raises(MethodNotChosen) as ei:
+        mp.require_person_pin("DTXSIDX")
+    body = explain(ei.value)["error"]
+    assert "pinned by default" in body["message"]
+    assert body["details"]["pin"]["pinned_by"] == "default"
+    assert "set automatically" in body["say"]
+
+    mp.pin_profile("DTXSIDX", "ntp-5day-2021", by="user")
+    assert mp.require_person_pin("DTXSIDX")["name"] == "ntp-5day-2021"
+
+
+def test_suggest_profile_is_a_pure_read(tmp_path, monkeypatch):
+    import common.paths
+    monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path)
+    d = tmp_path / "DTXSIDX"
+    d.mkdir()
+    s = mp.suggest_profile("DTXSIDX")
+    assert s["name"] == mp.newest_profile() and "newest" in s["why"]
+    assert list(d.iterdir()) == []                                # nothing written
+    s = mp.suggest_profile("DTXSIDX", count_mismatches=lambda st: (
+        0 if st.profile == "ntp-5day-2021" else 3))
+    assert s["name"] == "ntp-5day-2021"
+    assert "matches the analysis settings" in s["why"] and "has 3" in s["why"]
+    s = mp.suggest_profile("DTXSIDX", count_mismatches=lambda st: 0)
+    assert s["name"] == mp.newest_profile() and "agree" in s["why"]

@@ -183,7 +183,10 @@ def import_files(dtxsid: str, paths: list[Path], store) -> None:
     files to a pool that has already progressed invalidates its downstream
     artifacts, exactly as an upload through the API does."""
     from pipeline.pool_state import invalidate_pool_artifacts, pool_has_progressed
+    from workflow.engine import require_legal
+    from workflow.phases import Action
 
+    require_legal(dtxsid, Action.ADD_FILES, store)
     files_dir = store.session_dir(dtxsid) / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
     progressed = pool_has_progressed(dtxsid)
@@ -255,6 +258,9 @@ def apply_design(dtxsid: str, design_path: Path | dict, store) -> None:
     errors = design_field_errors(fields, VOCABULARIES)
     if errors:
         raise SystemExit("--design: " + "; ".join(errors))
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.STATE_DATASET_FACTS, store)   # C1: on a usable dataset
     if not store.artifact_exists(dtxsid, "integrated.json"):
         raise SystemExit("--design needs an integrated session")
     store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
@@ -359,11 +365,22 @@ def document_definition(dtxsid: str, mode: str | None) -> None:
 
 def method_profile(dtxsid: str, name: str | None) -> None:
     """Pin `name` when given (a re-pin is logged and recomputes), then say which
-    method the study runs under and anything it cannot do as stated."""
+    method the study runs under and anything it cannot do as stated.  A study
+    whose method no person chose needs `name` (C1 D1): it is never chosen for
+    them, and Process refuses without it."""
     from pipeline.integrated_io import load_integrated
-    from pipeline.method_profile import (TRACK, ensure_pin, pin_mode, pin_profile,
-                                         recorded_mismatches, session_method)
+    from pipeline.method_profile import (TRACK, chosen_by_person, ensure_pin, pin_mode,
+                                         pin_profile, read_pin, recorded_mismatches,
+                                         session_method, suggest_profile)
 
+    if not name and not chosen_by_person(read_pin(dtxsid)):
+        suggestion = suggest_profile(dtxsid)
+        raise SystemExit(
+            f"--method-profile is needed: no one has chosen the analysis method for "
+            f"{dtxsid} yet{' (its current one was set by default)' if read_pin(dtxsid) else ''}, "
+            f"and it is never chosen for you. Suggested: --method-profile "
+            f"{suggestion['name']} ({suggestion['why']}), or 'newest' to track the newest "
+            f"profile.")
     pin = pin_profile(dtxsid, name, by="user") if name else ensure_pin(dtxsid)
     method = session_method(dtxsid)
     how = ("tracks the newest" if pin_mode(pin) == TRACK else "fixed")
@@ -578,8 +595,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--method-profile",
                     help="fix the study on this analysis method profile (profiles/<name>.yaml, "
                          "ADR-0027), or 'newest' to track the newest profile as profiles are "
-                         "added.  Default: the study's pin; a study with none tracks the "
-                         "newest.  A change of profile recomputes")
+                         "added.  Default: the study's pin, when a person chose it; a study "
+                         "with none (or one set by default) needs this, and the run says which "
+                         "profile it suggests.  A change of profile recomputes")
     ap.add_argument("--document-definition", choices=("fixed", "track"),
                     help="fix the report on its document definition as it is now (it then "
                          "renders from that snapshot whatever the templates say later), or "
@@ -745,7 +763,9 @@ def main(argv: list[str] | None = None) -> int:
         with _Timer(f"render {', '.join(surfaces)}"):
             render(dtxsid, surfaces, out_dir, args.view, args.strict)
     except StepError as e:
-        raise SystemExit(f"step failed ({e.status_code}): {e.message}")
+        from workflow.refusals import explain
+        raise SystemExit(f"step failed ({e.status_code}): {e.message}\n"
+                         f"  {explain(e)['error']['say']}")
     except PendingContentError as e:
         raise SystemExit(f"--strict: report still has pending sections: {e.markers}")
     return 0

@@ -33,17 +33,33 @@ class FakeStore:
     can exercise the not-found branches without a filesystem.
     """
 
-    def __init__(self, *, files_exist=True, fingerprints=None, docs=None):
+    def __init__(self, *, files_exist=True, fingerprints=None, docs=None, present=(),
+                 real_dir=None):
         self._files_exist = files_exist
         self._fps = fingerprints or {}
         self._docs = docs or {}
+        self._present = set(present)
         self._integrated = {}
         self.sections = {}
         self._base = Path("/tmp/fake-session")
+        self._real_dir = real_dir
 
     def session_dir(self, dtxsid):
+        if self._real_dir is not None:      # a step that moves real files (the approval)
+            return self._real_dir
         # Return a path whose /files child exists-ness we control via a shim.
         return _FakePath(self._base / dtxsid, self._files_exist)
+
+    # --- what the phase guard reads (PoolStore protocol). The phase follows
+    # the docs: files → a report → integrated.json → animal_report.json.
+    def has_files(self, dtxsid):
+        return self._files_exist
+
+    def has_stale_sections(self, dtxsid):
+        return False
+
+    def artifact_exists(self, dtxsid, name):
+        return name in self._present or name in self._docs
 
     def ensure_fingerprints(self, dtxsid, force=False):
         return self._fps
@@ -100,13 +116,24 @@ class _FakePath:
         return str(self._path)
 
 
+_CLEAN = {"issues": [], "coverage_matrix": {}}
+
+
+def _validated(**docs):
+    """Docs of a VALIDATED study (a clean report), plus any given."""
+    return {"validation_report.json": dict(_CLEAN), **docs}
+
+
 # --- validate --------------------------------------------------------------
 
-def test_validate_step_no_files_raises_404():
+def test_validate_step_no_files_is_refused_409():
+    # C1: no files → EMPTY, where only ADD_FILES is legal (it was a 404).
+    from workflow.errors import PhaseRefusal
     store = FakeStore(files_exist=False)
-    with pytest.raises(StepError) as ei:
+    with pytest.raises(PhaseRefusal) as ei:
         validate_step("DTXSID_VC", store)
-    assert ei.value.status_code == 404
+    assert ei.value.status_code == 409
+    assert ei.value.details["phase"] == "EMPTY"
 
 
 def test_validate_step_persists_and_returns_report():
@@ -137,7 +164,8 @@ def test_resolve_step_requires_all_three_inputs():
 
 
 def test_resolve_step_appends_to_precedence():
-    store = FakeStore(docs={"precedence.json": [{"issue_index": 0, "chosen_file_id": "old"}]})
+    store = FakeStore(docs=_validated(**{"precedence.json": [{"issue_index": 0,
+                                                              "chosen_file_id": "old"}]}))
     result = resolve_step("DTXSID_VC", 1, "new-fid", store)
     assert result == {"ok": True}
     prec = store.read_json("DTXSID_VC", "precedence.json")
@@ -146,15 +174,28 @@ def test_resolve_step_appends_to_precedence():
 
 
 def test_resolve_step_starts_fresh_when_no_precedence_file():
-    store = FakeStore()
+    store = FakeStore(docs=_validated())
     resolve_step("DTXSID_VC", 0, "fid", store)
     assert len(store.read_json("DTXSID_VC", "precedence.json")) == 1
 
 
 # --- integrate -------------------------------------------------------------
 
+def test_integrate_step_never_validated_is_refused_409():
+    # C1: files but no validation report → UPLOADED, where INTEGRATE is refused
+    # before anything is read (it was a 400 "no fingerprints").
+    from workflow.errors import PhaseRefusal
+    store = FakeStore(fingerprints={})
+    with pytest.raises(PhaseRefusal) as ei:
+        integrate_step("DTXSID_VC", None, store)
+    assert ei.value.status_code == 409
+    assert ei.value.details["phase"] == "UPLOADED"
+
+
 def test_integrate_step_no_fingerprints_raises_400():
-    store = FakeStore(fingerprints={})  # no cache, no validation_report.json
+    # VALIDATED, but the report carries no fingerprints and none are cached:
+    # the 400 stays reachable as a fallback.
+    store = FakeStore(fingerprints={}, docs=_validated())
     with pytest.raises(StepError) as ei:
         integrate_step("DTXSID_VC", None, store)
     assert ei.value.status_code == 400
@@ -164,7 +205,7 @@ def test_integrate_step_no_coverage_matrix_raises_400():
     # fingerprints present, but validation_report has no coverage_matrix
     store = FakeStore(
         fingerprints={"f1": {}},
-        docs={"validation_report.json": {"fingerprints": {"f1": {}}}},
+        docs={"validation_report.json": {"issues": [], "fingerprints": {"f1": {}}}},
     )
     with pytest.raises(StepError) as ei:
         integrate_step("DTXSID_VC", None, store)
@@ -172,11 +213,12 @@ def test_integrate_step_no_coverage_matrix_raises_400():
 
 
 def test_integrate_step_success_caches_and_summarizes(sessions_dir):
-    # sessions_dir: integration pins the method profile on disk (ADR-0027),
-    # which must land in the test's directory, not the real sessions/.
+    # sessions_dir: the method profile is read from disk (ADR-0027); nothing
+    # must land in the real sessions/.
     store = FakeStore(
         fingerprints={"f1": object()},
-        docs={"validation_report.json": {"coverage_matrix": {"Body Weight|tox_study": {}}}},
+        docs={"validation_report.json": {"issues": [],
+                                         "coverage_matrix": {"Body Weight|tox_study": {}}}},
     )
     integrated = {
         "doseResponseExperiments": [
@@ -196,6 +238,114 @@ def test_integrate_step_success_caches_and_summarizes(sessions_dir):
     assert store.get_integrated("DTXSID_VC") is integrated
     # identity persisted for LLM metadata inference
     assert store.read_json("DTXSID_VC", "identity.json") == {"name": "PFHxSAm"}
+    # C1: integration pins no method profile, and says so plainly.
+    assert not (sessions_dir / "DTXSID_VC" / "method_profile.json").exists()
+    assert summary["method"] == {"profile": None, "pinned_by": None, "mode": None,
+                                 "deviations": [], "mismatches": []}
+    assert summary["approval_withdrawn"] is False
+    # The basis it was built from is recorded.
+    assert store.read_json("DTXSID_VC", "integration_basis.json")["basis"]
+
+
+def _integrated_min():
+    return {"doseResponseExperiments": [], "_meta": {}, "bMDResult": [],
+            "categoryAnalysisResults": []}
+
+
+def test_reintegration_withdraws_and_archives_the_data_approval(tmp_path, sessions_dir):
+    import json
+    sdir = tmp_path / "DTXSID_VC"
+    (sdir / "files").mkdir(parents=True)
+    (sdir / "animal_report.json").write_text(json.dumps({"total_animals": 40}))
+    store = FakeStore(fingerprints={"f1": object()}, real_dir=sdir,
+                      present={"integrated.json", "animal_report.json"},
+                      docs=_validated())
+    store._docs["validation_report.json"]["coverage_matrix"] = {"Body Weight|tox_study": {}}
+    with patch("workflow.steps.integrate_pool", return_value=_integrated_min()):
+        summary = integrate_step("DTXSID_VC", None, store)
+    assert summary["approval_withdrawn"] is True
+    assert not (sdir / "animal_report.json").exists()
+    archived = list((sdir / "history" / "_data_approval").glob("*-animal_report.json"))
+    assert len(archived) == 1
+    assert json.loads(archived[0].read_text()) == {"total_animals": 40}
+
+
+def test_a_failed_merge_keeps_the_data_approval(tmp_path):
+    sdir = tmp_path / "DTXSID_VC"
+    (sdir / "files").mkdir(parents=True)
+    (sdir / "animal_report.json").write_text("{}")
+    store = FakeStore(fingerprints={"f1": object()}, real_dir=sdir,
+                      present={"integrated.json", "animal_report.json"},
+                      docs=_validated())
+    store._docs["validation_report.json"]["coverage_matrix"] = {"Body Weight|tox_study": {}}
+    with patch("workflow.steps.integrate_pool", side_effect=RuntimeError("java")):
+        with pytest.raises(StepError) as ei:
+            integrate_step("DTXSID_VC", None, store)
+    assert ei.value.status_code == 500
+    assert (sdir / "animal_report.json").exists()
+    assert "integration_basis.json" not in store._docs
+
+
+def test_integration_refuses_when_validation_is_out_of_date():
+    # The restart trap: a cold re-scan minted new ids, so the coverage matrix
+    # names files the fingerprints integration would use do not hold.
+    from workflow.errors import ValidationOutOfDate
+    from workflow.refusals import explain
+
+    report = {"issues": [], "fingerprints": {"old-1": {"filename": "bw.csv"},
+                                              "old-2": {"filename": "bw.bm2"}},
+              "coverage_matrix": {"Body Weight|tox_study": {
+                  "xlsx": None, "txt_csv": ["old-1"], "bm2": "old-2"}}}
+    fps = {"new-1": {"filename": "bw.csv"}, "new-2": {"filename": "bw.bm2"},
+           "new-3": {"filename": "late.csv"}}
+    store = FakeStore(fingerprints=fps, docs={"validation_report.json": report})
+    with patch("workflow.steps.integrate_pool") as merge:
+        with pytest.raises(ValidationOutOfDate) as ei:
+            integrate_step("DTXSID_VC", None, store)
+    merge.assert_not_called()
+    assert ei.value.status_code == 409
+    assert ei.value.details == {"missing_ids": 2, "added": ["late.csv"], "missing": []}
+    assert ei.value.message == (
+        "INTEGRATE refused for DTXSID_VC: the validation report no longer matches the files "
+        "the server holds (2 file id(s) in its coverage matrix are not among the current "
+        "fingerprints; files added since validation: late.csv). Validate again, then "
+        "integrate.")
+    body = explain(ei.value)["error"]
+    assert (body["code"], body["fix"]) == ("validation_out_of_date", "M2")
+    assert body["say"].startswith("The file check is out of date")
+
+
+def test_integration_passes_on_the_report_fingerprint_fallback():
+    # A cold server with nothing re-scanned: no cached fingerprints, so the
+    # report's own are used, and they match its matrix by construction.
+    report = {"issues": [], "fingerprints": {"a": {"filename": "bw.csv"}},
+              "coverage_matrix": {"Body Weight|tox_study": {"txt_csv": ["a"]}}}
+    store = FakeStore(fingerprints={}, docs={"validation_report.json": report})
+    with patch("workflow.steps.integrate_pool", return_value=_integrated_min()) as merge:
+        integrate_step("DTXSID_VC", None, store)
+    merge.assert_called_once()
+
+
+def test_integration_refused_at_validation_errors():
+    from workflow.errors import PhaseRefusal
+    store = FakeStore(fingerprints={"f1": {}}, present={"integrated.json"},
+                      docs={"validation_report.json": {
+                          "issues": [{"severity": "error"}], "coverage_matrix": {"x": {}}}})
+    with patch("workflow.steps.integrate_pool") as merge:
+        with pytest.raises(PhaseRefusal) as ei:
+            integrate_step("DTXSID_VC", None, store)
+    merge.assert_not_called()
+    assert ei.value.details["phase"] == "VALIDATION_ERRORS"
+
+
+def test_resolve_and_confirm_are_refused_before_validation():
+    from workflow.errors import PhaseRefusal
+    for call in (lambda st: resolve_step("DTXSID_VC", 0, "fid", st),
+                 lambda st: confirm_metadata_step("DTXSID_VC", {}, st)):
+        store = FakeStore()                      # files, never validated: UPLOADED
+        with pytest.raises(PhaseRefusal):
+            call(store)
+        assert store._docs == {}                 # nothing written
 
 
 # --- confirm-metadata ------------------------------------------------------
@@ -204,7 +354,7 @@ def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
     # dict-style fingerprint that is NOT txt/csv → no header write, but the
     # correction is applied and fingerprints are re-persisted through the store.
     fps = {"f1": {"filename": "gene.bm2", "file_type": "bm2", "platform": "?"}}
-    store = FakeStore(fingerprints=fps)
+    store = FakeStore(fingerprints=fps, docs=_validated())
     result = confirm_metadata_step(
         "DTXSID_VC", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
     )
@@ -216,15 +366,38 @@ def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
 # --- materialize result sections (ADR-0018 Phase 1) ------------------------
 # These use a REAL tmp session (the sessions_dir fixture) because the transform
 # reads the _cache_sections file and writes bm2_*.json via save_section, both of
-# which resolve through the patched SESSIONS_DIR.
+# which resolve through the patched SESSIONS_DIR. Materializing is part of
+# Process (C1), so each session is seeded INTEGRATED first (_integrated_session).
+
+def _integrated_session(sessions_dir, dtxsid="DTXSID_VC"):
+    """A real session the phase derives INTEGRATED: a file, a clean validation
+    report and integrated.json."""
+    import json
+    d = sessions_dir / dtxsid
+    (d / "files").mkdir(parents=True)
+    (d / "files" / ".keep").write_text("")
+    (d / "validation_report.json").write_text(json.dumps(_CLEAN))
+    (d / "integrated.json").write_text("{}")
+    return d
+
+
+def test_materialize_is_refused_before_integration(sessions_dir):
+    from workflow.errors import PhaseRefusal
+    from workflow.steps import materialize_result_sections, materialize_summary
+    from workflow.store import DiskPoolStore
+    d = sessions_dir / "DTXSID_VC"
+    (d / "files").mkdir(parents=True)
+    (d / "files" / "bw.csv").write_text("x")
+    for step in (materialize_result_sections, materialize_summary):
+        with pytest.raises(PhaseRefusal):
+            step("DTXSID_VC", DiskPoolStore())
 
 def test_materialize_result_sections_writes_bm2_files(sessions_dir):
     import json
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     # Seed a sections cache the way Process would (two apical sections; one has a
     # narrative, one is table-only — both legitimate).
     (d / "_cache_sections_abc123.json").write_text(json.dumps({"sections": [
@@ -251,7 +424,7 @@ def test_materialize_result_sections_writes_bm2_files(sessions_dir):
 def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
-    (sessions_dir / "DTXSID_VC").mkdir(parents=True)
+    _integrated_session(sessions_dir)
     result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
     assert result == {"ok": True, "materialized": []}
 
@@ -280,8 +453,7 @@ def test_wording_review_stamped_on_flip_against_approved(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     # First materialize with direction "decreased", then the human approves it.
     _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
     materialize_result_sections("DTXSID_VC", DiskPoolStore())
@@ -307,8 +479,7 @@ def test_no_wording_review_when_never_approved(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
     materialize_result_sections("DTXSID_VC", DiskPoolStore())
     # NOT approved — just re-materialize with a flipped signature.
@@ -324,8 +495,7 @@ def test_no_wording_review_when_signature_unchanged(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_VC"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir)
     sig = {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}}
     _seed_cache(d, sig)
     materialize_result_sections("DTXSID_VC", DiskPoolStore())
