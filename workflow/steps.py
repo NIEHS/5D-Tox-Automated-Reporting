@@ -57,34 +57,34 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
     results — narrative.report_summary, deterministic, the same inputs as the
     Abstract — as a provisional draft (approved=False, source="generated").
 
-    Never overwrites a Summary a person approved or wrote (or one the LLM route
-    saved): only an absent or previously generated, unapproved summary.json is
-    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``."""
-    import json
+    Through the section write gate (workflow.section_writes, C2) as a system
+    write: unchanged text writes nothing; text a person owns (approved, released
+    with PROTECTED, edited) is never replaced — the new text is HELD and a
+    `hold` event records that Process had a new Summary it did not apply. Its
+    own extra rule stands: it replaces only its own earlier output
+    (``source == "generated"``), never one the LLM route or a person saved.
 
+    Returns ``{ok, written: bool, paragraphs: int, held?: {why, version}}``."""
     from narrative.report_summary import build_report_summary
     from narrative.summary_llm import summary_inputs
-    from pipeline.session_store import save_section
+    from workflow import section_writes
 
-    sdir = store.session_dir(dtxsid)
-    prior_path = sdir / "summary.json"
-    if prior_path.exists():
-        try:
-            prior = json.loads(prior_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            prior = {}
-        if prior.get("approved") or prior.get("source") != "generated":
-            return {"ok": True, "written": False, "paragraphs": 0}
+    prior = section_writes.read_prior(dtxsid, "summary", store)
+    if prior is not None and prior.get("source") != "generated":
+        return {"ok": True, "written": False, "paragraphs": 0,
+                "held": {"why": "not_generated_here", "version": prior.get("version")}}
 
-    paragraphs = build_report_summary(**summary_inputs(sdir))
+    paragraphs = build_report_summary(**summary_inputs(store.session_dir(dtxsid)))
     if not paragraphs:
         return {"ok": True, "written": False, "paragraphs": 0}
-    save_section(dtxsid, "summary", {
-        "paragraphs": paragraphs,
-        "source": "generated",
-        "approved": False,
-    }, archive=False)
-    return {"ok": True, "written": True, "paragraphs": len(paragraphs)}
+    out = section_writes.write_section(
+        dtxsid, "summary", {"paragraphs": paragraphs, "source": "generated", "approved": False},
+        store, act="summary", actor="system", author="generated")
+    result = {"ok": True, "written": out["outcome"] == "written",
+              "paragraphs": len(paragraphs) if out["outcome"] == "written" else 0}
+    if out["outcome"] == "held":
+        result["held"] = {"why": "owned", "version": out["version"]}
+    return result
 
 
 def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
@@ -95,29 +95,41 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     `{platform, title, tables_json, narrative, first_col_header, caption, footnotes}`)
     but never writes the `bm2_<slug>.json` FILES the render + readiness paths read.
     This closes that gap: for each cached apical section, write `bm2_<slug>.json`
-    (`slug = bm2_slug(title)`) carrying the SAME fields plus `approved=False` — a
-    provisional, generated draft. The narrative is already a paragraph list (kept as
-    `narrative`, which report_data reads directly); no transform needed beyond the
-    key + approval stamp.
+    (`slug = bm2_slug(title)`) carrying the SAME fields — a provisional, generated
+    draft (`approved=False`).
 
-    Idempotent: re-materializing overwrites with archive=False (a regenerate, not a
-    new blessed version). Genomics is deterministic and is NOT materialized here (it
-    is read-only, not an authorable/approvable section — ADR-0018). Returns
-    `{ok, materialized: [section_key, ...]}`.
+    Every file goes through the section write gate (workflow.section_writes, C2)
+    as a system write:
+      * content unchanged → nothing written (an approval stands; I5);
+      * changed, not owned → the prior archived, the new written, a
+        `generate/draft` event;
+      * changed, owned (approved, or released with PROTECTED) → knocked down with
+        a record (C2 D2/A1): the deliverable renders apical content from the
+        Process cache, so what prints has already changed; the owned version is
+        archived, the approval withdrawn (FINAL with it, PROTECTED stands), a
+        `review {why, since_version, flips}` marker set, a `reprocess/
+        needs-re-bless` event recorded. Re-accepting clears it. `wording_review`
+        keeps its meaning (the data-derived words that flipped under approved
+        wording; Phase 3b).
+
+    Genomics is deterministic and is NOT materialized here (ADR-0018). Returns
+    `{ok, materialized, unchanged, needs_review: [{key, why, prior_version,
+    version, flips}], held}`; `materialized` = the files written.
     """
-    import json
-
     from pipeline.session_db import _latest_cache
-    from pipeline.session_store import bm2_slug, save_section
+    from pipeline.session_store import bm2_slug
+    from workflow import section_writes
     from workflow.reprocess import cat_signature_flips
 
     sdir = store.session_dir(dtxsid)
     cache = _latest_cache(sdir, "sections")
     sections = cache.get("sections") if isinstance(cache, dict) else None
+    result: dict = {"ok": True, "materialized": [], "unchanged": [], "needs_review": [],
+                    "held": []}
     if not sections:
-        return {"ok": True, "materialized": []}
+        return result
 
-    materialized: list[str] = []
+    from common import provenance
     for sec in sections:
         title = sec.get("title") or sec.get("platform") or ""
         slug = bm2_slug(title)
@@ -126,23 +138,13 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         section_key = f"bm2_{slug}"
         cat_signature = sec.get("cat_signature") or {}
 
-        # Read the PRIOR section file (if any) BEFORE overwriting it — this is the
-        # only point where the old and new categorical signatures coexist, so it is
-        # where Phase 3b flip detection must run (invalidate ran at upload and kept
-        # no new binding; the reprocess that produced `sec` deleted the old cache).
-        # Capture whether the human had APPROVED the prior wording and its signature.
-        prior_path = sdir / f"{section_key}.json"
-        was_approved = False
-        old_signature: dict = {}
-        if prior_path.exists():
-            try:
-                prior = json.loads(prior_path.read_text(encoding="utf-8"))
-                was_approved = bool(prior.get("approved"))
-                old_signature = prior.get("cat_signature") or {}
-            except (json.JSONDecodeError, OSError, ValueError):
-                pass
+        # The prior file, read BEFORE the gate replaces it: the only point where
+        # the old and new categorical signatures coexist (Phase 3b flip detection).
+        prior = section_writes.read_prior(dtxsid, section_key, store)
+        flips = (cat_signature_flips(prior.get("cat_signature") or {}, cat_signature)
+                 if prior is not None else [])
 
-        # Carry the render-relevant fields verbatim; stamp provisional (unapproved).
+        # Carry the render-relevant fields verbatim; provisional (unapproved).
         data = {
             "platform": sec.get("platform"),
             "title": title,
@@ -155,28 +157,30 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
             "approved": False,
             "source": "generated",
         }
+        out = section_writes.write_section(
+            dtxsid, section_key, data, store, act="materialize", actor="system",
+            author="generated", on_owned=section_writes.REVIEW,
+            review={"why": "wording_changed" if flips else "numbers_changed", "flips": flips})
 
-        # Wording-review inform-signal (Phase 3b): only when the human had APPROVED
-        # the prior wording AND a data-derived WORD flipped under it. Not a block —
-        # programmatic content asserts no LLM judgement; it flags that the author's
-        # committed wording may now contradict the refreshed data. Fail-soft: no
-        # prior / never approved / no flip → no marker → byte-identical to before.
-        if was_approved:
-            flips = cat_signature_flips(old_signature, cat_signature)
-            if flips:
-                data["wording_review"] = flips
-
-        # archive=False: a regenerate/materialize is not a new blessed version.
-        save_section(dtxsid, section_key, data, archive=False)
-        materialized.append(section_key)
-        from common import provenance
+        if out["outcome"] == "written":
+            result["materialized"].append(section_key)
+        elif out["outcome"] == "unchanged":
+            result["unchanged"].append(section_key)
+        elif out["outcome"] == "needs_review":
+            result["materialized"].append(section_key)
+            result["needs_review"].append({
+                "key": section_key, "why": out["review"]["why"],
+                "prior_version": out["prior_version"], "version": out["version"],
+                "flips": out["review"]["flips"]})
+        else:
+            result["held"].append(section_key)
         provenance.record(
             "materialized", dtxsid=dtxsid, section_key=section_key,
-            platform=sec.get("platform"), was_approved=was_approved,
-            wording_review=bool(data.get("wording_review")),
+            platform=sec.get("platform"), outcome=out["outcome"],
+            wording_review=bool(flips and out["outcome"] == "needs_review"),
         )
 
-    return {"ok": True, "materialized": materialized}
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -253,7 +253,8 @@ def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
     from workflow.store import DiskPoolStore
     (sessions_dir / "DTXSID_VC").mkdir(parents=True)
     result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
-    assert result == {"ok": True, "materialized": []}
+    assert result == {"ok": True, "materialized": [], "unchanged": [], "needs_review": [],
+                      "held": []}
 
 
 # --- Phase 3b: wording_review flip detection at materialize -----------------
@@ -298,8 +299,16 @@ def test_wording_review_stamped_on_flip_against_approved(sessions_dir):
     assert bw["wording_review"] == [
         "Male|Terminal Body Wt..direction", "Male|Terminal Body Wt..trend"
     ]
-    # It is an inform-signal, not a currency block: the section is provisional again.
+    # C2 D2/A1: knocked down WITH a record — the approved version archived, a
+    # review marker, a needs-re-bless event. Never `stale` (that would send the
+    # phase back to UPLOADED).
     assert bw["approved"] is False
+    assert bw["review"]["why"] == "wording_changed"
+    assert bw["review"]["flips"] == bw["wording_review"]
+    assert "stale" not in bw
+    from pipeline.session_store import list_archived, read_version_history
+    assert [a["approved"] for _n, a in list_archived("DTXSID_VC", "bm2_body-weight")] == [True]
+    assert read_version_history("DTXSID_VC", "bm2_body-weight")[-1]["status"] == "needs-re-bless"
 
 
 def test_no_wording_review_when_never_approved(sessions_dir):
@@ -340,3 +349,192 @@ def test_no_wording_review_when_signature_unchanged(sessions_dir):
 
     bw = json.loads(bw_path.read_text())
     assert "wording_review" not in bw
+
+
+# --- C2: Process never overwrites owned content (I1, I5, T1, T2, T4) --------
+
+def _seed_two(d, weight_rows):
+    import json
+    for old in d.glob("_cache_sections_*.json"):
+        old.unlink()
+    (d / "_cache_sections_seed.json").write_text(json.dumps({"sections": [
+        {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": weight_rows},
+         "narrative": [], "cat_signature": {}},
+        {"platform": "Organ Weight", "title": "Organ Weight", "tables_json": {"rows": []},
+         "narrative": ["Liver weight increased."], "cat_signature": {}},
+    ]}))
+
+
+def test_i5_a_warm_materialize_with_nothing_changed_touches_no_file(sessions_dir):
+    # T1 regression: an approved apical section stays approved, and every
+    # bm2_*.json is byte-identical (mtime too).
+    import json
+    import os
+    from workflow.steps import accept_section_step, materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_I5"
+    d.mkdir(parents=True)
+    _seed_two(d, [1])
+    store = DiskPoolStore()
+    first = materialize_result_sections("DTXSID_I5", store)
+    assert first["materialized"] == ["bm2_body-weight", "bm2_organ-weight"]
+    accept_section_step("DTXSID_I5", "bm2_body-weight", store)
+    before = {p.name: (p.read_bytes(), os.stat(p).st_mtime_ns) for p in d.glob("bm2_*.json")}
+    events_before = (d / "history" / "bm2_body-weight" / "index.jsonl").read_text()
+
+    again = materialize_result_sections("DTXSID_I5", store)
+
+    assert again["materialized"] == [] and again["needs_review"] == []
+    assert again["unchanged"] == ["bm2_body-weight", "bm2_organ-weight"]
+    after = {p.name: (p.read_bytes(), os.stat(p).st_mtime_ns) for p in d.glob("bm2_*.json")}
+    assert after == before
+    assert json.loads((d / "bm2_body-weight.json").read_text())["approved"] is True
+    # I4: no event for an unchanged materialize.
+    assert (d / "history" / "bm2_body-weight" / "index.jsonl").read_text() == events_before
+
+
+def test_t2_changed_numbers_under_an_approval_are_knocked_down_with_a_record(sessions_dir):
+    import json
+    from pipeline.session_store import current_version_status, list_archived
+    from workflow.steps import accept_section_step, materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_T2"
+    d.mkdir(parents=True)
+    _seed_two(d, [1])
+    store = DiskPoolStore()
+    materialize_result_sections("DTXSID_T2", store)
+    accept_section_step("DTXSID_T2", "bm2_body-weight", store)
+    _seed_two(d, [2])
+
+    out = materialize_result_sections("DTXSID_T2", store)
+
+    assert out["needs_review"] == [{"key": "bm2_body-weight", "why": "numbers_changed",
+                                    "prior_version": 1, "version": 2, "flips": []}]
+    assert out["materialized"] == ["bm2_body-weight"]
+    assert out["unchanged"] == ["bm2_organ-weight"]
+    bw = json.loads((d / "bm2_body-weight.json").read_text())
+    assert bw["tables_json"] == {"rows": [2]} and bw["version"] == 2
+    assert bw["approved"] is False and bw["facts"] == ["protected"]
+    assert bw["review"] == {"why": "numbers_changed", "since_version": 1, "flips": []}
+    archived = list_archived("DTXSID_T2", "bm2_body-weight")
+    assert [(a["version"], a["approved"], a["tables_json"]) for _n, a in archived] == [
+        (1, True, {"rows": [1]})]
+    assert current_version_status("DTXSID_T2", "bm2_body-weight") == "needs-re-bless"
+
+
+def test_an_unowned_section_whose_numbers_changed_is_archived_and_rewritten(sessions_dir):
+    import json
+    from pipeline.session_store import list_archived, read_version_history
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_UN"
+    d.mkdir(parents=True)
+    _seed_two(d, [1])
+    materialize_result_sections("DTXSID_UN", DiskPoolStore())
+    _seed_two(d, [2])
+    out = materialize_result_sections("DTXSID_UN", DiskPoolStore())
+    assert out["materialized"] == ["bm2_body-weight"] and out["needs_review"] == []
+    assert json.loads((d / "bm2_body-weight.json").read_text())["version"] == 2
+    assert [a["tables_json"] for _n, a in list_archived("DTXSID_UN", "bm2_body-weight")] == [
+        {"rows": [1]}]
+    assert [(e["cause"], e["status"], e["act"]) for e in
+            read_version_history("DTXSID_UN", "bm2_body-weight")] == [
+        ("generate", "draft", "materialize"), ("generate", "draft", "materialize")]
+
+
+def _summary_inputs_patch(monkeypatch, paragraphs):
+    import narrative.report_summary as rs
+    import narrative.summary_llm as sl
+    monkeypatch.setattr(sl, "summary_inputs", lambda sdir: {})
+    monkeypatch.setattr(rs, "build_report_summary", lambda **kw: list(paragraphs))
+
+
+def test_t4_materialize_summary_holds_a_released_protected_summary(sessions_dir, monkeypatch):
+    import json
+    from pipeline.session_store import read_version_history
+    from workflow.steps import (
+        accept_section_step, materialize_summary, release_section_step,
+    )
+    from workflow.store import DiskPoolStore
+
+    store = DiskPoolStore()
+    _summary_inputs_patch(monkeypatch, ["first"])
+    assert materialize_summary("DTXSID_T4", store)["written"] is True
+    accept_section_step("DTXSID_T4", "summary", store)
+    release_section_step("DTXSID_T4", "summary", store, reason="check the wording")
+    _summary_inputs_patch(monkeypatch, ["second"])
+
+    out = materialize_summary("DTXSID_T4", store)
+
+    assert out["written"] is False and out["held"] == {"why": "owned", "version": 1}
+    s = json.loads((sessions_dir / "DTXSID_T4" / "summary.json").read_text())
+    assert s["paragraphs"] == ["first"] and s["facts"] == ["protected"]
+    hold = read_version_history("DTXSID_T4", "summary")[-1]
+    assert hold["cause"] == "hold" and hold["applied"] is False and hold["act"] == "summary"
+
+
+def test_materialize_summary_with_nothing_new_writes_nothing(sessions_dir, monkeypatch):
+    import os
+    from pipeline.session_store import read_version_history
+    from workflow.steps import materialize_summary
+    from workflow.store import DiskPoolStore
+
+    _summary_inputs_patch(monkeypatch, ["same"])
+    materialize_summary("DTXSID_SU", DiskPoolStore())
+    p = sessions_dir / "DTXSID_SU" / "summary.json"
+    before = (p.read_bytes(), os.stat(p).st_mtime_ns)
+    out = materialize_summary("DTXSID_SU", DiskPoolStore())
+    assert out == {"ok": True, "written": False, "paragraphs": 0}
+    assert (p.read_bytes(), os.stat(p).st_mtime_ns) == before
+    assert len(read_version_history("DTXSID_SU", "summary")) == 1
+
+
+def test_materialize_summary_leaves_a_summary_it_did_not_write(sessions_dir, monkeypatch):
+    import json
+    from workflow.steps import materialize_summary
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_SM"
+    d.mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps({"paragraphs": ["model"], "source": "model",
+                                                "version": 1}))
+    _summary_inputs_patch(monkeypatch, ["generated"])
+    out = materialize_summary("DTXSID_SM", DiskPoolStore())
+    assert out["written"] is False and out["held"]["why"] == "not_generated_here"
+    assert json.loads((d / "summary.json").read_text())["paragraphs"] == ["model"]
+
+
+@pytest.mark.parametrize("owned", [
+    {"approved": True, "facts": ["final", "protected"]},
+    {"approved": False, "facts": ["protected"]},           # released (D1)
+    {"user_edited": True},
+])
+def test_i1_materialize_with_the_fake_store_never_overwrites_owned_text(monkeypatch, owned):
+    # I1, with no disk at all: an owned apical section's text is archived
+    # before the machine's replaces it (D2/A1), and the summary is held.
+    import pipeline.session_db as session_db
+    from tests.unit.section_store_fake import FakeSectionStore
+    from workflow.steps import materialize_result_sections
+
+    monkeypatch.setattr(session_db, "_latest_cache", lambda sdir, unit: {"sections": [
+        {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": [2]},
+         "narrative": [], "cat_signature": {}}]})
+    prior = {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": [1]},
+             "narrative": [], "cat_signature": {}, "source": "generated", "version": 1, **owned}
+    store = FakeSectionStore({"bm2_body-weight": prior})
+    out = materialize_result_sections("DTXSID_FK", store)
+    assert [r["key"] for r in out["needs_review"]] == ["bm2_body-weight"]
+    assert store.archives["bm2_body-weight"][0][1] == prior    # the owned text, kept
+    now = store.sections["bm2_body-weight"]
+    assert now["approved"] is False and now["review"]["since_version"] == 1
+    assert now.get("facts", []) == ([] if owned.get("user_edited") else ["protected"])
+
+    # A further change keeps the marker until a person re-accepts.
+    monkeypatch.setattr(session_db, "_latest_cache", lambda sdir, unit: {"sections": [
+        {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": [3]},
+         "narrative": [], "cat_signature": {}}]})
+    materialize_result_sections("DTXSID_FK", store)
+    assert store.sections["bm2_body-weight"]["review"]["since_version"] == 1

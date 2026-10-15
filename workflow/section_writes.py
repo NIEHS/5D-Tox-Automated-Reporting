@@ -284,6 +284,11 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
     if owned_now:
         reason = require_reason(reason, key, act)       # rule 6
 
+    # A review marker (D2/A1) stands until a person re-accepts: a later machine
+    # write over the knocked-down section keeps it.
+    if actor == "system" and prior is not None and isinstance(prior.get("review"), dict):
+        data.setdefault("review", prior["review"])
+
     # Rule 7 (and 2, and 6 after its reason): archive the prior, write, record.
     line = event(key=key, cause=cause, status=status, act=act, actor=actor, author=author,
                  prior_version=prior_version, changed=True, chash=new_hash, reason=reason,
