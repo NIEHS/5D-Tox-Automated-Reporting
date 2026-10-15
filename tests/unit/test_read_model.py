@@ -129,7 +129,9 @@ def test_phase_and_legal_actions_come_from_the_engine(session):
                       report={"issues": [], "coverage_matrix": {}})
     state = study_state(ID, store)
     assert state["phase"] == "INTEGRATED"
-    assert state["legal_actions"] == ["APPROVE", "REPROCESS", "RESET", "VALIDATE"]
+    assert state["legal_actions"] == sorted([
+        "ADD_FILES", "APPROVE", "CONFIRM_CLASSIFICATION", "INTEGRATE", "PROCESS",
+        "REMOVE_FILE", "RESET", "RESOLVE", "STATE_DATASET_FACTS", "VALIDATE"])
     assert state["processed"] is False
     assert state["identity"] is None          # never written: absent, not guessed
 

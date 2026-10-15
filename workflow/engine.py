@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 
 from workflow.phases import (
     LEGAL_ACTIONS,
+    NEXT_STEP,
     Action,
     Phase,
     compute_section_completeness,
@@ -152,6 +153,26 @@ class WorkflowEngine:
             completeness=completeness,
         )
 
+    # -- the guard (ADR-0014: every mutating step checks legality first) ---
+
+    def require(self, action) -> WorkflowState:
+        """Derive the state and refuse `action` when the phase does not allow it
+        (PhaseRefusal, 409 ``phase_not_allowed``). Returns the state, so the
+        caller does not derive it twice. Every mutating step calls this before
+        it reads or writes anything else; C5's run lock will refuse here too."""
+        from workflow.errors import PhaseRefusal
+
+        action = Action(action)
+        st = self.state()
+        if action not in st.legal_actions:
+            nxt = NEXT_STEP.get(st.phase)
+            raise PhaseRefusal(
+                self.dtxsid, action.value, st.phase.value,
+                [a.value for a in st.legal_actions],
+                integration=st.artifacts.get("integration"),
+                next_action=nxt.value if nxt else None)
+        return st
+
     # -- derived section readiness ----------------------------------------
 
     def derive_section_readiness(
@@ -204,3 +225,9 @@ class WorkflowEngine:
             reason = regen.get("reason") if isinstance(regen, dict) else "stale"
             blocking.append({"section_key": key, "reason": reason})
         return {"can_publish": not blocking, "blocking": blocking}
+
+
+def require_legal(dtxsid: str, action, store: PoolStore | None = None) -> WorkflowState:
+    """``WorkflowEngine(dtxsid, store).require(action)``: the one guard every
+    mutating entry point calls (route, command line, notebook, script)."""
+    return WorkflowEngine(dtxsid, store).require(action)

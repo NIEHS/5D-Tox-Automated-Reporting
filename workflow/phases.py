@@ -15,6 +15,10 @@ to the JS oracle. Do NOT change observable behavior here without changing it at
 the JS source and regenerating the oracle first (see the contract's
 `_EVOLVING_THIS_CONTRACT`).
 
+The legal-action table (`LEGAL_ACTIONS`, with `NEXT_STEP`) is NOT a port: since
+C1 it is the workflow's own declared table of acts, and every mutating step
+enforces it (`workflow.engine.require_legal`).
+
 Fidelity notes vs. the JS:
   * `validationReport` presence uses `is None`, not Python truthiness — JS treats
     any object (even {}) as truthy; only null/undefined is "not yet validated".
@@ -47,98 +51,57 @@ class Phase(str, enum.Enum):
 
 
 class Action(str, enum.Enum):
-    VALIDATE = "VALIDATE"
-    INTEGRATE = "INTEGRATE"
-    APPROVE = "APPROVE"
-    REPROCESS = "REPROCESS"
-    RESET = "RESET"
-    CLEAR_FILES = "CLEAR_FILES"
+    """The workflow's acts on a study's data, as the interface names them. Every
+    mutating step names the one it performs and refuses outside its phase
+    (workflow.engine.require_legal)."""
+
+    ADD_FILES = "ADD_FILES"                    # bring files into the study (step 1)
+    REMOVE_FILE = "REMOVE_FILE"                # remove one file
+    RESET = "RESET"                            # clear the files and all derived from them
+    VALIDATE = "VALIDATE"                      # the file check (step 2)
+    RESOLVE = "RESOLVE"                        # choose between conflicting files (step 3)
+    CONFIRM_CLASSIFICATION = "CONFIRM_CLASSIFICATION"  # correct a file's platform/type (4)
+    INTEGRATE = "INTEGRATE"                    # combine the files into one dataset (step 5)
+    STATE_DATASET_FACTS = "STATE_DATASET_FACTS"  # study design / experiment metadata (6)
+    APPROVE = "APPROVE"                        # the data approval, the animal accounting (8)
+    PROCESS = "PROCESS"                        # Process, content preparation, materialising (9)
 
 
-# Button id (POOL_PHASES key) → abstract Action. The remaining POOL_PHASES
-# keys (badge-pool, validation-summary, file-metadata-review,
-# integrated-preview) are pure display, not actions.
-_BUTTON_ACTIONS: dict[str, Action] = {
-    "btn-validate": Action.VALIDATE,
-    "btn-integrate": Action.INTEGRATE,
-    "btn-approve-pool": Action.APPROVE,
-    "btn-reprocess-pool": Action.REPROCESS,
-    "btn-reset-pool": Action.RESET,
-    "btn-clear-files": Action.CLEAR_FILES,
+# The declared table of legal actions per settled phase (C1 spec §1). Typed
+# directly: it is the workflow's rule, no longer a transcription of a screen's
+# buttons. Why each entry is there:
+#   * ADD_FILES is always legal (C5's run lock will refuse it during a run);
+#   * VALIDATE stays legal after validation: the fix for an out-of-date
+#     integration is "validate again", and the command line re-validates on
+#     every run;
+#   * RESOLVE / CONFIRM_CLASSIFICATION follow the validation: a choice must be
+#     changeable after integration, before the re-integration it calls for;
+#   * INTEGRATE at INTEGRATED/APPROVED is re-integration (it withdraws the data
+#     approval); STATE_DATASET_FACTS writes onto the dataset, so needs one;
+#   * PROCESS is not gated on the data approval: INTEGRATED and APPROVED differ
+#     only in what the data review shows.
+_FILE_ACTS = frozenset({Action.ADD_FILES, Action.REMOVE_FILE, Action.RESET, Action.VALIDATE})
+_CHOICES = frozenset({Action.RESOLVE, Action.CONFIRM_CLASSIFICATION})
+_ALL = frozenset(Action)
+
+LEGAL_ACTIONS: dict[Phase, frozenset[Action]] = {
+    Phase.EMPTY: frozenset({Action.ADD_FILES}),
+    Phase.UPLOADED: _FILE_ACTS,
+    Phase.VALIDATION_ERRORS: _FILE_ACTS | _CHOICES,
+    Phase.VALIDATED: _FILE_ACTS | _CHOICES | {Action.INTEGRATE},
+    Phase.INTEGRATED: _ALL,
+    Phase.APPROVED: _ALL,
 }
 
-# Faithful transcription of the settled phases' button enablement from
-# web/js/pool_state.js POOL_PHASES (visible AND enabled == actionable).
-# Kept as (visible, enabled) pairs so LEGAL_ACTIONS is DERIVED, not hand-typed
-# — the derivation is what test_legal_actions_derivation pins. Transient
-# phases are intentionally absent. Update this map when POOL_PHASES changes,
-# then the derived table + its test move together.
-_PHASE_BUTTON_STATE: dict[Phase, dict[str, tuple[bool, bool]]] = {
-    Phase.EMPTY: {
-        "btn-validate": (True, False),
-        "btn-integrate": (True, False),
-        "btn-approve-pool": (True, False),
-        "btn-reprocess-pool": (False, False),
-        "btn-reset-pool": (True, False),
-        "btn-clear-files": (False, False),
-    },
-    Phase.UPLOADED: {
-        "btn-validate": (True, True),
-        "btn-integrate": (True, False),
-        "btn-approve-pool": (True, False),
-        "btn-reprocess-pool": (False, False),
-        "btn-reset-pool": (True, False),
-        "btn-clear-files": (True, True),
-    },
-    Phase.VALIDATION_ERRORS: {
-        "btn-validate": (True, True),
-        "btn-integrate": (True, False),
-        "btn-approve-pool": (True, False),
-        "btn-reprocess-pool": (False, False),
-        "btn-reset-pool": (True, True),
-        "btn-clear-files": (False, False),
-    },
-    Phase.VALIDATED: {
-        "btn-validate": (True, False),
-        "btn-integrate": (True, True),
-        "btn-approve-pool": (True, False),
-        "btn-reprocess-pool": (False, False),
-        "btn-reset-pool": (True, True),
-        "btn-clear-files": (False, False),
-    },
-    Phase.INTEGRATED: {
-        "btn-validate": (True, True),
-        "btn-integrate": (True, False),
-        "btn-approve-pool": (True, True),
-        "btn-reprocess-pool": (True, True),
-        "btn-reset-pool": (True, True),
-        "btn-clear-files": (False, False),
-    },
-    Phase.APPROVED: {
-        "btn-validate": (True, False),
-        "btn-integrate": (True, False),
-        "btn-approve-pool": (True, False),
-        "btn-reprocess-pool": (True, True),
-        "btn-reset-pool": (True, True),
-        "btn-clear-files": (False, False),
-    },
+# The act that moves each phase forward, as data, so a refusal and the
+# interface's "next step" read one table. INTEGRATED and APPROVED have none:
+# everything is legal there.
+NEXT_STEP: dict[Phase, Action] = {
+    Phase.EMPTY: Action.ADD_FILES,
+    Phase.UPLOADED: Action.VALIDATE,
+    Phase.VALIDATION_ERRORS: Action.VALIDATE,   # after fixing what the check lists
+    Phase.VALIDATED: Action.INTEGRATE,
 }
-
-
-def _derive_legal_actions() -> dict[Phase, frozenset[Action]]:
-    """An action is legal in a phase iff its button is visible AND enabled."""
-    table: dict[Phase, frozenset[Action]] = {}
-    for phase, buttons in _PHASE_BUTTON_STATE.items():
-        legal = {
-            _BUTTON_ACTIONS[bid]
-            for bid, (visible, enabled) in buttons.items()
-            if visible and enabled and bid in _BUTTON_ACTIONS
-        }
-        table[phase] = frozenset(legal)
-    return table
-
-
-LEGAL_ACTIONS: dict[Phase, frozenset[Action]] = _derive_legal_actions()
 
 
 def is_legal(phase, action) -> bool:

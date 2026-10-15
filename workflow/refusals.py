@@ -26,7 +26,10 @@ notebook explain a refusal the same way:
 The refusals the backend raises today carry no code, so most are recognised by
 their message (``_MESSAGE_RULES``, quoted from the Gate 0 analyses: data §3.1,
 Process §6.1, document §9.1). An exception that carries a ``code`` attribute
-naming a listed code (the phase guard of C1, say) is taken at its word.
+naming a listed code (the phase guard of C1, say) is taken at its word, and so
+are the ``say``, ``fix`` and ``details`` it carries when it knows its own case
+better than the list (``workflow.errors.PhaseRefusal`` says, per phase, what to
+do next).
 """
 
 from __future__ import annotations
@@ -143,11 +146,21 @@ REFUSALS: dict[str, Refusal] = {
     "definition_pin_invalid": Refusal(400, (
         "A document definition can be pinned in two ways only: fixed (it stays as "
         "it is) or track (it follows the newest definition)."), "M5"),
-    # ── reserved for the phase guard (C1) ────────────────────────────────────
+    # ── the legal-action guard (C1). The exceptions (workflow.errors) carry
+    #    the say and fix of their own case; these are the fallbacks. ─────────
     "phase_not_allowed": Refusal(409, (
         "This step isn't available at the study's current stage. The details say "
         "which stage the study is at; do the step that comes before this one first."),
         None),
+    "validation_out_of_date": Refusal(409, (
+        "The file check is out of date: it no longer matches the study's files as the "
+        "server sees them now. This happens after the server restarts, or when files "
+        "change outside the app. Nothing was combined and nothing was changed. Run the "
+        "file check again, then Integrate."), "M2"),
+    "method_not_chosen": Refusal(409, (
+        "Choose the analysis method (the method profile) this study is reported under "
+        "before processing. Every statistic, benchmark dose and the Methods text depend "
+        "on it, so it is never chosen for you."), "M5"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "
@@ -225,6 +238,9 @@ def _details(exc: BaseException, code: str) -> dict:
                                for e in exc.errors()]}
         except Exception:  # noqa: BLE001 — details are a courtesy, never a second failure
             return {}
+    own = getattr(exc, "details", None)
+    if getattr(exc, "code", None) == code and isinstance(own, dict):
+        return dict(own)  # a refusal of the workflow's own says what to show
     if code == "phase_not_allowed":
         return {k: getattr(exc, k) for k in ("phase", "legal_actions") if hasattr(exc, k)}
     return {}
@@ -280,8 +296,14 @@ def explain(exc: BaseException) -> dict:
         status = refusal.status
     details = _details(exc, code)
     say = refusal.say.format_map(_Fields({**details, **{k: v for k, v in fields.items() if v}}))
+    fix = refusal.fix
+    if getattr(exc, "code", None) == code:
+        # A refusal that knows its own case (C1's phase guard: per phase) says so.
+        own_say, own_fix = getattr(exc, "say", None), getattr(exc, "fix", None)
+        say = own_say if isinstance(own_say, str) and own_say else say
+        fix = own_fix if isinstance(own_fix, str) and own_fix else fix
     message = _message(exc)
     if code == "unexpected" and not isinstance(getattr(exc, "message", None), str):
         message = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
     return {"error": {"code": code, "status": status, "message": message,
-                      "say": say, "fix": refusal.fix, "details": details}}
+                      "say": say, "fix": fix, "details": details}}

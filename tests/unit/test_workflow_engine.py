@@ -74,7 +74,7 @@ def _clean_report(coverage=None):
 def test_empty_when_no_files():
     st = WorkflowEngine("DTX", FakeStore(files=False)).state()
     assert st.phase is Phase.EMPTY
-    assert st.legal_actions == frozenset()
+    assert st.legal_actions == frozenset({Action.ADD_FILES})
 
 
 def test_uploaded_when_files_but_no_validation():

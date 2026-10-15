@@ -1,11 +1,12 @@
 """
-Unit test for the settled-phase Action model (ADR-0014, step 1).
+Unit test for the settled-phase Action model (ADR-0014, step 1; C1).
 
 Pins the LEGAL_ACTIONS table that UIs consume instead of re-deriving button
-enablement. The table is DERIVED from _PHASE_BUTTON_STATE (a faithful
-transcription of POOL_PHASES visible+enabled flags), so this test guards both
-the transcription and the derivation. Transient phases (VALIDATING/INTEGRATING/
-APPROVING) must NOT appear — they are per-UI async presentation states.
+enablement. Since C1 the table is the workflow's own declared table of acts
+(C1 spec §1), typed directly in workflow/phases.py and enforced by every
+mutating step; it is no longer a transcription of the old screen's buttons.
+Transient phases (VALIDATING/INTEGRATING/APPROVING) must NOT appear — they are
+per-UI async presentation states.
 """
 
 import pytest
@@ -18,16 +19,24 @@ from workflow.phases import (
     is_legal,
 )
 
-# Expected legal actions per settled phase, read straight off POOL_PHASES
-# (web/js/pool_state.js): an action is legal iff its button is visible AND enabled.
+# Expected legal actions per settled phase (C1 spec §1, signed 2026-10-15).
+_FILES = {Action.ADD_FILES, Action.REMOVE_FILE, Action.RESET, Action.VALIDATE}
+_CHOICES = {Action.RESOLVE, Action.CONFIRM_CLASSIFICATION}
 _EXPECTED = {
-    Phase.EMPTY: set(),
-    Phase.UPLOADED: {Action.VALIDATE, Action.CLEAR_FILES},
-    Phase.VALIDATION_ERRORS: {Action.VALIDATE, Action.RESET},
-    Phase.VALIDATED: {Action.INTEGRATE, Action.RESET},
-    Phase.INTEGRATED: {Action.VALIDATE, Action.APPROVE, Action.REPROCESS, Action.RESET},
-    Phase.APPROVED: {Action.REPROCESS, Action.RESET},
+    Phase.EMPTY: {Action.ADD_FILES},
+    Phase.UPLOADED: _FILES,
+    Phase.VALIDATION_ERRORS: _FILES | _CHOICES,
+    Phase.VALIDATED: _FILES | _CHOICES | {Action.INTEGRATE},
+    Phase.INTEGRATED: set(Action),
+    Phase.APPROVED: set(Action),
 }
+
+
+def test_the_ten_acts_by_their_wire_values():
+    # D3: REPROCESS is PROCESS (it is also the first Process); CLEAR_FILES is RESET.
+    assert {a.value for a in Action} == {
+        "ADD_FILES", "REMOVE_FILE", "RESET", "VALIDATE", "RESOLVE",
+        "CONFIRM_CLASSIFICATION", "INTEGRATE", "STATE_DATASET_FACTS", "APPROVE", "PROCESS"}
 
 
 def test_legal_actions_derivation():
@@ -63,7 +72,9 @@ def test_is_legal_accepts_enums_and_strings():
     assert is_legal(Phase.UPLOADED, Action.VALIDATE) is True
     assert is_legal("UPLOADED", "VALIDATE") is True
     assert is_legal("EMPTY", "VALIDATE") is False
-    assert is_legal("APPROVED", "REPROCESS") is True
+    assert is_legal("APPROVED", "PROCESS") is True
+    assert is_legal("INTEGRATED", "PROCESS") is True
+    assert is_legal("VALIDATED", "PROCESS") is False
 
 
 def test_unknown_phase_or_action_raises():
@@ -71,3 +82,15 @@ def test_unknown_phase_or_action_raises():
         is_legal("NOPE", "VALIDATE")
     with pytest.raises(ValueError):
         is_legal("UPLOADED", "NOPE")
+    with pytest.raises(ValueError):           # the retired wire values
+        is_legal("APPROVED", "REPROCESS")
+    with pytest.raises(ValueError):
+        is_legal("UPLOADED", "CLEAR_FILES")
+
+
+def test_next_step_names_a_legal_act_for_every_refusing_phase():
+    from workflow.phases import NEXT_STEP
+    assert set(NEXT_STEP) == {Phase.EMPTY, Phase.UPLOADED, Phase.VALIDATION_ERRORS,
+                              Phase.VALIDATED}
+    for phase, action in NEXT_STEP.items():
+        assert action in LEGAL_ACTIONS[phase], phase
