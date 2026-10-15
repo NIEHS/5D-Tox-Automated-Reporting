@@ -386,6 +386,43 @@ def discard(dtxsid: str, key: str, store: PoolStore, *, act: str, actor: str,
 
 
 # ---------------------------------------------------------------------------
+# The genomics narrative overrides (C2 §4.12; until C9 they are no section file)
+# ---------------------------------------------------------------------------
+
+def archive_genomics_overrides(dtxsid: str, organ: str, overrides: dict, *, act: str,
+                               actor: str, reason: str | None, sexes=None) -> list[dict]:
+    """Archive one organ's person-written genomics narrative (both kinds) to
+    ``history/genomics_<organ>_<sex>/`` for each sex the organ has (the
+    overrides are kept per organ, the sections per organ and sex; with no sexes
+    known, ``history/genomics_<organ>/``), and record a ``discard`` event, before
+    it is cleared or replaced. Returns one ``{key, archived, version}`` per
+    archive; [] when the organ has no override.
+    """
+    from pipeline.session_store import append_version_event, archive_document
+
+    organ_l = organ.lower()
+    held = {kind: paras for kind in ("gene_set", "gene_bmd")
+            for o, paras in (overrides.get(kind) or {}).items() if o.lower() == organ_l and paras}
+    if not held:
+        return []
+    out = []
+    # The overrides are per organ; the sections (and their histories) are per
+    # organ and sex. Without the sexes, the organ's history directory holds it.
+    for sex in (sexes or [None]):
+        key = f"genomics_{organ_l}_{sex}" if sex else f"genomics_{organ_l}"
+        content = {"genomics_narrative_override": held, "organ": organ_l, "source": "person"}
+        name, version = archive_document(dtxsid, key, content)
+        # The person's text leaves the live store (replaced by a save, cleared
+        # by a regenerate) and is kept here: a discard of that version.
+        line = event(key=key, cause="discard", status="discarded", act=act, actor=actor,
+                     author="person", prior_version=None, changed=False,
+                     chash=content_hash(content), reason=reason, extra={"archived": name})
+        append_version_event(dtxsid, key, version, line)
+        out.append({"key": key, "archived": name, "version": version})
+    return out
+
+
+# ---------------------------------------------------------------------------
 # History reads
 # ---------------------------------------------------------------------------
 
@@ -465,4 +502,5 @@ __all__ = [
     "validate_section_key", "section_key_patterns", "author_of", "version_status", "is_locked",
     "already_accepted",
     "event", "record", "require_reason", "HOLD", "REVIEW", "STATE_KEYS", "section_content",
+    "archive_genomics_overrides",
 ]

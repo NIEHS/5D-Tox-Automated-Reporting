@@ -720,6 +720,17 @@ async def api_session_load(dtxsid: Dtxsid):
 # Empty `paragraphs` on the request clears the override for that organ.
 # ---------------------------------------------------------------------------
 
+def _genomics_sexes(session_dir, organ: str) -> list[str]:
+    """The sexes the Process genomics cache has for an organ (its keys are
+    "<organ>_<sex>"), sorted; [] when there is no cache."""
+    path = latest_session_cache(session_dir, "_cache_genomics_*.json")
+    cache = read_json_file(path) if path else None
+    if not isinstance(cache, dict):
+        return []
+    return sorted({k.split("_", 1)[1].lower() for k in cache
+                   if "_" in k and k.split("_", 1)[0].lower() == organ.lower()})
+
+
 @router.post("/api/session/{dtxsid}/genomics-narrative-override")
 async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
     """
@@ -760,6 +771,13 @@ async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
     # override edits happen on explicit user action (Lock click).  An
     # unreadable store raises (422) instead of being replaced by this one edit.
     existing = read_narrative_overrides(session_dir)
+
+    # C2 §4.12: the person's text this write replaces is archived first (to
+    # history/genomics_<organ>/), so a later override or a regenerate never
+    # loses it.
+    from workflow.section_writes import archive_genomics_overrides
+    archive_genomics_overrides(dtxsid, organ, existing, act="save", actor="person",
+                               reason=None, sexes=_genomics_sexes(session_dir, organ))
 
     if paragraphs:
         existing[kind][organ] = [str(p) for p in paragraphs]
