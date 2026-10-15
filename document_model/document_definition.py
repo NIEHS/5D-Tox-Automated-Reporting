@@ -232,3 +232,81 @@ def definition_name(dtxsid: str) -> str:
 def packaging_of(raw) -> str:
     """A composed definition's packaging (chunked when it declares none)."""
     return (raw.get("packaging") if isinstance(raw, dict) else None) or "chunked"
+
+
+# ---------------------------------------------------------------------------
+# The formats' names (Q-M1-6, signed 2026-10-15)
+# ---------------------------------------------------------------------------
+
+# What each era is called where a person chooses or reads a study's format.
+# ``title`` is the full name, ``short`` fits a table cell, ``phrase`` is the
+# name inside a sentence ("… is written in <phrase>").  Declared here, beside
+# DEFAULT_DEFINITION, so no screen or route names a format itself.  An era
+# with no entry is named by its file (``era_title``), never guessed.
+ERA_TITLES: dict[str, dict[str, str]] = {
+    "eras/ntp-rr-2018": {
+        "title": "NTP Research Report, as published in December 2018 (RR-8)",
+        "short": "NTP Research Report, 2018",
+        "phrase": "the NTP Research Report as published in 2018",
+    },
+    "eras/niehs-2022": {
+        "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+        "short": "NIEHS Report, October 2022",
+        "phrase": "the NIEHS Report as published in October 2022",
+    },
+    "eras/niehs-2023": {
+        "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+        "short": "NIEHS Report, March 2023",
+        "phrase": "the NIEHS Report as published in March 2023",
+    },
+    "eras/niehs-2026": {
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "short": "NIEHS Report, 2026",
+        "phrase": "the NIEHS Report as published in 2026",
+    },
+}
+
+# What a definition may alter besides its structure (_DEFINITION_KEYS), in the
+# words a person reads ("… with its own series details").
+ALTERATION_WORDS: dict[str, str] = {
+    "packaging": "packaging",
+    "object_position": "placement of tables and figures",
+    "book_meta": "series details",
+    "phrasing": "wording",
+    "tissue_order": "order of tissues",
+    "abstract_genes": "naming of genes in the abstract",
+}
+
+
+def era_title(era: str | None) -> dict[str, str]:
+    """{title, short, phrase} of an era; an undeclared one is named by its file."""
+    if era in ERA_TITLES:
+        return dict(ERA_TITLES[era])
+    name = era or "an undeclared format"
+    return {"title": name, "short": name, "phrase": name}
+
+
+def definition_outline(name: str) -> dict:
+    """Where a definition stands among the declared formats, read from the
+    files without composing them: ``{era, changes, alters}``.
+
+    ``era`` is the first ``eras/…`` definition on its ``extends`` chain (the
+    name itself when it is one; None when the chain reaches no era).
+    ``changes`` counts the structural changes the definitions between it and
+    its era state; ``alters`` lists the other keys they set (book_meta, …),
+    in ALTERATION_WORDS order.  Cheap: one small YAML read per link."""
+    changes, alters = 0, []
+    seen: list[str] = []
+    current: str | None = name
+    while current and not current.startswith("eras/"):
+        if current in seen:
+            raise ValueError(f"definition {name!r}: extends cycle {' -> '.join((*seen, current))}")
+        seen.append(current)
+        raw = _read(current)
+        if not is_extension(raw):
+            return {"era": None, "changes": changes, "alters": alters}
+        changes += len(raw.get("changes") or [])
+        alters += [k for k in ALTERATION_WORDS if k in raw and k not in alters]
+        current = str(raw["extends"])
+    return {"era": current, "changes": changes,
+            "alters": [k for k in ALTERATION_WORDS if k in alters]}

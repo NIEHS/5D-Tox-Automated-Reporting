@@ -97,6 +97,12 @@ _data_uploads: dict[str, dict] = {}
 # code needs no import of the HTTP layer.
 _bm2_uploads: dict[str, dict] = {}
 
+# Maps csv_id (UUID string) -> {filename, temp_path, temp_dir, df} for uploaded
+# gene-level BMD CSVs.  Owned here for the same reason as _bm2_uploads (the
+# core forgets a deleted session's entries, forget_session); web_routes.
+# server_state re-exports this same dict.
+_csv_uploads: dict[str, dict] = {}
+
 
 # ---------------------------------------------------------------------------
 # Path + lazy-import helpers
@@ -138,3 +144,20 @@ def get_integrated_pool() -> dict[str, dict]:
 def get_data_uploads() -> dict[str, dict]:
     """Return the data uploads dict (file_id -> upload info)."""
     return _data_uploads
+
+
+def forget_session(dtxsid: str, session_files_dir: Path) -> None:
+    """Drop what this process holds in memory for a session whose folder was
+    deleted: its fingerprints and integrated project, and every upload entry
+    whose file lived under ``session_files_dir`` or no longer exists."""
+    import os
+
+    prefix = str(session_files_dir)
+    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
+        stale = [fid for fid, info in store.items()
+                 if str(info.get("temp_path", "")).startswith(prefix)
+                 or not os.path.exists(info.get("temp_path", ""))]
+        for fid in stale:
+            del store[fid]
+    _pool_fingerprints.pop(dtxsid, None)
+    _integrated_pool.pop(dtxsid, None)

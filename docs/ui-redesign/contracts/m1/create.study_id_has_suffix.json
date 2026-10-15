@@ -1,0 +1,38 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies",
+    "body": {
+      "dtxsid": "DTXSID50469320_v2",
+      "identity": {
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "pubchem_cid": 6623,
+        "source": {
+          "kind": "lookup",
+          "service": "PubChem",
+          "looked_up_at": "2026-10-15T20:10:51Z"
+        }
+      },
+      "confirmed": true,
+      "dtxsid_checked_by_person": false,
+      "format_seen": {
+        "definition": "eras/niehs-2026",
+        "hash": "cdbd602e773aee83"
+      }
+    }
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "study_id_has_suffix",
+      "status": 400,
+      "message": "study id 'DTXSID50469320_v2' must match ^DTXSID\\d+$",
+      "say": "A study's id is the DTXSID alone. Ids with a suffix (…_rat, …_published) are made by the system.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID50469320_v2"
+      }
+    }
+  }
+}

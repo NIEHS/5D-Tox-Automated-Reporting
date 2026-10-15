@@ -444,7 +444,10 @@ def test_a_single_study_has_no_members_key(session):
 
 def test_the_kind_of_session_and_its_relations(sessions_dir, session):
     assert study_state(ID)["kind"] == "study"
-    assert study_state(ID)["relations"] == {"parent": None, "twin": None}
+    assert study_state(ID)["relations"] == {"parent": None, "members": [], "companion": None,
+                                            "twin": None, "others": []}
+    assert study_state(ID)["chemical_dtxsid"] == ID
+    assert study_state(ID)["stands"]["say"] == "No files yet"
 
     (session / "studies.json").write_text(json.dumps({"rat": f"{ID}_rat"}))
     (sessions_dir / f"{ID}_rat").mkdir()

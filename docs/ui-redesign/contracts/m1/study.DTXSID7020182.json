@@ -1,0 +1,85 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID7020182"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID7020182",
+    "kind": "study",
+    "chemical_dtxsid": "DTXSID7020182",
+    "chemical_dtxsid_from": "id",
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "identity": {
+      "name": "Bisphenol A",
+      "casrn": "80-05-7",
+      "short_name": null,
+      "source": {
+        "kind": "lookup",
+        "service": "PubChem",
+        "confirmed_at": "2026-10-15T20:10:54Z"
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-15T20:10:54Z",
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026."
+    },
+    "published": null,
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the study has no report (it has not been processed)"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": null,
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

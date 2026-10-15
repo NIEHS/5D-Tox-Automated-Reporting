@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/chemicals/DTXSID7020182"
+  },
+  "status": 200,
+  "body": {
+    "dtxsid": "DTXSID7020182",
+    "identity": {
+      "name": "Bisphenol A",
+      "casrn": "80-05-7",
+      "pubchem_cid": 6623,
+      "molecular_formula": "C15H16O2",
+      "molecular_weight": 228.29,
+      "iupac_name": "4-[2-(4-hydroxyphenyl)propan-2-yl]phenol",
+      "inchikey": "IISBACLAFKSPIT-UHFFFAOYSA-N"
+    },
+    "dtxsid_matched": true,
+    "service": "PubChem",
+    "say_source": "Looked up in PubChem just now. The CompTox (CTX) lookup is not set up on this server.",
+    "structure_url": "/api/v2/chemicals/DTXSID7020182/structure.png",
+    "looked_up_at": "2026-10-15T20:10:51Z"
+  }
+}

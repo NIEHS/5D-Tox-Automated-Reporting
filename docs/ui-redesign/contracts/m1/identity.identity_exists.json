@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/v2/studies/DTXSID50469320/identity",
+    "body": {
+      "identity": {
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "pubchem_cid": 6623,
+        "source": {
+          "kind": "lookup"
+        }
+      },
+      "confirmed": true
+    }
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "identity_exists",
+      "status": 409,
+      "message": "DTXSID50469320/identity.json already names 'Perfluorohexanesulfonamide'",
+      "say": "This study already has its chemical's identity. Changing it is not done here.",
+      "fix": null,
+      "details": {}
+    }
+  }
+}

@@ -1825,6 +1825,8 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
     run_data + run_document; this function stays the single eager pass the route
     and the golden oracle drive, so the 12-key payload is unchanged.
     """
+    from workflow.studies import require_data_session
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
     _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
 
@@ -1886,6 +1888,8 @@ async def run_document(dtxsid: str, params: dict, store) -> dict:
     the seam the eager document_step is built on, and the future home of a lazy /
     on-demand content regeneration path.
     """
+    from workflow.studies import require_data_session
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
     _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
     try:

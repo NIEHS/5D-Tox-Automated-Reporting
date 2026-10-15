@@ -43,8 +43,9 @@ from pipeline.pool_globals import _bm2_uploads
 # ---------------------------------------------------------------------------
 # Maps csv_id (UUID string) → dict with filename, temp_path, and parsed DataFrame.
 # Used for gene-level BMD CSV uploads (transcriptomic data for the Gene Set
-# and Gene BMD Analysis report sections).
-_csv_uploads: dict[str, dict] = {}
+# and Gene BMD Analysis report sections).  Owned by pipeline.pool_globals (the
+# core forgets a deleted session's entries); this is the same dict object.
+from pipeline.pool_globals import _csv_uploads
 
 
 # ---------------------------------------------------------------------------
