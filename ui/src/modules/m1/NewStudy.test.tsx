@@ -254,6 +254,56 @@ describe('S2 step 3: created', () => {
     expect(src).toHaveTextContent(`Confirmed by a person from a PubChem lookup on ${today}.`)
   })
 
+  it('F9: Back from the success view goes to the studies list; the filled-in form can\'t be reached again, and nothing is sent twice', async () => {
+    let posts = 0
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') posts++
+    })
+    try {
+      const { user, router } = await toStep2('DTXSID7020182')
+      await user.click(await screen.findByRole('checkbox', { name: /I checked the DTXSID/ }))
+      await user.click(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ }))
+      await user.click(screen.getByRole('button', { name: 'Create study' }))
+      expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/studies/new')
+      expect(router.state.location.search).toBe('?created=DTXSID7020182')
+
+      await act(() => router.navigate(-1))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/studies'))
+      expect(await screen.findByRole('heading', { name: 'Studies' })).toBeInTheDocument()
+      // the form's place was taken by the list: one more Back reaches no form
+      await act(() => router.navigate(-1))
+      expect(router.state.location.pathname).toBe('/studies')
+      expect(screen.queryByRole('textbox', { name: "The chemical's DTXSID" })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Create study' })).not.toBeInTheDocument()
+
+      // Forward returns to the success view, read from the backend; still no second create
+      await act(() => router.navigate(1))
+      expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(posts).toBe(1)
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('F9: the success view\'s address, opened afresh (a reload), shows the study as the backend serves it, never the form', async () => {
+    const check = (await (await fetch('/api/v2/studies/DTXSID7020182/creation-check')).json()) as { format: { definition: string; hash: string } }
+    const made = await fetch('/api/v2/studies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dtxsid: 'DTXSID7020182',
+        identity: { name: 'Bisphenol A', casrn: '80-05-7', pubchem_cid: 6623, source: { kind: 'lookup', service: 'PubChem', looked_up_at: 'x' } },
+        confirmed: true, dtxsid_checked_by_person: true, format_seen: check.format,
+      }),
+    })
+    expect(made.status).toBe(201)
+    renderApp('/studies/new?created=DTXSID7020182')
+    expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+    expect(screen.getByText(/It will be written in NIEHS Report, as published in 2026/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: "The chemical's DTXSID" })).not.toBeInTheDocument()
+  })
+
   it('AC26: two tabs at step 2 for the same id: the second create is refused with Open it; one study exists', async () => {
     // tab 1 creates the study while tab 2 sits at step 2
     const tab2 = await toStep2('DTXSID7020182')
