@@ -156,6 +156,8 @@ def test_use_run_over_an_approved_summary_is_refused(client, study, monkeypatch)
 def test_pool_reset_archives_each_section_before_deleting_it(client, study):
     _seed(study, "bm2_body-weight", tables_json={"rows": [1]}, approved=True)
     _seed(study, "summary", paragraphs=["s"])
+    (study / "files").mkdir()
+    (study / "files" / "a.txt").write_text("x")       # RESET is a file act (C1)
     r = client.post(f"/api/pool/reset/{ID}")
     assert r.status_code == 200
     assert not (study / "bm2_body-weight.json").exists() and not (study / "summary.json").exists()

@@ -543,8 +543,7 @@ def test_i5_a_warm_materialize_with_nothing_changed_touches_no_file(sessions_dir
     from workflow.steps import accept_section_step, materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_I5"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir, "DTXSID_I5")
     _seed_two(d, [1])
     store = DiskPoolStore()
     first = materialize_result_sections("DTXSID_I5", store)
@@ -570,8 +569,7 @@ def test_t2_changed_numbers_under_an_approval_are_knocked_down_with_a_record(ses
     from workflow.steps import accept_section_step, materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_T2"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir, "DTXSID_T2")
     _seed_two(d, [1])
     store = DiskPoolStore()
     materialize_result_sections("DTXSID_T2", store)
@@ -600,8 +598,7 @@ def test_an_unowned_section_whose_numbers_changed_is_archived_and_rewritten(sess
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_UN"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir, "DTXSID_UN")
     _seed_two(d, [1])
     materialize_result_sections("DTXSID_UN", DiskPoolStore())
     _seed_two(d, [2])
@@ -630,6 +627,7 @@ def test_t4_materialize_summary_holds_a_released_protected_summary(sessions_dir,
     )
     from workflow.store import DiskPoolStore
 
+    _integrated_session(sessions_dir, "DTXSID_T4")
     store = DiskPoolStore()
     _summary_inputs_patch(monkeypatch, ["first"])
     assert materialize_summary("DTXSID_T4", store)["written"] is True
@@ -652,6 +650,7 @@ def test_materialize_summary_with_nothing_new_writes_nothing(sessions_dir, monke
     from workflow.steps import materialize_summary
     from workflow.store import DiskPoolStore
 
+    _integrated_session(sessions_dir, "DTXSID_SU")
     _summary_inputs_patch(monkeypatch, ["same"])
     materialize_summary("DTXSID_SU", DiskPoolStore())
     p = sessions_dir / "DTXSID_SU" / "summary.json"
@@ -667,8 +666,7 @@ def test_materialize_summary_leaves_a_summary_it_did_not_write(sessions_dir, mon
     from workflow.steps import materialize_summary
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTXSID_SM"
-    d.mkdir(parents=True)
+    d = _integrated_session(sessions_dir, "DTXSID_SM")
     (d / "summary.json").write_text(json.dumps({"paragraphs": ["model"], "source": "model",
                                                 "version": 1}))
     _summary_inputs_patch(monkeypatch, ["generated"])

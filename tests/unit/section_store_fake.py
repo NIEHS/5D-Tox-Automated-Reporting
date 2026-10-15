@@ -25,16 +25,31 @@ class FakeSectionStore:
         self.deleted: list[str] = []
         self._clock = 0
 
+    # --- what the phase guard reads (C1): an INTEGRATED study, so Process
+    # is legal — files, a clean validation report and integrated.json.
+    _DOCS = {"validation_report.json": {"issues": [], "coverage_matrix": {}}}
+    _PRESENT = {"integrated.json"}
+
+    def has_files(self, dtxsid):
+        return True
+
+    def has_stale_sections(self, dtxsid):
+        return False
+
     # --- the parts of PoolStore the section code uses -------------------
     def session_dir(self, dtxsid):
         return Path("/nonexistent-fake") / dtxsid
 
     def read_json(self, dtxsid, name):
+        if name in self._DOCS:
+            return copy.deepcopy(self._DOCS[name])
         key = name[:-5] if name.endswith(".json") else name
         data = self.sections.get(key)
         return copy.deepcopy(data) if data is not None else None
 
     def artifact_exists(self, dtxsid, name):
+        if name in self._PRESENT:
+            return True
         key = name[:-5] if name.endswith(".json") else name
         return key in self.sections
 
