@@ -512,7 +512,8 @@ export interface StudyRow {
   stands: Stands
   processed: boolean
   last_changed: string | null
-  format: FormatSummary
+  /** null when the backend could not read the session's format; `notes` then says why (spec §3 S1) */
+  format: FormatSummary | null
   published: PublishedReport | null
   bookshelf: Bookshelf
   relations: StudyRelations
@@ -539,6 +540,20 @@ export interface StudiesList {
   generated_at: string
 }
 
+/**
+ * A report's member whose folder is absent (the backend's stub,
+ * `workflow/studies.py` study_detail): no `stands`, no `relations`.
+ */
+export interface MissingMember {
+  id: string
+  key: string
+  exists: false
+}
+
+export function isMissingMember(m: StudyRow | MissingMember): m is MissingMember {
+  return 'exists' in m && m.exists === false
+}
+
 export interface StudyBanner {
   level: 'info' | 'warning' | (string & {})
   say: string
@@ -549,9 +564,10 @@ export interface StudyBanner {
 export interface StudyDetail extends StudyRow {
   detail: {
     banner: StudyBanner | null
-    format: FormatDetail
-    /** only for a report over several studies */
-    members?: StudyRow[]
+    /** null when the backend could not read the session's format; `notes` then says why */
+    format: FormatDetail | null
+    /** only for a report over several studies; a member whose folder is absent is a stub */
+    members?: (StudyRow | MissingMember)[]
   }
 }
 

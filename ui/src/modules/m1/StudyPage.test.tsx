@@ -1,12 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
+import { M1_DETAILS, STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
+import type { StudyDetail } from '../../api/types'
 import { emptyM1Db, removeMockStudy, touchMockStudy } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
 import { running } from '../../api/mocks/runs'
 import { renderApp } from '../../test/render'
-import { openStudyPage } from './testing'
+import { DAMAGED_NOTE, openStudyPage } from './testing'
 
 /** The study's pages: in a drawer on a narrow window (jsdom's). */
 async function studyMenu(user: ReturnType<typeof renderApp>['user']) {
@@ -92,6 +93,36 @@ describe('S3 the study page', () => {
     expect(menu.queryByRole('link', { name: 'Study files' })).not.toBeInTheDocument()
     expect(menu.queryByRole('link', { name: 'Process' })).not.toBeInTheDocument()
     expect(menu.getByRole('link', { name: 'Review the report' })).toBeInTheDocument()
+  })
+
+  it('review 1 (spec S1/S3): a study whose format could not be read still opens: the note, and "[format pending]" in the format card', async () => {
+    const d = structuredClone(M1_DETAILS['DTXSID5032498']!) as StudyDetail
+    d.format = null
+    d.detail.format = null
+    d.notes = [DAMAGED_NOTE('DTXSID5032498')]
+    server.use(http.get('/api/v2/studies/DTXSID5032498', () => HttpResponse.json(d)))
+    await openStudyPage('DTXSID5032498')
+    const card = screen.getByTestId('format-card')
+    expect(within(card).getByRole('button', { name: 'format is missing; show why' })).toHaveTextContent('[format pending]')
+    expect(within(card).getByTestId('format-unread')).toHaveTextContent('The report format could not be read')
+    // the page's note says why, and the rest of the page is there
+    expect(screen.getAllByRole('alert').some((a) => a.textContent?.includes(DAMAGED_NOTE('DTXSID5032498').say))).toBe(true)
+    expect(screen.getByTestId('chemical')).toBeInTheDocument()
+    expect(screen.getByTestId('delete-card')).toBeInTheDocument()
+  })
+
+  it('review 2: a report whose member folder is missing still opens; the member says it is missing, with no Open', async () => {
+    const d = structuredClone(M1_DETAILS['DTXSID1020431']!) as StudyDetail
+    d.detail.members = d.detail.members!.map((m) => (m.id === 'DTXSID1020431_mouse' ? { id: m.id, key: 'mouse', exists: false as const } : m))
+    server.use(http.get('/api/v2/studies/DTXSID1020431', () => HttpResponse.json(d)))
+    await openStudyPage('DTXSID1020431')
+    const members = screen.getByTestId('members')
+    const mouse = within(members).getByText('DTXSID1020431_mouse').closest('tr') as HTMLElement
+    expect(mouse).toHaveTextContent("Missing: this study's folder is not in the store.")
+    expect(within(mouse).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(mouse).queryByRole('button', { name: 'Open' })).not.toBeInTheDocument()
+    const rat = within(members).getByText('DTXSID1020431_rat').closest('tr') as HTMLElement
+    expect(within(rat).getByRole('link', { name: 'Open DTXSID1020431_rat' })).toBeInTheDocument()
   })
 
   it('AC31: a missing short name is pending, linking to Study facts', async () => {

@@ -237,7 +237,7 @@ function previewFor(id: string): DeletePreview {
       ),
       keeps: [
         { what: 'output', say: `The deliverables already written to output/${id}/` },
-        ...(d.format.source === 'study' ? [{ what: 'study_definition', say: `The study definition under templates/studies/${id}/ (not part of the study)` }] : []),
+        ...(d.format?.source === 'study' ? [{ what: 'study_definition', say: `The study definition under templates/studies/${id}/ (not part of the study)` }] : []),
         ...companion,
         ...others,
       ],

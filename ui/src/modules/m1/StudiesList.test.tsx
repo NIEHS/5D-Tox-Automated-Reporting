@@ -2,10 +2,11 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { M1_STUDIES } from '../../api/mocks/fixtures'
+import type { StudiesList } from '../../api/types'
 import { emptyM1Db } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
 import { renderApp } from '../../test/render'
-import { expand, openList, queryRow, row } from './testing'
+import { DAMAGED_NOTE, expand, openList, queryRow, row } from './testing'
 
 /** S1 Studies list: M1 spec §12 criteria 1, 3–11 (2 needs the real backend). */
 
@@ -142,6 +143,23 @@ describe('S1 the studies list', () => {
     expect(f).toHaveTextContent('NIEHS-10 · 2023 Mar')
     await user.hover(f)
     expect(await screen.findByText(/This chemical has a published report, NIEHS-10/)).toBeInTheDocument()
+  })
+
+  it('review 1 (spec S1): a session whose format the backend could not read still lists: "[format pending]" with the note, and the warning icon', async () => {
+    const list = structuredClone(M1_STUDIES) as StudiesList
+    const triclosan = list.chemicals.find((c) => c.dtxsid === 'DTXSID5032498')!.sessions[0]!
+    triclosan.format = null
+    triclosan.notes = [DAMAGED_NOTE('DTXSID5032498')]
+    server.use(http.get('/api/v2/studies', () => HttpResponse.json(list)))
+    const { user } = await openList()
+    const r = row('chem:DTXSID5032498')
+    const pending = within(within(r).getByTestId('format')).getByRole('button', { name: 'format is missing; show why' })
+    expect(pending).toHaveTextContent('[format pending]')
+    expect(within(r).getByLabelText(/^Note: One of this study's saved files is damaged/)).toBeInTheDocument()
+    await user.click(pending)
+    expect(await screen.findByText(DAMAGED_NOTE('DTXSID5032498').say)).toBeInTheDocument()
+    // the other rows are unaffected
+    expect(within(row('chem:DTXSID50469320')).getByTestId('format')).toHaveTextContent('NIEHS Report, March 2023')
   })
 
   it('explains a list that cannot be read, in plain words', async () => {

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Descriptions, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import { Link, useNavigate, useParams } from 'react-router'
 import { deleteStudy, getDeleteDryRun } from '../../api/m1'
-import type { ExistingStudyState, StudyDetail, StudyRow } from '../../api/types'
+import { isMissingMember, type ExistingStudyState, type MissingMember, type StudyDetail, type StudyRow } from '../../api/types'
 import { ConfirmAct } from '../../kit/ConfirmAct'
 import { formatClock } from '../../kit/elapsed'
 import { moduleById, moduleRoute, studyRoute } from '../../kit/modules'
@@ -15,7 +15,7 @@ import { StudyWorkflowPanels } from '../../shell/StudyOverview'
 import { IdentityLookup } from './IdentityLookup'
 import { NoSuchStudy } from './NoSuchStudy'
 import { STUDIES_KEY, useStudyDetail } from './queries'
-import { BookshelfLink, NextLink } from './StudiesList'
+import { BookshelfLink, NextLink, formatUnreadSay } from './StudiesList'
 import { KIND_COLOURS, appPath, dayOf, formatSourceSay, identitySourceSay, kindLabel } from './words'
 
 /**
@@ -82,9 +82,12 @@ function Banner({ d }: { d: StudyDetail }) {
   )
 }
 
-function MembersTable({ members }: { members: StudyRow[] }) {
+/** A member study whose folder is not in the store: said plainly, never opened. */
+export const MISSING_MEMBER_SAY = "Missing: this study's folder is not in the store."
+
+function MembersTable({ members }: { members: (StudyRow | MissingMember)[] }) {
   return (
-    <Table<StudyRow>
+    <Table<StudyRow | MissingMember>
       aria-label="The studies in this report"
       data-testid="members"
       size="small"
@@ -96,21 +99,27 @@ function MembersTable({ members }: { members: StudyRow[] }) {
         {
           title: 'Where it stands',
           key: 'stands',
-          render: (_, m) => (
-            <Space orientation="vertical" size={2}>
-              <PhaseTag phase={m.stands.phase} say={m.stands.say} />
-              <NextLink s={m} />
-            </Space>
-          ),
+          render: (_, m) =>
+            isMissingMember(m) ? (
+              <Typography.Text type="danger" data-testid="member-missing">
+                {MISSING_MEMBER_SAY}
+              </Typography.Text>
+            ) : (
+              <Space orientation="vertical" size={2}>
+                <PhaseTag phase={m.stands.phase} say={m.stands.say} />
+                <NextLink s={m} />
+              </Space>
+            ),
         },
         {
           title: '',
           key: 'open',
-          render: (_, m) => (
-            <Link to={studyRoute(m.id)} aria-label={`Open ${m.id}`}>
-              <Button size="small">Open</Button>
-            </Link>
-          ),
+          render: (_, m) =>
+            isMissingMember(m) ? null : (
+              <Link to={studyRoute(m.id)} aria-label={`Open ${m.id}`}>
+                <Button size="small">Open</Button>
+              </Link>
+            ),
         },
       ]}
     />
@@ -205,6 +214,19 @@ function ChemicalCard({ d, state }: { d: StudyDetail; state: ExistingStudyState 
 
 function FormatCard({ d, state }: { d: StudyDetail; state: ExistingStudyState | null }) {
   const f = d.detail.format
+  if (!f) {
+    // the backend could not read the format (a damaged file): say so, never guess one
+    return (
+      <Card title="Report format" size="small" data-testid="format-card">
+        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+          <Pending label="format" cause={formatUnreadSay(d)} />
+          <Typography.Text type="secondary" data-testid="format-unread">
+            The report format could not be read, so none is shown. The warning at the top of the page says why.
+          </Typography.Text>
+        </Space>
+      </Card>
+    )
+  }
   const pin = state?.pins.definition
   const m5 = moduleById('M5')
   const m5To = moduleRoute('M5', d.id)

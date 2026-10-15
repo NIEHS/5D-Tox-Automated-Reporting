@@ -85,8 +85,26 @@ function SessionCell({ r, expanded }: { r: ListRow; expanded: boolean }) {
   )
 }
 
+/** Why the format could not be read: the backend's note, or plain words when it sent none. */
+export function formatUnreadSay(s: StudyRow): string {
+  const note = s.notes.find((n) => n.code === 'damaged_session_file') ?? s.notes.find((n) => n.level === 'error')
+  return note?.say ?? "The report format of this session could not be read."
+}
+
 function FormatCell({ s }: { s: StudyRow }) {
   const pub = s.published ? publishedLabel(s.published) : null
+  if (!s.format) {
+    return (
+      <Space size={4} wrap data-testid="format">
+        <Pending label="format" cause={formatUnreadSay(s)} to={studyRoute(s.id)} toLabel="Open the study" />
+        {pub && (
+          <Tag color="gold">
+            {pub.report} · {pub.when ?? '[publication date pending]'}
+          </Tag>
+        )}
+      </Space>
+    )
+  }
   return (
     <Popover content={<Typography.Paragraph style={{ maxWidth: 360, margin: 0 }}>{s.format.say}</Typography.Paragraph>} title={s.format.title}>
       <Space size={4} wrap style={{ cursor: 'help' }} data-testid="format">
