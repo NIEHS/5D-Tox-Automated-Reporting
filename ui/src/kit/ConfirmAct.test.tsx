@@ -39,7 +39,8 @@ describe('<ConfirmAct>, irreversible', () => {
     for (const x of DRY_RUN_RESET.deletes) expect(d.getByText(x.say as string, { exact: false })).toBeInTheDocument()
     for (const x of DRY_RUN_RESET.keeps) expect(d.getByText(x.say as string, { exact: false })).toBeInTheDocument()
     expect(d.getByText(/These 4 approvals will be lost/)).toBeInTheDocument()
-    for (const k of DRY_RUN_RESET.approvals_lost) expect(d.getByText(k)).toBeInTheDocument()
+    // by the section's title, read from the study's state
+    for (const t of ['Body Weight', 'Clinical Chemistry', 'Hematology', 'Organ Weight']) expect(d.getByText(t)).toBeInTheDocument()
     expect(d.getByText(/about 5 minutes/)).toBeInTheDocument()
 
     const ok = d.getByRole('button', { name: 'Start over' })
@@ -50,7 +51,7 @@ describe('<ConfirmAct>, irreversible', () => {
     await user.type(d.getByLabelText('Type the study id to confirm'), '0')
     expect(ok).toBeEnabled()
     await user.click(ok)
-    await waitFor(() => expect(perform).toHaveBeenCalledWith({}))
+    await waitFor(() => expect(perform).toHaveBeenCalledWith({ typedId: ID }))
   })
 
   it('does nothing when cancelled', async () => {
@@ -164,5 +165,47 @@ describe('<ConfirmAct>, the dry run', () => {
     setup({ dry: DRY_RUN_RESET, disabled: true, disabledReason: 'Start over is not possible while the study is being processed.' })
     expect(screen.getByRole('button', { name: 'Start over' })).toBeDisabled()
     expect(screen.getByText(/not possible while the study is being processed/)).toBeInTheDocument()
+  })
+})
+
+describe('<ConfirmAct>, a dry run with a preview token (M1 R4)', () => {
+  const dry: DryRun = { ...DRY_RUN_RESET, preview_token: 'sha256:aaa', type_to_confirm: ID }
+
+  it('sends the token and the typed id, and accepts the id with spaces around it but not in another case', async () => {
+    const { user, perform } = setup({ dry })
+    await user.click(screen.getByRole('button', { name: 'Start over' }))
+    const d = await dialog()
+    const ok = d.getByRole('button', { name: 'Start over' })
+    await user.type(d.getByLabelText('Type the study id to confirm'), ID.toLowerCase())
+    expect(ok).toBeDisabled()
+    await user.clear(d.getByLabelText('Type the study id to confirm'))
+    await user.type(d.getByLabelText('Type the study id to confirm'), `  ${ID} `)
+    expect(ok).toBeEnabled()
+    await user.click(ok)
+    await waitFor(() => expect(perform).toHaveBeenCalledWith({ previewToken: 'sha256:aaa', typedId: ID }))
+  })
+
+  it('reads the dry run again when the study changed after the review, clears the id and says why', async () => {
+    const changed = new ApiError({
+      code: 'changed_since_preview', status: 409, message: 'token mismatch',
+      say: 'The study changed after you reviewed what would be deleted. Nothing was deleted; review the list again.', fix: null,
+    })
+    const perform = vi.fn<(i: unknown) => Promise<unknown>>().mockRejectedValueOnce(changed).mockResolvedValueOnce({ ok: true })
+    const second: DryRun = { ...dry, preview_token: 'sha256:bbb', deletes: [...dry.deletes, { what: 'files/new.csv', say: 'a file brought in since' }] }
+    const loadDryRun = vi.fn<() => Promise<DryRun>>().mockResolvedValueOnce(dry).mockResolvedValueOnce(second)
+    const { user } = renderWithApp(<ConfirmAct studyId={ID} act="reset_pool" label="Start over" perform={perform} loadDryRun={loadDryRun} />)
+    await user.click(screen.getByRole('button', { name: 'Start over' }))
+    let d = await dialog()
+    await user.type(d.getByLabelText('Type the study id to confirm'), ID)
+    await user.click(d.getByRole('button', { name: 'Start over' }))
+    d = await dialog()
+    expect(await d.findByText('The study changed while this was open. Review what this will do again.')).toBeInTheDocument()
+    expect(d.getByText(/a file brought in since/)).toBeInTheDocument()
+    expect(d.getByLabelText('Type the study id to confirm')).toHaveValue('')
+    expect(d.getByRole('button', { name: 'Start over' })).toBeDisabled()
+    expect(loadDryRun).toHaveBeenCalledTimes(2)
+    await user.type(d.getByLabelText('Type the study id to confirm'), ID)
+    await user.click(d.getByRole('button', { name: 'Start over' }))
+    await waitFor(() => expect(perform).toHaveBeenLastCalledWith({ previewToken: 'sha256:bbb', typedId: ID }))
   })
 })

@@ -1,0 +1,15 @@
+{
+  "status": 404,
+  "body": {
+    "error": {
+      "code": "identity_not_found",
+      "status": 404,
+      "message": "PubChem lookup failed for name 'DTXSID0000000001'",
+      "say": "PubChem has no chemical with the DTXSID DTXSID0000000001. A single mistyped digit gives another chemical or none. Check the id on the CompTox dashboard.",
+      "fix": null,
+      "details": {
+        "service": "PubChem"
+      }
+    }
+  }
+}

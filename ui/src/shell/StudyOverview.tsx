@@ -1,17 +1,18 @@
 import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
-import { Link, useParams } from 'react-router'
+import { Link } from 'react-router'
 import type { Action, ExistingStudyState, Readiness } from '../api/types'
 import { ItemList } from '../kit/ItemList'
 import { PublishReadiness } from '../kit/PublishReadiness'
 import { moduleById, moduleRoute } from '../kit/modules'
-import { useStudyState } from '../kit/useStudyState'
 import { ACTION_ORDER, ACTION_WORDS, phaseWords } from '../kit/words'
 import { nextStepOf } from './nextStep'
 
 /**
- * A study's first page: every step of the data workflow, the ones the
- * backend allows now as links, every other one visibly unavailable with the
- * reason; then what needs attention, as the backend's readiness lists it.
+ * The workflow panels of a study's landing page (M1's S3 shows them under
+ * its own cards): every step of the data workflow, the ones the backend
+ * allows now as links, every other one visibly unavailable with the reason;
+ * then what needs attention, as the backend's readiness lists it, and the
+ * analysis method.
  */
 
 function actionLabel(a: Action, state: ExistingStudyState): string {
@@ -107,10 +108,8 @@ function ReadinessCard({ title, readiness, studyId, emptySay }: { title: string;
   )
 }
 
-export function StudyOverview() {
-  const { id = '' } = useParams()
-  const { data } = useStudyState(id)
-  if (!data || !data.exists) return null
+export function StudyWorkflowPanels({ state: data, showDefinition = true }: { state: ExistingStudyState; showDefinition?: boolean }) {
+  const id = data.id
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {data.kind === 'companion' ? null : data.kind === 'report' ? (
@@ -135,20 +134,20 @@ export function StudyOverview() {
         </Card>
       )}
       {/* Published content is never processed: no method or definition to choose. */}
-      {data.kind !== 'companion' && <PinsCard state={data} />}
+      {data.kind !== 'companion' && <PinsCard state={data} showDefinition={showDefinition} />}
     </Space>
   )
 }
 
 /** The method and the report definition, as the backend reports them: never a silent default. */
-function PinsCard({ state }: { state: ExistingStudyState }) {
+function PinsCard({ state, showDefinition }: { state: ExistingStudyState; showDefinition: boolean }) {
   const method = state.pins.method
-  const definition = state.pins.definition
+  const definition = showDefinition ? state.pins.definition : undefined
   if (!method && !definition) return null
   const m5 = moduleById('M5')
   const to = moduleRoute('M5', state.id)
   return (
-    <Card title="Method and report definition" size="small" extra={m5 && to ? <Link to={to}>Go to {m5.title}</Link> : null}>
+    <Card title={definition ? 'Method and report definition' : 'Analysis method'} size="small" extra={m5 && to ? <Link to={to}>Go to {m5.title}</Link> : null}>
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {method && (
           <div data-testid="pin-method">

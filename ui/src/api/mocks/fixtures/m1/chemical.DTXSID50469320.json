@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "body": {
+    "dtxsid": "DTXSID50469320",
+    "identity": {
+      "name": "Perfluorohexanesulfonamide",
+      "casrn": "41997-13-1",
+      "pubchem_cid": 11603678,
+      "molecular_formula": "C6H2F13NO2S",
+      "molecular_weight": 399.13,
+      "iupac_name": "1,1,2,2,3,3,4,4,5,5,6,6,6-tridecafluorohexane-1-sulfonamide",
+      "inchikey": "WDZLGCSJJWEQJO-UHFFFAOYSA-N"
+    },
+    "dtxsid_matched": true,
+    "service": "PubChem",
+    "say_source": "Looked up in PubChem just now. The CompTox (CTX) lookup is not set up on this server.",
+    "structure_url": "/api/v2/chemicals/DTXSID50469320/structure.png",
+    "looked_up_at": "2026-10-14T13:01:52Z"
+  }
+}

@@ -1,8 +1,8 @@
 import { CheckCircleFilled } from '@ant-design/icons'
-import { Input, Space, Typography, type InputProps } from 'antd'
+import { Button, Input, Space, Typography, type InputProps } from 'antd'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { IdKind } from '../api/types'
-import { ID_LABELS, checkId, type IdCheck } from './checkId'
+import { ID_LABELS, checkId, dtxsidsIn, isDtxsidKind, type IdCheck } from './checkId'
 import { useVocabularies } from './useVocabularies'
 
 /**
@@ -13,6 +13,11 @@ import { useVocabularies } from './useVocabularies'
  * `onCheck` reports whether the value is good, so the screen can keep its
  * "save" closed until it is. An id that cannot be checked (the rule did not
  * load) is never reported good.
+ *
+ * A DTXSID (kinds `dtxsid` and `study_id`) is made upper case as it is typed,
+ * visibly in the field. Pasted text loses its spaces at either end. When
+ * pasted text holds exactly one DTXSID but is not one (a CompTox address),
+ * the field offers "Use DTXSID…?"; it is never filled without that click.
  */
 
 export interface IdFieldProps {
@@ -23,13 +28,17 @@ export interface IdFieldProps {
   label?: string
   id?: string
   disabled?: boolean
-  inputProps?: Omit<InputProps, 'value' | 'onChange' | 'status' | 'disabled'>
+  onBlur?: () => void
+  inputProps?: Omit<InputProps, 'value' | 'onChange' | 'status' | 'disabled' | 'onBlur' | 'onPaste'>
 }
 
-export function IdField({ kind, value = '', onChange, onCheck, label, id, disabled, inputProps }: IdFieldProps) {
+export function IdField({ kind, value = '', onChange, onCheck, label, id, disabled, onBlur, inputProps }: IdFieldProps) {
   const { data, isPending } = useVocabularies()
   const helpId = useId()
   const [touched, setTouched] = useState(value !== '')
+  const [offer, setOffer] = useState<string | null>(null)
+  const dtxsid = isDtxsidKind(kind)
+  const shape = (text: string) => (dtxsid ? text.toUpperCase() : text)
   const pattern = data?.patterns?.[kind]
   const check: IdCheck | null = isPending ? null : checkId(kind, value, pattern)
   const name = label ?? ID_LABELS[kind]
@@ -61,14 +70,45 @@ export function IdField({ kind, value = '', onChange, onCheck, label, id, disabl
         suffix={good ? <CheckCircleFilled aria-label="looks right" style={{ color: '#52c41a' }} /> : <span />}
         onChange={(e) => {
           setTouched(true)
-          onChange?.(e.target.value)
+          setOffer(null)
+          onChange?.(shape(e.target.value))
         }}
-        onBlur={() => setTouched(true)}
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData('text')
+          const trimmed = pasted.trim()
+          const input = e.currentTarget
+          e.preventDefault()
+          const start = input.selectionStart ?? value.length
+          const end = input.selectionEnd ?? value.length
+          const next = shape(value.slice(0, start) + trimmed + value.slice(end))
+          setTouched(true)
+          onChange?.(next)
+          const found = dtxsid ? dtxsidsIn(trimmed) : []
+          setOffer(found.length === 1 && found[0] !== next ? (found[0] ?? null) : null)
+        }}
+        onBlur={() => {
+          setTouched(true)
+          onBlur?.()
+        }}
       />
       {showProblem && check && !check.ok && (
         <Typography.Text id={helpId} type="danger" style={{ fontSize: 12 }}>
           {check.say}
         </Typography.Text>
+      )}
+      {offer && offer !== value && (
+        <Space size={4} wrap data-testid="id-offer">
+          <Typography.Text style={{ fontSize: 13 }}>The pasted text holds a DTXSID.</Typography.Text>
+          <Button
+            size="small"
+            onClick={() => {
+              setOffer(null)
+              onChange?.(offer)
+            }}
+          >
+            Use {offer}?
+          </Button>
+        </Space>
       )}
     </Space>
   )

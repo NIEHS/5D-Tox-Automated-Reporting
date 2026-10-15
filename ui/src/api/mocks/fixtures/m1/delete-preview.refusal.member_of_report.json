@@ -1,0 +1,16 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "member_of_report",
+      "status": 409,
+      "message": "DTXSID1020431_rat is listed in DTXSID1020431/studies.json",
+      "say": "This is the rat study of the report DTXSID1020431. Deleting it would break that report.",
+      "fix": "M1",
+      "details": {
+        "parent": "DTXSID1020431",
+        "key": "rat"
+      }
+    }
+  }
+}

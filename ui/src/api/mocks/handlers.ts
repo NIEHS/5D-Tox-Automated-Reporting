@@ -10,6 +10,8 @@ import {
   VOCABULARIES,
   stateNotFound,
 } from './fixtures'
+import { createM1Handlers, resetM1Db } from './m1'
+import { running } from './runs'
 
 /** The backend's session-id gate (common.dtxsid.DTXSID_RE). */
 const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
@@ -25,13 +27,14 @@ const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
 export interface MockOptions {
   /** pause between streamed events; 0 in tests */
   stepDelayMs?: number
+  /** how long the chemical lookup takes (it takes seconds against PubChem); 0 in tests */
+  lookupDelayMs?: number
 }
 
-const running = new Map<string, string>()
-
-/** Forget every mock run; called between tests. */
+/** Forget every mock run and every change made to the mock studies; called between tests. */
 export function resetMockDb(): void {
   running.clear()
+  resetM1Db()
 }
 
 export function envelope(body: ErrorEnvelope): Response {
@@ -64,8 +67,12 @@ export function ndjsonResponse(events: RunEvent[], stepDelayMs = 0, onEnd?: () =
   return new HttpResponse(stream, { headers: { 'Content-Type': 'application/x-ndjson' } })
 }
 
-export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
+export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptions = {}) {
   return [
+    // M1 Studies (docs/ui-redesign/modules/m1/contract.md); first, because it also
+    // answers the state of the sessions it creates, deletes or adds.
+    ...createM1Handlers({ lookupDelayMs }),
+
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)
       if (!SESSION_ID.test(id)) {

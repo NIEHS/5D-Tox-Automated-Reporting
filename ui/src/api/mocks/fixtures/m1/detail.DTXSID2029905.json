@@ -1,0 +1,85 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID2029905",
+    "kind": "study",
+    "chemical_dtxsid": "DTXSID2029905",
+    "chemical_dtxsid_from": "id",
+    "identity": {
+      "name": "1,1,2,2-Tetrahydroperfluoro-1-dodecanol",
+      "casrn": "865-86-1",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "APPROVED",
+      "say": "Data reviewed",
+      "next": {
+        "say": "Review the report's sections",
+        "fix": "D1"
+      }
+    },
+    "processed": true,
+    "last_changed": "2026-10-14T09:40:00Z",
+    "format": {
+      "definition": "studies/DTXSID2029905/document",
+      "source": "study",
+      "era": "eras/niehs-2023",
+      "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+      "title_short": "NIEHS Report, March 2023",
+      "changes": 0,
+      "say": "This chemical has a published report, NIEHS-08 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered."
+    },
+    "published": {
+      "report": "NIEHS-08",
+      "date": "2023-03",
+      "nbk": "NBK589991"
+    },
+    "bookshelf": {
+      "on_shelf": true,
+      "url": "/Bookshelf/DTXSID2029905",
+      "say": "On the Bookshelf (draft)"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": null,
+      "format": {
+        "definition": "studies/DTXSID2029905/document",
+        "source": "study",
+        "era": "eras/niehs-2023",
+        "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+        "title_short": "NIEHS Report, March 2023",
+        "changes": 0,
+        "say": "This chemical has a published report, NIEHS-08 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

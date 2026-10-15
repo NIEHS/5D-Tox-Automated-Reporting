@@ -17,16 +17,26 @@ export interface PendingProps {
   /** the module that fills it */
   fix?: ModuleId | null
   studyId?: string
+  /** a page that fills it, when it is not a module's (e.g. a study's own page); wins over `fix` */
+  to?: string
+  /** the link's words for `to` */
+  toLabel?: string
 }
 
-export function Pending({ label, cause, fix, studyId }: PendingProps) {
+export function Pending({ label, cause, fix, studyId, to: direct, toLabel }: PendingProps) {
   const m = moduleById(fix)
   const to = m ? moduleRoute(m.id, studyId) : undefined
   const content = (
     <Space orientation="vertical" size={4} style={{ maxWidth: 320 }}>
       <Typography.Text>{cause}</Typography.Text>
-      {m && to && <Link to={to}>Fill it in: {m.title}</Link>}
-      {m && !to && <Typography.Text type="secondary">It is filled in under {m.title}.</Typography.Text>}
+      {direct ? (
+        <Link to={direct}>{toLabel ?? 'Fill it in'}</Link>
+      ) : (
+        <>
+          {m && to && <Link to={to}>Fill it in: {m.title}</Link>}
+          {m && !to && <Typography.Text type="secondary">It is filled in under {m.title}.</Typography.Text>}
+        </>
+      )}
     </Space>
   )
   return (
