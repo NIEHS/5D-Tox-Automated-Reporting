@@ -69,6 +69,9 @@ class ReadOnlyDiskPoolStore(DiskPoolStore):
     set_integrated = _refuse
     write_json = _refuse
     save_section = _refuse
+    archive_section = _refuse
+    delete_section = _refuse
+    record_version_event = _refuse
 
 
 # ---------------------------------------------------------------------------

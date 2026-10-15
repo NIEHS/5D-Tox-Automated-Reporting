@@ -106,9 +106,10 @@ REFUSALS: dict[str, Refusal] = {
         "nothing you change in the study will fix it. Tell the maintainer."), None),
     # ── sections, approval and the guards (D1) ───────────────────────────────
     "section_not_found": Refusal(404, (
-        "There is no saved section “{key}” to approve. Methods, the apical BMD "
-        "summary and the genomics interpretations can't be approved at all yet; "
-        "the other sections exist only once Process has run."), "D1"),
+        "There is no saved section “{key}”, so there is nothing to {act}. Methods, "
+        "the apical BMD summary and the genomics interpretations are not saved as "
+        "sections yet, so they can't be approved; the other sections exist only "
+        "once Process has run."), "D1"),
     "section_key_missing": Refusal(400, (
         "The request didn't say which section it is about. This is a fault in the "
         "interface, not in your study; tell the maintainer."), None),
@@ -122,6 +123,24 @@ REFUSALS: dict[str, Refusal] = {
     "guard_refused": Refusal(409, (
         "This change to a section was refused to protect content a person owns. "
         "The details say which rule refused it."), "D1"),
+    # ── owned content (C2): the section write gate and the section steps ─────
+    "section_owned": Refusal(409, (
+        "This section has been approved, or you chose to keep it, so it can't be "
+        "replaced automatically. To replace it, reopen it and say why."), "D1"),
+    "section_key_invalid": Refusal(400, (
+        "There is no section by that name in this report."), "D1"),
+    "reason_required": Refusal(400, (
+        "Please say why. The reason is kept with the section's history."), "D1"),
+    "version_not_found": Refusal(404, (
+        "That version of the section doesn't exist."), "D1"),
+    "version_content_missing": Refusal(409, (
+        "This version is listed in the history, but its text was lost before history "
+        "was kept reliably. It can't be restored."), None),
+    "approve_content_retired": Refusal(409, (
+        "Approving can't change the text. Accept the section as it is, or edit it in "
+        "Word or Overleaf and bring that version back."), "D4"),
+    "approve_via_accept": Refusal(400, (
+        "Saving doesn't approve. Use Accept."), "D1"),
     # ── the pins (M5) ────────────────────────────────────────────────────────
     "method_profile_changed": Refusal(409, (
         "The analysis method this study is pinned to (its method profile) was "
@@ -186,7 +205,7 @@ _MESSAGE_RULES: tuple[tuple[str, str, str], ...] = (
     ("StepError", r"^Processing failed: .*(?:RunApicalBmds|ExportGenomics)", "calculation_program_failed"),
     ("StepError", r"^Processing failed:", "processing_failed"),
     ("StepError", r"^Content preparation failed:", "content_preparation_failed"),
-    ("StepError", r"^No '(?P<key>[^']*)' section to approve", "section_not_found"),
+    ("StepError", r"^No '(?P<key>[^']*)' section to (?P<act>\w+)", "section_not_found"),
     ("StepError", r"^dtxsid and section_key are required", "section_key_missing"),
     # GuardViolation (workflow/labels.py, workflow/currency.py)
     ("GuardViolation", r"requires a recorded reason", "release_reason_required"),
@@ -225,6 +244,9 @@ def _details(exc: BaseException, code: str) -> dict:
                                for e in exc.errors()]}
         except Exception:  # noqa: BLE001 — details are a courtesy, never a second failure
             return {}
+    own = getattr(exc, "details", None)
+    if isinstance(own, dict) and getattr(exc, "code", None) == code:
+        return dict(own)
     if code == "phase_not_allowed":
         return {k: getattr(exc, k) for k in ("phase", "legal_actions") if hasattr(exc, k)}
     return {}
@@ -258,7 +280,7 @@ def _message(exc: BaseException) -> str:
 
 # What a `say` shows when its rule captured nothing for a field (a refusal that
 # named its own code, say).
-_FIELD_DEFAULTS = {"key": "this", "file": "the details name it"}
+_FIELD_DEFAULTS = {"key": "this", "file": "the details name it", "act": "approve"}
 
 
 class _Fields(dict):
