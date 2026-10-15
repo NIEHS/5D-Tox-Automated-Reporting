@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID7020182/creation-check"
+  },
+  "status": 200,
+  "body": {
+    "dtxsid": "DTXSID7020182",
+    "exists": false,
+    "existing": null,
+    "related_sessions": [],
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "No published report is on file for this chemical, so a study under this id uses the format for new studies: the NIEHS Report as published in 2026.",
+      "brings": [],
+      "hash": "cdbd602e773aee83"
+    },
+    "published": null
+  }
+}

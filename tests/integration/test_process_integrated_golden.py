@@ -118,14 +118,29 @@ def _canonical(payload) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
 
 
+def seed_processable(session, dtxsid):
+    """Make a session Process will run on (C1): files and a clean validation
+    report (the phase derives INTEGRATED once integrated.json is there; `.keep`
+    is not a data file, fingerprinting skips it), and the method profile
+    chosen by a person (the newest, fixed), as Process refuses until one is."""
+    from pipeline.method_profile import newest_profile, pin_profile
+
+    (session / "files").mkdir(exist_ok=True)
+    (session / "files" / ".keep").write_text("")
+    (session / "validation_report.json").write_text(
+        json.dumps({"issues": [], "coverage_matrix": {}}))
+    pin_profile(dtxsid, newest_profile(), by="user")
+
+
 def _setup_session(sessions_dir):
-    """Write integrated.json into a fresh session dir."""
+    """Write integrated.json into a fresh session dir, seeded so the study is
+    INTEGRATED with a person's method pin (seed_processable)."""
     session = sessions_dir / DTXSID
     session.mkdir(parents=True, exist_ok=True)
-    (session / "files").mkdir(exist_ok=True)
     (session / "integrated.json").write_text(
         json.dumps(_make_integrated_data(), indent=2),
     )
+    seed_processable(session, DTXSID)
     return session
 
 

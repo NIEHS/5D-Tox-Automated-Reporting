@@ -55,7 +55,7 @@ describe('the typed fetch functions', () => {
     expect(e.code).toBe('phase_not_allowed')
     expect(e.status).toBe(409)
     expect(e.fix).toBe('M2')
-    expect(e.say).toMatch(/cannot be combined/)
+    expect(e.say).toMatch(/Combining the files into one dataset isn't possible yet/)
   })
 
   it('turn a body that is not an envelope into code "unexpected", keeping the status and the body', async () => {
@@ -163,6 +163,6 @@ describe('the run event stream (NDJSON)', () => {
     const e = (await collect(runProcess('DTXSID1021952')).catch((x: unknown) => x)) as ApiError
     expect(e).toBeInstanceOf(ApiError)
     expect(e.code).toBe('phase_not_allowed')
-    expect(e.fix).toBe('M3')
+    expect(e.fix).toBe('M2') // the backend's own: the file check found errors
   })
 })

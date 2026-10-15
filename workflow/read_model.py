@@ -6,17 +6,21 @@ model (``GET /api/v2/studies/{id}/state``; the command line and the notebook can
 call ``study_state`` directly). It composes what the core already derives:
 
   * what kind of session it is (a study, a report over several studies, a
-    member of one, a published book's companion) and its relations;
+    member of one, a published book's companion), the chemical it is about and
+    its relations, and where it stands with the next step (``stands``): the
+    derivations of workflow.studies, the same the studies list serves;
   * the phase and its legal actions (``WorkflowEngine.state``);
   * the identity (``identity.json``; the abbreviation is the short name);
   * the two pins: the method profile (``pipeline.method_profile``: the pin, the
     deviations, the LIVE mismatches between the dataset's recorded analyses and
-    the profile) and the document definition (``document_model.definition_pin``:
+    the profile, and, until a person has chosen one, the ``suggestion`` to
+    propose) and the document definition (``document_model.definition_pin``:
     the pin, its drift, and which definition renders);
   * whether the study was processed;
   * the sections: the catalog of the tree that renders, the readiness, and per
-    section what is on disk (approved, facts, stale, regenerated, wording_review,
-    source, version, the version manifest's status, the machine guard);
+    section what is on disk (approved, facts, maturity, stale, regenerated,
+    wording_review, review, source, version, the version's status, the machine
+    guard: workflow.ownership, C2);
   * the publish readiness (``WorkflowEngine.publish_readiness``) as a checklist,
     with what it checked (``checks``) and whether that is everything publishing
     needs (``complete``: not until C6);
@@ -69,6 +73,9 @@ class ReadOnlyDiskPoolStore(DiskPoolStore):
     set_integrated = _refuse
     write_json = _refuse
     save_section = _refuse
+    archive_section = _refuse
+    delete_section = _refuse
+    record_version_event = _refuse
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +172,31 @@ def method_pin_state(dtxsid: str, session: Path) -> dict:
     out["deviations"] = list(settings.deviations)
     out["unchecked"] = list(settings.unchecked)
     out["mismatches"] = _live_mismatches(session / "integrated.json", settings)
+    if not mp.chosen_by_person(pin):
+        # C1 D1: Process waits for a person's choice; the interface (M5)
+        # proposes this one and the person confirms it.
+        out["suggestion"] = _method_suggestion(dtxsid, session)
     return out
+
+
+def _method_suggestion(dtxsid: str, session: Path) -> dict | None:
+    """``{name, why}``: the profile to propose (pipeline.method_profile.
+    suggest_profile), comparing each candidate with the dataset through the
+    memoized live mismatches. None when no profile can be suggested."""
+    from pipeline import method_profile as mp
+
+    integrated = session / "integrated.json"
+    if not integrated.is_file():
+        def count(settings):               # no dataset: nothing recorded to compare
+            return None
+    else:
+        def count(settings):
+            return len(_live_mismatches(integrated, settings))
+    try:
+        return mp.suggest_profile(dtxsid, count_mismatches=count)
+    except mp.MethodProfileError as exc:
+        logger.warning("No method profile to suggest for %s: %s", dtxsid, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -296,8 +327,11 @@ _CACHE_ONLY_SAY = ("This section can't be approved yet: its text is kept only wi
 _NO_SAVED_TEXT_SAY = "There is no text for this section yet, so there is nothing to approve."
 
 
+_ALREADY_ACCEPTED_SAY = "This section is already accepted and nothing has changed since."
+
+
 def _accept_verdict(key: str, kind: str, approvable: bool, enabled: bool, blocked_by: list[str],
-                    has_file: bool) -> dict:
+                    has_file: bool, accepted: bool = False) -> dict:
     """Whether a person may accept (approve) the section now, and if not, why:
     ``{"allowed", "code", "say"}``. Derived from the catalog (kind, approvable),
     the readiness (enabled, blocked_by) and whether there is a saved text to
@@ -314,6 +348,11 @@ def _accept_verdict(key: str, kind: str, approvable: bool, enabled: bool, blocke
         if key in _CACHE_ONLY_KEYS:
             return {"allowed": False, "code": "not_saved_as_section", "say": _CACHE_ONLY_SAY}
         return {"allowed": False, "code": "no_saved_text", "say": _NO_SAVED_TEXT_SAY}
+    if accepted:
+        # accept_section_step would change nothing (C2: noop already_accepted).
+        # A section under review, stale, or approved under an unrecorded
+        # status IS acceptable: accepting answers it.
+        return {"allowed": False, "code": "already_accepted", "say": _ALREADY_ACCEPTED_SAY}
     return {"allowed": True, "code": None, "say": None}
 
 
@@ -327,17 +366,46 @@ def _regenerated(raw) -> dict | None:
     return {**raw, "say": _STALE_SAY.get(reason, _STALE_SAY_DEFAULT)}
 
 
+def _maturity(d: dict | None) -> str | None:
+    """The section's maturity rung (workflow.labels): "final", "working_draft",
+    "first_draft", or None when it holds none."""
+    from workflow.labels import maturity_rung
+    from workflow.ownership import section_facts
+    rung = maturity_rung(section_facts(d))
+    return rung.value if rung is not None else None
+
+
+def _review(raw) -> dict | None:
+    """Why an approved section's printed content changed under it (C2 D2/A1:
+    ``{why, since_version, flips}``), with the plain words (``say``). None
+    when there is no such marker."""
+    if not isinstance(raw, dict):
+        return None
+    return {**raw, "say": _REVIEW_SAY.get(raw.get("why"), _REVIEW_SAY_DEFAULT)}
+
+
+_REVIEW_SAY = {
+    "numbers_changed": ("The study's data changed the numbers this section prints since it "
+                        "was approved. Read it again, then approve it again."),
+    "wording_changed": ("The study's data changed words this section's text depends on since "
+                        "it was approved. Read it again, then approve it again."),
+}
+_REVIEW_SAY_DEFAULT = "This section changed since it was approved. Read it again, then approve it again."
+
+
 def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: dict,
                  title: str | None) -> dict:
     """One section as the interface sees it: the catalog's identity, the
     readiness, and what its file on disk says (nothing, when it has none)."""
     from pipeline.session_store import current_version_status
     from workflow.ownership import may_machine_write, section_facts
+    from workflow.section_writes import already_accepted
 
     r = readiness.get(key, {})
     d = section if isinstance(section, dict) else None
     regenerated = (d or {}).get("regenerated")
     wording = (d or {}).get("wording_review")
+    status = current_version_status(dtxsid, key) if d else None
     return {
         "key": key,
         "title": (d or {}).get("title") or title,
@@ -357,10 +425,13 @@ def _section_row(dtxsid: str, key: str, spec, section: dict | None, readiness: d
         "source": (d or {}).get("source"),
         "model": (d or {}).get("model_used"),
         "version": (d or {}).get("version") if d else None,
-        "version_status": current_version_status(dtxsid, key) if d else None,
+        "version_status": status,
+        "maturity": _maturity(d),
+        "review": _review((d or {}).get("review")),
         "machine_may_write": may_machine_write(d),
         "accept": _accept_verdict(key, spec.kind, spec.approvable, r.get("enabled", True),
-                                  list(r.get("blocked_by", [])), d is not None),
+                                  list(r.get("blocked_by", [])), d is not None,
+                                  already_accepted(d, status)),
     }
 
 
@@ -467,47 +538,15 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
 
 
 # ---------------------------------------------------------------------------
-# What kind of session this is
+# What kind of session this is (one derivation, workflow.studies)
 # ---------------------------------------------------------------------------
 
 def session_kind(dtxsid: str, sessions_root: Path) -> dict:
-    """What the session is, and the sessions it belongs with (the rule of the M1
-    contract §3, first match wins):
-
-      * ``companion``: a published book's content (``published_clone.json``);
-        ``twin`` is the generated study it was built beside;
-      * ``report``: a report over several studies (``studies.json``);
-      * ``member``: listed in another session's ``studies.json``; ``parent`` is
-        that report;
-      * ``study``: the id is a bare DTXSID (a chemical's own study);
-      * ``other``: anything else (a suffixed working copy, say).
-
-    ``{"kind", "relations": {"parent", "twin"}}``. A screen uses it to offer only
-    what makes sense for the session: a companion is read-only, a report has no
-    files of its own (its members do)."""
-    import re
-    from rendering.published_clone import CLONE_FILE
-    from rendering.report_compose import STUDIES_FILE
-
-    session = sessions_root / dtxsid
-    relations: dict = {"parent": None, "twin": None}
-    clone = _read_json(session / CLONE_FILE)
-    if clone is not None:
-        twin = clone.get("twin") if isinstance(clone, dict) else None
-        relations["twin"] = twin if isinstance(twin, str) else None
-        return {"kind": "companion", "relations": relations}
-    if (session / STUDIES_FILE).is_file():
-        return {"kind": "report", "relations": relations}
-    for listing in sorted(sessions_root.glob(f"*/{STUDIES_FILE}")):
-        try:
-            stated = json.loads(listing.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue  # that report's own read reports its damaged file
-        if isinstance(stated, dict) and dtxsid in stated.values():
-            relations["parent"] = listing.parent.name
-            return {"kind": "member", "relations": relations}
-    kind = "study" if re.fullmatch(r"DTXSID\d+", dtxsid) else "other"
-    return {"kind": kind, "relations": relations}
+    """What the session is and the sessions it belongs with: the derivation of
+    ``workflow.studies.session_kind`` (the M1 contract §3), kept importable here.
+    ``{"kind", "chemical_dtxsid", "chemical_dtxsid_from", "relations"}``."""
+    from workflow.studies import session_kind as derive
+    return derive(dtxsid, sessions_root)
 
 
 # ---------------------------------------------------------------------------
@@ -524,6 +563,7 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     """
     from common.dtxsid import validate_dtxsid
     from workflow.engine import WorkflowEngine, _is_processed
+    from workflow.studies import stands
 
     validate_dtxsid(dtxsid)
     store = store if store is not None else ReadOnlyDiskPoolStore()
@@ -550,9 +590,16 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
         "sections": sections_state(dtxsid, engine, store, session, catalog, tree),
         "readiness": {"publish": publish_readiness_state(engine)},
     }
+    if state["kind"] in ("companion", "report"):
+        # Every workflow action is a data act, and R6 refuses them all on a
+        # session whose data is not its own (workflow.studies.require_data_session):
+        # the read model offers nothing the step would refuse.
+        state["legal_actions"] = []
     members = members_state(dtxsid, store)
     if members is not None:
         state["members"] = members
+    state["stands"] = stands(state["kind"], state["phase"], state["processed"],
+                             member_states=members, publish=state["readiness"]["publish"])
     return state
 
 

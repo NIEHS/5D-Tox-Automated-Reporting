@@ -1,0 +1,100 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID1020431_mouse",
+    "kind": "member",
+    "chemical_dtxsid": "DTXSID1020431",
+    "chemical_dtxsid_from": "id_prefix",
+    "identity": {
+      "name": "1,4-Dichlorobenzene",
+      "casrn": "106-46-7",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "APPROVED",
+      "say": "Data reviewed",
+      "next": {
+        "say": "Review the report's sections",
+        "fix": "D1"
+      }
+    },
+    "processed": true,
+    "last_changed": "2026-10-12T11:47:02Z",
+    "format": {
+      "definition": "studies/DTXSID1020431/document",
+      "source": "study",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 1,
+      "say": "Written as part of the report DTXSID1020431, in its format."
+    },
+    "published": {
+      "report": "NIEHS-13",
+      "date": "2026-04",
+      "nbk": "NBK621744"
+    },
+    "bookshelf": {
+      "on_shelf": false,
+      "url": "/Bookshelf/DTXSID1020431",
+      "say": "Part of DTXSID1020431's book"
+    },
+    "relations": {
+      "parent": "DTXSID1020431",
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": [
+        "DTXSID1020431_rat"
+      ]
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": false,
+        "code": "member_of_report",
+        "say": "This is the mouse study of the report DTXSID1020431. Deleting it would break that report."
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": {
+        "level": "info",
+        "say": "This is the mouse study of the report DTXSID1020431 (1,4-Dichlorobenzene, NIEHS-13), which also has a rat study. Its data is prepared here; its report is the parent's.",
+        "links": [
+          {
+            "say": "The report DTXSID1020431",
+            "href": "/app/studies/DTXSID1020431"
+          },
+          {
+            "say": "The rat study DTXSID1020431_rat",
+            "href": "/app/studies/DTXSID1020431_rat"
+          }
+        ]
+      },
+      "format": {
+        "definition": "studies/DTXSID1020431/document",
+        "source": "study",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 1,
+        "say": "Written as part of the report DTXSID1020431, in its format.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

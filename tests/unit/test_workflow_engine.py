@@ -74,7 +74,7 @@ def _clean_report(coverage=None):
 def test_empty_when_no_files():
     st = WorkflowEngine("DTX", FakeStore(files=False)).state()
     assert st.phase is Phase.EMPTY
-    assert st.legal_actions == frozenset()
+    assert st.legal_actions == frozenset({Action.ADD_FILES})
 
 
 def test_uploaded_when_files_but_no_validation():
@@ -116,8 +116,9 @@ def test_approved_when_both_present():
     assert st.phase is Phase.APPROVED
 
 
-def test_stale_regresses_over_everything():
-    # A stale approved artifact set must fall back to UPLOADED (pool mutated).
+def test_a_stale_section_does_not_move_the_phase():
+    # C1 D2: staleness is a section matter (currency, the publish gate). A file
+    # change already deletes the validation report (UPLOADED by rule 3).
     store = FakeStore(
         files=True,
         stale=True,
@@ -125,7 +126,8 @@ def test_stale_regresses_over_everything():
         docs={"validation_report.json": _clean_report()},
     )
     st = WorkflowEngine("DTX", store).state()
-    assert st.phase is Phase.UPLOADED
+    assert st.phase is Phase.APPROVED
+    assert st.artifacts["hasStale"] is True
 
 
 def test_validation_errors_phase():

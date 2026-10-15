@@ -43,6 +43,7 @@ from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 from common.provenance import step_provenance
 from workflow.errors import StepError
 from workflow.store import PoolStore
+from workflow.studies import require_data_session
 
 logger = logging.getLogger(__name__)
 
@@ -57,34 +58,39 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
     results — narrative.report_summary, deterministic, the same inputs as the
     Abstract — as a provisional draft (approved=False, source="generated").
 
-    Never overwrites a Summary a person approved or wrote (or one the LLM route
-    saved): only an absent or previously generated, unapproved summary.json is
-    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``."""
-    import json
+    Through the section write gate (workflow.section_writes, C2) as a system
+    write: unchanged text writes nothing; text a person owns (approved, released
+    with PROTECTED, edited) is never replaced — the new text is HELD and a
+    `hold` event records that Process had a new Summary it did not apply. Its
+    own extra rule stands: it replaces only its own earlier output
+    (``source == "generated"``), never one the LLM route or a person saved.
+    Part of Process (C1: refused outside INTEGRATED / APPROVED).
 
+    Returns ``{ok, written: bool, paragraphs: int, held?: {why, version}}``."""
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.PROCESS, store)
     from narrative.report_summary import build_report_summary
     from narrative.summary_llm import summary_inputs
-    from pipeline.session_store import save_section
+    from workflow import section_writes
 
-    sdir = store.session_dir(dtxsid)
-    prior_path = sdir / "summary.json"
-    if prior_path.exists():
-        try:
-            prior = json.loads(prior_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            prior = {}
-        if prior.get("approved") or prior.get("source") != "generated":
-            return {"ok": True, "written": False, "paragraphs": 0}
+    prior = section_writes.read_prior(dtxsid, "summary", store)
+    if prior is not None and prior.get("source") != "generated":
+        return {"ok": True, "written": False, "paragraphs": 0,
+                "held": {"why": "not_generated_here", "version": prior.get("version")}}
 
-    paragraphs = build_report_summary(**summary_inputs(sdir))
+    paragraphs = build_report_summary(**summary_inputs(store.session_dir(dtxsid)))
     if not paragraphs:
         return {"ok": True, "written": False, "paragraphs": 0}
-    save_section(dtxsid, "summary", {
-        "paragraphs": paragraphs,
-        "source": "generated",
-        "approved": False,
-    }, archive=False)
-    return {"ok": True, "written": True, "paragraphs": len(paragraphs)}
+    out = section_writes.write_section(
+        dtxsid, "summary", {"paragraphs": paragraphs, "source": "generated", "approved": False},
+        store, act="summary", actor="system", author="generated")
+    result = {"ok": True, "written": out["outcome"] == "written",
+              "paragraphs": len(paragraphs) if out["outcome"] == "written" else 0}
+    if out["outcome"] == "held":
+        result["held"] = {"why": "owned", "version": out["version"]}
+    return result
 
 
 def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
@@ -95,29 +101,46 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     `{platform, title, tables_json, narrative, first_col_header, caption, footnotes}`)
     but never writes the `bm2_<slug>.json` FILES the render + readiness paths read.
     This closes that gap: for each cached apical section, write `bm2_<slug>.json`
-    (`slug = bm2_slug(title)`) carrying the SAME fields plus `approved=False` — a
-    provisional, generated draft. The narrative is already a paragraph list (kept as
-    `narrative`, which report_data reads directly); no transform needed beyond the
-    key + approval stamp.
+    (`slug = bm2_slug(title)`) carrying the SAME fields — a provisional, generated
+    draft (`approved=False`).
 
-    Idempotent: re-materializing overwrites with archive=False (a regenerate, not a
-    new blessed version). Genomics is deterministic and is NOT materialized here (it
-    is read-only, not an authorable/approvable section — ADR-0018). Returns
-    `{ok, materialized: [section_key, ...]}`.
+    Every file goes through the section write gate (workflow.section_writes, C2)
+    as a system write:
+      * content unchanged → nothing written (an approval stands; I5);
+      * changed, not owned → the prior archived, the new written, a
+        `generate/draft` event;
+      * changed, owned (approved, or released with PROTECTED) → knocked down with
+        a record (C2 D2/A1): the deliverable renders apical content from the
+        Process cache, so what prints has already changed; the owned version is
+        archived, the approval withdrawn (FINAL with it, PROTECTED stands), a
+        `review {why, since_version, flips}` marker set, a `reprocess/
+        needs-re-bless` event recorded. Re-accepting clears it. `wording_review`
+        keeps its meaning (the data-derived words that flipped under approved
+        wording; Phase 3b).
+
+    Genomics is deterministic and is NOT materialized here (ADR-0018). Returns
+    `{ok, materialized, unchanged, needs_review: [{key, why, prior_version,
+    version, flips}], held}`; `materialized` = the files written. Part of Process
+    (C1: refused outside INTEGRATED / APPROVED).
     """
-    import json
-
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.PROCESS, store)
     from pipeline.session_db import _latest_cache
-    from pipeline.session_store import bm2_slug, save_section
+    from pipeline.session_store import bm2_slug
+    from workflow import section_writes
     from workflow.reprocess import cat_signature_flips
 
     sdir = store.session_dir(dtxsid)
     cache = _latest_cache(sdir, "sections")
     sections = cache.get("sections") if isinstance(cache, dict) else None
+    result: dict = {"ok": True, "materialized": [], "unchanged": [], "needs_review": [],
+                    "held": []}
     if not sections:
-        return {"ok": True, "materialized": []}
+        return result
 
-    materialized: list[str] = []
+    from common import provenance
     for sec in sections:
         title = sec.get("title") or sec.get("platform") or ""
         slug = bm2_slug(title)
@@ -126,23 +149,13 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         section_key = f"bm2_{slug}"
         cat_signature = sec.get("cat_signature") or {}
 
-        # Read the PRIOR section file (if any) BEFORE overwriting it — this is the
-        # only point where the old and new categorical signatures coexist, so it is
-        # where Phase 3b flip detection must run (invalidate ran at upload and kept
-        # no new binding; the reprocess that produced `sec` deleted the old cache).
-        # Capture whether the human had APPROVED the prior wording and its signature.
-        prior_path = sdir / f"{section_key}.json"
-        was_approved = False
-        old_signature: dict = {}
-        if prior_path.exists():
-            try:
-                prior = json.loads(prior_path.read_text(encoding="utf-8"))
-                was_approved = bool(prior.get("approved"))
-                old_signature = prior.get("cat_signature") or {}
-            except (json.JSONDecodeError, OSError, ValueError):
-                pass
+        # The prior file, read BEFORE the gate replaces it: the only point where
+        # the old and new categorical signatures coexist (Phase 3b flip detection).
+        prior = section_writes.read_prior(dtxsid, section_key, store)
+        flips = (cat_signature_flips(prior.get("cat_signature") or {}, cat_signature)
+                 if prior is not None else [])
 
-        # Carry the render-relevant fields verbatim; stamp provisional (unapproved).
+        # Carry the render-relevant fields verbatim; provisional (unapproved).
         data = {
             "platform": sec.get("platform"),
             "title": title,
@@ -155,28 +168,30 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
             "approved": False,
             "source": "generated",
         }
+        out = section_writes.write_section(
+            dtxsid, section_key, data, store, act="materialize", actor="system",
+            author="generated", on_owned=section_writes.REVIEW,
+            review={"why": "wording_changed" if flips else "numbers_changed", "flips": flips})
 
-        # Wording-review inform-signal (Phase 3b): only when the human had APPROVED
-        # the prior wording AND a data-derived WORD flipped under it. Not a block —
-        # programmatic content asserts no LLM judgement; it flags that the author's
-        # committed wording may now contradict the refreshed data. Fail-soft: no
-        # prior / never approved / no flip → no marker → byte-identical to before.
-        if was_approved:
-            flips = cat_signature_flips(old_signature, cat_signature)
-            if flips:
-                data["wording_review"] = flips
-
-        # archive=False: a regenerate/materialize is not a new blessed version.
-        save_section(dtxsid, section_key, data, archive=False)
-        materialized.append(section_key)
-        from common import provenance
+        if out["outcome"] == "written":
+            result["materialized"].append(section_key)
+        elif out["outcome"] == "unchanged":
+            result["unchanged"].append(section_key)
+        elif out["outcome"] == "needs_review":
+            result["materialized"].append(section_key)
+            result["needs_review"].append({
+                "key": section_key, "why": out["review"]["why"],
+                "prior_version": out["prior_version"], "version": out["version"],
+                "flips": out["review"]["flips"]})
+        else:
+            result["held"].append(section_key)
         provenance.record(
             "materialized", dtxsid=dtxsid, section_key=section_key,
-            platform=sec.get("platform"), was_approved=was_approved,
-            wording_review=bool(data.get("wording_review")),
+            platform=sec.get("platform"), outcome=out["outcome"],
+            wording_review=bool(flips and out["outcome"] == "needs_review"),
         )
 
-    return {"ok": True, "materialized": materialized}
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +204,15 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the ValidationReport as a plain dict (also persisted to
     validation_report.json). Raises StepError(404) if the session has no files.
+
+    Never deletes the dataset or the data approval (C1 D4): a validation that
+    finds errors leaves them inert (the phase refuses their use), and one that
+    no longer matches the integration's basis reads "integrate again".
     """
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.VALIDATE, store)
     files_dir = store.session_dir(dtxsid) / "files"
     if not files_dir.exists():
         raise StepError("No files directory found for this session", status_code=404)
@@ -239,6 +262,11 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
         raise StepError(
             "dtxsid, issue_index, and chosen_file_id are required", status_code=400
         )
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.RESOLVE, store)
+
 
     precedence = store.read_json(dtxsid, "precedence.json")
     if not isinstance(precedence, list):
@@ -263,7 +291,12 @@ def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dic
 
     `confirmed` maps file_id -> {platform, data_type}. Returns
     {ok, updated} where `updated` counts files whose headers were rewritten.
+    A correction made after integration takes effect at the next integration.
     """
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.CONFIRM_CLASSIFICATION, store)
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
 
@@ -355,7 +388,18 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     summary payload (not the full integrated JSON — it can exceed response caps).
     Raises StepError(404) with no files, StepError(400) if validation hasn't run,
     StepError(500) if integration itself fails.
+
+    C1: refused outside VALIDATED / INTEGRATED / APPROVED (PhaseRefusal), and
+    when the validation it would pair with the fingerprints no longer matches
+    them (ValidationOutOfDate, the restart trap). A successful merge withdraws
+    the data approval (archived under history/_data_approval/) and records the
+    basis it was built from; it pins no method profile.
     """
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.INTEGRATE, store)
+
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
     if not files_dir.exists():
@@ -375,6 +419,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     coverage_matrix = report.get("coverage_matrix", {}) if isinstance(report, dict) else {}
     if not coverage_matrix:
         raise StepError("No coverage matrix found -- run validation first", status_code=400)
+    _check_validation_matches(dtxsid, fps, report)
 
     # Load user precedence decisions (may be empty if no conflicts resolved)
     precedence = store.read_json(dtxsid, "precedence.json")
@@ -425,8 +470,17 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         logger.exception("Pool integration failed for %s", dtxsid)
         raise StepError(f"Integration failed: {e}", status_code=500)
 
+    # The dataset changed, so the data approval made on the old one no longer
+    # holds (C1 D5: archived, never deleted). A failed merge leaves it alone.
+    approval_withdrawn = _withdraw_data_approval(dtxsid, store)
+
     # Cache in memory for the process-integrated endpoint
     store.set_integrated(dtxsid, integrated)
+
+    # What this dataset was built from (workflow.integration_basis): a later
+    # validation that no longer matches it reads as "integrate again".
+    from workflow.integration_basis import record_basis
+    record_basis(dtxsid, store)
 
     # Study-design facts a person stated (generate_report --design): integration
     # re-infers every experiment's metadata, and the stated design must win.
@@ -458,8 +512,9 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # re-extracts from the new sidecar on next process. (invalidate_pool_artifacts
     # DOES delete the sidecar, because that path tears down integrated.json too.)
 
-    # The study's analysis method (ADR-0027): pin the newest profile when the
-    # study has none, and check what the .bm2 analyses record against it.
+    # The study's analysis method (ADR-0027): check what the .bm2 analyses
+    # record against the profile a person pinned. Integration pins nothing
+    # (C1 D1: a person chooses the method; Process refuses until they have).
     method_summary = _pin_and_check_method(dtxsid, integrated, store)
 
     # Build the lightweight summary (see the route docstring for why).
@@ -481,6 +536,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         "bmd_result_count": len(integrated.get("bMDResult", [])),
         "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
         "method": method_summary,
+        "approval_withdrawn": approval_withdrawn,
         "experiments": [
             {
                 "name": exp.get("name", ""),
@@ -518,15 +574,17 @@ def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
 
 
 def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> dict:
-    """Pin a method profile if the study has none, and report every recorded
-    analysis setting that disagrees with it as a `method_mismatch` warning in
-    the validation report (ADR-0027 §5).  Returns {profile, pinned_by,
-    deviations, mismatches}."""
-    from pipeline.method_profile import ensure_pin, pin_mode, recorded_mismatches, session_method
+    """Report every recorded analysis setting that disagrees with the study's
+    pinned method profile as a `method_mismatch` warning in the validation
+    report (ADR-0027 §5).  Pins nothing (C1): with no profile pinned there is
+    nothing to compare against, so the stale warnings are removed and the
+    summary is empty.  Returns {profile, pinned_by, mode, deviations,
+    mismatches}.  (The name is kept for its callers.)"""
+    from pipeline.method_profile import pin_mode, read_pin, recorded_mismatches, session_method
 
-    pin = ensure_pin(dtxsid)
-    method = session_method(dtxsid)
-    mismatches = recorded_mismatches(integrated, method)
+    pin = read_pin(dtxsid)
+    method = session_method(dtxsid) if pin else None
+    mismatches = recorded_mismatches(integrated, method) if pin else []
     report = store.read_json(dtxsid, "validation_report.json")
     if isinstance(report, dict):
         issues = [i for i in report.get("issues", []) if i.get("issue_type") != "method_mismatch"]
@@ -536,8 +594,63 @@ def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> di
                    for m in mismatches]
         report["issues"] = issues
         store.write_json(dtxsid, "validation_report.json", report)
+    if not pin:
+        return {"profile": None, "pinned_by": None, "mode": None, "deviations": [],
+                "mismatches": []}
     return {"profile": pin["name"], "pinned_by": pin["pinned_by"], "mode": pin_mode(pin),
             "deviations": list(method.deviations), "mismatches": [m["message"] for m in mismatches]}
+
+
+def _fp_field(fp, key: str):
+    """A fingerprint field, whether a FileFingerprint or a plain dict."""
+    return fp.get(key) if isinstance(fp, dict) else getattr(fp, key, None)
+
+
+def _check_validation_matches(dtxsid: str, fps: dict, report: dict) -> None:
+    """Refuse (ValidationOutOfDate) when the fingerprints integration would use
+    no longer match the validation report it pairs them with: a file id in the
+    coverage matrix is not among them (a cold re-scan minted new ids), or the
+    files they name differ from the report's. Refuses; never repairs.
+    Classification corrections are not compared (C1 spec §3.2; C3)."""
+    from workflow.errors import ValidationOutOfDate
+
+    cov_ids: set = set()
+    for tiers in (report.get("coverage_matrix") or {}).values():
+        for v in (tiers or {}).values():
+            if isinstance(v, list):
+                cov_ids.update(i for i in v if i)
+            elif isinstance(v, str) and v:
+                cov_ids.add(v)
+    missing_ids = len(cov_ids - set(fps))
+    added: set = set()
+    missing: set = set()
+    if isinstance(report.get("fingerprints"), dict):
+        held = {n for n in (_fp_field(fp, "filename") for fp in fps.values()) if n}
+        checked = {n for n in (_fp_field(fp, "filename")
+                               for fp in report["fingerprints"].values()) if n}
+        added, missing = held - checked, checked - held
+    if missing_ids or added or missing:
+        raise ValidationOutOfDate(dtxsid, missing_ids, sorted(added), sorted(missing))
+
+
+DATA_APPROVAL_HISTORY = "history/_data_approval"
+
+
+def _withdraw_data_approval(dtxsid: str, store: PoolStore) -> bool:
+    """Move animal_report.json (the data approval) to
+    history/_data_approval/<stamp>-animal_report.json; True when there was one.
+    The approval was of the dataset integration just replaced (C1 D5)."""
+    if not store.artifact_exists(dtxsid, "animal_report.json"):
+        return False
+    from common.clock import now_iso
+
+    sdir = store.session_dir(dtxsid)
+    archive = sdir / DATA_APPROVAL_HISTORY
+    archive.mkdir(parents=True, exist_ok=True)
+    stamp = now_iso().replace(":", "")
+    (sdir / "animal_report.json").replace(archive / f"{stamp}-animal_report.json")
+    logger.info("Data approval of %s withdrawn by re-integration (archived)", dtxsid)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +663,12 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the AnimalReport as a plain dict. Raises StepError(404) with no
     files, StepError(400) if nothing fingerprinted, StepError(500) on failure.
+    Refused before integration (C1: APPROVE is legal at INTEGRATED/APPROVED).
     """
+    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
+    from workflow.engine import require_legal
+    from workflow.phases import Action
+    require_legal(dtxsid, Action.APPROVE, store)
     session_path = store.session_dir(dtxsid)
     files_dir = session_path / "files"
     if not files_dir.exists():
@@ -654,114 +772,590 @@ def _promote_to_final(data: dict) -> None:
 
 @step_provenance
 def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
-    """Approve (lock) an existing report section.
+    """Approve (lock) an existing report section. A state change: its text is
+    never touched (C2: accepting changes the state, never the content).
 
-    Mirrors the persistence half of POST /api/session/approve: stamp
-    `approved=True` + `approved_at`, and clear any `stale` flag (set by
-    invalidate_pool_artifacts when the pool mutated after approval — re-approval
-    clears it). Re-saved in place (archive=False) so a lock flip is not a new
-    history version, exactly as /api/session/unapprove already does for the
-    reverse flip; the approve route's own archiving happens when the CONTENT is
-    saved, not on this pure lock transition.
+    Stamps `approved=True` + `approved_at`, promotes the facts to FINAL (which
+    sets PROTECTED), and clears what a person's reading answers: `stale` (the
+    pool changed after approval), `wording_review` (data-derived words flipped
+    under approved wording) and `review` (Process changed what an approved
+    apical section prints: C2 D2/A1). Saved in place (archive=False) with one
+    `edit/blessed` event against the SAME version, so a re-accept after a
+    reprocess flips needs-re-bless → blessed without minting a version.
 
-    /api/session/approve also reports whether the approved text differs from
-    the generated original (`user_edited`); that needs the request payload, so
-    it stays in the route. This step lifts ONLY the state change.
+    Accepting a section that is already approved, carries no stale/review
+    marker, and whose version is blessed changes nothing: ``noop
+    already_accepted``, no event.
 
-    Raises StepError(400) with no dtxsid/section_key, StepError(404) if the
-    section file does not exist (nothing to approve — content is written by the
-    generation/save path first).
+    Returns ``{ok, section_key, approved: True, version, version_status,
+    noop?}``. Raises section_key_invalid (400), section_not_found (404).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "approve")
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if not isinstance(data, dict):
-        raise StepError(
-            f"No '{section_key}' section to approve", status_code=404
-        )
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": True, "version": version,
+              "version_status": "blessed"}
+    if sw.already_accepted(data, sw.version_status(dtxsid, section_key, version, store)):
+        return {**result, "noop": _noop("already_accepted")}
 
     data["approved"] = True
     data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
-    data.pop("stale", None)
-    # The Phase 3b wording-review inform-signal is answered by exactly this act:
-    # the human has read the prose against the refreshed data and re-blessed it.
-    # Clearing it here (and in the route twin) is what lets a LATER flip be a
-    # fresh signal instead of noise that never goes away.
-    data.pop("wording_review", None)
+    for marker in ("stale", "wording_review", "review"):
+        data.pop(marker, None)
     _promote_to_final(data)
-
-    # Phase 4: record this acceptance as an "edit"/"blessed" version event. This
-    # is the pure re-bless path — the content already exists on disk and only the
-    # lock flips — so it uses archive=False: save_section PRESERVES the version
-    # number and the manifest line lands against the SAME version. That is exactly
-    # what "re-accept transitions needs-re-bless → blessed WITHOUT minting a new
-    # version" needs: after a reprocess minted (say) v2 born needs-re-bless, the
-    # human re-accept appends a v2/edit/blessed line, so v2's current status flips
-    # to blessed with no duplicate version. The marker is transient (save_section
-    # pops it); stamping it on `data` keeps this step store-mediated — no direct
-    # disk I/O and no new store-method signature (the injected store just persists
-    # `data`).
-    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
-
-    # archive=False: a lock flip is not a content change worth a new history
-    # FILE (matches how unapprove flips the flag). save_section stamps `version`
-    # and appends the manifest line above.
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="edit", status="blessed", act="accept", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data))
+    # archive=False: a lock flip is not a content change worth a history FILE;
+    # save_section keeps the version and appends the event above.
     store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {
-        "ok": True,
-        "section_key": section_key,
-        "approved": True,
-        "version": data.get("version", 1),
-    }
+    return {**result, "version": data.get("version", version)}
 
 
 @step_provenance
 def release_section_step(
     dtxsid: str, section_key: str, store: PoolStore, *, reason: str = "",
 ) -> dict:
-    """REVISE (reopen) a report section for editing, preserving its content.
+    """REVISE (reopen) an approved report section, preserving its content.
 
-    This is the VOLUNTARY human down-ratchet — the "Revise" action, renamed from
-    the old bare "Unapprove". It:
-      * flips `approved=False` (unlocks the editor),
-      * runs the HUMAN_RELEASE demote on the section's facts
-        (labels.demote_for_human_release: FINAL withdrawn, PROTECTED stands — the
-        content stops claiming finality but stays guarded until re-accepted), and
-      * records the human's free-text `reason` on a Phase-4 version-trail entry
-        (cause="revise"), so WHY a person reopened a blessed section is auditable
-        alongside the system's cause="reprocess" entries.
+    The voluntary human down-ratchet: `approved=False`, FINAL withdrawn,
+    PROTECTED stands (C2 D1: a released section stays protected from machines;
+    only a person's explicit act replaces it). The reason is required (C2 D3)
+    and kept on the version trail (`revise/working`) and the `revised` marker.
 
-    The reason is provenance (the version trail + `revised` marker), NOT a fact —
-    facts are categorical. Content is preserved (archive=False for the flag flip;
-    the trail entry captures the transition). No-op-safe: absent section → ok.
-
-    Raises StepError(400) with no dtxsid/section_key.
+    Returns ``{ok, section_key, approved: False, version, version_status,
+    noop?}``; a section that is not approved changes nothing (``noop
+    not_approved``, no event). Raises section_key_invalid (400),
+    section_not_found (404), reason_required (400).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "reopen")
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": False, "version": version}
+    if not data.get("approved"):
+        return {**result, "version_status": sw.version_status(dtxsid, section_key, version, store),
+                "noop": _noop("not_approved")}
+    reason = sw.require_reason(reason, section_key, "reopen")
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if isinstance(data, dict):
-        data["approved"] = False
-        _demote_for_revise(data, reason)
-        store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {"ok": True, "section_key": section_key, "approved": False}
+    data["approved"] = False
+    _demote_for_revise(data, reason)
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="revise", status="working", act="release", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data), reason=reason)
+    store.save_section(dtxsid, section_key, data, archive=False)
+    return {**result, "version_status": "working"}
 
 
 def _demote_for_revise(data: dict, reason: str) -> None:
-    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place, and stamp
-    the version-trail event. Withdraws FINAL (PROTECTED stands), records the human
-    reason as provenance (`revised` marker + the trail entry's reason). A no-op on
-    a section holding no maturity fact leaves facts untouched but STILL records the
-    reopen on the trail — reopening an un-blessed draft is a real, auditable act."""
+    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place: FINAL
+    withdrawn (PROTECTED stands), the human reason kept as the `revised`
+    marker. Shared with the old /api/session/unapprove route's history."""
     from workflow.labels import demote_for_human_release
     from workflow.ownership import section_facts, store_content_facts
 
     store_content_facts(data, demote_for_human_release(section_facts(data)))
-    data["revised"] = {"reason": reason} if reason else {"reason": ""}
-    data[_VERSION_EVENT_KEY] = {
-        "cause": "revise", "status": "working", "reason": reason,
-    }
+    data["revised"] = {"reason": reason}
+
+
+# The no-op answers of the section steps (MODULES.md §4.2: a success that did
+# nothing says so). The words are the C2 contract's.
+_NOOPS = {
+    "already_accepted": "This section is already accepted and nothing has changed since.",
+    "not_approved": "This section isn't approved, so there is nothing to reopen.",
+    "already_current": "That version is already the current one.",
+}
+
+
+def _noop(code: str) -> dict:
+    return {"code": code, "say": _NOOPS[code]}
+
+
+# The state keys a restore carries over from the CURRENT file, never from the
+# version it brings back: restoring never clears currency (C2 §4.8).
+_CURRENCY_KEYS = ("stale", "regenerated", "review", "wording_review")
+
+
+@step_provenance
+def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStore, *,
+                         reason: str = "") -> dict:
+    """Bring a past version of a section back as the current one (C2 §4.8, D3).
+
+    The version is found in the archives (or is the current file); it works
+    when the current file is absent (after a discard). The current file is
+    archived first; the restored text becomes the next version, never its old
+    number. It comes back as a DRAFT a person owns: not approved, PROTECTED
+    (no machine replaces it; accepting it is a separate act). Restoring never
+    clears currency: a stale or under-review current file passes its markers on.
+    The reason is required (D3) and kept on the `restore` event with
+    `from_version`.
+
+    Returns ``{ok, section_key, version, from_version, approved: False,
+    version_status: "working", noop?}``; restoring the current version is
+    ``noop already_current``. Raises section_key_invalid (400),
+    version_not_found (404), version_content_missing (409), reason_required (400).
+    """
+    from workflow import section_writes as sw
+    from workflow.labels import Fact
+    from workflow.ownership import STATE_KEYS, store_content_facts
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    target = sw.read_version(dtxsid, section_key, version, store)
+    noop = {"ok": True, "section_key": section_key, "version": version, "from_version": version,
+            "approved": bool(current and current.get("approved")),
+            "version_status": sw.version_status(dtxsid, section_key, version, store),
+            "noop": _noop("already_current")}
+    if current is not None and current.get("version") == version:
+        return noop
+    reason = sw.require_reason(reason, section_key, "restore")
+
+    data = {k: v for k, v in target.items() if k not in STATE_KEYS}
+    data["approved"] = False
+    store_content_facts(data, {Fact.PROTECTED})
+    for k in _CURRENCY_KEYS:
+        if current is not None and current.get(k):
+            data[k] = current[k]
+    out = sw.write_section(
+        dtxsid, section_key, data, store, act="restore", actor="person",
+        author=sw.author_of(target), force=True, reason=reason, cause="restore",
+        status="working", extra_event={"from_version": version})
+    if out["outcome"] == "unchanged":
+        return {**noop, "version": out["version"]}
+    return {"ok": True, "section_key": section_key, "version": out["version"],
+            "from_version": version, "approved": False, "version_status": "working"}
+
+
+@step_provenance
+def discard_section_step(dtxsid: str, section_key: str, store: PoolStore, *,
+                         reason: str = "") -> dict:
+    """Discard a section's current text (C2 §4.7, D4: behind the old route and
+    pool reset only; the new interface does not offer it). The file is archived,
+    then deleted, and a `discard/discarded` event recorded; the version counter
+    stays monotonic and restore still reaches the text.
+
+    Returns ``{ok, section_key, archived, version}``. Raises
+    section_key_invalid (400), section_not_found (404), section_owned (409:
+    an approved section is released first) and reason_required (400).
+    """
+    from workflow import section_writes as sw
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    if current is None:
+        raise sw.not_found(section_key, "discard")
+    if sw.is_locked(current):
+        raise sw.owned(section_key, "discard")
+    reason = sw.require_reason(reason, section_key, "discard")
+    out = sw.discard(dtxsid, section_key, store, act="discard", actor="person", reason=reason)
+    return {"ok": True, "section_key": section_key, "archived": out["archived"],
+            "version": out["version"]}
+
+
+# ---------------------------------------------------------------------------
+# Studies: create, fill a missing identity, delete (module M1)
+# ---------------------------------------------------------------------------
+
+def _casrn_check_digit_holds(casrn: str) -> bool:
+    """A CASRN's last digit is the sum of the other digits, each times its
+    position counted from the right (from 1), modulo 10."""
+    digits = casrn.replace("-", "")
+    body, check = digits[:-1], digits[-1]
+    return sum(int(d) * i for i, d in enumerate(reversed(body), start=1)) % 10 == int(check)
+
+
+def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
+                        dtxsid_checked_by_person: bool) -> dict:
+    """The identity a person confirmed, checked against the lookup it came from
+    (workflow.studies.lookup_chemical, cached for 10 minutes), as identity.json
+    holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one).
+
+    Refuses ``identity_unconfirmed`` without the confirmation (and, when the
+    service does not list the DTXSID for the compound, without the person's
+    check of it), ``identity_incomplete`` / ``invalid_casrn`` for a malformed
+    one, and ``identity_changed`` when the lookup now gives another chemical."""
+    from narrative.chem_resolver import CASRN_PATTERN
+    from workflow.studies import StudyRefusal, lookup_chemical
+
+    if not confirmed:
+        raise StudyRefusal("identity_unconfirmed", "the identity was not confirmed", 400)
+    identity = identity if isinstance(identity, dict) else {}
+    source = identity.get("source") if isinstance(identity.get("source"), dict) else {}
+    if source.get("kind") != "lookup":
+        raise StudyRefusal("identity_unconfirmed",
+                           f"identity source {source.get('kind')!r}: only a looked-up identity "
+                           "is accepted", 400)
+    name = str(identity.get("name") or "").strip()
+    casrn = str(identity.get("casrn") or "").strip()
+    if not name or not casrn:
+        raise StudyRefusal("identity_incomplete", "the identity needs a name and a CASRN", 400)
+    if not CASRN_PATTERN.match(casrn) or not _casrn_check_digit_holds(casrn):
+        raise StudyRefusal("invalid_casrn", f"CASRN {casrn!r} fails its check digit", 400,
+                           {"casrn": casrn})
+    found = lookup_chemical(dtxsid)
+    seen = found["identity"]
+    if (name, casrn) != (seen["name"], seen["casrn"]):
+        raise StudyRefusal("identity_changed",
+                           f"confirmed {name!r} ({casrn}); the lookup gives {seen['name']!r} "
+                           f"({seen['casrn']})", 409,
+                           {"looked_up": {"name": seen["name"], "casrn": seen["casrn"]}})
+    if not found["dtxsid_matched"] and not dtxsid_checked_by_person:
+        raise StudyRefusal("identity_unconfirmed",
+                           f"{found['service']} does not list {dtxsid} for {seen['name']}; the "
+                           "person did not say they checked the DTXSID", 400)
+    return {"dtxsid": dtxsid, "name": seen["name"], "casrn": seen["casrn"],
+            "pubchem_cid": seen["pubchem_cid"],
+            "identity_source": {"kind": "lookup", "service": found["service"],
+                                "looked_up_at": found["looked_up_at"],
+                                "confirmed_at": datetime.now(timezone.utc).strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"),
+                                "dtxsid_matched": found["dtxsid_matched"]}}
+
+
+@step_provenance
+def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | None,
+                      *, confirmed: bool, dtxsid_checked_by_person: bool = False) -> dict:
+    """Create a study under the chemical's DTXSID, with the identity and the
+    report format a person confirmed (module M1). Writes identity.json and
+    meta.json and nothing else: no files, no pins (Q-M1-10). The phase after is
+    EMPTY. Returns ``{"id": dtxsid}``.
+
+    In order: the id is a bare DTXSID (``study_id_has_suffix``); the format the
+    person saw is the one the id gives now (``format_changed``); the identity
+    is confirmed and is the lookup's (``_confirmed_identity``); the folder is
+    created atomically, so two people cannot both create one (``study_exists``).
+    An existing EMPTY folder counts as absent (a read before C4 may leave one)."""
+    import json
+    import os
+    import shutil
+
+    from pipeline.session_store import session_path
+    from workflow.studies import StudyRefusal, format_hash, require_study_id
+
+    require_study_id(dtxsid)
+    seen = (format_seen or {}).get("hash") if isinstance(format_seen, dict) else None
+    now_hash = format_hash(dtxsid)
+    if seen != now_hash:
+        raise StudyRefusal("format_changed",
+                           f"format seen {seen!r}; the id now gives {now_hash}", 409,
+                           {"hash": now_hash})
+    record = _confirmed_identity(dtxsid, identity, confirmed, dtxsid_checked_by_person)
+
+    # The study appears whole or not at all: written under a hidden name, then
+    # renamed into place. A rename replaces an EMPTY folder (a read before C4
+    # may have left one, R8) and fails on a non-empty one, so of two people
+    # creating the same study at once exactly one succeeds.
+    import uuid
+    folder = session_path(dtxsid)
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    staging = folder.parent / f".creating-{dtxsid}-{uuid.uuid4().hex[:8]}"
+    staging.mkdir()
+    try:
+        stamp = datetime.now(timezone.utc).isoformat()
+        for name, data in (("identity.json", record),
+                           ("meta.json", {"dtxsid": dtxsid, "created_at": stamp,
+                                          "updated_at": stamp})):
+            (staging / name).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        try:
+            os.rename(staging, folder)
+        except OSError:
+            raise StudyRefusal("study_exists", f"session {dtxsid} already exists", 409,
+                               {"existing_id": dtxsid, "id": dtxsid}) from None
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+    logger.info("Created study %s (%s, %s)", dtxsid, record["name"], record["casrn"])
+    return {"id": dtxsid}
+
+
+@step_provenance
+def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
+                         dtxsid_checked_by_person: bool = False) -> dict:
+    """Fill a study's missing chemical identity from a confirmed lookup (module
+    M1). The chemical looked up is the one the session's id names. Refuses a
+    session that does not exist (``study_not_found``), a companion or a report
+    (``read_only_session``), and one whose identity.json already names the
+    chemical (``identity_exists``: changing it is not done here, Q-M1-11).
+    Keeps what identity.json already holds besides (the short name).
+    Returns ``{"id": dtxsid}``."""
+    import json
+    import os
+
+    from common.session_files import read_json_file
+    from workflow.studies import (
+        StudyRefusal, chemical_dtxsid, session_exists, session_folder, session_kind)
+
+    folder = session_folder(dtxsid)
+    if not session_exists(dtxsid):
+        raise StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
+    kind = session_kind(dtxsid)["kind"]
+    if kind in ("companion", "report"):
+        raise StudyRefusal("read_only_session",
+                           f"{dtxsid} is a {kind}; its identity is not filled here", 409)
+    current = read_json_file(folder / "identity.json")
+    current = current if isinstance(current, dict) else {}
+    if current.get("name"):
+        raise StudyRefusal("identity_exists", f"{dtxsid}/identity.json already names "
+                           f"{current['name']!r}", 409)
+    chem = chemical_dtxsid(dtxsid)
+    if not chem:
+        raise StudyRefusal("invalid_study_id", f"{dtxsid} names no chemical to look up", 400,
+                           {"id": dtxsid})
+    record = _confirmed_identity(chem, identity, confirmed, dtxsid_checked_by_person)
+    record = {**current, **record, "dtxsid": dtxsid}
+    tmp = folder / ".identity.json.tmp"
+    tmp.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, folder / "identity.json")
+    return {"id": dtxsid}
+
+
+# What a session holds, by plain category, for the delete dry run: (category,
+# test on a top-level name, words). First match wins; what matches none is
+# "other". The words take the count of entries found.
+_DELETE_CATEGORIES: tuple[tuple[str, object, str], ...] = (
+    ("dataset", lambda n: n in ("integrated.json", "integrated.bm2", "_category_lookup.json",
+                                "genomics.sidecar.json", "_fingerprints.json",
+                                "validation_report.json", "precedence.json",
+                                "animal_report.json", "session.duckdb", "session_parquet",
+                                "references.json", "integration_basis.json",
+                                ".session_db.fingerprint")
+     or n.startswith(("_cache_", ".prepare_content")),
+     "The integrated dataset and everything computed from it (statistics, BMDs, genomics, "
+     "the query database)"),
+    ("statements", lambda n: n in ("study_design.json", "metadata_approved.json",
+                                   "front_matter.json", "deposit.json", "efdr.json"),
+     "What people stated: {names}"),
+    ("identity", lambda n: n == "identity.json",
+     "The chemical's identity as recorded for this study"),
+    ("pins", lambda n: n in ("method_profile.json", "document_definition.json",
+                             "document_definition.yaml"),
+     "{names}"),
+    ("views", lambda n: n in ("views", "document.yaml", "styles.yaml"),
+     "The study's saved report views and its own structure or styles"),
+    ("runs", lambda n: n in ("narrative_runs", "narrative_comparisons", "summary"),
+     "The saved language-model runs and comparisons of its texts"),
+    ("log", lambda n: n == _PROVENANCE_LOG,
+     "The record of what was done to the study and when"),
+)
+# The per-request log the HTTP layer appends to (common.provenance.flush).
+_PROVENANCE_LOG = ".provenance.jsonl"
+
+_STATEMENT_WORDS = {"study_design.json": "study design", "metadata_approved.json":
+                    "experiment metadata", "front_matter.json": "front matter",
+                    "deposit.json": "deposit list", "efdr.json": "eFDR"}
+
+
+def _count_files(path: Path) -> int:
+    return sum(1 for p in path.rglob("*") if p.is_file()) if path.is_dir() else 0
+
+
+def _dir_bytes(path: Path) -> int:
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+
+
+def _megabytes(n: int) -> str:
+    return f"{n / 1_000_000:.0f} MB" if n >= 1_000_000 else f"{max(1, round(n / 1000))} kB"
+
+
+def _pin_words(folder: Path) -> str:
+    """"The method profile pin (ntp-5day-2021, fixed) and the document
+    definition pin (eras/niehs-2026, tracking)" from the pin files."""
+    import json
+    parts = []
+    for file, what in (("method_profile.json", "method profile"),
+                       ("document_definition.json", "document definition")):
+        try:
+            pin = json.loads((folder / file).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(pin, dict):
+            mode = {"fixed": "fixed", "track": "tracking"}.get(pin.get("mode"), pin.get("mode"))
+            facts = ", ".join(str(x) for x in (pin.get("name") or pin.get("profile"), mode) if x)
+            parts.append(f"the {what} pin" + (f" ({facts})" if facts else ""))
+    return (" and ".join(parts) or "the pins").capitalize()
+
+
+def delete_study_dry_run(dtxsid: str) -> dict:
+    """What deleting the study would delete, keep and lose (module M1; the C8
+    dry run, MODULES.md §4.3), with the token the delete must present. Reads
+    only: nothing is created or changed.
+
+    Refuses an absent (or empty) session (``study_not_found``), a published
+    book's content (``read_only_session``), a member of a report
+    (``member_of_report``) and a study with a run in flight (``run_in_flight``).
+
+    ``{"confirm": {act, strength, deletes, keeps, approvals_lost, cost,
+    reason_required}, "type_to_confirm", "preview_token"}``. The token is a hash
+    of every path in the folder with its size and modification time, so any
+    change after the review refuses the delete (``changed_since_preview``)."""
+    import hashlib
+
+    import common.paths
+    from workflow.studies import (
+        StoreIndex, StudyRefusal, delete_verdict, published_record, report_of, session_exists,
+        session_folder, session_kind)
+
+    folder = session_folder(dtxsid)
+    if not session_exists(dtxsid):
+        raise StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
+    index = StoreIndex()
+    info = session_kind(dtxsid, index=index)
+    kind, relations = info["kind"], info["relations"]
+    verdict = delete_verdict(dtxsid, kind, relations, index)
+    if not verdict["allowed"]:
+        raise StudyRefusal(verdict["code"], f"{dtxsid}: delete refused ({kind})", 409,
+                           verdict["details"])
+
+    names = sorted(p.name for p in folder.iterdir())
+    deletes: list[dict] = []
+    n_files = _count_files(folder / "files")
+    n_orig = _count_files(folder / "_originals")
+    if n_files or n_orig:
+        say = f"The study's {n_files} data file" + ("" if n_files == 1 else "s")
+        if n_orig:
+            say += f", and the {n_orig} original" + ("" if n_orig == 1 else "s") + \
+                   " they were converted from"
+        deletes.append({"what": "files", "say": say})
+    # The sections as the read model lists them (their titles, as D1 shows them).
+    from workflow.read_model import study_state
+    on_disk = [r for r in study_state(dtxsid).get("sections", []) if r.get("has_file")]
+    section_keys = {r["key"] for r in on_disk}
+    approved = [r.get("title") or r["key"] for r in on_disk if r.get("approved")]
+    if on_disk:
+        n = len(on_disk)
+        state = ("none is approved" if not approved else
+                 "all approved" if len(approved) == n else f"{len(approved)} approved")
+        titles = ", ".join(r.get("title") or r["key"] for r in on_disk)
+        deletes.append({"what": "sections",
+                        "say": f"{n} report section" + ("" if n == 1 else "s")
+                               + f" ({titles}); {state}"})
+    seen_cats: dict[str, list[str]] = {}
+    for name in names:
+        if name in ("files", "_originals", "history", "meta.json") or \
+                name[:-5] in section_keys:
+            continue
+        cat = next((c for c, test, _ in _DELETE_CATEGORIES if test(name)), "other")
+        seen_cats.setdefault(cat, []).append(name)
+    for cat, test, words in _DELETE_CATEGORIES:
+        if cat not in seen_cats:
+            continue
+        if cat == "statements":
+            say = words.format(names=", ".join(_STATEMENT_WORDS.get(n, n) for n in seen_cats[cat]))
+        elif cat == "pins":
+            say = _pin_words(folder)
+        else:
+            say = words
+        deletes.append({"what": cat, "say": say})
+    if "other" in seen_cats:
+        deletes.append({"what": "other",
+                        "say": "Everything else in the study's folder: " +
+                               ", ".join(seen_cats["other"])})
+    n_hist = _count_files(folder / "history")
+    if n_hist:
+        deletes.append({"what": "history",
+                        "say": f"The history of every section and pin ({n_hist} "
+                               + ("entry" if n_hist == 1 else "entries") + ")"})
+    if kind == "report":
+        deletes.insert(0, {"what": "report",
+                           "say": "The report's list of its studies (studies.json); its studies "
+                                  "stay and then show as sessions of their own"})
+
+    keeps: list[dict] = []
+    out_dir = common.paths.OUTPUT_DIR / dtxsid
+    n_out = _count_files(out_dir)
+    if n_out:
+        keeps.append({"what": "output",
+                      "say": f"The deliverables already written to output/{dtxsid}/ "
+                             f"({n_out} file" + ("" if n_out == 1 else "s") + ")"})
+    from document_model.document_definition import _templates_dir
+    if (_templates_dir() / "studies" / dtxsid).is_dir():
+        pub = published_record(report_of(dtxsid)[0])
+        whose = f"{pub['report']}'s study definition" if pub else "The study definition"
+        keeps.append({"what": "study_definition",
+                      "say": f"{whose} under templates/studies/{dtxsid}/ (not part of the study)"})
+    if relations.get("companion"):
+        keeps.append({"what": "companion",
+                      "say": f"The published book's content, {relations['companion']}"})
+    for m in relations.get("members", []):
+        keeps.append({"what": "member", "say": f"The {m['key']} study {m['id']}"})
+    others = relations.get("others", [])
+    if others:
+        keeps.append({"what": "others",
+                      "say": ("The other session of this chemical, " if len(others) == 1
+                              else "The other sessions of this chemical, ") + ", ".join(others)})
+
+    size = _dir_bytes(folder)
+    cost = f"{_megabytes(size)} will be freed."
+    pub = published_record(report_of(dtxsid)[0])
+    if pub and kind in ("study", "report"):
+        cost = (f"This {'report' if kind == 'report' else 'study'} reproduces {pub['report']}. "
+                "It can be rebuilt only from the command line (tooling.build_published_reports), "
+                "not from this interface. " + cost)
+
+    # The token covers the study's content. The request log (.provenance.jsonl)
+    # is left out: every request that reaches a step appends to it, a refused
+    # delete included, so it would refuse the retry that follows.
+    listing = hashlib.sha256()
+    for p in sorted(folder.rglob("*")):
+        if p.name == _PROVENANCE_LOG and p.parent == folder:
+            continue
+        st = p.lstat()
+        listing.update(f"{p.relative_to(folder)}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return {"confirm": {"act": "delete_study", "strength": "irreversible",
+                        "deletes": deletes, "keeps": keeps,
+                        "approvals_lost": approved, "cost": {"say": cost},
+                        "reason_required": False},
+            "type_to_confirm": dtxsid,
+            "preview_token": "sha256:" + listing.hexdigest()}
+
+
+@step_provenance
+def delete_study_step(dtxsid: str, confirm_id: str, preview_token: str) -> dict:
+    """Delete a study for good, after a person reviewed the dry run and typed
+    its id (module M1; Q-M1-4: permanent). Re-runs the dry run (so its refusals
+    hold here too), then checks the typed id (``confirm_mismatch``: equal to
+    the id, case-sensitive, spaces at either end ignored) and the token
+    (``changed_since_preview``). Removes the session's folder and forgets what
+    the server holds in memory for it. What lies outside the folder (its
+    deliverables in output/, a study definition, other sessions) stays.
+    Returns ``{"deleted", "kept", "say"}``."""
+    import shutil
+
+    from pipeline.pool_globals import forget_session
+    from workflow.studies import StudyRefusal, session_folder
+
+    preview = delete_study_dry_run(dtxsid)
+    if (confirm_id or "").strip() != dtxsid:
+        raise StudyRefusal("confirm_mismatch", f"typed {confirm_id!r}, the study is {dtxsid}", 400)
+    if preview_token != preview["preview_token"]:
+        raise StudyRefusal("changed_since_preview",
+                           f"preview token {preview_token} does not match {preview['preview_token']}",
+                           409)
+    # Renamed away first, so the study leaves the list in one step; then removed.
+    import uuid
+    folder = session_folder(dtxsid)
+    doomed = folder.parent / f".deleting-{dtxsid}-{uuid.uuid4().hex[:8]}"
+    folder.rename(doomed)
+    shutil.rmtree(doomed, ignore_errors=True)
+    if doomed.exists():
+        logger.warning("Deleted study %s: %s could not be fully removed", dtxsid, doomed)
+    forget_session(dtxsid, folder / "files")
+    logger.info("Deleted study %s (folder removed)", dtxsid)
+    return {"deleted": dtxsid, "kept": preview["confirm"]["keeps"],
+            "say": f"{dtxsid} was deleted."}

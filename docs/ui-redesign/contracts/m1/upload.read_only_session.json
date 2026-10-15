@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/upload-csv?dtxsid=DTXSID50469320_published"
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "read_only_session",
+      "status": 409,
+      "message": "DTXSID50469320_published is a published book's companion (published_clone.json); no data act is done on it",
+      "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID50469320_published"
+      }
+    }
+  }
+}

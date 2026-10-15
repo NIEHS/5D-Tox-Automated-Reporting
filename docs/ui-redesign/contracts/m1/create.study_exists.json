@@ -1,0 +1,39 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies",
+    "body": {
+      "dtxsid": "DTXSID7020182",
+      "identity": {
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "pubchem_cid": 6623,
+        "source": {
+          "kind": "lookup",
+          "service": "PubChem",
+          "looked_up_at": "2026-10-15T20:10:51Z"
+        }
+      },
+      "confirmed": true,
+      "dtxsid_checked_by_person": false,
+      "format_seen": {
+        "definition": "eras/niehs-2026",
+        "hash": "cdbd602e773aee83"
+      }
+    }
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "study_exists",
+      "status": 409,
+      "message": "session DTXSID7020182 already exists",
+      "say": "A study of this chemical already exists (DTXSID7020182). Open it instead.",
+      "fix": "M1",
+      "details": {
+        "existing_id": "DTXSID7020182",
+        "id": "DTXSID7020182"
+      }
+    }
+  }
+}

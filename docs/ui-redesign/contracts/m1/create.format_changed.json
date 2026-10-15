@@ -1,0 +1,38 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies",
+    "body": {
+      "dtxsid": "DTXSID3",
+      "identity": {
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "pubchem_cid": 6623,
+        "source": {
+          "kind": "lookup",
+          "service": "PubChem",
+          "looked_up_at": "2026-10-15T20:10:51Z"
+        }
+      },
+      "confirmed": true,
+      "dtxsid_checked_by_person": false,
+      "format_seen": {
+        "definition": "eras/niehs-2026",
+        "hash": "0000000000000000"
+      }
+    }
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "format_changed",
+      "status": 409,
+      "message": "format seen '0000000000000000'; the id now gives cdbd602e773aee83",
+      "say": "The report format this id brings changed since you looked. Review it again.",
+      "fix": null,
+      "details": {
+        "hash": "cdbd602e773aee83"
+      }
+    }
+  }
+}

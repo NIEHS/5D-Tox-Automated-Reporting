@@ -5,6 +5,7 @@ import type { ExistingStudyState, ModuleId } from '../api/types'
 import { nextStepOf } from './nextStep'
 import { moduleById, moduleRoute, studyRoute } from '../kit/modules'
 import { Pending } from '../kit/Pending'
+import { PhaseTag } from '../kit/PhaseTag'
 import { phaseWords } from '../kit/words'
 
 /**
@@ -115,9 +116,13 @@ export function StudyHeader({ state }: { state: ExistingStudyState }) {
           {showStage && (
             <Descriptions.Item label="Stage" span="filled">
               <Space size={4} wrap>
-                <Tag color={words.known ? 'blue' : 'red'} data-testid="phase">
-                  {words.label}
-                </Tag>
+                {state.stands ? (
+                  <PhaseTag phase={state.stands.phase} say={state.stands.say} />
+                ) : (
+                  <Tag color={words.known ? 'blue' : 'red'} data-testid="phase">
+                    {words.label}
+                  </Tag>
+                )}
                 <Typography.Text type="secondary">{words.explain}</Typography.Text>
               </Space>
             </Descriptions.Item>

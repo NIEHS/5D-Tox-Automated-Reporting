@@ -203,3 +203,55 @@ def test_protection_map_accepts_single_root():
     root = _N("background", data_key="background")
     data = {"background": {"approved": True}}
     assert protection_map(root, data) == {"background": GuardLevel.GUARDED}
+
+
+# --- C2: one definition of "owned" -----------------------------------------
+
+import itertools
+
+from workflow.ownership import STATE_KEYS, content_hash, is_owned
+
+
+def _combinations():
+    for approved, user_edited, stale, facts in itertools.product(
+        (False, True), (False, True), (False, True),
+        ([], ["protected"], ["final", "protected"], ["working_draft"], ["first_draft"]),
+    ):
+        yield {"approved": approved, "user_edited": user_edited, "stale": stale, "facts": facts}
+
+
+@pytest.mark.parametrize("section", list(_combinations()))
+def test_i7_protection_mark_iff_machine_may_not_write(section):
+    # I7: the render mark and the machine guard can never disagree.
+    assert (protection_level(section) >= GuardLevel.GUARDED) == (not may_machine_write(section))
+
+
+def test_t3_a_released_section_is_still_protected():
+    # T3: after a release, facts=["protected"]; the mark used to say OPEN.
+    released = {"approved": False, "facts": ["protected"], "revised": {"reason": "r"}}
+    assert is_owned(released)
+    assert may_machine_write(released) is False
+    assert protection_level(released) is GuardLevel.GUARDED
+
+
+def test_ingested_text_is_owned():
+    assert is_owned({"source": "ingested"})
+    assert not is_owned({"source": "generated"})
+
+
+def test_a_working_draft_alone_is_not_owned():
+    assert not is_owned({"facts": ["working_draft"]})
+
+
+def test_content_hash_ignores_state_and_sees_content():
+    base = {"paragraphs": ["a"], "source": "generated"}
+    stated = {**base, "approved": True, "approved_at": "t", "facts": ["final", "protected"],
+              "stale": True, "regenerated": {"reason": "data_changed"}, "wording_review": ["x"],
+              "review": {"why": "numbers_changed"}, "revised": {"reason": "r"}, "version": 9,
+              "saved_at": "t"}
+    assert set(stated) - set(base) == STATE_KEYS
+    assert content_hash(base) == content_hash(stated)
+    assert content_hash(base) != content_hash({**base, "paragraphs": ["b"]})
+    assert content_hash(base).startswith("sha256:")
+    # Key order does not matter (canonical JSON).
+    assert content_hash({"b": 1, "a": 2}) == content_hash({"a": 2, "b": 1})

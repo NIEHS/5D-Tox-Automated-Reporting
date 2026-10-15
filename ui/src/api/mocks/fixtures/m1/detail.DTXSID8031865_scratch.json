@@ -1,0 +1,101 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID8031865_scratch",
+    "kind": "other",
+    "chemical_dtxsid": "DTXSID8031865",
+    "chemical_dtxsid_from": "id_prefix",
+    "identity": {
+      "name": null,
+      "casrn": null,
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-01T10:00:00Z",
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies."
+    },
+    "published": null,
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the study has no report (it has not been processed)"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [
+      {
+        "level": "warn",
+        "code": "not_a_chemical_id",
+        "say": "Made by a tool; its id is not a chemical's DTXSID."
+      },
+      {
+        "level": "warn",
+        "code": "identity_missing",
+        "say": "No chemical identity is on file for this session."
+      }
+    ],
+    "detail": {
+      "banner": {
+        "level": "warning",
+        "say": "This session's id, DTXSID8031865_scratch, is not a chemical's DTXSID: it was made by a tool. Its report uses the 2026 format. A study under DTXSID8031865 would be the chemical's own study.",
+        "links": [
+          {
+            "say": "Create the study DTXSID8031865",
+            "href": "/app/studies/new?dtxsid=DTXSID8031865"
+          }
+        ]
+      },
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

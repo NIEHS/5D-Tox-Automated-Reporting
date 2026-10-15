@@ -1,0 +1,95 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID_TEST"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID_TEST",
+    "kind": "other",
+    "chemical_dtxsid": null,
+    "chemical_dtxsid_from": null,
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "identity": {
+      "name": null,
+      "casrn": null,
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-11T14:12:56Z",
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies."
+    },
+    "published": null,
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the session has no report"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [
+      {
+        "level": "warn",
+        "code": "not_a_chemical_id",
+        "say": "Made by a tool or a test; its id names no chemical."
+      }
+    ],
+    "detail": {
+      "banner": {
+        "level": "warning",
+        "links": [],
+        "say": "This session's id, DTXSID_TEST, names no chemical: it was made by a tool or a test."
+      },
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

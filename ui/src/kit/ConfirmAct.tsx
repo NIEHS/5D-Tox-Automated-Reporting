@@ -4,7 +4,7 @@ import { getDryRun, noopOf } from '../api/client'
 import { ApiError } from '../api/errors'
 import type { DryRun, Noop } from '../api/types'
 import { Refusal } from './Refusal'
-import { useStudyMutation } from './useStudyState'
+import { useStudyMutation, useStudyState } from './useStudyState'
 
 /**
  * Confirm-or-undo for an act that changes or destroys something
@@ -19,7 +19,21 @@ import { useStudyMutation } from './useStudyState'
  * A reversible act with no `undo`, or one that needs a reason, gets the
  * dialog too. An unknown strength is treated as irreversible. If the dry run
  * cannot be had, the act is not offered.
+ *
+ * When the dry run carries a `preview_token` (M1 R4), the act receives it,
+ * and the backend refuses with `changed_since_preview` if the study changed
+ * after the person reviewed the list. The dialog then reads the dry run
+ * again, clears the typed id, and says why. The typed id is compared with
+ * the dry run's `type_to_confirm` (the study id when absent), ignoring spaces
+ * at either end; case matters.
  */
+
+/** What the act receives: the reason, the dry run's token, and the id the person typed. */
+export interface ConfirmInput {
+  reason?: string
+  previewToken?: string
+  typedId?: string
+}
 
 export interface ConfirmActProps {
   studyId: string
@@ -27,8 +41,8 @@ export interface ConfirmActProps {
   act: string
   /** what the button says, in plain words ("Start over") */
   label: string
-  /** do the act; gets the reason when the backend asked for one */
-  perform: (input: { reason?: string }) => Promise<unknown>
+  /** do the act; gets the reason when the backend asked for one, the dry run's token, and the typed id */
+  perform: (input: ConfirmInput) => Promise<unknown>
   /** undo a reversible act */
   undo?: () => Promise<unknown>
   /** called with the act's answer once it is done */
@@ -38,6 +52,10 @@ export interface ConfirmActProps {
   /** the act is not allowed now; `disabledReason` must say why */
   disabled?: boolean
   disabledReason?: string
+  /** the dialog's title (defaults to `label`) */
+  dialogTitle?: string
+  /** the dialog's confirm button (defaults to `label`) */
+  confirmLabel?: string
   buttonProps?: Omit<ButtonProps, 'onClick' | 'disabled' | 'loading' | 'children'>
 }
 
@@ -58,7 +76,7 @@ function isIrreversible(dry: DryRun): boolean {
   return dry.strength === 'irreversible' || !KNOWN_STRENGTHS.has(dry.strength)
 }
 
-function Consequences({ dry }: { dry: DryRun }) {
+function Consequences({ dry, sectionTitle }: { dry: DryRun; sectionTitle: (key: string) => string | null }) {
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {isIrreversible(dry) ? (
@@ -90,11 +108,10 @@ function Consequences({ dry }: { dry: DryRun }) {
             {dry.approvals_lost.length === 1 ? 'This approval will be lost:' : `These ${dry.approvals_lost.length} approvals will be lost:`}
           </Typography.Text>
           <ul style={{ margin: '4px 0 0' }}>
-            {dry.approvals_lost.map((k) => (
-              <li key={k}>
-                <Typography.Text code>{k}</Typography.Text>
-              </li>
-            ))}
+            {dry.approvals_lost.map((k) => {
+              const title = sectionTitle(k)
+              return <li key={k}>{title ? <Typography.Text>{title}</Typography.Text> : <Typography.Text code>{k}</Typography.Text>}</li>
+            })}
           </ul>
         </section>
       )}
@@ -139,40 +156,73 @@ export function ConfirmAct({
   loadDryRun,
   disabled,
   disabledReason,
+  dialogTitle,
+  confirmLabel,
   buttonProps,
 }: ConfirmActProps) {
   const [phase, setPhase] = useState<Phase>({ at: 'idle' })
   const [reason, setReason] = useState('')
   const [typedId, setTypedId] = useState('')
   const [dryError, setDryError] = useState<ApiError | null>(null)
+  const [changed, setChanged] = useState<ApiError | null>(null)
+  // The section titles, for the approvals that would be lost (read, never computed).
+  const { data: state } = useStudyState(studyId)
+  const sectionTitle = (key: string): string | null =>
+    (state?.exists ? state.sections.find((x) => x.key === key)?.title : null) ?? null
 
-  const doAct = useStudyMutation(studyId, (input: { reason?: string }) => perform(input))
+  const doAct = useStudyMutation(studyId, (input: ConfirmInput) => perform(input))
   const doUndo = useStudyMutation(studyId, () => (undo ? undo() : Promise.resolve(undefined)))
 
   const finish = (dry: DryRun, result: unknown) => {
     setPhase({ at: 'done', dry, noop: noopOf(result) })
     setReason('')
     setTypedId('')
+    setChanged(null)
     onDone?.(result)
+  }
+
+  const fetchDry = async (): Promise<DryRun | null> => {
+    try {
+      return await (loadDryRun ? loadDryRun() : getDryRun(studyId, act))
+    } catch (err) {
+      setDryError(err instanceof ApiError ? err : new ApiError({ code: 'unexpected', status: 0, message: String(err), say: 'The application could not say what this would do, so it was not done.', fix: null }))
+      setPhase({ at: 'idle' })
+      return null
+    }
+  }
+
+  // What was reviewed changed: read the dry run again, and make the person review and type again.
+  const reviewAgain = async (err: ApiError) => {
+    setTypedId('')
+    const dry = await fetchDry()
+    doAct.reset()
+    if (!dry) return
+    setChanged(err)
+    setPhase({ at: 'dialog', dry })
   }
 
   // A refusal from the dialog stays in the dialog; otherwise it shows under the button.
   const run = (dry: DryRun) => {
-    doAct.mutate(dry.reason_required ? { reason: reason.trim() } : {}, { onSuccess: (result) => finish(dry, result) })
+    const input: ConfirmInput = {}
+    if (dry.reason_required) input.reason = reason.trim()
+    if (dry.preview_token !== undefined) input.previewToken = dry.preview_token
+    if (isIrreversible(dry)) input.typedId = typedId.trim()
+    setChanged(null)
+    doAct.mutate(input, {
+      onSuccess: (result) => finish(dry, result),
+      onError: (err) => {
+        if (err.code === 'changed_since_preview') void reviewAgain(err)
+      },
+    })
   }
 
   const start = async () => {
     setDryError(null)
+    setChanged(null)
     doAct.reset()
     setPhase({ at: 'loading' })
-    let dry: DryRun
-    try {
-      dry = await (loadDryRun ? loadDryRun() : getDryRun(studyId, act))
-    } catch (err) {
-      setDryError(err instanceof ApiError ? err : new ApiError({ code: 'unexpected', status: 0, message: String(err), say: 'The application could not say what this would do, so it was not done.', fix: null }))
-      setPhase({ at: 'idle' })
-      return
-    }
+    const dry = await fetchDry()
+    if (!dry) return
     if (needsDialog(dry, Boolean(undo))) {
       setPhase({ at: 'dialog', dry })
     } else {
@@ -184,7 +234,8 @@ export function ConfirmAct({
 
   const dialog = phase.at === 'dialog' ? phase.dry : null
   const reasonOk = !dialog?.reason_required || reason.trim().length > 0
-  const idOk = !dialog || !isIrreversible(dialog) || typedId === studyId
+  const expectedId = dialog?.type_to_confirm ?? studyId
+  const idOk = !dialog || !isIrreversible(dialog) || typedId.trim() === expectedId
   const canConfirm = reasonOk && idOk && !doAct.isPending
 
   return (
@@ -242,16 +293,17 @@ export function ConfirmAct({
 
       <Modal
         open={dialog !== null}
-        title={label}
+        title={dialogTitle ?? label}
         mask={{ closable: false }}
         onCancel={() => {
           if (doAct.isPending) return
           setPhase({ at: 'idle' })
           setReason('')
           setTypedId('')
+          setChanged(null)
           doAct.reset()
         }}
-        okText={label}
+        okText={confirmLabel ?? label}
         okButtonProps={{ danger: dialog ? dialog.strength !== 'reversible' : false, disabled: !canConfirm, loading: doAct.isPending }}
         cancelText="Cancel"
         onOk={() => dialog && run(dialog)}
@@ -259,7 +311,16 @@ export function ConfirmAct({
       >
         {dialog && (
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-            <Consequences dry={dialog} />
+            {changed && (
+              <Alert
+                type="warning"
+                showIcon
+                role="alert"
+                title="The study changed while this was open. Review what this will do again."
+                description={changed.say}
+              />
+            )}
+            <Consequences dry={dialog} sectionTitle={sectionTitle} />
             {dialog.reason_required && (
               <label style={{ display: 'block' }}>
                 <Typography.Text strong>Why? </Typography.Text>
@@ -276,7 +337,7 @@ export function ConfirmAct({
             {isIrreversible(dialog) && (
               <label style={{ display: 'block' }}>
                 <Typography.Text>
-                  To confirm, type the study id <Typography.Text code>{studyId}</Typography.Text>
+                  To confirm, type the study id <Typography.Text code>{expectedId}</Typography.Text>
                 </Typography.Text>
                 <Input
                   aria-label="Type the study id to confirm"
@@ -291,7 +352,9 @@ export function ConfirmAct({
                 )}
               </label>
             )}
-            {doAct.error && <Refusal error={doAct.error} studyId={studyId} title={`"${label}" was not done`} />}
+            {doAct.error && doAct.error.code !== 'changed_since_preview' && (
+              <Refusal error={doAct.error} studyId={studyId} title={`"${label}" was not done`} />
+            )}
           </Space>
         )}
       </Modal>

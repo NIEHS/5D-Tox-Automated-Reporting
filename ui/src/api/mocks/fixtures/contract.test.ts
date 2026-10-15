@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { PHASES, SECTION_KINDS, type ExistingStudyState, type SectionState } from '../../types'
+import { ACTIONS, PHASES, SECTION_KINDS, type ExistingStudyState, type SectionState } from '../../types'
 import {
   STATES_BY_ID,
   STATE_APPROVED,
   STATE_COMPANION,
+  STATE_EMPTY,
   STATE_MEMBER_RAT,
   STATE_MISSING,
   STATE_REPORT,
@@ -16,11 +17,14 @@ import {
  * here first rather than on a screen.
  */
 
-const STATE_KEYS = ['exists', 'id', 'identity', 'kind', 'legal_actions', 'phase', 'pins', 'processed', 'readiness', 'relations', 'sections']
+const STATE_KEYS = [
+  'chemical_dtxsid', 'chemical_dtxsid_from', 'exists', 'id', 'identity', 'kind', 'legal_actions', 'phase', 'pins',
+  'processed', 'readiness', 'relations', 'sections', 'stands',
+]
 
 const SECTION_KEYS: (keyof SectionState)[] = [
   'accept', 'approvable', 'approved', 'blocked_by', 'enabled', 'facts', 'has_file', 'instance_of', 'key', 'kind',
-  'machine_may_write', 'model', 'region', 'regenerated', 'source', 'stale', 'title', 'user_edited', 'version',
+  'machine_may_write', 'maturity', 'model', 'region', 'regenerated', 'review', 'source', 'stale', 'title', 'user_edited', 'version',
   'version_status', 'wording_review',
 ]
 
@@ -67,6 +71,22 @@ describe('the state fixtures are real answers in the typed shape', () => {
     }
   })
 
+  it('legal actions are C1\'s: only ADD_FILES when empty, none on a companion or a report (R6)', () => {
+    for (const s of all) for (const a of s.legal_actions) expect(ACTIONS, s.id).toContain(a)
+    expect(STATE_EMPTY.legal_actions).toEqual(['ADD_FILES'])
+    expect(STATE_COMPANION.legal_actions).toEqual([])
+    expect(STATE_REPORT.legal_actions).toEqual([])
+  })
+
+  it('an unpinned method carries the suggestion a person confirms (C1 D1 = B); a pinned one does not', () => {
+    expect(STATE_EMPTY.pins.method?.pinned).toBe(false)
+    const suggestion = STATE_EMPTY.pins.method?.suggestion
+    expect(suggestion?.name).toBeTruthy()
+    expect(suggestion?.why).toBeTruthy()
+    expect(STATE_APPROVED.pins.method?.pinned).toBe(true)
+    expect(STATE_APPROVED.pins.method).not.toHaveProperty('suggestion')
+  })
+
   it('the publish readiness says what it checked and that it is not complete', () => {
     for (const s of all) {
       const p = s.readiness.publish
@@ -81,6 +101,11 @@ describe('the state fixtures are real answers in the typed shape', () => {
     for (const m of STATE_REPORT.members ?? []) {
       expect(Object.keys(m).sort()).toEqual(['exists', 'id', 'key', 'phase', 'processed', 'readiness'])
     }
+    for (const s of all) {
+      expect(Object.keys(s.relations).sort(), s.id).toEqual(['companion', 'members', 'others', 'parent', 'twin'])
+      expect(Object.keys(s.stands).sort(), s.id).toEqual(['next', 'phase', 'say'])
+    }
+    expect(STATE_REPORT.relations.members.map((m) => m.key)).toEqual(['rat', 'mouse'])
     expect(STATE_MEMBER_RAT.relations.parent).toBe(STATE_REPORT.id)
     expect(STATE_COMPANION.relations.twin).toBe('DTXSID50469320')
     expect(STATE_MISSING).toEqual({ id: 'DTXSID9999999', exists: false })

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID0000000001"
+  },
+  "status": 404,
+  "body": {
+    "error": {
+      "code": "study_not_found",
+      "status": 404,
+      "message": "no session DTXSID0000000001",
+      "say": "There is no study DTXSID0000000001. It may have been deleted.",
+      "fix": "M1",
+      "details": {
+        "id": "DTXSID0000000001"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "status": 503,
+  "body": {
+    "error": {
+      "code": "identity_lookup_unreachable",
+      "status": 503,
+      "message": "PubChem request failed: ConnectTimeout",
+      "say": "The chemical lookup service (PubChem) could not be reached. Nothing was created. Try again in a minute.",
+      "fix": null,
+      "details": {
+        "service": "PubChem"
+      }
+    }
+  }
+}

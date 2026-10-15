@@ -1,0 +1,110 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID50469320_published/state"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID50469320_published",
+    "exists": true,
+    "kind": "companion",
+    "chemical_dtxsid": "DTXSID50469320",
+    "chemical_dtxsid_from": "id_prefix",
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": "DTXSID50469320",
+      "others": []
+    },
+    "phase": "EMPTY",
+    "legal_actions": [],
+    "identity": {
+      "name": "Perfluorohexanesulfonamide",
+      "casrn": "41997-13-1",
+      "dtxsid": "DTXSID50469320_published",
+      "short_name": null
+    },
+    "pins": {
+      "method": {
+        "pinned": false,
+        "name": null,
+        "hash": null,
+        "series": null,
+        "mode": null,
+        "pinned_by": null,
+        "pinned_at": null,
+        "deviations": [
+          "no profile pinned; the newest, ntp-5day-2025.1, is used"
+        ],
+        "unchecked": [],
+        "mismatches": [],
+        "suggestion": {
+          "name": "ntp-5day-2025.1",
+          "why": "the newest profile of the ntp-5day series (the study has no recorded analyses to compare)"
+        }
+      },
+      "definition": {
+        "pinned": false,
+        "name": "eras/niehs-2026",
+        "hash": null,
+        "mode": null,
+        "pinned_by": null,
+        "pinned_at": null,
+        "source": "session",
+        "snapshot": false,
+        "drift": null
+      }
+    },
+    "processed": false,
+    "sections": [
+      {
+        "key": "abstract",
+        "title": "Abstract",
+        "kind": "authored",
+        "approvable": false,
+        "instance_of": null,
+        "region": "front",
+        "has_file": false,
+        "enabled": true,
+        "blocked_by": [],
+        "approved": false,
+        "facts": [],
+        "user_edited": false,
+        "stale": false,
+        "regenerated": null,
+        "wording_review": [],
+        "source": null,
+        "model": null,
+        "version": null,
+        "version_status": null,
+        "maturity": null,
+        "review": null,
+        "machine_may_write": true,
+        "accept": {
+          "allowed": false,
+          "code": "not_approvable",
+          "say": "This is supplied or standard text, not text the application writes, so it is not approved here."
+        }
+      }
+    ],
+    "readiness": {
+      "publish": {
+        "ready": true,
+        "complete": false,
+        "checks": [
+          {
+            "id": "stale_llm_sections",
+            "say": "Whether any section written by the language model is out of date with the study's data."
+          }
+        ],
+        "items": []
+      }
+    },
+    "stands": {
+      "phase": null,
+      "say": "The published book's content (read-only)",
+      "next": null
+    }
+  }
+}

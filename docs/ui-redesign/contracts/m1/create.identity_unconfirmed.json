@@ -1,0 +1,36 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies",
+    "body": {
+      "dtxsid": "DTXSID3",
+      "identity": {
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "pubchem_cid": 6623,
+        "source": {
+          "kind": "lookup",
+          "service": "PubChem",
+          "looked_up_at": "2026-10-15T20:10:51Z"
+        }
+      },
+      "confirmed": false,
+      "dtxsid_checked_by_person": false,
+      "format_seen": {
+        "definition": "eras/niehs-2026",
+        "hash": "cdbd602e773aee83"
+      }
+    }
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "identity_unconfirmed",
+      "status": 400,
+      "message": "the identity was not confirmed",
+      "say": "Confirm the chemical before going on: tick the box that says it is the chemical you are studying.",
+      "fix": null,
+      "details": {}
+    }
+  }
+}

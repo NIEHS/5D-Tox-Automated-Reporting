@@ -4,12 +4,15 @@ import type { ErrorEnvelope, ExistingStudyState, RunEvent } from '../types'
 import {
   DRY_RUNS_BY_ACT,
   REFUSAL_INVALID_STUDY_ID,
+  REFUSAL_PROCESS_NOT_ALLOWED,
   REFUSAL_RUN_IN_FLIGHT,
   STATES_BY_ID,
   STREAM_PROCESS_OK,
   VOCABULARIES,
   stateNotFound,
 } from './fixtures'
+import { createM1Handlers, resetM1Db } from './m1'
+import { running } from './runs'
 
 /** The backend's session-id gate (common.dtxsid.DTXSID_RE). */
 const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
@@ -25,13 +28,14 @@ const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
 export interface MockOptions {
   /** pause between streamed events; 0 in tests */
   stepDelayMs?: number
+  /** how long the chemical lookup takes (it takes seconds against PubChem); 0 in tests */
+  lookupDelayMs?: number
 }
 
-const running = new Map<string, string>()
-
-/** Forget every mock run; called between tests. */
+/** Forget every mock run and every change made to the mock studies; called between tests. */
 export function resetMockDb(): void {
   running.clear()
+  resetM1Db()
 }
 
 export function envelope(body: ErrorEnvelope): Response {
@@ -64,8 +68,12 @@ export function ndjsonResponse(events: RunEvent[], stepDelayMs = 0, onEnd?: () =
   return new HttpResponse(stream, { headers: { 'Content-Type': 'application/x-ndjson' } })
 }
 
-export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
+export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptions = {}) {
   return [
+    // M1 Studies (docs/ui-redesign/modules/m1/contract.md); first, because it also
+    // answers the state of the sessions it creates, deletes or adds.
+    ...createM1Handlers({ lookupDelayMs }),
+
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)
       if (!SESSION_ID.test(id)) {
@@ -103,15 +111,14 @@ export function createHandlers({ stepDelayMs = 0 }: MockOptions = {}) {
         })
       }
       if (running.has(id)) return envelope(REFUSAL_RUN_IN_FLIGHT)
-      if (!state.legal_actions.includes('REPROCESS')) {
+      if (!state.legal_actions.includes('PROCESS')) {
+        // The backend's own refusal for a study that cannot be processed yet (C1).
+        if (id === 'DTXSID1021952') return envelope(REFUSAL_PROCESS_NOT_ALLOWED)
         return envelope({
           error: {
-            code: 'phase_not_allowed',
-            status: 409,
-            message: `StepError: action REPROCESS is not legal in phase ${state.phase}`,
-            say: 'The study cannot be processed yet: its data have not been combined.',
-            fix: 'M3',
-            details: { phase: state.phase, action: 'REPROCESS', legal_actions: state.legal_actions },
+            ...REFUSAL_PROCESS_NOT_ALLOWED.error,
+            message: `PROCESS refused for ${id}: the study is in phase ${state.phase}`,
+            details: { action: 'PROCESS', phase: state.phase, legal_actions: state.legal_actions },
           },
         })
       }

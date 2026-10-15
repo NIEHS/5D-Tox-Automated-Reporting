@@ -4,14 +4,24 @@
     "id": "DTXSID5032498",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID5032498",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "VALIDATED",
     "legal_actions": [
+      "ADD_FILES",
+      "CONFIRM_CLASSIFICATION",
       "INTEGRATE",
-      "RESET"
+      "REMOVE_FILE",
+      "RESET",
+      "RESOLVE",
+      "VALIDATE"
     ],
     "identity": {
       "name": "Triclosan",
@@ -66,6 +76,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -93,6 +105,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -120,6 +134,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -147,6 +163,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -174,6 +192,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -201,6 +221,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -228,6 +250,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -255,6 +279,8 @@
         "model": "claude-sonnet-4-6",
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -284,6 +310,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -311,6 +339,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -338,6 +368,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -365,6 +397,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -392,6 +426,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -419,6 +455,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -446,6 +484,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -473,6 +513,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -503,6 +545,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -522,6 +566,14 @@
           }
         ],
         "items": []
+      }
+    },
+    "stands": {
+      "phase": "VALIDATED",
+      "say": "Files validated, not yet integrated",
+      "next": {
+        "say": "Integrate the data",
+        "fix": "M3"
       }
     }
   }

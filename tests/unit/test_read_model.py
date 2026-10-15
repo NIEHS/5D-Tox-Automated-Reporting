@@ -129,7 +129,9 @@ def test_phase_and_legal_actions_come_from_the_engine(session):
                       report={"issues": [], "coverage_matrix": {}})
     state = study_state(ID, store)
     assert state["phase"] == "INTEGRATED"
-    assert state["legal_actions"] == ["APPROVE", "REPROCESS", "RESET", "VALIDATE"]
+    assert state["legal_actions"] == sorted([
+        "ADD_FILES", "APPROVE", "CONFIRM_CLASSIFICATION", "INTEGRATE", "PROCESS",
+        "REMOVE_FILE", "RESET", "RESOLVE", "STATE_DATASET_FACTS", "VALIDATE"])
     assert state["processed"] is False
     assert state["identity"] is None          # never written: absent, not guessed
 
@@ -307,6 +309,41 @@ def test_an_unpinned_method_says_which_profile_would_be_used(session):
     assert not (session / "method_profile.json").exists()   # read, never pinned
 
 
+def test_until_a_person_chooses_the_method_a_suggestion_is_served(session):
+    """C1 D1 = B: no person's pin → `suggestion` {name, why} (for M5 to
+    propose); a default pin is not a person's choice; a person's pin has none.
+    Reading it pins nothing."""
+    from pipeline.method_profile import newest_profile
+    method = study_state(ID, FakeStore(session))["pins"]["method"]
+    assert method["suggestion"]["name"] == newest_profile()
+    assert "newest" in method["suggestion"]["why"]
+    assert not (session / "method_profile.json").exists()
+
+    _pin_method(session, "ntp-5day-2025", mode="track", by="default")
+    method = study_state(ID, FakeStore(session))["pins"]["method"]
+    assert method["pinned_by"] == "default" and method["suggestion"]["name"]
+
+    _pin_method(session, "ntp-5day-2021")
+    assert "suggestion" not in study_state(ID, FakeStore(session))["pins"]["method"]
+
+
+def test_the_suggestion_follows_the_recorded_analyses(session):
+    """With a dataset, the profile whose expectations its recorded analyses
+    contradict least is suggested (here the 2021 one: 10% relative deviation)."""
+    integrated = {"bMDResult": [{"name": "rat_4D_LI_No0_BMD", "analysisInfo": {"notes": [
+        "Data Source: rat_4D_LI_No0", "BMR Type: Relative Deviation", "BMR Factor: 0.1",
+        "Model Averaging Method: x"]}}]}
+    (session / "integrated.json").write_text(json.dumps(integrated))
+    from pipeline import method_profile as mp
+    expected = {p["name"]: len(mp.recorded_mismatches(integrated, mp.resolve(p["name"], probe=False)))
+                for p in mp.list_profiles()}
+    best = min(expected.values())
+    suggestion = study_state(ID, FakeStore(session))["pins"]["method"]["suggestion"]
+    assert expected[suggestion["name"]] == best
+    if suggestion["name"] != mp.newest_profile():
+        assert "matches the analysis settings" in suggestion["why"]
+
+
 def test_a_changed_profile_is_reported_not_raised(session):
     _pin_method(session, "ntp-5day-2021", hash_="0000000000000000")
     method = study_state(ID, FakeStore(session))["pins"]["method"]
@@ -407,19 +444,65 @@ def test_a_single_study_has_no_members_key(session):
 
 def test_the_kind_of_session_and_its_relations(sessions_dir, session):
     assert study_state(ID)["kind"] == "study"
-    assert study_state(ID)["relations"] == {"parent": None, "twin": None}
+    assert study_state(ID)["relations"] == {"parent": None, "members": [], "companion": None,
+                                            "twin": None, "others": []}
+    assert study_state(ID)["chemical_dtxsid"] == ID
+    assert study_state(ID)["stands"]["say"] == "No files yet"
 
     (session / "studies.json").write_text(json.dumps({"rat": f"{ID}_rat"}))
     (sessions_dir / f"{ID}_rat").mkdir()
     assert study_state(ID)["kind"] == "report"
+    assert study_state(ID)["legal_actions"] == []          # R6: its data is in its studies
     member = study_state(f"{ID}_rat")
     assert member["kind"] == "member" and member["relations"]["parent"] == ID
+    assert member["legal_actions"] == ["ADD_FILES"]
 
     companion = sessions_dir / f"{ID}_published"
     companion.mkdir()
     (companion / "published_clone.json").write_text(json.dumps({"report": "NIEHS-10", "twin": ID}))
     clone = study_state(f"{ID}_published")
     assert clone["kind"] == "companion" and clone["relations"]["twin"] == ID
+    assert clone["legal_actions"] == []                   # R6: read-only
 
     (sessions_dir / f"{ID}_nb").mkdir()
     assert study_state(f"{ID}_nb")["kind"] == "other"
+
+
+# ---------------------------------------------------------------------------
+# C2: maturity, review, the version's status, and accept under the new rules
+# ---------------------------------------------------------------------------
+
+def test_c2_section_rows_carry_maturity_review_and_the_owned_guard(session):
+    from pipeline.session_store import _VERSION_EVENT_KEY, save_section
+    sections = {
+        # approved and blessed: nothing left to accept
+        "background": {"approved": True, "facts": ["final", "protected"], "source": "model"},
+        # knocked down by Process (C2 D2/A1): under review, acceptable
+        "bm2_body-weight": {"approved": False, "facts": ["protected"], "source": "generated",
+                            "review": {"why": "numbers_changed", "since_version": 1, "flips": []}},
+        # released: not approved, still protected from the machine
+        "summary": {"approved": False, "facts": ["protected"], "revised": {"reason": "r"},
+                    "source": "generated"},
+    }
+    events = {"background": ("edit", "blessed"), "bm2_body-weight": ("reprocess", "needs-re-bless"),
+              "summary": ("revise", "working")}
+    for key, d in sections.items():
+        cause, status = events[key]
+        save_section(ID, key, {**d, _VERSION_EVENT_KEY: {"cause": cause, "status": status}})
+    on_disk = {k: json.loads((session / f"{k}.json").read_text()) for k in sections}
+    state = study_state(ID, FakeStore(session, sections=on_disk))
+
+    bg = _row(state, "background")
+    assert bg["maturity"] == "final" and bg["review"] is None
+    assert bg["version_status"] == "blessed" and bg["machine_may_write"] is False
+    assert bg["accept"]["allowed"] is False and bg["accept"]["code"] == "already_accepted"
+
+    bw = _row(state, "bm2_body-weight")
+    assert bw["maturity"] is None and bw["version_status"] == "needs-re-bless"
+    assert bw["review"]["why"] == "numbers_changed" and "data changed" in bw["review"]["say"]
+    assert bw["machine_may_write"] is False
+    assert bw["accept"] == {"allowed": True, "code": None, "say": None}
+
+    summary = _row(state, "summary")
+    assert summary["approved"] is False and summary["machine_may_write"] is False   # D1
+    assert summary["version_status"] == "working"

@@ -157,13 +157,33 @@ def test_a_foreign_status_code_is_not_passed_to_the_client():
 
 
 def test_an_exception_naming_a_listed_code_is_taken_at_its_word():
-    exc = StepError("Process is not legal in phase UPLOADED (legal: CLEAR_FILES, VALIDATE)", 409)
+    exc = StepError("Process is not legal in phase UPLOADED (legal: RESET, VALIDATE)", 409)
     exc.code = "phase_not_allowed"
     exc.phase = "UPLOADED"
-    exc.legal_actions = ["CLEAR_FILES", "VALIDATE"]
+    exc.legal_actions = ["RESET", "VALIDATE"]
     body = explain(exc)["error"]
     assert (body["code"], body["status"]) == ("phase_not_allowed", 409)
-    assert body["details"] == {"phase": "UPLOADED", "legal_actions": ["CLEAR_FILES", "VALIDATE"]}
+    assert body["details"] == {"phase": "UPLOADED", "legal_actions": ["RESET", "VALIDATE"]}
 
     exc.code = "not_a_listed_code"
     assert classify(exc)[0] != "not_a_listed_code"
+
+
+# --- C2: the refusals a section act gives ------------------------------------
+
+@pytest.mark.parametrize("code", ["section_owned", "section_key_invalid", "reason_required",
+                                  "version_not_found", "version_content_missing",
+                                  "approve_content_retired", "approve_via_accept"])
+def test_c2_codes_are_in_the_closed_list(code):
+    assert code in REFUSALS and REFUSALS[code].fix in _MODULES
+
+
+def test_a_section_refusal_names_its_code_and_details():
+    from workflow.section_writes import not_found, owned
+    body = explain(owned("summary", "use_run"))["error"]
+    assert body["code"] == "section_owned" and body["status"] == 409
+    assert body["details"] == {"key": "summary", "act": "use_run"}
+    body = explain(not_found("bm2_x", "reopen"))["error"]
+    assert body["code"] == "section_not_found" and body["status"] == 404
+    assert body["message"] == "No 'bm2_x' section to reopen"
+    assert "“bm2_x”" in body["say"] and "nothing to reopen" in body["say"]

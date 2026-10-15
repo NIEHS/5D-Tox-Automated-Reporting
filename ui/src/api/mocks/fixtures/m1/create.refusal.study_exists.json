@@ -1,0 +1,15 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "study_exists",
+      "status": 409,
+      "message": "session DTXSID50469320 already exists",
+      "say": "A study of this chemical already exists (DTXSID50469320). Open it instead.",
+      "fix": "M1",
+      "details": {
+        "existing_id": "DTXSID50469320"
+      }
+    }
+  }
+}

@@ -20,6 +20,8 @@ Usage:
     python chem_resolver.py --dtxsid DTXSID6020430
 """
 
+import contextlib
+import contextvars
 import json
 import os
 import re
@@ -126,12 +128,40 @@ class ChemicalIdentity:
 # PubChem resolver — free, no API key needed
 # ---------------------------------------------------------------------------
 
+# Why a request got no answer, when someone asked (recording_failures): a
+# service that could not be reached is a different fact from a compound it
+# does not know, and a caller deciding "no such chemical" must tell them apart.
+_FAILURES: contextvars.ContextVar[list | None] = contextvars.ContextVar("_FAILURES", default=None)
+
+
+@contextlib.contextmanager
+def recording_failures():
+    """Collect, as text, every request in the block that got no answer for a
+    reason other than "not found" (a network error, a timeout, a 5xx or a rate
+    limit). An empty list after the block means every miss was a real "not
+    found". The resolver's own behaviour is unchanged (it still falls through)."""
+    failures: list[str] = []
+    token = _FAILURES.set(failures)
+    try:
+        yield failures
+    finally:
+        _FAILURES.reset(token)
+
+
+def _record_failure(what: str) -> None:
+    failures = _FAILURES.get()
+    if failures is not None:
+        failures.append(what)
+
+
 def _pubchem_get(path: str, params: dict | None = None) -> dict | None:
     """
     Make a GET request to PubChem PUG REST and return parsed JSON.
 
     Returns None on any error (network, 404, rate limit, etc.) so that
     callers can gracefully fall through to the next resolution strategy.
+    A failure other than 404 is recorded for a caller inside
+    ``recording_failures``.
     """
     url = f"{PUBCHEM_BASE}{path}"
     try:
@@ -140,8 +170,14 @@ def _pubchem_get(path: str, params: dict | None = None) -> dict | None:
         if r.status_code == 200:
             return r.json()
         # PubChem returns 404 for "not found", which is expected for novel chemicals
+        if r.status_code != 404:
+            _record_failure(f"PubChem answered HTTP {r.status_code}")
         return None
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        _record_failure(f"PubChem request failed: {type(exc).__name__}")
+        return None
+    except ValueError:  # a 200 whose body is not JSON
+        _record_failure("PubChem answered with a body that is not JSON")
         return None
 
 
@@ -199,6 +235,31 @@ def _fetch_pubchem_synonyms(cid: int) -> list[str]:
         if info_list:
             return info_list[0].get("Synonym", [])
     return []
+
+
+def pubchem_synonyms(cid: int) -> list[str]:
+    """Every synonym PubChem lists for a CID, uncapped (ChemicalIdentity keeps
+    only the first 20, which can miss the compound's DTXSID)."""
+    return _fetch_pubchem_synonyms(cid) if cid else []
+
+
+def structure_png(cid: int, size: str = "300x300") -> bytes | None:
+    """The compound's 2-D structure picture from PubChem (PNG bytes), None when
+    PubChem returns none (a failure is recorded as _pubchem_get does)."""
+    if not cid:
+        return None
+    try:
+        time.sleep(RATE_LIMIT)
+        r = requests.get(f"{PUBCHEM_BASE}/compound/cid/{int(cid)}/PNG",
+                         params={"image_size": size}, timeout=15)
+    except requests.RequestException as exc:
+        _record_failure(f"PubChem request failed: {type(exc).__name__}")
+        return None
+    if r.status_code == 200 and r.content.startswith(b"\x89PNG"):
+        return r.content
+    if r.status_code != 404:
+        _record_failure(f"PubChem answered HTTP {r.status_code}")
+    return None
 
 
 def _fetch_pubchem_description(cid: int) -> str:
@@ -320,8 +381,14 @@ def _ctx_get(path: str, params: dict | None = None,
         r = requests.get(url, params=params, headers=headers, timeout=15)
         if r.status_code == 200:
             return r.json()
+        if r.status_code != 404:
+            _record_failure(f"CTX answered HTTP {r.status_code}")
         return None
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        _record_failure(f"CTX request failed: {type(exc).__name__}")
+        return None
+    except ValueError:
+        _record_failure("CTX answered with a body that is not JSON")
         return None
 
 

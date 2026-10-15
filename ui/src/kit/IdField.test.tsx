@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { VOCABULARIES } from '../api/mocks/fixtures'
 import type { IdKind } from '../api/types'
 import { renderWithApp } from '../test/render'
-import { casrnCheckDigitOk, checkId } from './checkId'
+import { casrnCheckDigitOk, checkId, dtxsidsIn } from './checkId'
 import { IdField } from './IdField'
 
 const P = VOCABULARIES.patterns
@@ -17,14 +17,15 @@ describe('checkId', () => {
   it('refuses a suffixed study id and says why', () => {
     const r = checkId('dtxsid', 'DTXSID50469320_rat', P.dtxsid)
     expect(r.ok).toBe(false)
-    expect(r.ok === false && r.say).toMatch(/DTXSID alone \(DTXSID50469320\)/)
+    expect(r.ok === false && r.say).toMatch(/DTXSID alone \(DTXSID50469320\)\. Ids with a suffix/)
   })
 
   it('refuses lower case, spaces, empty, and the wrong shape', () => {
     expect(checkId('dtxsid', 'dtxsid50469320', P.dtxsid)).toMatchObject({ ok: false, say: 'Write DTXSID in capital letters.' })
     expect(checkId('dtxsid', ' DTXSID50469320', P.dtxsid)).toMatchObject({ ok: false, say: 'Remove the spaces before or after it.' })
     expect(checkId('dtxsid', '', P.dtxsid)).toMatchObject({ ok: false })
-    expect(checkId('dtxsid', 'DTXSIDabc', P.dtxsid)).toMatchObject({ ok: false, say: expect.stringMatching(/For example: DTXSID50469320/) as unknown })
+    expect(checkId('dtxsid', '', P.dtxsid)).toMatchObject({ ok: false, say: "Enter the chemical's DTXSID." })
+    expect(checkId('dtxsid', 'DTXSIDabc', P.dtxsid)).toMatchObject({ ok: false, say: expect.stringMatching(/^After 'DTXSID' come digits only/) as unknown })
   })
 
   it('checks a CAS number, including its check digit', () => {
@@ -45,7 +46,21 @@ describe('checkId', () => {
 
   it('checks a study id with the backend\'s own study-id rule (a bare DTXSID)', () => {
     expect(checkId('study_id', 'DTXSID50469320', P.study_id)).toEqual({ ok: true })
-    expect(checkId('study_id', 'DTXSID1020431_rat', P.study_id)).toMatchObject({ ok: false, say: expect.stringMatching(/made by the application/) as unknown })
+    expect(checkId('study_id', 'DTXSID1020431_rat', P.study_id)).toMatchObject({ ok: false, say: expect.stringMatching(/made by the system/) as unknown })
+  })
+
+  it('names the DTXSID mistakes before the pattern (M1 spec §4 rules 3 to 6)', () => {
+    expect(checkId('dtxsid', '7020182', P.dtxsid)).toMatchObject({ ok: false, say: "A DTXSID starts with 'DTXSID', for example DTXSID50469320." })
+    expect(checkId('dtxsid', 'DTXSID50469320_v2', P.dtxsid)).toMatchObject({ ok: false, say: expect.stringMatching(/^A study's id is the DTXSID alone/) as unknown })
+    expect(checkId('dtxsid', 'DTXSID5046932O', P.dtxsid)).toMatchObject({ ok: false, say: "Character 14 is the letter O. A DTXSID has only digits after 'DTXSID'." })
+    expect(checkId('dtxsid', 'DTXSIDl0', P.dtxsid)).toMatchObject({ ok: false, say: expect.stringMatching(/Character 7 is the letter L/) as unknown })
+    expect(checkId('dtxsid', 'DTXSID', P.dtxsid)).toMatchObject({ ok: false, say: expect.stringMatching(/digits only/) as unknown })
+  })
+
+  it('finds the DTXSIDs in pasted text', () => {
+    expect(dtxsidsIn('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')).toEqual(['DTXSID7020182'])
+    expect(dtxsidsIn('DTXSID1 and dtxsid2')).toEqual(['DTXSID1', 'DTXSID2'])
+    expect(dtxsidsIn('nothing here')).toEqual([])
   })
 
   it('serves no date rule, so none is checked (none is invented)', () => {
@@ -71,15 +86,48 @@ describe('<IdField>', () => {
     await waitFor(() => expect(input).toBeEnabled())
     expect(screen.queryByText(/For example/)).not.toBeInTheDocument()
     await user.type(input, 'DTXSID5046932_')
-    expect(screen.getByText(/made by the application itself/)).toBeInTheDocument()
+    expect(screen.getByText(/made by the system/)).toBeInTheDocument()
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(onCheck).toHaveBeenLastCalledWith(false)
     await user.clear(input)
     await user.type(input, 'DTXSID50469320')
-    expect(screen.queryByText(/made by the application itself/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/made by the system/)).not.toBeInTheDocument()
     expect(input).toHaveAttribute('aria-invalid', 'false')
     expect(screen.getByLabelText('looks right')).toBeInTheDocument()
     await waitFor(() => expect(onCheck).toHaveBeenLastCalledWith(true))
+  })
+
+  it('makes a DTXSID upper case as it is typed, visibly', async () => {
+    const { user } = renderWithApp(<Host kind="dtxsid" onCheck={vi.fn()} />)
+    const input = await screen.findByRole('textbox', { name: 'DTXSID' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.type(input, 'dtxsid7020182')
+    expect(input).toHaveValue('DTXSID7020182')
+  })
+
+  it('trims a paste, and offers the DTXSID found in pasted text without filling it in', async () => {
+    const { user } = renderWithApp(<Host kind="dtxsid" onCheck={vi.fn()} />)
+    const input = await screen.findByRole('textbox', { name: 'DTXSID' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.click(input)
+    await user.paste('  DTXSID50469320 ')
+    expect(input).toHaveValue('DTXSID50469320')
+    expect(screen.queryByTestId('id-offer')).not.toBeInTheDocument()
+    await user.clear(input)
+    await user.paste('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')
+    expect(input).toHaveValue('HTTPS://COMPTOX.EPA.GOV/DASHBOARD/CHEMICAL/DETAILS/DTXSID7020182')
+    expect(screen.getByText(/starts with 'DTXSID'/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Use DTXSID7020182?' }))
+    expect(input).toHaveValue('DTXSID7020182')
+    expect(screen.queryByTestId('id-offer')).not.toBeInTheDocument()
+  })
+
+  it('leaves a CAS number as it is typed', async () => {
+    const { user } = renderWithApp(<Host kind="casrn" onCheck={vi.fn()} />)
+    const input = await screen.findByRole('textbox', { name: 'CAS number' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.type(input, '80-05-8')
+    expect(screen.getByText(/check digit doesn't match/)).toBeInTheDocument()
   })
 
   it('shows the example from the backend as the placeholder', async () => {

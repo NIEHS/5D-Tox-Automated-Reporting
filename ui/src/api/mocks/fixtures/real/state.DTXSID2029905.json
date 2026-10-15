@@ -4,14 +4,27 @@
     "id": "DTXSID2029905",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID2029905",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "APPROVED",
     "legal_actions": [
-      "REPROCESS",
-      "RESET"
+      "ADD_FILES",
+      "APPROVE",
+      "CONFIRM_CLASSIFICATION",
+      "INTEGRATE",
+      "PROCESS",
+      "REMOVE_FILE",
+      "RESET",
+      "RESOLVE",
+      "STATE_DATASET_FACTS",
+      "VALIDATE"
     ],
     "identity": {
       "name": "1,1,2,2-Tetrahydroperfluoro-1-dodecanol",
@@ -70,6 +83,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -97,6 +112,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -124,6 +141,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -151,6 +170,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -178,6 +199,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -205,6 +228,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -232,6 +257,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -263,11 +290,13 @@
         "model": "claude-sonnet-4-6",
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -290,6 +319,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -317,6 +348,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -348,11 +381,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -375,6 +410,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -402,6 +439,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -429,6 +468,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -460,11 +501,13 @@
         "model": null,
         "version": 1,
         "version_status": "blessed",
+        "maturity": "final",
+        "review": null,
         "machine_may_write": false,
         "accept": {
-          "allowed": true,
-          "code": null,
-          "say": null
+          "allowed": false,
+          "code": "already_accepted",
+          "say": "This section is already accepted and nothing has changed since."
         }
       },
       {
@@ -487,6 +530,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -514,6 +559,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -541,6 +588,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -568,6 +617,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -595,6 +646,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -622,6 +675,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -649,6 +704,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -676,6 +733,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -703,6 +762,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -722,6 +783,14 @@
           }
         ],
         "items": []
+      }
+    },
+    "stands": {
+      "phase": "APPROVED",
+      "say": "Data reviewed",
+      "next": {
+        "say": "Review the report's sections",
+        "fix": "D1"
       }
     }
   }

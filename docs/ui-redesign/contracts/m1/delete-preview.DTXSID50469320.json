@@ -1,0 +1,72 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID50469320/delete-preview"
+  },
+  "status": 200,
+  "body": {
+    "confirm": {
+      "act": "delete_study",
+      "strength": "irreversible",
+      "deletes": [
+        {
+          "what": "files",
+          "say": "The study's 27 data files, and the 24 originals they were converted from"
+        },
+        {
+          "what": "sections",
+          "say": "9 report sections (Background, Body Weight, Clinical Chemistry, Clinical Observations, Hematology, Hormones, Organ Weight, Tissue Concentration, Summary); none is approved"
+        },
+        {
+          "what": "dataset",
+          "say": "The integrated dataset and everything computed from it (statistics, BMDs, genomics, the query database)"
+        },
+        {
+          "what": "statements",
+          "say": "What people stated: deposit list, front matter, study design"
+        },
+        {
+          "what": "identity",
+          "say": "The chemical's identity as recorded for this study"
+        },
+        {
+          "what": "pins",
+          "say": "The method profile pin (ntp-5day-2021, fixed)"
+        },
+        {
+          "what": "log",
+          "say": "The record of what was done to the study and when"
+        },
+        {
+          "what": "history",
+          "say": "The history of every section and pin (1 entry)"
+        }
+      ],
+      "keeps": [
+        {
+          "what": "output",
+          "say": "The deliverables already written to output/DTXSID50469320/ (7 files)"
+        },
+        {
+          "what": "study_definition",
+          "say": "NIEHS-10's study definition under templates/studies/DTXSID50469320/ (not part of the study)"
+        },
+        {
+          "what": "companion",
+          "say": "The published book's content, DTXSID50469320_published"
+        },
+        {
+          "what": "others",
+          "say": "The other session of this chemical, DTXSID50469320_nb"
+        }
+      ],
+      "approvals_lost": [],
+      "cost": {
+        "say": "This study reproduces NIEHS-10. It can be rebuilt only from the command line (tooling.build_published_reports), not from this interface. 127 MB will be freed."
+      },
+      "reason_required": false
+    },
+    "type_to_confirm": "DTXSID50469320",
+    "preview_token": "sha256:789a30b54879573fc2dd3d6038da6d2c51aee643338560ef257aa5ba84f8d68d"
+  }
+}

@@ -91,14 +91,21 @@ async def test_document_step_matches_process_step_for_content_keys(
 
 
 @pytest.mark.asyncio
-async def test_document_step_raises_steperror_400_when_not_integrated(
+async def test_document_step_is_refused_409_when_not_integrated(
     sessions_dir,
 ):
-    """A session with no integrated.json raises StepError(400) — the missing-data
-    guard is shared with process_step (both build the ctx via the same
-    _build_process_context), so callers get a clean 'run integration first'."""
-    (sessions_dir / DTXSID / "files").mkdir(parents=True, exist_ok=True)
-    with pytest.raises(StepError) as exc:
+    """A study that is not integrated is refused by the phase guard (C1,
+    phase_not_allowed) before anything is written: no pin, no definition, no
+    rescanned fingerprints."""
+    from workflow.errors import PhaseRefusal
+
+    session = sessions_dir / DTXSID
+    (session / "files").mkdir(parents=True, exist_ok=True)
+    (session / "files" / "bw.csv").write_text("x")
+    with pytest.raises(PhaseRefusal) as exc:
         await document_step(DTXSID, {}, DiskPoolStore())
-    assert exc.value.status_code == 400
-    assert "run integration first" in exc.value.message
+    assert exc.value.status_code == 409
+    assert exc.value.details["phase"] == "UPLOADED"
+    for name in ("method_profile.json", "document_definition.json",
+                 "document_definition.yaml", "_fingerprints.json"):
+        assert not (session / name).exists(), name

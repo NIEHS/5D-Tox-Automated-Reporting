@@ -4,13 +4,20 @@
     "id": "DTXSID1022477",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID1022477",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "UPLOADED",
     "legal_actions": [
-      "CLEAR_FILES",
+      "ADD_FILES",
+      "REMOVE_FILE",
+      "RESET",
       "VALIDATE"
     ],
     "identity": {
@@ -70,6 +77,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -97,6 +106,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -124,6 +135,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -151,6 +164,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -178,6 +193,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -205,6 +222,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -232,6 +251,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -259,6 +280,8 @@
         "model": "claude-sonnet-4-6",
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -288,6 +311,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -315,6 +340,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -342,6 +369,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -369,6 +398,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -396,6 +427,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -423,6 +456,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -450,6 +485,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -477,6 +514,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -504,6 +543,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -531,6 +572,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -558,6 +601,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -585,6 +630,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -615,6 +662,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -634,6 +683,14 @@
           }
         ],
         "items": []
+      }
+    },
+    "stands": {
+      "phase": "UPLOADED",
+      "say": "Files brought in, not yet validated",
+      "next": {
+        "say": "Validate the files",
+        "fix": "M2"
       }
     }
   }

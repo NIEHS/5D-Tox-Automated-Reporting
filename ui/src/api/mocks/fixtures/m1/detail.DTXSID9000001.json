@@ -1,0 +1,87 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID9000001",
+    "kind": "study",
+    "chemical_dtxsid": "DTXSID9000001",
+    "chemical_dtxsid_from": "id",
+    "identity": {
+      "name": null,
+      "casrn": null,
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-14T08:00:00Z",
+    "format": {
+      "definition": "eras/niehs-2026",
+      "source": "default",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 0,
+      "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026."
+    },
+    "published": null,
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the study has no report (it has not been processed)"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [
+      {
+        "level": "warn",
+        "code": "identity_missing",
+        "say": "No chemical identity is on file for this study."
+      }
+    ],
+    "detail": {
+      "banner": null,
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

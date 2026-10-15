@@ -1,0 +1,99 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID50469320_published"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID50469320_published",
+    "kind": "companion",
+    "chemical_dtxsid": "DTXSID50469320",
+    "chemical_dtxsid_from": "id_prefix",
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": "DTXSID50469320",
+      "others": []
+    },
+    "identity": {
+      "name": "Perfluorohexanesulfonamide",
+      "casrn": "41997-13-1",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": null,
+      "say": "The published book's content (read-only)",
+      "next": null
+    },
+    "processed": false,
+    "last_changed": "2026-10-15T20:10:23Z",
+    "format": {
+      "definition": "session:document.yaml",
+      "source": "session",
+      "era": null,
+      "title": "The published book's own structure",
+      "title_short": "As published",
+      "changes": 0,
+      "say": "This session holds NIEHS-10's own content and structure, built from the published book."
+    },
+    "published": {
+      "report": "NIEHS-10",
+      "date": "2023-03",
+      "nbk": "NBK589955"
+    },
+    "bookshelf": {
+      "on_shelf": true,
+      "url": "/Bookshelf/DTXSID50469320_published",
+      "say": "The published content, on the Bookshelf"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": false,
+        "code": "read_only_session",
+        "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": {
+        "level": "info",
+        "links": [
+          {
+            "say": "Read it on the Bookshelf",
+            "href": "/Bookshelf/DTXSID50469320_published"
+          },
+          {
+            "say": "The generated study: DTXSID50469320",
+            "href": "/app/studies/DTXSID50469320"
+          }
+        ],
+        "say": "This is the published book's own content (NIEHS-10), built by a tool from the published book. It can't be changed or deleted here."
+      },
+      "format": {
+        "definition": "session:document.yaml",
+        "source": "session",
+        "era": null,
+        "title": "The published book's own structure",
+        "title_short": "As published",
+        "changes": 0,
+        "say": "This session holds NIEHS-10's own content and structure, built from the published book.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

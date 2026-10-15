@@ -30,11 +30,13 @@ from dataclasses import dataclass, field
 
 from workflow.phases import (
     LEGAL_ACTIONS,
+    NEXT_STEP,
     Action,
     Phase,
     compute_section_completeness,
     derive_phase,
 )
+from workflow.integration_basis import integration_status
 from workflow.section_catalog import catalog_for_session
 from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
@@ -121,6 +123,12 @@ class WorkflowEngine:
             # files with distinct lifecycles (see module docstring).
             "hasIntegrated": self.store.artifact_exists(self.dtxsid, "integrated.json"),
             "hasAnimalReport": self.store.artifact_exists(self.dtxsid, "animal_report.json"),
+            # Whether the dataset was built from the validation on disk now
+            # (workflow.integration_basis): current / out_of_date / unrecorded,
+            # None with no integrated.json. Small reads: the basis file, the
+            # report already in hand, precedence.json.
+            "integration": integration_status(self.dtxsid, self.store,
+                                              report=validation_report),
             # Presence of the query substrate (session.duckdb), built only at the
             # end of Process — the cheap "has this session been processed" signal
             # the data-prep DB-view button gates on. Read-only stat, like above.
@@ -139,7 +147,12 @@ class WorkflowEngine:
         """Re-derive the full workflow state from disk. Cheap enough to call on
         every request; phase is never cached (invariant 3)."""
         artifacts = self.gather_artifacts()
-        phase = Phase(derive_phase(artifacts))
+        # An integration built from another validation is not this one's
+        # dataset: the phase reads VALIDATED (integrate again). The raw
+        # hasIntegrated flag stays in `artifacts`; derive_phase is unchanged.
+        effective = {**artifacts, "hasIntegrated": bool(
+            artifacts["hasIntegrated"] and artifacts.get("integration") != "out_of_date")}
+        phase = Phase(derive_phase(effective))
 
         report = artifacts["validationReport"]
         coverage = report.get("coverage_matrix", {}) if isinstance(report, dict) else {}
@@ -151,6 +164,26 @@ class WorkflowEngine:
             artifacts={k: v for k, v in artifacts.items() if k != "validationReport"},
             completeness=completeness,
         )
+
+    # -- the guard (ADR-0014: every mutating step checks legality first) ---
+
+    def require(self, action) -> WorkflowState:
+        """Derive the state and refuse `action` when the phase does not allow it
+        (PhaseRefusal, 409 ``phase_not_allowed``). Returns the state, so the
+        caller does not derive it twice. Every mutating step calls this before
+        it reads or writes anything else; C5's run lock will refuse here too."""
+        from workflow.errors import PhaseRefusal
+
+        action = Action(action)
+        st = self.state()
+        if action not in st.legal_actions:
+            nxt = NEXT_STEP.get(st.phase)
+            raise PhaseRefusal(
+                self.dtxsid, action.value, st.phase.value,
+                [a.value for a in st.legal_actions],
+                integration=st.artifacts.get("integration"),
+                next_action=nxt.value if nxt else None)
+        return st
 
     # -- derived section readiness ----------------------------------------
 
@@ -204,3 +237,9 @@ class WorkflowEngine:
             reason = regen.get("reason") if isinstance(regen, dict) else "stale"
             blocking.append({"section_key": key, "reason": reason})
         return {"can_publish": not blocking, "blocking": blocking}
+
+
+def require_legal(dtxsid: str, action, store: PoolStore | None = None) -> WorkflowState:
+    """``WorkflowEngine(dtxsid, store).require(action)``: the one guard every
+    mutating entry point calls (route, command line, notebook, script)."""
+    return WorkflowEngine(dtxsid, store).require(action)

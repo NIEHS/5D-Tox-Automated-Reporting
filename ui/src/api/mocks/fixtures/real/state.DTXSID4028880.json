@@ -4,15 +4,26 @@
     "id": "DTXSID4028880",
     "exists": true,
     "kind": "study",
+    "chemical_dtxsid": "DTXSID4028880",
+    "chemical_dtxsid_from": "id",
     "relations": {
       "parent": null,
-      "twin": null
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
     },
     "phase": "INTEGRATED",
     "legal_actions": [
+      "ADD_FILES",
       "APPROVE",
-      "REPROCESS",
+      "CONFIRM_CLASSIFICATION",
+      "INTEGRATE",
+      "PROCESS",
+      "REMOVE_FILE",
       "RESET",
+      "RESOLVE",
+      "STATE_DATASET_FACTS",
       "VALIDATE"
     ],
     "identity": {
@@ -72,6 +83,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -99,6 +112,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -126,6 +141,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -153,6 +170,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -180,6 +199,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -207,6 +228,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -234,6 +257,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -261,6 +286,8 @@
         "model": "claude-sonnet-4-6",
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -288,6 +315,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -315,6 +344,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -342,6 +373,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -369,6 +402,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -396,6 +431,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -423,6 +460,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -450,6 +489,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": true,
@@ -477,6 +518,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -504,6 +547,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -531,6 +576,8 @@
         "model": null,
         "version": null,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -561,6 +608,8 @@
         "model": null,
         "version": 1,
         "version_status": null,
+        "maturity": null,
+        "review": null,
         "machine_may_write": true,
         "accept": {
           "allowed": false,
@@ -580,6 +629,14 @@
           }
         ],
         "items": []
+      }
+    },
+    "stands": {
+      "phase": "INTEGRATED",
+      "say": "Data integrated",
+      "next": {
+        "say": "Review the report's sections",
+        "fix": "D1"
       }
     }
   }

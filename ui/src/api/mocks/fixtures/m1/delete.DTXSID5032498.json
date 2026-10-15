@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "deleted": "DTXSID5032498",
+    "kept": [
+      {
+        "what": "output",
+        "say": "The deliverables in output/DTXSID5032498/"
+      }
+    ],
+    "say": "DTXSID5032498 was deleted."
+  }
+}

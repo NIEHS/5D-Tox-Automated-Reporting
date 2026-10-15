@@ -1,0 +1,37 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID50469320_nb",
+    "kind": "other",
+    "chemical_dtxsid": "DTXSID50469320",
+    "…": "the StudyRow of §4.1",
+    "detail": {
+      "banner": {
+        "level": "warning",
+        "say": "This session's id, DTXSID50469320_nb, is not a chemical's DTXSID: it was made by a tool. Its report uses the 2026 format; a study under DTXSID50469320 would use NIEHS-10's format.",
+        "links": [
+          {
+            "say": "The study DTXSID50469320",
+            "href": "/app/studies/DTXSID50469320"
+          }
+        ]
+      },
+      "format": {
+        "definition": "eras/niehs-2026",
+        "source": "default",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 0,
+        "say": "…",
+        "brings": [],
+        "pin": {
+          "mode": "track",
+          "pinned_at": "2026-10-13T13:45:31+00:00",
+          "pinned_by": "default"
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

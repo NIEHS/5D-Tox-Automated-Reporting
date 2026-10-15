@@ -1,0 +1,95 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID1020431_published",
+    "kind": "companion",
+    "chemical_dtxsid": "DTXSID50469320",
+    "chemical_dtxsid_from": "id_prefix",
+    "identity": {
+      "name": "1,4-Dichlorobenzene",
+      "casrn": "106-46-7",
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null
+      }
+    },
+    "stands": {
+      "phase": null,
+      "say": "The published book's content (read-only)",
+      "next": null
+    },
+    "processed": false,
+    "last_changed": "2026-10-11T16:20:00Z",
+    "format": {
+      "definition": "session:document.yaml",
+      "source": "session",
+      "era": null,
+      "title": "The published book's own structure",
+      "title_short": "As published",
+      "changes": 0,
+      "say": "This session holds NIEHS-13's own content and structure, built from the published book."
+    },
+    "published": {
+      "report": "NIEHS-13",
+      "date": "2026-04",
+      "nbk": "NBK621744"
+    },
+    "bookshelf": {
+      "on_shelf": true,
+      "url": "/Bookshelf/DTXSID1020431_published",
+      "say": "The published content, on the Bookshelf"
+    },
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": "DTXSID1020431",
+      "others": []
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": false,
+        "code": "read_only_session",
+        "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": {
+        "level": "info",
+        "say": "This is the published book's own content (NIEHS-13), built by a tool from the published book. It can't be changed or deleted here.",
+        "links": [
+          {
+            "say": "Read it on the Bookshelf",
+            "href": "/Bookshelf/DTXSID1020431_published"
+          },
+          {
+            "say": "The generated study: DTXSID1020431",
+            "href": "/app/studies/DTXSID1020431"
+          }
+        ]
+      },
+      "format": {
+        "definition": "session:document.yaml",
+        "source": "session",
+        "era": null,
+        "title": "The published book's own structure",
+        "title_short": "As published",
+        "changes": 0,
+        "say": "This session holds NIEHS-13's own content and structure, built from the published book.",
+        "brings": [],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      }
+    }
+  }
+}

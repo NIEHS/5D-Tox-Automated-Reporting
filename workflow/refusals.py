@@ -26,7 +26,10 @@ notebook explain a refusal the same way:
 The refusals the backend raises today carry no code, so most are recognised by
 their message (``_MESSAGE_RULES``, quoted from the Gate 0 analyses: data §3.1,
 Process §6.1, document §9.1). An exception that carries a ``code`` attribute
-naming a listed code (the phase guard of C1, say) is taken at its word.
+naming a listed code (the phase guard of C1, say) is taken at its word, and so
+are the ``say``, ``fix`` and ``details`` it carries when it knows its own case
+better than the list (``workflow.errors.PhaseRefusal`` says, per phase, what to
+do next).
 """
 
 from __future__ import annotations
@@ -55,6 +58,56 @@ REFUSALS: dict[str, Refusal] = {
     "invalid_study_id": Refusal(400, (
         "That is not a valid study id. A study is named by its chemical's DTXSID: "
         "“DTXSID” followed by digits, for example DTXSID50469320."), "M1"),
+    "study_id_has_suffix": Refusal(400, (
+        "A study's id is the DTXSID alone. Ids with a suffix (…_rat, …_published) are "
+        "made by the system."), None),
+    "study_exists": Refusal(409, (
+        "A study of this chemical already exists ({id}). Open it instead."), "M1"),
+    "study_not_found": Refusal(404, (
+        "There is no study {id}. It may have been deleted."), "M1"),
+    "identity_not_found": Refusal(404, (
+        "{service} has no chemical with the DTXSID {id}. A single mistyped digit gives "
+        "another chemical or none. Check the id on the CompTox dashboard."), None),
+    "identity_lookup_unreachable": Refusal(503, (
+        "The chemical lookup service ({service}) could not be reached. Nothing was "
+        "created. Try again in a minute."), None),
+    "identity_unconfirmed": Refusal(400, (
+        "Confirm the chemical before going on: tick the box that says it is the chemical "
+        "you are studying."), None),
+    "identity_changed": Refusal(409, (
+        "The lookup now gives a different chemical than the one you confirmed. Look it "
+        "up again."), None),
+    "identity_incomplete": Refusal(400, (
+        "A name and a CASRN are needed."), None),
+    "invalid_casrn": Refusal(400, (
+        "This CASRN's check digit doesn't match; a digit is probably mistyped."), None),
+    "identity_exists": Refusal(409, (
+        "This study already has its chemical's identity. Changing it is not done here."),
+        None),
+    "format_changed": Refusal(409, (
+        "The report format this id brings changed since you looked. Review it again."),
+        None),
+    "structure_unavailable": Refusal(404, (
+        "PubChem did not return a structure picture."), None),
+    "read_only_session": Refusal(409, (
+        "This is the published book's own content, made by a tool. It can't be changed "
+        "or deleted here."), None),
+    "report_has_no_data": Refusal(409, (
+        "This is a report over several studies: it has no files or data of its own. "
+        "Its data is prepared in each of its studies; open one of them."), "M1"),
+    "member_of_report": Refusal(409, (
+        "This is the {species} study of the report {parent}. Deleting it would break "
+        "that report."), "M1"),
+    "run_in_flight": Refusal(409, (
+        "Process is running on this study (since {time}). Wait for it to finish."), "P1"),
+    "confirm_mismatch": Refusal(400, (
+        "The id you typed doesn't match this study's id. Nothing was deleted."), None),
+    "changed_since_preview": Refusal(409, (
+        "The study changed after you reviewed what would be deleted. Nothing was "
+        "deleted; review the list again."), None),
+    "list_failed": Refusal(500, (
+        "The list of studies can't be read: the folder that holds them is missing or "
+        "unreadable. Tell the maintainer."), None),
     "no_files": Refusal(404, (
         "This study has no data files yet. Add the study's files first."), "M2"),
     "files_not_recognised": Refusal(400, (
@@ -106,9 +159,10 @@ REFUSALS: dict[str, Refusal] = {
         "nothing you change in the study will fix it. Tell the maintainer."), None),
     # ── sections, approval and the guards (D1) ───────────────────────────────
     "section_not_found": Refusal(404, (
-        "There is no saved section “{key}” to approve. Methods, the apical BMD "
-        "summary and the genomics interpretations can't be approved at all yet; "
-        "the other sections exist only once Process has run."), "D1"),
+        "There is no saved section “{key}”, so there is nothing to {act}. Methods, "
+        "the apical BMD summary and the genomics interpretations are not saved as "
+        "sections yet, so they can't be approved; the other sections exist only "
+        "once Process has run."), "D1"),
     "section_key_missing": Refusal(400, (
         "The request didn't say which section it is about. This is a fault in the "
         "interface, not in your study; tell the maintainer."), None),
@@ -122,6 +176,24 @@ REFUSALS: dict[str, Refusal] = {
     "guard_refused": Refusal(409, (
         "This change to a section was refused to protect content a person owns. "
         "The details say which rule refused it."), "D1"),
+    # ── owned content (C2): the section write gate and the section steps ─────
+    "section_owned": Refusal(409, (
+        "This section has been approved, or you chose to keep it, so it can't be "
+        "replaced automatically. To replace it, reopen it and say why."), "D1"),
+    "section_key_invalid": Refusal(400, (
+        "There is no section by that name in this report."), "D1"),
+    "reason_required": Refusal(400, (
+        "Please say why. The reason is kept with the section's history."), "D1"),
+    "version_not_found": Refusal(404, (
+        "That version of the section doesn't exist."), "D1"),
+    "version_content_missing": Refusal(409, (
+        "This version is listed in the history, but its text was lost before history "
+        "was kept reliably. It can't be restored."), None),
+    "approve_content_retired": Refusal(409, (
+        "Approving can't change the text. Accept the section as it is, or edit it in "
+        "Word or Overleaf and bring that version back."), "D4"),
+    "approve_via_accept": Refusal(400, (
+        "Saving doesn't approve. Use Accept."), "D1"),
     # ── the pins (M5) ────────────────────────────────────────────────────────
     "method_profile_changed": Refusal(409, (
         "The analysis method this study is pinned to (its method profile) was "
@@ -143,11 +215,21 @@ REFUSALS: dict[str, Refusal] = {
     "definition_pin_invalid": Refusal(400, (
         "A document definition can be pinned in two ways only: fixed (it stays as "
         "it is) or track (it follows the newest definition)."), "M5"),
-    # ── reserved for the phase guard (C1) ────────────────────────────────────
+    # ── the legal-action guard (C1). The exceptions (workflow.errors) carry
+    #    the say and fix of their own case; these are the fallbacks. ─────────
     "phase_not_allowed": Refusal(409, (
         "This step isn't available at the study's current stage. The details say "
         "which stage the study is at; do the step that comes before this one first."),
         None),
+    "validation_out_of_date": Refusal(409, (
+        "The file check is out of date: it no longer matches the study's files as the "
+        "server sees them now. This happens after the server restarts, or when files "
+        "change outside the app. Nothing was combined and nothing was changed. Run the "
+        "file check again, then Integrate."), "M2"),
+    "method_not_chosen": Refusal(409, (
+        "Choose the analysis method (the method profile) this study is reported under "
+        "before processing. Every statistic, benchmark dose and the Methods text depend "
+        "on it, so it is never chosen for you."), "M5"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "
@@ -186,7 +268,7 @@ _MESSAGE_RULES: tuple[tuple[str, str, str], ...] = (
     ("StepError", r"^Processing failed: .*(?:RunApicalBmds|ExportGenomics)", "calculation_program_failed"),
     ("StepError", r"^Processing failed:", "processing_failed"),
     ("StepError", r"^Content preparation failed:", "content_preparation_failed"),
-    ("StepError", r"^No '(?P<key>[^']*)' section to approve", "section_not_found"),
+    ("StepError", r"^No '(?P<key>[^']*)' section to (?P<act>\w+)", "section_not_found"),
     ("StepError", r"^dtxsid and section_key are required", "section_key_missing"),
     # GuardViolation (workflow/labels.py, workflow/currency.py)
     ("GuardViolation", r"requires a recorded reason", "release_reason_required"),
@@ -215,7 +297,11 @@ def _class_names(exc: BaseException) -> set[str]:
 
 def _details(exc: BaseException, code: str) -> dict:
     """What the interface may show beside the message: the damaged file's name,
-    a request's field errors."""
+    a request's field errors, or what a refusal naming its own code carries
+    (``details``: the study id, the parent report …)."""
+    own = getattr(exc, "details", None)
+    if isinstance(own, dict) and getattr(exc, "code", None) == code:
+        return dict(own)
     if code == "damaged_session_file":
         path = getattr(exc, "path", None)
         return {"file": f"{path.parent.name}/{path.name}"} if path is not None else {}
@@ -258,7 +344,9 @@ def _message(exc: BaseException) -> str:
 
 # What a `say` shows when its rule captured nothing for a field (a refusal that
 # named its own code, say).
-_FIELD_DEFAULTS = {"key": "this", "file": "the details name it"}
+_FIELD_DEFAULTS = {"key": "this", "file": "the details name it", "act": "approve",
+                   "id": "with this id", "service": "the lookup service", "species": "member",
+                   "parent": "it belongs to", "time": "a time not recorded"}
 
 
 class _Fields(dict):
@@ -280,8 +368,14 @@ def explain(exc: BaseException) -> dict:
         status = refusal.status
     details = _details(exc, code)
     say = refusal.say.format_map(_Fields({**details, **{k: v for k, v in fields.items() if v}}))
+    fix = refusal.fix
+    if getattr(exc, "code", None) == code:
+        # A refusal that knows its own case (C1's phase guard: per phase) says so.
+        own_say, own_fix = getattr(exc, "say", None), getattr(exc, "fix", None)
+        say = own_say if isinstance(own_say, str) and own_say else say
+        fix = own_fix if isinstance(own_fix, str) and own_fix else fix
     message = _message(exc)
     if code == "unexpected" and not isinstance(getattr(exc, "message", None), str):
         message = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
     return {"error": {"code": code, "status": status, "message": message,
-                      "say": say, "fix": refusal.fix, "details": details}}
+                      "say": say, "fix": fix, "details": details}}

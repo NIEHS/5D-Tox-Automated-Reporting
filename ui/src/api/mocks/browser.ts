@@ -2,7 +2,7 @@ import { setupWorker } from 'msw/browser'
 import { createHandlers } from './handlers'
 
 /** The development mock: a Service Worker, with paced run events. */
-export const worker = setupWorker(...createHandlers({ stepDelayMs: 700 }))
+export const worker = setupWorker(...createHandlers({ stepDelayMs: 700, lookupDelayMs: 1500 }))
 
 export function startMockWorker() {
   return worker.start({

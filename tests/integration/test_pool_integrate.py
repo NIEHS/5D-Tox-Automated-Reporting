@@ -101,8 +101,9 @@ class TestPoolIntegrate:
 
         assert "DTXSID50469320" in pool_orchestrator._integrated_pool
 
-    def test_integrate_without_validation_returns_400(self, sessions_dir):
-        """Integration without prior validation should fail (no fingerprints)."""
+    def test_integrate_without_validation_returns_409(self, sessions_dir):
+        """Integration without prior validation is refused by the phase guard
+        (UPLOADED: validate first), before anything is read."""
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -115,10 +116,11 @@ class TestPoolIntegrate:
         (files_dir / "dummy.txt").write_text("data")
 
         resp = client.post(f"/api/pool/integrate/{dtxsid}", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 409
+        assert "phase UPLOADED" in resp.json()["error"]
 
-    def test_integrate_without_files_returns_404(self, sessions_dir):
-        """Integration with no files/ directory returns 404."""
+    def test_integrate_without_files_returns_409(self, sessions_dir):
+        """Integration with no files is refused by the phase guard (EMPTY)."""
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -126,4 +128,27 @@ class TestPoolIntegrate:
         (sessions_dir / "DTXSID_EMPTY").mkdir(parents=True)
 
         resp = client.post("/api/pool/integrate/DTXSID_EMPTY", json={})
-        assert resp.status_code == 404
+        assert resp.status_code == 409
+        assert "phase EMPTY" in resp.json()["error"]
+
+    def test_reintegration_withdraws_the_data_approval(self, given_pfhxsam, mock_bmdx_pipe):
+        """Re-integrating an approved study archives its data approval and says so."""
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
+        client = TestClient(app)
+        assert client.post("/api/pool/validate/DTXSID50469320").status_code == 200
+        ident = {"identity": {"name": "Test", "casrn": "123-45-6", "dtxsid": "DTXSID50469320"}}
+        first = client.post("/api/pool/integrate/DTXSID50469320", json=ident).json()
+        assert first["approval_withdrawn"] is False
+        (given_pfhxsam / "integrated.json").write_text("{}")   # the mock writes none
+        (given_pfhxsam / "animal_report.json").write_text("{}")
+        state = client.get("/api/workflow/DTXSID50469320/state").json()
+        assert (state["phase"], state["artifacts"]["integration"]) == ("APPROVED", "current")
+
+        again = client.post("/api/pool/integrate/DTXSID50469320", json=ident).json()
+        assert again["approval_withdrawn"] is True
+        assert not (given_pfhxsam / "animal_report.json").exists()
+        assert list((given_pfhxsam / "history" / "_data_approval").iterdir())
+        assert client.get("/api/workflow/DTXSID50469320/state").json()["phase"] == "INTEGRATED"
