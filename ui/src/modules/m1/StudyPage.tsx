@@ -348,7 +348,8 @@ export function StudyPage() {
 
   if (detail.isPending) return <Skeleton active paragraph={{ rows: 10 }} />
   if (detail.error) {
-    if (detail.error.code === 'study_not_found') return <NoSuchStudy id={id} reason="not_found" />
+    // a study this page had shown (its earlier read is kept) and now reads as absent was deleted while open (S5)
+    if (detail.error.code === 'study_not_found') return <NoSuchStudy id={id} reason={detail.data?.id === id ? 'deleted' : 'not_found'} />
     if (detail.error.code === 'invalid_study_id') return <NoSuchStudy id={id} reason="invalid" say={detail.error.say} />
     return (
       <Refusal

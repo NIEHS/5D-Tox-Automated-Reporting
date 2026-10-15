@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { focusManager } from '@tanstack/react-query'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { M1_CHEMICALS, M1_DETAILS, STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
@@ -230,6 +231,35 @@ describe('S5 no such study', () => {
     renderApp('/studies/DTXSID7020182_rat')
     expect(await screen.findByText(/There is no study DTXSID7020182_rat/)).toBeInTheDocument()
     expect(screen.queryByText('Create a study of this chemical')).not.toBeInTheDocument()
+  })
+
+  it('F8: deleted in another tab, the page says "This study was deleted." when the window comes back into focus', async () => {
+    await openStudyPage('DTXSID5032498')
+    removeMockStudy('DTXSID5032498')
+    try {
+      // the app's query client re-reads on window focus (kit/queryClient.ts); so does the tests'
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+      expect(await screen.findByText('This study was deleted.')).toBeInTheDocument()
+      expect(screen.queryByText(/It may have been deleted/)).not.toBeInTheDocument()
+    } finally {
+      act(() => focusManager.setFocused(undefined))
+    }
+  })
+
+  it('F8: the study\'s own read answering 404 first (the state not yet re-read) still says "This study was deleted."', async () => {
+    const { queryClient } = await openStudyPage('DTXSID5032498')
+    removeMockStudy('DTXSID5032498')
+    await queryClient.invalidateQueries({ queryKey: ['study', 'DTXSID5032498', 'detail'] })
+    expect(await screen.findByText('This study was deleted.')).toBeInTheDocument()
+  })
+
+  it('F8: an id never seen keeps the plain not-found words', async () => {
+    renderApp('/studies/DTXSID7020182')
+    expect(await screen.findByText('There is no study DTXSID7020182. It may have been deleted.')).toBeInTheDocument()
+    expect(screen.queryByText('This study was deleted.')).not.toBeInTheDocument()
   })
 
   it('AC40: a page open on a study deleted elsewhere says "This study was deleted" on its next read', async () => {
