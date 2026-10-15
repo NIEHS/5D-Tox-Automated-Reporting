@@ -54,6 +54,33 @@ describe('<ConfirmAct>, irreversible', () => {
     await waitFor(() => expect(perform).toHaveBeenCalledWith({ typedId: ID }))
   })
 
+  it('shows plain words only: no internal code after an item, the cost labelled neutrally, approvals sent as titles as plain text', async () => {
+    const dry: DryRun = {
+      ...DRY_RUN_RESET,
+      deletes: [{ what: 'dataset', say: 'The combined dataset' }, { what: 'statements', say: 'The stated study facts' }],
+      keeps: [{ what: 'study_definition', say: 'The study definition under templates/studies/' }],
+      approvals_lost: ['Body Weight', 'Summary of Findings'],
+      cost: { say: '151 MB will be freed.' },
+    }
+    const { user } = setup({ dry })
+    await user.click(screen.getByRole('button', { name: 'Start over' }))
+    const d = await dialog()
+    for (const x of [...dry.deletes, ...dry.keeps]) {
+      const li = d.getByText(x.say as string).closest('li') as HTMLElement
+      expect(li.textContent).toBe(x.say)
+    }
+    expect(d.queryByText(/\((dataset|statements|study_definition)\)/)).not.toBeInTheDocument()
+    // a title that is no section key reads as text, never as code
+    for (const t of dry.approvals_lost) {
+      const li = d.getByText(t).closest('li') as HTMLElement
+      expect(li.textContent).toBe(t)
+      expect(li.querySelector('code')).toBeNull()
+    }
+    const cost = d.getByText('151 MB will be freed.', { exact: false })
+    expect(cost).toHaveTextContent('Cost: 151 MB will be freed.')
+    expect(d.queryByText(/To redo it/)).not.toBeInTheDocument()
+  })
+
   it('does nothing when cancelled', async () => {
     const { user, perform } = setup({ dry: DRY_RUN_RESET })
     await user.click(screen.getByRole('button', { name: 'Start over' }))
