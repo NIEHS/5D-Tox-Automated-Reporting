@@ -76,7 +76,13 @@ export function dtxsidsIn(text: string): string[] {
   return [...new Set(text.toUpperCase().match(/DTXSID\d+/g) ?? [])]
 }
 
-export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefined): IdCheck {
+/**
+ * `storeRule` is the backend's rule for any id it can hold (the served
+ * `session_id` pattern). A DTXSID kind is checked against it too: the served
+ * DTXSID pattern sets no length, but the store does, and an id it can't hold
+ * must not look right here only to be refused after Next.
+ */
+export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefined, storeRule?: IdPattern): IdCheck {
   if (!pattern) return { ok: null, say: `The rule for a ${ID_LABELS[kind]} could not be loaded, so this cannot be checked yet.` }
   const re = compile(pattern)
   if (!re) return { ok: null, say: `The rule for a ${ID_LABELS[kind]} is broken, so this cannot be checked. Tell whoever looks after the application.` }
@@ -90,6 +96,13 @@ export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefi
     const problem = dtxsidProblem(value, pattern.example)
     if (problem) return { ok: false, say: problem }
     if (!re.test(value)) return { ok: false, say: `After 'DTXSID' come digits only, for example ${pattern.example}.` }
+    const store = storeRule ? compile(storeRule) : null
+    if (storeRule && !store) {
+      return { ok: null, say: `The rule for a ${ID_LABELS[kind]} is broken, so this cannot be checked. Tell whoever looks after the application.` }
+    }
+    if (store && !store.test(value)) {
+      return { ok: false, say: `This is longer than any DTXSID the application can hold. Check it, for example ${pattern.example}.` }
+    }
   }
   if (kind === 'doi' && /^(https?:\/\/)?(dx\.)?doi\.org\//i.test(value)) {
     return { ok: false, say: 'Type the DOI without the link part: start at "10.".' }

@@ -53,8 +53,27 @@ describe('S2 step 1: the DTXSID', () => {
     await user.click(input)
     await user.paste('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')
     expect(input).not.toHaveValue('DTXSID7020182')
+    // F7: only the offer, not the red "A DTXSID starts with…" beside it
+    expect(screen.queryByText(/A DTXSID starts with 'DTXSID'/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Use DTXSID7020182?' }))
     expect(input).toHaveValue('DTXSID7020182')
+  })
+
+  it('F7: an id longer than the store can hold (80 digits) is refused on the screen; Next stays disabled; it is never sent', async () => {
+    let checks = 0
+    server.use(
+      http.get('/api/v2/studies/:dtxsid/creation-check', () => {
+        checks++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user, input, next } = await openNew()
+    await user.click(input)
+    await user.paste(`DTXSID${'7'.repeat(80)}`)
+    expect(screen.getByText(/longer than any DTXSID the application can hold/)).toBeInTheDocument()
+    await act(() => new Promise((r) => setTimeout(r, 450)))
+    expect(next()).toBeDisabled()
+    expect(checks).toBe(0)
   })
 
   it('AC17: an existing study is named, with Open it; Next stays disabled; nothing is written', async () => {
