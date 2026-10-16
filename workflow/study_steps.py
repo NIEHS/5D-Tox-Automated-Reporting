@@ -290,36 +290,83 @@ def _pin_words(folder: Path) -> str:
     return (" and ".join(parts) or "the pins").capitalize()
 
 
+def require_deletable(dtxsid: str, index=None) -> dict:
+    """The one rule of what may not be deleted, for every act that removes a
+    study's folder (the delete pair of M1, the old full reset): a published
+    book's content (``read_only_session``), a member of a report
+    (``member_of_report``), a study with a run in flight (``run_in_flight``),
+    as ``workflow.studies.delete_verdict`` decides. Raises the refusal;
+    returns ``session_kind``'s answer when the study may go."""
+    from workflow.studies import StoreIndex, StudyRefusal, delete_verdict, session_kind
+
+    index = index or StoreIndex()
+    info = session_kind(dtxsid, index=index)
+    verdict = delete_verdict(dtxsid, info["kind"], info["relations"], index)
+    if not verdict["allowed"]:
+        raise StudyRefusal(verdict["code"], f"{dtxsid}: delete refused ({info['kind']})", 409,
+                           verdict["details"])
+    return info
+
+
 def delete_study_dry_run(dtxsid: str) -> dict:
     """What deleting the study would delete, keep and lose (module M1; the C8
     dry run, MODULES.md §4.3), with the token the delete must present. Reads
     only: nothing is created or changed.
 
-    Refuses an absent (or empty) session (``study_not_found``), a published
-    book's content (``read_only_session``), a member of a report
-    (``member_of_report``) and a study with a run in flight (``run_in_flight``).
+    Refuses an absent (or empty) session (``study_not_found``), and whatever
+    ``require_deletable`` refuses (a published book's content, a member of a
+    report, a study with a run in flight).
+
+    A study deleted while this reads it (a second click on Delete, another
+    tab) is ``study_not_found`` too, never a server error: the folder is
+    checked again after the walk, and a failure while walking a folder that
+    is gone is that refusal.
 
     ``{"confirm": {act, strength, deletes, keeps, approvals_lost, cost,
     reason_required}, "type_to_confirm", "preview_token"}``. The token is a hash
     of every path in the folder with its size and modification time, so any
     change after the review refuses the delete (``changed_since_preview``)."""
+    import os
+
+    from workflow.studies import StudyRefusal, session_exists, session_folder
+
+    folder = session_folder(dtxsid)
+    gone = StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
+    try:
+        inode = os.stat(folder).st_ino
+    except FileNotFoundError:
+        raise gone from None
+    if not session_exists(dtxsid):
+        raise gone
+
+    def vanished() -> bool:
+        try:
+            return os.stat(folder).st_ino != inode
+        except FileNotFoundError:
+            return True
+
+    try:
+        out = _dry_run(dtxsid, folder)
+    except StudyRefusal:
+        raise
+    except Exception:
+        if vanished():
+            raise gone from None
+        raise
+    if vanished():
+        raise gone
+    return out
+
+
+def _dry_run(dtxsid: str, folder: Path) -> dict:
+    """delete_study_dry_run's listing, over a folder known to exist."""
     import hashlib
 
     import common.paths
-    from workflow.studies import (
-        StoreIndex, StudyRefusal, delete_verdict, published_record, report_of, session_exists,
-        session_folder, session_kind)
+    from workflow.studies import published_record, report_of
 
-    folder = session_folder(dtxsid)
-    if not session_exists(dtxsid):
-        raise StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
-    index = StoreIndex()
-    info = session_kind(dtxsid, index=index)
+    info = require_deletable(dtxsid)
     kind, relations = info["kind"], info["relations"]
-    verdict = delete_verdict(dtxsid, kind, relations, index)
-    if not verdict["allowed"]:
-        raise StudyRefusal(verdict["code"], f"{dtxsid}: delete refused ({kind})", 409,
-                           verdict["details"])
 
     names = sorted(p.name for p in folder.iterdir())
     deletes: list[dict] = []
@@ -424,6 +471,33 @@ def delete_study_dry_run(dtxsid: str) -> dict:
             "preview_token": "sha256:" + listing.hexdigest()}
 
 
+def _take_away(dtxsid: str, folder: Path) -> Path:
+    """Rename the study's folder out of the store (so it leaves the list in
+    one step) and forget what the server holds in memory for it. Called under
+    ``_study_lock``. Returns the renamed folder, for the caller to remove
+    once the lock is released."""
+    import uuid
+
+    from pipeline.pool_globals import forget_session
+    from workflow.studies import StudyRefusal
+
+    doomed = folder.parent / f".deleting-{dtxsid}-{uuid.uuid4().hex[:8]}"
+    try:
+        folder.rename(doomed)
+    except FileNotFoundError:   # removed by a route that takes no lock
+        raise StudyRefusal("study_not_found", f"no session {dtxsid}", 404,
+                           {"id": dtxsid}) from None
+    forget_session(dtxsid, folder / "files")
+    return doomed
+
+
+def _remove(dtxsid: str, doomed: Path) -> None:
+    import shutil
+    shutil.rmtree(doomed, ignore_errors=True)
+    if doomed.exists():
+        logger.warning("Deleted study %s: %s could not be fully removed", dtxsid, doomed)
+
+
 @step_provenance
 def delete_study_step(dtxsid: str, confirm_id: str, preview_token: str) -> dict:
     """Delete a study for good, after a person reviewed the dry run and typed
@@ -433,28 +507,39 @@ def delete_study_step(dtxsid: str, confirm_id: str, preview_token: str) -> dict:
     (``changed_since_preview``). Removes the session's folder and forgets what
     the server holds in memory for it. What lies outside the folder (its
     deliverables in output/, a study definition, other sessions) stays.
+
+    One delete at a time per study (``_study_lock``): of two requests sent by
+    a double click, one deletes and the other is ``study_not_found``.
     Returns ``{"deleted", "kept", "say"}``."""
-    import shutil
+    from workflow.studies import StudyRefusal
 
-    from pipeline.pool_globals import forget_session
-    from workflow.studies import StudyRefusal, session_folder
-
-    preview = delete_study_dry_run(dtxsid)
-    if (confirm_id or "").strip() != dtxsid:
-        raise StudyRefusal("confirm_mismatch", f"typed {confirm_id!r}, the study is {dtxsid}", 400)
-    if preview_token != preview["preview_token"]:
-        raise StudyRefusal("changed_since_preview",
-                           f"preview token {preview_token} does not match {preview['preview_token']}",
-                           409)
-    # Renamed away first, so the study leaves the list in one step; then removed.
-    import uuid
-    folder = session_folder(dtxsid)
-    doomed = folder.parent / f".deleting-{dtxsid}-{uuid.uuid4().hex[:8]}"
-    folder.rename(doomed)
-    shutil.rmtree(doomed, ignore_errors=True)
-    if doomed.exists():
-        logger.warning("Deleted study %s: %s could not be fully removed", dtxsid, doomed)
-    forget_session(dtxsid, folder / "files")
+    with _study_lock(dtxsid) as folder:
+        preview = delete_study_dry_run(dtxsid)
+        if (confirm_id or "").strip() != dtxsid:
+            raise StudyRefusal("confirm_mismatch", f"typed {confirm_id!r}, the study is {dtxsid}",
+                               400)
+        if preview_token != preview["preview_token"]:
+            raise StudyRefusal("changed_since_preview",
+                               f"preview token {preview_token} does not match "
+                               f"{preview['preview_token']}", 409)
+        doomed = _take_away(dtxsid, folder)
+    _remove(dtxsid, doomed)
     logger.info("Deleted study %s (folder removed)", dtxsid)
     return {"deleted": dtxsid, "kept": preview["confirm"]["keeps"],
             "say": f"{dtxsid} was deleted."}
+
+
+@step_provenance
+def reset_session_step(dtxsid: str) -> dict:
+    """The old full reset (``POST /api/session/reset/{id}``): remove a
+    session's whole folder, with no dry run and no typed id, but never what
+    the M1 delete refuses (``require_deletable``: a published book's content,
+    a member of a report, a study with a run in flight). An empty folder is
+    removed too, as the route always did. Refuses ``study_not_found`` when
+    the folder is absent or was deleted meanwhile. Returns ``{"deleted"}``."""
+    with _study_lock(dtxsid) as folder:
+        require_deletable(dtxsid)
+        doomed = _take_away(dtxsid, folder)
+    _remove(dtxsid, doomed)
+    logger.info("Full session reset for %s: folder removed", dtxsid)
+    return {"deleted": dtxsid}

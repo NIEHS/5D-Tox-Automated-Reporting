@@ -979,4 +979,6 @@ from workflow.study_steps import (  # noqa: E402,F401
     delete_study_dry_run,
     delete_study_step,
     record_identity_step,
+    require_deletable,
+    reset_session_step,
 )

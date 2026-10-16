@@ -392,3 +392,133 @@ def test_the_request_log_does_not_change_the_token(study):
     assert delete_study_dry_run("DTXSID5032498")["preview_token"] == token
     delete_study_step("DTXSID5032498", "DTXSID5032498", token)
     assert not study.exists()
+
+
+# ---------------------------------------------------------------------------
+# Delete races (F3): a folder that vanishes under the dry run or the delete
+# ---------------------------------------------------------------------------
+
+def _deleted_while_walking(monkeypatch, folder: Path, *, raise_after: bool):
+    """The dry run's section read replaced: the folder is renamed away (another
+    request deleted it) in the middle of the walk; then the walk fails as the
+    real one did (FileNotFoundError) or carries on over nothing."""
+    import workflow.read_model as rm
+
+    def walk(dtxsid, store=None):
+        folder.rename(folder.parent / f".deleting-{dtxsid}-other")
+        if raise_after:
+            raise FileNotFoundError(str(folder / "narrative_runs" / "summary" / "r1.json"))
+        return {"sections": []}
+
+    monkeypatch.setattr(rm, "study_state", walk)
+
+
+@pytest.mark.parametrize("raise_after", [True, False])
+def test_a_dry_run_of_a_folder_deleted_meanwhile_is_not_found(study, monkeypatch, raise_after):
+    _deleted_while_walking(monkeypatch, study, raise_after=raise_after)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_dry_run("DTXSID5032498")
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+
+
+def test_a_dry_run_failing_on_a_folder_still_there_is_not_hidden(study, monkeypatch):
+    """Only a vanished folder becomes study_not_found; any other failure stays."""
+    import workflow.read_model as rm
+
+    def broken(dtxsid, store=None):
+        raise FileNotFoundError("something else")
+
+    monkeypatch.setattr(rm, "study_state", broken)
+    with pytest.raises(FileNotFoundError):
+        delete_study_dry_run("DTXSID5032498")
+
+
+def test_the_second_of_two_deletes_is_not_found(study, monkeypatch):
+    """A double click: the second request opens the study, then waits for the
+    lock while the first deletes it. Forced: the second request's wait for
+    the lock runs the whole first delete."""
+    import fcntl
+
+    token = delete_study_dry_run("DTXSID5032498")["preview_token"]
+    real_flock = fcntl.flock
+    first: list = []
+
+    def flock_after_the_other_deleted(fd, op):
+        if not first:
+            monkeypatch.setattr(fcntl, "flock", real_flock)
+            first.append(delete_study_step("DTXSID5032498", "DTXSID5032498", token))
+        return real_flock(fd, op)
+
+    monkeypatch.setattr(fcntl, "flock", flock_after_the_other_deleted)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_step("DTXSID5032498", "DTXSID5032498", token)
+    assert first and first[0]["deleted"] == "DTXSID5032498"
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+    assert not study.exists()
+    assert not [p for p in study.parent.iterdir() if p.name.startswith(".deleting")]
+
+
+def test_a_delete_whose_folder_vanishes_at_the_rename_is_not_found(study, monkeypatch):
+    """A route that takes no lock removed the folder after the checks."""
+    from workflow import study_steps
+
+    token = delete_study_dry_run("DTXSID5032498")["preview_token"]
+    real = study_steps.delete_study_dry_run
+
+    def then_removed(dtxsid):
+        out = real(dtxsid)
+        import shutil
+        shutil.rmtree(study)
+        return out
+
+    monkeypatch.setattr(study_steps, "delete_study_dry_run", then_removed)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_step("DTXSID5032498", "DTXSID5032498", token)
+    assert e.value.code == "study_not_found"
+
+
+# ---------------------------------------------------------------------------
+# The old full reset (F2): the same rule as the delete
+# ---------------------------------------------------------------------------
+
+def test_reset_refuses_what_the_delete_refuses(sessions_dir, monkeypatch):
+    from workflow.steps import reset_session_step
+
+    _folder(sessions_dir, "DTXSID1", studies__json={"rat": "DTXSID1_rat"})
+    _folder(sessions_dir, "DTXSID1_rat", meta__json={})
+    _folder(sessions_dir, "DTXSID1_published", published_clone__json={"twin": "DTXSID1"})
+    for sid, code in (("DTXSID1_rat", "member_of_report"),
+                      ("DTXSID1_published", "read_only_session")):
+        with pytest.raises(StudyRefusal) as e:
+            reset_session_step(sid)
+        assert e.value.code == code and e.value.status_code == 409
+        assert (sessions_dir / sid).is_dir()
+        with pytest.raises(StudyRefusal) as d:
+            delete_study_dry_run(sid)
+        assert d.value.code == code
+
+
+def test_reset_refuses_a_run_in_flight(sessions_dir, monkeypatch):
+    from workflow.steps import reset_session_step
+
+    _folder(sessions_dir, "DTXSID2", meta__json={})
+    monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
+    with pytest.raises(StudyRefusal) as e:
+        reset_session_step("DTXSID2")
+    assert e.value.code == "run_in_flight"
+    assert e.value.details == {"started_at": "2026-10-15T12:00:00Z"}
+    assert (sessions_dir / "DTXSID2").is_dir()
+
+
+def test_reset_removes_a_study_and_forgets_it(sessions_dir):
+    from pipeline.pool_globals import get_integrated_pool
+    from workflow.steps import reset_session_step
+
+    d = _folder(sessions_dir, "DTXSID2_nb", meta__json={})
+    get_integrated_pool()["DTXSID2_nb"] = {}
+    assert reset_session_step("DTXSID2_nb") == {"deleted": "DTXSID2_nb"}
+    assert not d.exists() and "DTXSID2_nb" not in get_integrated_pool()
+    assert not [p for p in sessions_dir.iterdir() if p.name.startswith(".deleting")]
+    with pytest.raises(StudyRefusal) as e:
+        reset_session_step("DTXSID2_nb")
+    assert e.value.code == "study_not_found"
