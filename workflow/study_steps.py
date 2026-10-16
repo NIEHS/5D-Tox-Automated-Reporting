@@ -34,17 +34,21 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
                         dtxsid_checked_by_person: bool) -> dict:
     """The identity a person confirmed, checked against the lookup it came from
     (workflow.studies.lookup_chemical, cached for 10 minutes), as identity.json
-    holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one),
-    with one exception (the maintainer, 2026-10-16): when the lookup found the
-    chemical but gives no CAS number, the person types it, and it is recorded
-    as theirs (``identity_source.casrn_from: "person"``; ``"lookup"``
-    otherwise). Everything else still comes from the lookup.
+    holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one).
+    The only absolute requirement is the DTXSID (the maintainer, 2026-10-16,
+    revised), so the CAS number never blocks:
+      * the lookup gives one: it is recorded (``casrn_from: "lookup"``), also
+        when the identity sent leaves it out;
+      * the lookup gives none and the person typed one: it is checked and
+        recorded as theirs (``casrn_from: "person"``);
+      * neither: the identity is recorded without one (``casrn: null``,
+        ``casrn_from: null``), and the study shows it as pending.
+    Everything else comes from the lookup.
 
     Refuses ``identity_unconfirmed`` without the confirmation (and, when the
     service does not list the DTXSID for the compound, without the person's
-    check of it); ``identity_incomplete`` without a name, or without a CAS
-    number (the lookup's, or the person's when the lookup has none);
-    ``invalid_casrn`` when the CAS number fails its pattern or check digit;
+    check of it); ``identity_incomplete`` without a name; ``invalid_casrn``
+    when a typed CAS number fails its pattern or check digit;
     ``identity_changed`` when the lookup now gives another name, or a CAS
     number other than the one sent."""
     from narrative.chem_resolver import CASRN_PATTERN
@@ -61,7 +65,10 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
     name = str(identity.get("name") or "").strip()
     casrn = str(identity.get("casrn") or "").strip()
     if not name:
-        raise StudyRefusal("identity_incomplete", "the identity needs a name", 400)
+        refusal = StudyRefusal("identity_incomplete", "the identity needs a name", 400)
+        refusal.say = ("The chemical's name is missing from what was confirmed. Its name "
+                       "comes from the lookup: look the chemical up again.")
+        raise refusal
     if casrn and (not CASRN_PATTERN.match(casrn) or not _casrn_check_digit_holds(casrn)):
         raise StudyRefusal("invalid_casrn", f"CASRN {casrn!r} fails its pattern or check digit",
                            400, {"casrn": casrn})
@@ -73,42 +80,80 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
                            f"confirmed {name!r} ({casrn or 'no CASRN'}); the lookup gives "
                            f"{seen['name']!r} ({seen['casrn'] or 'no CASRN'})", 409,
                            {"looked_up": looked_up})
-    if not casrn:
-        refusal = StudyRefusal("identity_incomplete",
-                               "the identity needs a CASRN" + ("" if seen["casrn"] else
-                               f"; {found['service']} gives none, so the person types it"),
-                               400, {"needs": ["casrn"], "looked_up": looked_up})
-        if not seen["casrn"]:
-            refusal.say = (f"{found['service']} gives no CAS number for {seen['name']}. "
-                           "Type the CAS number (for example 80-05-7) before going on.")
-        raise refusal
     if not found["dtxsid_matched"] and not dtxsid_checked_by_person:
         raise StudyRefusal("identity_unconfirmed",
                            f"{found['service']} does not list {dtxsid} for {seen['name']}; the "
                            "person did not say they checked the DTXSID", 400)
+    if seen["casrn"]:
+        casrn, casrn_from = seen["casrn"], "lookup"
+    else:
+        casrn, casrn_from = (casrn or None), ("person" if casrn else None)
     return {"dtxsid": dtxsid, "name": seen["name"], "casrn": casrn,
             "pubchem_cid": seen["pubchem_cid"],
             "identity_source": {"kind": "lookup", "service": found["service"],
                                 "looked_up_at": found["looked_up_at"],
-                                "confirmed_at": datetime.now(timezone.utc).strftime(
-                                    "%Y-%m-%dT%H:%M:%SZ"),
+                                "confirmed_at": _now_z(),
                                 "dtxsid_matched": found["dtxsid_matched"],
-                                "casrn_from": "lookup" if seen["casrn"] else "person"}}
+                                "casrn_from": casrn_from}}
+
+
+def _now_z() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pending_identity(dtxsid: str, identity: dict | None) -> dict:
+    """identity.json for a study created with its identity pending: the DTXSID
+    alone (the only absolute requirement, the maintainer 2026-10-16, revised),
+    for when the lookup does not know the DTXSID or cannot be reached. The
+    name and the CAS number are filled later by ``record_identity_step``.
+
+    Refuses ``bad_request`` when an identity is sent as well (pending or
+    confirmed: the request must say which), and ``identity_unconfirmed`` when
+    a lookup in the last 10 minutes found the chemical and lists this DTXSID
+    for it (it is to be confirmed, not left pending). A found compound the
+    service does not list the DTXSID for may be left pending: the person may
+    judge it is not their chemical. Only the cached lookup is consulted: no
+    network."""
+    from workflow.studies import StudyRefusal, cached_lookup
+
+    if identity:
+        raise StudyRefusal("bad_request", "identity_pending is set and an identity was sent; "
+                           "send one or the other", 422)
+    found = cached_lookup(dtxsid)
+    if found and found.get("dtxsid_matched"):
+        seen = found["identity"]
+        refusal = StudyRefusal("identity_unconfirmed",
+                               f"{found['service']} found {seen['name']!r} for {dtxsid} at "
+                               f"{found['looked_up_at']}; it is confirmed, not left pending", 400,
+                               {"looked_up": {"name": seen["name"], "casrn": seen["casrn"]}})
+        refusal.say = (f"{found['service']} found this chemical ({seen['name']}) a moment ago. "
+                       "Confirm it instead of leaving its identity pending.")
+        raise refusal
+    return {"dtxsid": dtxsid,
+            "identity_source": {"kind": "pending", "pending_since": _now_z()}}
 
 
 @step_provenance
 def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | None,
-                      *, confirmed: bool, dtxsid_checked_by_person: bool = False) -> dict:
+                      *, confirmed: bool, dtxsid_checked_by_person: bool = False,
+                      identity_pending: bool = False) -> dict:
     """Create a study under the chemical's DTXSID, with the identity and the
     report format a person confirmed (module M1). Writes identity.json and
     meta.json and nothing else: no files, no pins (Q-M1-10). The phase after is
     EMPTY. Returns ``{"id": dtxsid}``.
 
+    ``identity_pending``: the person chose to create the study without its
+    chemical's name and CAS number, because the lookup does not know the
+    DTXSID or cannot be reached (the maintainer, 2026-10-16, revised).
+    ``identity`` is then None, and identity.json holds the DTXSID alone
+    (``_pending_identity``); "Look up the chemical" fills it later.
+
     In order: the id is a bare DTXSID (``study_id_has_suffix``); the format the
     person saw is the one the id gives now (``format_changed``); the identity
-    is confirmed and is the lookup's (``_confirmed_identity``); the folder is
-    created atomically, so two people cannot both create one (``study_exists``).
-    An existing EMPTY folder counts as absent (a read before C4 may leave one)."""
+    is confirmed and is the lookup's (``_confirmed_identity``), or explicitly
+    pending (``_pending_identity``); the folder is created atomically, so two
+    people cannot both create one (``study_exists``). An existing EMPTY folder
+    counts as absent (a read before C4 may leave one)."""
     import json
     import os
     import shutil
@@ -123,7 +168,8 @@ def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | No
         raise StudyRefusal("format_changed",
                            f"format seen {seen!r}; the id now gives {now_hash}", 409,
                            {"hash": now_hash})
-    record = _confirmed_identity(dtxsid, identity, confirmed, dtxsid_checked_by_person)
+    record = (_pending_identity(dtxsid, identity) if identity_pending else
+              _confirmed_identity(dtxsid, identity, confirmed, dtxsid_checked_by_person))
 
     # The study appears whole or not at all: written under a hidden name, then
     # renamed into place. A rename replaces an EMPTY folder (a read before C4
@@ -148,7 +194,8 @@ def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | No
     finally:
         if staging.exists():
             shutil.rmtree(staging, ignore_errors=True)
-    logger.info("Created study %s (%s, %s)", dtxsid, record["name"], record["casrn"])
+    logger.info("Created study %s (%s, %s)", dtxsid, record.get("name") or "name pending",
+                record.get("casrn") or "CASRN pending")
     return {"id": dtxsid}
 
 
@@ -192,11 +239,15 @@ def _study_lock(dtxsid: str):
 def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
                          dtxsid_checked_by_person: bool = False) -> dict:
     """Fill a study's missing chemical identity from a confirmed lookup (module
-    M1). The chemical looked up is the one the session's id names. Refuses a
-    session that does not exist (``study_not_found``), a companion or a report
+    M1): a study made before M1, or one created with its identity pending
+    (identity.json holds the DTXSID alone). The chemical looked up is the one
+    the session's id names; the CAS number follows ``_confirmed_identity``
+    (the lookup's, a typed one, or none). Refuses a session that does not
+    exist (``study_not_found``), a companion or a report
     (``read_only_session``), and one whose identity.json already names the
     chemical (``identity_exists``: changing it is not done here, Q-M1-11).
-    Keeps what identity.json already holds besides (the short name).
+    Keeps what identity.json already holds besides (the short name); the
+    pending ``identity_source`` is replaced by the lookup's.
 
     The check and the write are one act per study (``_study_lock``): of two
     people saving at once, one fills the identity and the other is refused

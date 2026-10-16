@@ -173,7 +173,16 @@ function ChemicalCard({ d, state }: { d: StudyDetail; state: ExistingStudyState 
             {id.name ?? <Pending label="name" cause="The chemical's name is not on file. Look the chemical up below." />}
           </Descriptions.Item>
           <Descriptions.Item label="CASRN">
-            {id.casrn ?? <Pending label="CASRN" cause="The chemical's CAS number is not on file. Look the chemical up below." />}
+            {id.casrn ?? (
+              <Pending
+                label="CASRN"
+                cause={
+                  canLookUp
+                    ? "The chemical's CAS number is not on file. Look the chemical up below."
+                    : 'The CAS number is not on file: the lookup gave none, and none was typed when the identity was confirmed. Adding it to an identity on file is not offered on this page.'
+                }
+              />
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="DTXSID">
             {d.chemical_dtxsid ? (

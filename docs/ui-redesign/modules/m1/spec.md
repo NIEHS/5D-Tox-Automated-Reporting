@@ -552,12 +552,19 @@ means a copy of the maintainer's 32 session folders.
     DOI, Appendix A. The checkbox label names that format.
 21. **Create study** stays disabled until the confirm checkbox is ticked.
 22. A well-formed DTXSID that PubChem doesn't know (for example `DTXSID0000000001`)
-    shows the "PubChem has no chemical…" error with **Back to the id**. No name
-    appears, "Test Article" appears nowhere, and no way to create is offered (while
-    Q-M1-3 is open).
+    shows the "PubChem has no chemical…" message with **Back to the id** and
+    **Create it with the chemical pending…** (revised 2026-10-16). No name field is
+    offered and "Test Article" appears nowhere. The pending create, after its ticks,
+    makes a study whose list row and page show "[name pending]" and "[CASRN pending]"
+    with a note, and whose page offers **Look up the chemical**.
 23. With the lookup service unreachable (the tester's mock, or a server without
     network), the page says the service could not be reached and that nothing was
-    created, with **Try again**. The list is unchanged.
+    created, with **Try again** as the primary act and the pending create as the
+    secondary one. Until one is used, the list is unchanged.
+23a. When PubChem finds the chemical but gives no CAS number, the field asks for one
+    and may be left empty: **Create study** needs only the confirm tick. A typed
+    CAS number must pass its check digit and is recorded as stated by a person; an
+    empty one shows as "[CASRN pending]".
 24. **Back** from step 2 returns to step 1 with the id kept. Reloading during step 2
     returns to step 1. In both cases the list is unchanged.
 25. After **Create study**, the success page shows the id, name, CASRN and format,

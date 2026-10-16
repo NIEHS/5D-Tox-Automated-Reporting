@@ -47,6 +47,9 @@ class CreateStudy(BaseModel):
     identity: dict | None = None
     confirmed: bool = False
     dtxsid_checked_by_person: bool = False
+    # True: create with the chemical's identity pending (``identity`` null),
+    # when the lookup does not know the DTXSID or cannot be reached.
+    identity_pending: bool = False
     format_seen: FormatSeen | None = None
 
 
@@ -102,13 +105,15 @@ def api_v2_chemical_structure(dtxsid: str):
 
 @router.post("/studies", status_code=201)
 def api_v2_create_study(body: CreateStudy):
-    """Create a study with the identity and format a person confirmed."""
+    """Create a study with the identity and format a person confirmed, or
+    with its identity explicitly pending."""
     from workflow.steps import create_study_step
     from workflow.studies import study_row
     create_study_step(body.dtxsid, body.identity,
                       body.format_seen.model_dump() if body.format_seen else None,
                       confirmed=body.confirmed,
-                      dtxsid_checked_by_person=body.dtxsid_checked_by_person)
+                      dtxsid_checked_by_person=body.dtxsid_checked_by_person,
+                      identity_pending=body.identity_pending)
     return JSONResponse(study_row(body.dtxsid), status_code=201)
 
 

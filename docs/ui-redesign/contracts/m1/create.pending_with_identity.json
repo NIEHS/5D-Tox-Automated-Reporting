@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v2/studies",
+    "body": {
+      "dtxsid": "DTXSID0000000002",
+      "identity": {
+        "name": "x"
+      },
+      "identity_pending": true,
+      "confirmed": true,
+      "dtxsid_checked_by_person": true,
+      "format_seen": {
+        "definition": "eras/niehs-2026",
+        "hash": "cdbd602e773aee83"
+      }
+    }
+  },
+  "status": 422,
+  "body": {
+    "error": {
+      "code": "bad_request",
+      "status": 422,
+      "message": "identity_pending is set and an identity was sent; send one or the other",
+      "say": "The request was malformed. This is a fault in the interface, not in your study; tell the maintainer.",
+      "fix": null,
+      "details": {}
+    }
+  }
+}

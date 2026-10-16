@@ -13,6 +13,7 @@ import { useVocabularies } from '../../kit/useVocabularies'
 import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
 import { identityNeed, identityToSend, type IdentityNeed } from './identityGap'
 import { FormatNotice } from './FormatNotice'
+import { PendingCreate } from './PendingCreate'
 import { STUDIES_KEY, useChemicalLookup, useCreationCheck, useStudyDetail } from './queries'
 import { kindLabel } from './words'
 
@@ -155,6 +156,7 @@ function StepConfirm({
   const casrnRule = useVocabularies().data?.patterns.casrn
 
   const [casrn, setCasrn] = useState('')
+  // the CAS number field is optional: empty is acceptable once its rule has loaded
   const [casrnOk, setCasrnOk] = useState(false)
 
   const create = useMutation<StudyRow, ApiError, { lookup: ChemicalLookup; check: CreationCheck; need: IdentityNeed }>({
@@ -195,6 +197,13 @@ function StepConfirm({
       Back to the id
     </Button>
   )
+  // never a dead end (2026-10-16, revised): the study may be created with its chemical pending
+  const pendingNote = (
+    <Typography.Text type="secondary">
+      If you are sure of the DTXSID, the study can be created now with its chemical's name and CAS number pending, and the
+      chemical looked up later from the study's page.
+    </Typography.Text>
+  )
 
   if (lookup.error) {
     const e = lookup.error
@@ -205,11 +214,13 @@ function StepConfirm({
           showIcon
           data-testid="lookup-unreachable"
           title={e.say}
+          description={pendingNote}
           action={
             <Space orientation="vertical">
-              <Button onClick={() => void lookup.refetch()} loading={lookup.isFetching}>
+              <Button type="primary" onClick={() => void lookup.refetch()} loading={lookup.isFetching}>
                 Try again
               </Button>
+              <PendingCreate dtxsid={dtxsid} reason="unreachable" onCreated={onCreated} />
               {backButton}
             </Space>
           }
@@ -217,7 +228,21 @@ function StepConfirm({
       )
     }
     if (e.code === 'identity_not_found') {
-      return <Alert type="error" showIcon data-testid="lookup-not-found" title={e.say} action={backButton} />
+      return (
+        <Alert
+          type="error"
+          showIcon
+          data-testid="lookup-not-found"
+          title={e.say}
+          description={pendingNote}
+          action={
+            <Space orientation="vertical">
+              {backButton}
+              <PendingCreate dtxsid={dtxsid} reason="not_found" onCreated={onCreated} />
+            </Space>
+          }
+        />
+      )
     }
     return <Refusal error={e} title="The chemical could not be looked up" action={backButton} />
   }
@@ -226,10 +251,10 @@ function StepConfirm({
   const c = check.data
   const formatWords = c ? c.format.title : null
   const confirmNeeds = !l.dtxsid_matched && !checked
-  // never offer a create the backend would refuse (identity_incomplete, invalid_casrn)
-  const need = identityNeed(l, "a study can't be created", casrnRule)
+  // never send what the backend would refuse (identity_incomplete, invalid_casrn); a missing CAS number is allowed
+  const need = identityNeed(l, casrnRule)
   const canCreate =
-    need.kind !== 'blocked' &&
+    need.kind !== 'no_name' &&
     (need.kind !== 'casrn' || casrnOk) &&
     Boolean(c) &&
     confirmed &&
@@ -266,6 +291,12 @@ function StepConfirm({
           casrnOk={casrnOk}
           onCasrn={setCasrn}
           onCasrnOk={setCasrnOk}
+          noName={
+            <Space orientation="vertical" size="small">
+              {pendingNote}
+              <PendingCreate dtxsid={dtxsid} reason="no_name" service={l.service} onCreated={onCreated} />
+            </Space>
+          }
           label={
             <span data-testid="confirm-label">
               This is the chemical I am studying, and the study will be written in <em>{formatWords}</em>.
@@ -303,9 +334,22 @@ function StepCreated({ row, formatTitle }: { row: StudyRow; formatTitle: string 
   return (
     <Result
       status="success"
-      title={`Study ${row.id} created: ${row.identity.name ?? ''}${row.identity.casrn ? ` (${row.identity.casrn})` : ''}`}
+      title={
+        row.identity.name
+          ? `Study ${row.id} created: ${row.identity.name}${row.identity.casrn ? ` (${row.identity.casrn})` : ''}`
+          : `Study ${row.id} created, with its chemical pending`
+      }
       subTitle={
         <Space orientation="vertical" size={2}>
+          {!row.identity.name && (
+            <span data-testid="created-pending">
+              Its name and CAS number show as "[name pending]" and "[CASRN pending]" until the chemical is looked up from
+              the study's page.
+            </span>
+          )}
+          {row.identity.name && !row.identity.casrn && (
+            <span data-testid="created-casrn-pending">Its CAS number shows as "[CASRN pending]" until it is added.</span>
+          )}
           {formatTitle && <span>It will be written in {formatTitle}.</span>}
           <span>
             Where it stands: {row.stands.say} ({kindLabel(row)}).

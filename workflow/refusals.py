@@ -78,7 +78,8 @@ REFUSALS: dict[str, Refusal] = {
         "The lookup now gives a different chemical than the one you confirmed. Look it "
         "up again."), None),
     "identity_incomplete": Refusal(400, (
-        "A name and a CASRN are needed."), None),
+        "The chemical's name is missing from what was confirmed. Its name comes from "
+        "the lookup: look the chemical up again."), None),
     "invalid_casrn": Refusal(400, (
         "This CASRN's check digit doesn't match; a digit is probably mistyped."), None),
     "identity_exists": Refusal(409, (
