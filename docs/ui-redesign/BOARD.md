@@ -31,7 +31,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | C8 dry-run and undo | not started | | | | Q9 |
 | M1 Studies | **merged** (623f003, wave 1; demo on 9200); tested (`modules/m1/test.md`: 39/41) and reviewed (`modules/m1/review.md`: ready with fixes); fix round running (`ui-m1-fix-be`, `ui-m1-fix-fe`) | ui-adversarial-tester, ui-reviewer | 2026-10-15 | | |
 | M2 Study files | spec ready, **awaiting the maintainer** (Q-M2-1…11) | | | | C3, C4, C8 (specified against them) |
-| M3 Integration and the dataset | not started | | | | |
+| M3 Integration and the dataset | not started; **carry:** `integrate_step` overwrites a confirmed `identity.json` with the request body (`workflow/steps.py:432`, M1 review 4) | | | | |
 | M4 Study facts | not started | | | | |
 | M5 Method and document pins | not started | | | | |
 | M6 Data approval | not started | | | | |
