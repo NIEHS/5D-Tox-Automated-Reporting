@@ -26,6 +26,12 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
   five dropped tables are exactly those with empty cells) and drops the 2026
   package's own body-weight and organ-weight tables. Owner: core track (bmdx-pipe
   integration); M2's check must at least refuse it until fixed.
+- **2026-10-16, C3 spec, checked in the code by the orchestrator:** integration can
+  fail **after** writing. `integrate_step` writes `integrated.json`, archives the data
+  approval and records the basis, then `reapply_study_design` loads the dataset; when
+  that load fails schema validation the phase still reads INTEGRATED and "current"
+  while every read of the dataset answers 422. Fix: write to a temporary file and
+  commit only after the load succeeds. Owner: C1 follow-up or M3.
 - The `.bm2` read cache (LMDB, 1 GB map) cannot hold a 251 MB project: `MDB_MAP_FULL`
   on an empty cache, so that project is re-read at every check.
 
@@ -36,7 +42,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
 | C1 legal actions enforced | **merged** into `ui-redesign` (623f003, wave 1) | – | 2026-10-15 (D1 = B) | orchestrator-verified (full suite: only the known docx failure; guard 11/11); maintainer demo pending | |
 | C2 owned content protected | **merged** (623f003, wave 1); its section tests now seed INTEGRATED studies (C1 refuses Process before integration) | – | 2026-10-15 | orchestrator-verified; maintainer demo pending | |
-| C3 saves merge and check | spec running (`ui-c3-spec`), Q10 answered 2026-10-16 | ui-backend-engineer (spec stage) | | | |
+| C3 saves merge and check | spec ready (`modules/c3/`), **awaiting the maintainer** (D1–D9) | – | | | |
 | C4 side-effect-free reads | spec ready (`modules/c4/`), **awaiting the maintainer** (D1–D7) | | | | C1 merged ✓ |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
 | C6 derived readiness | not started | | | | Q2–Q5 |
