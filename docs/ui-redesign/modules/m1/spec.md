@@ -630,12 +630,18 @@ requests of §10. So:
 - the formats get the declared titles of Q-M1-6;
 - creation pins nothing; changing an existing identity is not in M1.
 
-**Decided 2026-10-16 (the maintainer):** when PubChem finds the chemical but gives
-no CAS number, creation is blocked until the person types one. The name and every
-other field still come from the lookup; only the CAS number is the person's, checked
-by its pattern and check digit, and recorded as stated by a person
-(`identity_source.casrn_from: "person"`). A DTXSID PubChem does not know at all is
-still refused (no stated identity).
+**Decided 2026-10-16 (the maintainer), revised the same day:** the only absolute
+requirement for a test article's identity is its **DTXSID**. A test article missing
+its synonyms is very unlikely, so the rare gaps are handled simply, never by a dead end:
+- the name, the CAS number and the rest come from the lookup when it gives them;
+- when the lookup gives no CAS number, the screen asks for one, but the person may
+  go on without it. A typed CAS number is checked (pattern, check digit) and recorded
+  as stated by a person (`identity_source.casrn_from: "person"`); an absent one shows
+  as "[CASRN pending]";
+- when the lookup does not know the DTXSID, or cannot be reached, the person may
+  still create the study with its identity pending. It shows "[name pending]" and
+  "[CASRN pending]" and offers **Look up the chemical** later;
+- no name is typed by a person (no stated identity, Q-M1-3).
 
 **Still open** (no recommendation was made; none blocks the build):
 - **Q-M1-2:** a new study of a published chemical inherits that book's definition,
