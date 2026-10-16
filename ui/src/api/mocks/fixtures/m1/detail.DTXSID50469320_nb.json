@@ -69,7 +69,7 @@
     "detail": {
       "banner": {
         "level": "warning",
-        "say": "This session's id, DTXSID50469320_nb, is not a chemical's DTXSID: it was made by a tool. Its report uses the 2026 format; a study under DTXSID50469320 would use NIEHS-10's format.",
+        "say": "This session's id, DTXSID50469320_nb, is not a chemical's DTXSID alone, and no report lists it: a tool made it, or it was a study of a report that has since been deleted. Its report uses the 2026 format; a study under DTXSID50469320 would use NIEHS-10's format.",
         "links": [
           {
             "say": "The study DTXSID50469320",

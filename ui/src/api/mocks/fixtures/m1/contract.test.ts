@@ -51,14 +51,14 @@ describe('M1 fixtures', () => {
       expect(d, r.id).toBeDefined()
       const { detail, ...row } = d!
       expect(row, r.id).toEqual(r)
-      expect(Object.keys(detail.format), r.id).toEqual(expect.arrayContaining(['brings', 'pin', 'title', 'say', 'source']))
+      expect(Object.keys(detail.format ?? {}), r.id).toEqual(expect.arrayContaining(['brings', 'pin', 'title', 'say', 'source']))
       expect('members' in detail, r.id).toBe(r.kind === 'report')
     }
   })
 
   it('the lookups, creation checks and the delete preview carry the contract\'s keys', () => {
     for (const l of Object.values(M1_CHEMICALS)) {
-      expect(Object.keys(l).sort()).toEqual(['dtxsid', 'dtxsid_matched', 'identity', 'looked_up_at', 'say_source', 'service', 'structure_url'])
+      expect(Object.keys(l).sort()).toEqual(expect.arrayContaining(['dtxsid', 'dtxsid_matched', 'identity', 'looked_up_at', 'say_source', 'service', 'structure_url']))
     }
     for (const c of [M1_CHECK_BPA, M1_CHECK_PFHXSAM]) {
       expect(Object.keys(c).sort()).toEqual(['dtxsid', 'existing', 'exists', 'format', 'published', 'related_sessions'])

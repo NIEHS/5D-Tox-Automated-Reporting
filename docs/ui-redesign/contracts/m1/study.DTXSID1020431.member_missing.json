@@ -1,0 +1,185 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID1020431"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID1020431",
+    "kind": "report",
+    "chemical_dtxsid": "DTXSID1020431",
+    "chemical_dtxsid_from": "id",
+    "relations": {
+      "parent": null,
+      "members": [
+        {
+          "key": "rat",
+          "id": "DTXSID1020431_rat"
+        },
+        {
+          "key": "mouse",
+          "id": "DTXSID1020431_mouse"
+        }
+      ],
+      "companion": "DTXSID1020431_published",
+      "twin": null,
+      "others": []
+    },
+    "identity": {
+      "name": "1,4-Dichlorobenzene",
+      "casrn": "106-46-7",
+      "short_name": "1,4-DCB",
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null,
+        "casrn_from": null
+      }
+    },
+    "stands": {
+      "phase": null,
+      "say": "A report over 2 studies; its studies are being prepared",
+      "next": {
+        "say": "Finish the member studies",
+        "fix": "M1"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-13T11:33:57Z",
+    "format": {
+      "definition": "studies/DTXSID1020431/document",
+      "source": "study",
+      "era": "eras/niehs-2026",
+      "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+      "title_short": "NIEHS Report, 2026",
+      "changes": 1,
+      "say": "This chemical has a published report, NIEHS-13 (April 2026). The report is written in that book's format: the NIEHS Report as published in 2026, with 1 change."
+    },
+    "published": {
+      "report": "NIEHS-13",
+      "date": "2026-04",
+      "nbk": "NBK621744"
+    },
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: its studies have not all been processed"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [],
+    "detail": {
+      "banner": {
+        "level": "info",
+        "links": [],
+        "say": "A report over two studies. The data is prepared in each study; this report gathers them."
+      },
+      "format": {
+        "definition": "studies/DTXSID1020431/document",
+        "source": "study",
+        "era": "eras/niehs-2026",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title_short": "NIEHS Report, 2026",
+        "changes": 1,
+        "say": "This chemical has a published report, NIEHS-13 (April 2026). The report is written in that book's format: the NIEHS Report as published in 2026, with 1 change.",
+        "brings": [
+          {
+            "what": "document_definition",
+            "path": "templates/studies/DTXSID1020431/document.yaml",
+            "say": "the book's structure and wording"
+          },
+          {
+            "what": "deposit",
+            "path": "templates/studies/DTXSID1020431/deposit.yaml",
+            "say": "the book's captions for its deposited files and its data DOI, 10.22427/NIEHS-DATA-NIEHS-13"
+          }
+        ],
+        "pin": {
+          "mode": null,
+          "pinned_at": null,
+          "pinned_by": null
+        },
+        "chosen_by": "id"
+      },
+      "members": [
+        {
+          "id": "DTXSID1020431_rat",
+          "kind": "member",
+          "chemical_dtxsid": "DTXSID1020431",
+          "chemical_dtxsid_from": "id_prefix",
+          "relations": {
+            "parent": "DTXSID1020431",
+            "members": [],
+            "companion": null,
+            "twin": null,
+            "others": []
+          },
+          "identity": {
+            "name": "1,4-Dichlorobenzene",
+            "casrn": "106-46-7",
+            "short_name": null,
+            "source": {
+              "kind": "unknown",
+              "service": null,
+              "confirmed_at": null,
+              "casrn_from": null
+            }
+          },
+          "stands": {
+            "phase": "APPROVED",
+            "say": "Data reviewed",
+            "next": {
+              "say": "Review the report's sections",
+              "fix": "D1"
+            }
+          },
+          "processed": true,
+          "last_changed": "2026-10-12T11:42:28Z",
+          "format": {
+            "definition": "studies/DTXSID1020431/document",
+            "source": "study",
+            "era": "eras/niehs-2026",
+            "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+            "title_short": "NIEHS Report, 2026",
+            "changes": 1,
+            "say": "Written as part of the report DTXSID1020431, in its format."
+          },
+          "published": {
+            "report": "NIEHS-13",
+            "date": "2026-04",
+            "nbk": "NBK621744"
+          },
+          "bookshelf": {
+            "on_shelf": false,
+            "url": "/Bookshelf/DTXSID1020431",
+            "say": "Part of DTXSID1020431's book"
+          },
+          "actions": {
+            "open": {
+              "allowed": true
+            },
+            "delete": {
+              "allowed": false,
+              "code": "member_of_report",
+              "say": "This is the rat study of the report DTXSID1020431. Deleting it would break that report."
+            }
+          },
+          "notes": []
+        },
+        {
+          "id": "DTXSID1020431_mouse",
+          "key": "mouse",
+          "exists": false
+        }
+      ]
+    }
+  }
+}

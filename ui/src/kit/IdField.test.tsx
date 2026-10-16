@@ -67,6 +67,15 @@ describe('checkId', () => {
     expect(Object.keys(P).sort()).toEqual(['casrn', 'doi', 'dtxsid', 'session_id', 'study_id'])
   })
 
+  it('checks a DTXSID against the store\'s rule too: the served DTXSID pattern sets no length, the store does', () => {
+    const long = `DTXSID${'1'.repeat(80)}`
+    expect(checkId('dtxsid', long, P.dtxsid).ok).toBe(true)
+    expect(checkId('dtxsid', long, P.dtxsid, P.session_id)).toMatchObject({ ok: false, say: expect.stringMatching(/longer than any DTXSID/) as unknown })
+    expect(checkId('dtxsid', `DTXSID${'1'.repeat(64)}`, P.dtxsid, P.session_id)).toEqual({ ok: true })
+    expect(checkId('study_id', long, P.study_id, P.session_id).ok).toBe(false)
+    expect(checkId('dtxsid', 'DTXSID50469320', P.dtxsid, { pattern: '(', example: '', say: '' }).ok).toBeNull()
+  })
+
   it('never calls an id good when its rule is missing or broken', () => {
     expect(checkId('doi', '10.1/x', undefined).ok).toBeNull()
     expect(checkId('doi', '10.1/x', { pattern: '(', example: '', say: '' }).ok).toBeNull()
@@ -116,10 +125,36 @@ describe('<IdField>', () => {
     await user.clear(input)
     await user.paste('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')
     expect(input).toHaveValue('HTTPS://COMPTOX.EPA.GOV/DASHBOARD/CHEMICAL/DETAILS/DTXSID7020182')
-    expect(screen.getByText(/starts with 'DTXSID'/)).toBeInTheDocument()
+    // while the offer is shown, only the offer: no red error beside it
+    expect(screen.queryByText(/starts with 'DTXSID'/)).not.toBeInTheDocument()
+    expect(input).toHaveAttribute('aria-invalid', 'false')
     await user.click(screen.getByRole('button', { name: 'Use DTXSID7020182?' }))
     expect(input).toHaveValue('DTXSID7020182')
     expect(screen.queryByTestId('id-offer')).not.toBeInTheDocument()
+  })
+
+  it('says what is wrong again once the offer is set aside by typing', async () => {
+    const { user } = renderWithApp(<Host kind="dtxsid" onCheck={vi.fn()} />)
+    const input = await screen.findByRole('textbox', { name: 'DTXSID' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.click(input)
+    await user.paste('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')
+    expect(screen.getByTestId('id-offer')).toBeInTheDocument()
+    await user.type(input, 'x')
+    expect(screen.queryByTestId('id-offer')).not.toBeInTheDocument()
+    expect(screen.getByText(/starts with 'DTXSID'/)).toBeInTheDocument()
+  })
+
+  it('never calls a DTXSID right that the store could not hold (80 digits)', async () => {
+    const onCheck = vi.fn()
+    const { user } = renderWithApp(<Host kind="dtxsid" onCheck={onCheck} />)
+    const input = await screen.findByRole('textbox', { name: 'DTXSID' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.click(input)
+    await user.paste(`DTXSID${'1'.repeat(80)}`)
+    expect(screen.getByText(/longer than any DTXSID the application can hold/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('looks right')).not.toBeInTheDocument()
+    expect(onCheck).toHaveBeenLastCalledWith(false)
   })
 
   it('leaves a CAS number as it is typed', async () => {
@@ -127,7 +162,7 @@ describe('<IdField>', () => {
     const input = await screen.findByRole('textbox', { name: 'CAS number' })
     await waitFor(() => expect(input).toBeEnabled())
     await user.type(input, '80-05-8')
-    expect(screen.getByText(/check digit doesn't match/)).toBeInTheDocument()
+    expect(screen.getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
   })
 
   it('shows the example from the backend as the placeholder', async () => {

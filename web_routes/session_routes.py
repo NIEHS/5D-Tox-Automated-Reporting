@@ -1502,41 +1502,26 @@ async def api_session_reset(dtxsid: Dtxsid):
 
     Unlike pool reset (which preserves identity and history), this removes
     EVERYTHING: the entire sessions/{dtxsid}/ directory including meta.json,
-    identity.json, background.json, history/, files/, and all approved sections.
+    identity.json, background.json, history/, files/, and all approved sections,
+    and clears all in-memory server state for this chemical.
 
-    Also clears all in-memory server state for this chemical (same as pool reset).
-
-    After this, the chemical identity form is still filled (from localStorage)
-    but the server has no record of any prior work.  The user starts completely
-    from scratch.
+    Superseded by the M1 delete pair (``/api/v2/studies/{id}/delete-preview``
+    and ``…/delete``), and held to the same rule: a published book's content,
+    a member of a report or a study with a run in flight is refused, in the
+    §4.2 error envelope (workflow.study_steps.reset_session_step). It asks for
+    no typed id and no preview token. An absent id answers 200 "No session to
+    reset", as it always did.
     """
-    _bm2_uploads = get_bm2_uploads()
-    _csv_uploads = get_csv_uploads()
-    _pool_fingerprints = get_pool_fingerprints()
-    _data_uploads = get_data_uploads()
-    _integrated_pool = get_integrated_pool()
+    from workflow.steps import reset_session_step
+    from workflow.studies import StudyRefusal, session_folder
+    from web_routes.v2_routes import envelope_response
 
-    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
-    if not d.exists():
+    if not session_folder(dtxsid).exists():
         return JSONResponse({"ok": True, "message": "No session to reset"})
-
-    # Delete the entire session directory tree
-    shutil.rmtree(d)
-
-    # Clear in-memory server state (same cleanup as pool reset)
-    session_files_prefix = str(d / "files")
-    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
-        stale_ids = [
-            fid for fid, info in store.items()
-            if info.get("temp_path", "").startswith(session_files_prefix)
-            or not os.path.exists(info.get("temp_path", ""))
-        ]
-        for fid in stale_ids:
-            del store[fid]
-
-    _pool_fingerprints.pop(dtxsid, None)
-    _integrated_pool.pop(dtxsid, None)
-
-    logger.info("Full session reset for %s — directory deleted", dtxsid)
-
+    try:
+        reset_session_step(dtxsid)
+    except StudyRefusal as exc:
+        if exc.code == "study_not_found":   # deleted meanwhile: nothing left to reset
+            return JSONResponse({"ok": True, "message": "No session to reset"})
+        return envelope_response(exc)
     return JSONResponse({"ok": True})

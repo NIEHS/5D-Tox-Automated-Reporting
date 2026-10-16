@@ -34,6 +34,7 @@ import {
   STATE_EMPTY,
   STRUCTURE_PNG_BASE64,
 } from './fixtures'
+import { casrnCheckDigitOk } from '../../kit/checkId'
 import { running } from './runs'
 
 /**
@@ -46,7 +47,8 @@ import { running } from './runs'
  * Mock-only ids, for the browser demo:
  * - DTXSID0000000001: PubChem knows no such chemical (identity_not_found);
  * - DTXSID0000000002: the lookup service cannot be reached (identity_lookup_unreachable);
- * - DTXSID1111111111: the creation check answers, but the format changed by the time of Create (format_changed).
+ * - DTXSID1111111111: the creation check answers, but the format changed by the time of Create (format_changed);
+ * - DTXSID3333333333: PubChem finds the chemical but gives no CAS number (the person is asked for it).
  */
 
 const SESSION_ID = /^DTXSID[A-Za-z0-9_-]{1,64}$/
@@ -206,7 +208,7 @@ function checkFor(dtxsid: string): CreationCheck {
   const existing = exists(dtxsid) ? { id: dtxsid, kind: db.details.get(dtxsid)!.kind } : null
   const related = [...db.details.values()]
     .filter((d) => exists(d.id) && d.id !== dtxsid && d.chemical_dtxsid === dtxsid)
-    .map((d) => ({ id: d.id, kind: d.kind, say: d.kind === 'companion' ? "The published book's content" : d.kind === 'member' ? 'Part of a report over several studies' : 'Other session, made by a tool' }))
+    .map((d) => ({ id: d.id, kind: d.kind, say: d.kind === 'companion' ? "The published book's content" : d.kind === 'member' ? 'Part of a report over several studies' : 'Other session' }))
   const format = clone(base.format)
   // the mock's format hash: the contract's, or a stand-in where it gives none
   if (!format.hash || format.hash.startsWith('[')) format.hash = `mock-${format.definition}`
@@ -237,7 +239,7 @@ function previewFor(id: string): DeletePreview {
       ),
       keeps: [
         { what: 'output', say: `The deliverables already written to output/${id}/` },
-        ...(d.format.source === 'study' ? [{ what: 'study_definition', say: `The study definition under templates/studies/${id}/ (not part of the study)` }] : []),
+        ...(d.format?.source === 'study' ? [{ what: 'study_definition', say: `The study definition under templates/studies/${id}/ (not part of the study)` }] : []),
         ...companion,
         ...others,
       ],
@@ -292,6 +294,22 @@ function setIdentity(id: string, identity: { name: string; casrn: string | null 
   if (base) db.states.set(id, { ...clone(base), identity: { ...(base.identity ?? { dtxsid: id, short_name: null }), name: identity.name, casrn: identity.casrn } })
 }
 
+/** The identity source recorded for a confirmed identity; `casrn_from: "person"` when the person typed the CAS number. */
+function identitySourceOf(identity: CreateStudyRequest['identity'], now: string): StudyRow['identity']['source'] {
+  return {
+    kind: 'lookup',
+    service: identity.source.service,
+    confirmed_at: now,
+    casrn_from: identity.source.casrn_from === 'person' ? 'person' : 'lookup',
+  }
+}
+
+/**
+ * Mock-only id for the browser demo: PubChem finds the chemical but gives no
+ * CAS number (the person is asked for one).
+ */
+export const MOCK_NO_CASRN_ID = 'DTXSID3333333333'
+
 export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number } = {}) {
   return [
     http.get(`${API_V2}/studies`, () => HttpResponse.json(list())),
@@ -303,6 +321,9 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
       if (bad) return bad
       if (req.confirmed !== true) return refusal('identity_unconfirmed', 400, 'Confirm the chemical before creating the study.', 'confirmed is not true')
       if (!req.identity?.name || !req.identity.casrn) return refusal('identity_incomplete', 400, 'A name and a CASRN are needed.', 'identity incomplete')
+      if (!/^\d{2,7}-\d{2}-\d$/.test(req.identity.casrn) || !casrnCheckDigitOk(req.identity.casrn)) {
+        return refusal('invalid_casrn', 400, "This CASRN's check digit doesn't match; a digit is probably mistyped.", `CASRN ${req.identity.casrn} fails its check digit`, { casrn: req.identity.casrn })
+      }
       if (exists(id)) {
         return m1Envelope({ error: { ...M1_REFUSAL_STUDY_EXISTS.error, message: `session ${id} already exists`, say: `A study of this chemical already exists (${id}). Open it instead.`, details: { existing_id: id } } })
       }
@@ -311,7 +332,11 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
         return refusal('format_changed', 409, 'The report format this id brings changed since you looked. Review it again.', `format hash ${req.format_seen?.hash} != ${check.format.hash}`)
       }
       const looked = M1_CHEMICALS[id]
-      if (looked && (looked.identity.name !== req.identity.name || looked.identity.casrn !== req.identity.casrn)) {
+      const casrnByPerson = req.identity.source?.casrn_from === 'person'
+      if (casrnByPerson && looked?.identity.casrn) {
+        return refusal('identity_changed', 409, 'The lookup now gives a CAS number for this chemical. Look it up again.', 'casrn_from person, but the lookup has a CASRN')
+      }
+      if (looked && (looked.identity.name !== req.identity.name || (!casrnByPerson && looked.identity.casrn !== req.identity.casrn))) {
         return refusal('identity_changed', 409, 'The lookup now gives a different chemical than the one you confirmed. Look it up again.', 'identity differs from the cached lookup')
       }
       const now = new Date().toISOString()
@@ -319,7 +344,7 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
         ...clone(M1_CREATED_BPA),
         id,
         chemical_dtxsid: id,
-        identity: { name: req.identity.name, casrn: req.identity.casrn, short_name: null, source: { kind: 'lookup', service: req.identity.source.service, confirmed_at: now } },
+        identity: { name: req.identity.name, casrn: req.identity.casrn, short_name: null, source: identitySourceOf(req.identity, now) },
         last_changed: now,
         format: { ...clone(check.format), brings: undefined } as StudyRow['format'],
         published: check.published,
@@ -391,7 +416,8 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
       const req = (await request.json()) as RecordIdentityRequest
       if (req.confirmed !== true) return refusal('identity_unconfirmed', 400, 'Confirm the chemical before creating the study.', 'confirmed is not true')
       const now = new Date().toISOString()
-      d.identity = { ...d.identity, name: req.identity.name, casrn: req.identity.casrn, source: { kind: 'lookup', service: req.identity.source.service, confirmed_at: now } }
+      if (!req.identity?.name || !req.identity.casrn) return refusal('identity_incomplete', 400, 'A name and a CASRN are needed.', 'identity incomplete')
+      d.identity = { ...d.identity, name: req.identity.name, casrn: req.identity.casrn, source: identitySourceOf(req.identity, now) }
       d.notes = d.notes.filter((n) => n.code !== 'identity_missing')
       const group = db.chemicals.find((c) => c.ids.includes(id))
       if (group && group.name === null) {
@@ -416,8 +442,15 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
       if (bad) return bad
       if (lookupDelayMs > 0) await delay(lookupDelayMs)
       if (id === 'DTXSID0000000002') return m1Envelope(M1_CHEM_UNREACHABLE)
-      const found = M1_CHEMICALS[id]
-      if (found) return HttpResponse.json({ ...found, looked_up_at: new Date().toISOString() })
+      const found =
+        M1_CHEMICALS[id] ??
+        (id === MOCK_NO_CASRN_ID
+          ? { ...clone(M1_CHEMICALS['DTXSID7020182']!), dtxsid: id, dtxsid_matched: true, structure_url: null, identity: { ...clone(M1_CHEMICALS['DTXSID7020182']!.identity), casrn: null } }
+          : undefined)
+      // PROPOSED (2026-10-16): a lookup without a CAS number says the person must give one
+      if (found) return HttpResponse.json({ ...found, looked_up_at: new Date().toISOString(), ...(found.identity.casrn
+        ? { needs: [], needs_say: null }
+        : { needs: ['casrn'], needs_say: `${found.service} gives no CAS number for ${found.identity.name}. Type it before going on; it will be recorded as stated by you.` }) })
       return m1Envelope({
         error: { ...M1_CHEM_NOT_FOUND.error, message: `PubChem lookup failed for name '${id}'`, say: `PubChem has no chemical with the DTXSID ${id}. A single mistyped digit gives another chemical or none. Check the id on the CompTox dashboard.` },
       })

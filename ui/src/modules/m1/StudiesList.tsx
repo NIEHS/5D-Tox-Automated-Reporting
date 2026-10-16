@@ -9,7 +9,7 @@ import { PhaseTag } from '../../kit/PhaseTag'
 import { Refusal } from '../../kit/Refusal'
 import { useStudies } from './queries'
 import { UNASSIGNED_KEY, buildRows, searchRows, type ListRow } from './rows'
-import { KIND_COLOURS, childCount, exactTime, kindLabel, publishedLabel, relativeTime } from './words'
+import { KIND_COLOURS, childCount, exactTime, formatUnreadSay, kindLabel, publishedLabel, relativeTime } from './words'
 
 /**
  * S1 Studies list (M1 spec §3). One top-level row per chemical, in the
@@ -87,6 +87,18 @@ function SessionCell({ r, expanded }: { r: ListRow; expanded: boolean }) {
 
 function FormatCell({ s }: { s: StudyRow }) {
   const pub = s.published ? publishedLabel(s.published) : null
+  if (!s.format) {
+    return (
+      <Space size={4} wrap data-testid="format">
+        <Pending label="format" cause={formatUnreadSay(s)} to={studyRoute(s.id)} toLabel="Open the study" />
+        {pub && (
+          <Tag color="gold">
+            {pub.report} · {pub.when ?? '[publication date pending]'}
+          </Tag>
+        )}
+      </Space>
+    )
+  }
   return (
     <Popover content={<Typography.Paragraph style={{ maxWidth: 360, margin: 0 }}>{s.format.say}</Typography.Paragraph>} title={s.format.title}>
       <Space size={4} wrap style={{ cursor: 'help' }} data-testid="format">

@@ -4,7 +4,7 @@
     "path": "/api/v2/studies/DTXSID5032498/delete",
     "body": {
       "confirm_id": "dtxsid5032498",
-      "preview_token": "sha256:1a6b1afa095a3bdbe7343e2f5f7707feb0dc48ccb7abf8216a43cc07ed7a72ce"
+      "preview_token": "sha256:a40aec93ac1d90d6be40c86c78ccb511e896175fc0137989628142022d3349f7"
     }
   },
   "status": 400,

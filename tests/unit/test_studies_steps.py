@@ -165,6 +165,72 @@ def test_create_with_no_lookup_creates_nothing(sessions_dir, lookup):
     assert not (sessions_dir / NEW).exists()
 
 
+# ---------------------------------------------------------------------------
+# A CAS number the person types: only when the lookup gives none (2026-10-16)
+# ---------------------------------------------------------------------------
+
+def test_create_with_a_typed_casrn_when_the_lookup_has_none(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    create_study_step(NEW, _identity(casrn=" 80-05-7 "), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["casrn"] == "80-05-7" and ident["name"] == "Bisphenol A"
+    assert ident["identity_source"]["casrn_from"] == "person"
+    assert studies.study_row(NEW)["identity"]["source"]["casrn_from"] == "person"
+
+
+def test_a_looked_up_casrn_is_recorded_as_the_lookups(sessions_dir, lookup):
+    create_study_step(NEW, _identity(), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["identity_source"]["casrn_from"] == "lookup"
+
+
+def test_a_missing_casrn_the_lookup_lacks_says_to_type_it(sessions_dir, lookup):
+    from workflow.refusals import explain
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn=None), _seen(), confirmed=True)
+    assert e.value.code == "identity_incomplete" and e.value.details["needs"] == ["casrn"]
+    say = explain(e.value)["error"]["say"]
+    assert "gives no CAS number for Bisphenol A" in say and "Type the CAS number" in say
+    assert not (sessions_dir / NEW).exists()
+
+
+@pytest.mark.parametrize("typed", ["80-05-8", "80-5-7", "8005-7", "CAS 80-05-7"])
+def test_a_typed_casrn_is_checked(sessions_dir, lookup, typed):
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn=typed), _seen(), confirmed=True)
+    assert e.value.code == "invalid_casrn"
+    assert not (sessions_dir / NEW).exists()
+
+
+def test_a_typed_casrn_other_than_the_lookups_is_refused(sessions_dir, lookup):
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn="50-00-0"), _seen(), confirmed=True)
+    assert e.value.code == "identity_changed"
+    assert e.value.details["looked_up"] == {"name": "Bisphenol A", "casrn": "80-05-7"}
+    assert not (sessions_dir / NEW).exists()
+
+
+def test_a_wrong_name_is_refused_even_with_a_typed_casrn(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(name="Bisphenol B", casrn="80-05-7"), _seen(),
+                          confirmed=True)
+    assert e.value.code == "identity_changed"
+
+
+def test_record_identity_with_a_typed_casrn(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(f"{NEW}_nb", _identity(casrn=""), confirmed=True)
+    assert e.value.code == "identity_incomplete"
+    record_identity_step(f"{NEW}_nb", _identity(casrn="80-05-7"), confirmed=True)
+    ident = json.loads((d / "identity.json").read_text())
+    assert ident["casrn"] == "80-05-7" and ident["identity_source"]["casrn_from"] == "person"
+
+
 def test_the_casrn_check_digit():
     from workflow.steps import _casrn_check_digit_holds
     for good in ("80-05-7", "41997-13-1", "106-46-7", "3380-34-5", "7732-18-5"):
@@ -209,6 +275,64 @@ def test_record_identity_refusals(sessions_dir, lookup):
     with pytest.raises(StudyRefusal) as e:
         record_identity_step("DTXSID_TEST", _identity(), confirmed=True)
     assert e.value.code == "invalid_study_id"
+
+
+def test_simultaneous_identity_fills_give_one_success(sessions_dir, monkeypatch):
+    """F4: three people save the identity at once. All three pass the first
+    check (the lookup holds them until all have), so only the per-study lock
+    keeps the check-then-write atomic: one fills it, two are refused
+    identity_exists, no server error, no temp file left behind."""
+    import threading
+
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW},
+                identity__json={"abbreviation": "BPA"})
+    gate = threading.Barrier(3, timeout=10)
+
+    def held_lookup(dtxsid, *, fresh=False):
+        gate.wait()
+        return {**json.loads(json.dumps(LOOKUP)), "dtxsid": dtxsid}
+
+    monkeypatch.setattr(studies, "lookup_chemical", held_lookup)
+    results: list = []
+
+    def save():
+        try:
+            results.append(record_identity_step(f"{NEW}_nb", _identity(), confirmed=True))
+        except StudyRefusal as exc:
+            results.append(exc.code)
+        except Exception as exc:   # the failure F4 found: a FileNotFoundError
+            results.append(repr(exc))
+
+    threads = [threading.Thread(target=save) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+    assert sorted(map(str, results)) == sorted(
+        [str({"id": f"{NEW}_nb"}), "identity_exists", "identity_exists"]), results
+    ident = json.loads((d / "identity.json").read_text())
+    assert ident["name"] == "Bisphenol A" and ident["abbreviation"] == "BPA"
+    assert not [p for p in d.iterdir() if p.name.endswith(".tmp")]
+
+
+def test_record_identity_on_a_study_deleted_meanwhile(sessions_dir, lookup, monkeypatch):
+    """The study is deleted (renamed away) between the checks and the write:
+    study_not_found, and nothing is written where it was."""
+    from workflow import study_steps
+
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
+    real = study_steps._confirmed_identity
+
+    def then_deleted(*a, **k):
+        out = real(*a, **k)
+        d.rename(sessions_dir / ".deleting-x")
+        return out
+
+    monkeypatch.setattr(study_steps, "_confirmed_identity", then_deleted)
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(f"{NEW}_nb", _identity(), confirmed=True)
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+    assert not d.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -334,3 +458,156 @@ def test_the_request_log_does_not_change_the_token(study):
     assert delete_study_dry_run("DTXSID5032498")["preview_token"] == token
     delete_study_step("DTXSID5032498", "DTXSID5032498", token)
     assert not study.exists()
+
+
+# ---------------------------------------------------------------------------
+# Delete races (F3): a folder that vanishes under the dry run or the delete
+# ---------------------------------------------------------------------------
+
+def _deleted_while_walking(monkeypatch, folder: Path, *, raise_after: bool):
+    """The dry run's section read replaced: the folder is renamed away (another
+    request deleted it) in the middle of the walk; then the walk fails as the
+    real one did (FileNotFoundError) or carries on over nothing."""
+    import workflow.read_model as rm
+
+    def walk(dtxsid, store=None):
+        folder.rename(folder.parent / f".deleting-{dtxsid}-other")
+        if raise_after:
+            raise FileNotFoundError(str(folder / "narrative_runs" / "summary" / "r1.json"))
+        return {"sections": []}
+
+    monkeypatch.setattr(rm, "study_state", walk)
+
+
+@pytest.mark.parametrize("raise_after", [True, False])
+def test_a_dry_run_of_a_folder_deleted_meanwhile_is_not_found(study, monkeypatch, raise_after):
+    _deleted_while_walking(monkeypatch, study, raise_after=raise_after)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_dry_run("DTXSID5032498")
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+
+
+def test_a_dry_run_failing_on_a_folder_still_there_is_not_hidden(study, monkeypatch):
+    """Only a vanished folder becomes study_not_found; any other failure stays."""
+    import workflow.read_model as rm
+
+    def broken(dtxsid, store=None):
+        raise FileNotFoundError("something else")
+
+    monkeypatch.setattr(rm, "study_state", broken)
+    with pytest.raises(FileNotFoundError):
+        delete_study_dry_run("DTXSID5032498")
+
+
+def test_the_second_of_two_deletes_is_not_found(study, monkeypatch):
+    """A double click: the second request opens the study, then waits for the
+    lock while the first deletes it. Forced: the second request's wait for
+    the lock runs the whole first delete."""
+    import fcntl
+
+    token = delete_study_dry_run("DTXSID5032498")["preview_token"]
+    real_flock = fcntl.flock
+    first: list = []
+
+    def flock_after_the_other_deleted(fd, op):
+        if not first:
+            monkeypatch.setattr(fcntl, "flock", real_flock)
+            first.append(delete_study_step("DTXSID5032498", "DTXSID5032498", token))
+        return real_flock(fd, op)
+
+    monkeypatch.setattr(fcntl, "flock", flock_after_the_other_deleted)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_step("DTXSID5032498", "DTXSID5032498", token)
+    assert first and first[0]["deleted"] == "DTXSID5032498"
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+    assert not study.exists()
+    assert not [p for p in study.parent.iterdir() if p.name.startswith(".deleting")]
+
+
+def test_a_delete_whose_folder_vanishes_at_the_rename_is_not_found(study, monkeypatch):
+    """A route that takes no lock removed the folder after the checks."""
+    from workflow import study_steps
+
+    token = delete_study_dry_run("DTXSID5032498")["preview_token"]
+    real = study_steps.delete_study_dry_run
+
+    def then_removed(dtxsid):
+        out = real(dtxsid)
+        import shutil
+        shutil.rmtree(study)
+        return out
+
+    monkeypatch.setattr(study_steps, "delete_study_dry_run", then_removed)
+    with pytest.raises(StudyRefusal) as e:
+        delete_study_step("DTXSID5032498", "DTXSID5032498", token)
+    assert e.value.code == "study_not_found"
+
+
+# ---------------------------------------------------------------------------
+# The old full reset (F2): the same rule as the delete
+# ---------------------------------------------------------------------------
+
+def test_reset_refuses_what_the_delete_refuses(sessions_dir, monkeypatch):
+    from workflow.steps import reset_session_step
+
+    _folder(sessions_dir, "DTXSID1", studies__json={"rat": "DTXSID1_rat"})
+    _folder(sessions_dir, "DTXSID1_rat", meta__json={})
+    _folder(sessions_dir, "DTXSID1_published", published_clone__json={"twin": "DTXSID1"})
+    for sid, code in (("DTXSID1_rat", "member_of_report"),
+                      ("DTXSID1_published", "read_only_session")):
+        with pytest.raises(StudyRefusal) as e:
+            reset_session_step(sid)
+        assert e.value.code == code and e.value.status_code == 409
+        assert (sessions_dir / sid).is_dir()
+        with pytest.raises(StudyRefusal) as d:
+            delete_study_dry_run(sid)
+        assert d.value.code == code
+
+
+def test_reset_refuses_a_run_in_flight(sessions_dir, monkeypatch):
+    from workflow.steps import reset_session_step
+
+    _folder(sessions_dir, "DTXSID2", meta__json={})
+    monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
+    with pytest.raises(StudyRefusal) as e:
+        reset_session_step("DTXSID2")
+    assert e.value.code == "run_in_flight"
+    assert e.value.details == {"started_at": "2026-10-15T12:00:00Z"}
+    assert (sessions_dir / "DTXSID2").is_dir()
+
+
+def test_reset_removes_a_study_and_forgets_it(sessions_dir):
+    from pipeline.pool_globals import get_integrated_pool
+    from workflow.steps import reset_session_step
+
+    d = _folder(sessions_dir, "DTXSID2_nb", meta__json={})
+    get_integrated_pool()["DTXSID2_nb"] = {}
+    assert reset_session_step("DTXSID2_nb") == {"deleted": "DTXSID2_nb"}
+    assert not d.exists() and "DTXSID2_nb" not in get_integrated_pool()
+    assert not [p for p in sessions_dir.iterdir() if p.name.startswith(".deleting")]
+    with pytest.raises(StudyRefusal) as e:
+        reset_session_step("DTXSID2_nb")
+    assert e.value.code == "study_not_found"
+
+
+# ---------------------------------------------------------------------------
+# The dialog's words (F5)
+# ---------------------------------------------------------------------------
+
+def test_a_section_with_no_name_is_named_plainly(study):
+    """bm2_unknown.json (Process names a table "unknown" when its endpoints
+    match no data type) is not listed as "unknown"."""
+    (study / "bm2_unknown.json").write_text(json.dumps(
+        {"platform": "unknown", "title": "unknown", "approved": True}))
+    c = delete_study_dry_run("DTXSID5032498")["confirm"]
+    sections = next(d["say"] for d in c["deletes"] if d["what"] == "sections")
+    assert "an unnamed result section saved as bm2_unknown" in sections
+    assert "Body Weight" in sections and "(Body Weight, unknown" not in sections
+    assert ", unknown," not in sections
+    assert "An unnamed result section saved as bm2_unknown" in c["approvals_lost"]
+
+
+def test_the_dry_run_always_says_what_stays(sessions_dir, output_dir):
+    _folder(sessions_dir, "DTXSID3", identity__json={"name": "X"}, meta__json={})
+    c = delete_study_dry_run("DTXSID3")["confirm"]
+    assert c["keeps"] == [{"what": "nothing_else", "say": "Nothing outside the study is affected"}]
