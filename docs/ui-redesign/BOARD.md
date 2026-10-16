@@ -16,6 +16,19 @@ In progress (2026-10-14). Stage 1: three workflow analysts, in parallel:
 Stage 2: `MODULES.md` drafted 2026-10-14 (modules, shared kit, shared contracts,
 skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in `MODULES.md` §8; still open: §9).
 
+## Data-integrity findings (outside any one module)
+
+- **2026-10-16, reproduced by the orchestrator:** a study table with empty cells is
+  **silently left out of the combined dataset**. T9 (`_scratch/m2-design/testdata/
+  T9_blank_cells`: female body-weight table with 61 empty cells, male complete):
+  the check raises no error, integration succeeds, and `integrated.json` holds only
+  the male experiment. This is the cause of the earlier "workbook-only" loss (the
+  five dropped tables are exactly those with empty cells) and drops the 2026
+  package's own body-weight and organ-weight tables. Owner: core track (bmdx-pipe
+  integration); M2's check must at least refuse it until fixed.
+- The `.bm2` read cache (LMDB, 1 GB map) cannot hold a 251 MB project: `MDB_MAP_FULL`
+  on an empty cache, so that project is re-read at every check.
+
 ## Modules
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
@@ -30,7 +43,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
 | M1 Studies | **merged with its fix round** (2e3bfcd): test (`modules/m1/test.md`) and review (`modules/m1/review.md`) findings fixed; a missing CAS number is asked for (2026-10-16); demo on 9200 | – | 2026-10-15 | **awaiting the maintainer's done sign-off**; open: delete during Process (C5 or stopgap) | |
-| M2 Study files | questions answered 2026-10-16; **spec revision** running (`ui-m2-design`) | ui-interaction-designer | | | C3, C4, C8 (specified against them) |
+| M2 Study files | spec **revised** to the 2026-10-16 answers (`modules/m2/`); awaiting the maintainer on Q-M2-3a, 12–15 | – | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started; **carry:** `integrate_step` overwrites a confirmed `identity.json` with the request body (`workflow/steps.py:432`, M1 review 4) | | | | |
 | M4 Study facts | not started | | | | |
 | M5 Method and document pins | not started | | | | |
