@@ -34,12 +34,19 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
                         dtxsid_checked_by_person: bool) -> dict:
     """The identity a person confirmed, checked against the lookup it came from
     (workflow.studies.lookup_chemical, cached for 10 minutes), as identity.json
-    holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one).
+    holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one),
+    with one exception (the maintainer, 2026-10-16): when the lookup found the
+    chemical but gives no CAS number, the person types it, and it is recorded
+    as theirs (``identity_source.casrn_from: "person"``; ``"lookup"``
+    otherwise). Everything else still comes from the lookup.
 
     Refuses ``identity_unconfirmed`` without the confirmation (and, when the
     service does not list the DTXSID for the compound, without the person's
-    check of it), ``identity_incomplete`` / ``invalid_casrn`` for a malformed
-    one, and ``identity_changed`` when the lookup now gives another chemical."""
+    check of it); ``identity_incomplete`` without a name, or without a CAS
+    number (the lookup's, or the person's when the lookup has none);
+    ``invalid_casrn`` when the CAS number fails its pattern or check digit;
+    ``identity_changed`` when the lookup now gives another name, or a CAS
+    number other than the one sent."""
     from narrative.chem_resolver import CASRN_PATTERN
     from workflow.studies import StudyRefusal, lookup_chemical
 
@@ -53,29 +60,40 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
                            "is accepted", 400)
     name = str(identity.get("name") or "").strip()
     casrn = str(identity.get("casrn") or "").strip()
-    if not name or not casrn:
-        raise StudyRefusal("identity_incomplete", "the identity needs a name and a CASRN", 400)
-    if not CASRN_PATTERN.match(casrn) or not _casrn_check_digit_holds(casrn):
-        raise StudyRefusal("invalid_casrn", f"CASRN {casrn!r} fails its check digit", 400,
-                           {"casrn": casrn})
+    if not name:
+        raise StudyRefusal("identity_incomplete", "the identity needs a name", 400)
+    if casrn and (not CASRN_PATTERN.match(casrn) or not _casrn_check_digit_holds(casrn)):
+        raise StudyRefusal("invalid_casrn", f"CASRN {casrn!r} fails its pattern or check digit",
+                           400, {"casrn": casrn})
     found = lookup_chemical(dtxsid)
     seen = found["identity"]
-    if (name, casrn) != (seen["name"], seen["casrn"]):
+    looked_up = {"name": seen["name"], "casrn": seen["casrn"]}
+    if name != seen["name"] or (seen["casrn"] and casrn and casrn != seen["casrn"]):
         raise StudyRefusal("identity_changed",
-                           f"confirmed {name!r} ({casrn}); the lookup gives {seen['name']!r} "
-                           f"({seen['casrn']})", 409,
-                           {"looked_up": {"name": seen["name"], "casrn": seen["casrn"]}})
+                           f"confirmed {name!r} ({casrn or 'no CASRN'}); the lookup gives "
+                           f"{seen['name']!r} ({seen['casrn'] or 'no CASRN'})", 409,
+                           {"looked_up": looked_up})
+    if not casrn:
+        refusal = StudyRefusal("identity_incomplete",
+                               "the identity needs a CASRN" + ("" if seen["casrn"] else
+                               f"; {found['service']} gives none, so the person types it"),
+                               400, {"needs": ["casrn"], "looked_up": looked_up})
+        if not seen["casrn"]:
+            refusal.say = (f"{found['service']} gives no CAS number for {seen['name']}. "
+                           "Type the CAS number (for example 80-05-7) before going on.")
+        raise refusal
     if not found["dtxsid_matched"] and not dtxsid_checked_by_person:
         raise StudyRefusal("identity_unconfirmed",
                            f"{found['service']} does not list {dtxsid} for {seen['name']}; the "
                            "person did not say they checked the DTXSID", 400)
-    return {"dtxsid": dtxsid, "name": seen["name"], "casrn": seen["casrn"],
+    return {"dtxsid": dtxsid, "name": seen["name"], "casrn": casrn,
             "pubchem_cid": seen["pubchem_cid"],
             "identity_source": {"kind": "lookup", "service": found["service"],
                                 "looked_up_at": found["looked_up_at"],
                                 "confirmed_at": datetime.now(timezone.utc).strftime(
                                     "%Y-%m-%dT%H:%M:%SZ"),
-                                "dtxsid_matched": found["dtxsid_matched"]}}
+                                "dtxsid_matched": found["dtxsid_matched"],
+                                "casrn_from": "lookup" if seen["casrn"] else "person"}}
 
 
 @step_provenance

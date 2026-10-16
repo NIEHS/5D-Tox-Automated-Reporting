@@ -165,6 +165,72 @@ def test_create_with_no_lookup_creates_nothing(sessions_dir, lookup):
     assert not (sessions_dir / NEW).exists()
 
 
+# ---------------------------------------------------------------------------
+# A CAS number the person types: only when the lookup gives none (2026-10-16)
+# ---------------------------------------------------------------------------
+
+def test_create_with_a_typed_casrn_when_the_lookup_has_none(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    create_study_step(NEW, _identity(casrn=" 80-05-7 "), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["casrn"] == "80-05-7" and ident["name"] == "Bisphenol A"
+    assert ident["identity_source"]["casrn_from"] == "person"
+    assert studies.study_row(NEW)["identity"]["source"]["casrn_from"] == "person"
+
+
+def test_a_looked_up_casrn_is_recorded_as_the_lookups(sessions_dir, lookup):
+    create_study_step(NEW, _identity(), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["identity_source"]["casrn_from"] == "lookup"
+
+
+def test_a_missing_casrn_the_lookup_lacks_says_to_type_it(sessions_dir, lookup):
+    from workflow.refusals import explain
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn=None), _seen(), confirmed=True)
+    assert e.value.code == "identity_incomplete" and e.value.details["needs"] == ["casrn"]
+    say = explain(e.value)["error"]["say"]
+    assert "gives no CAS number for Bisphenol A" in say and "Type the CAS number" in say
+    assert not (sessions_dir / NEW).exists()
+
+
+@pytest.mark.parametrize("typed", ["80-05-8", "80-5-7", "8005-7", "CAS 80-05-7"])
+def test_a_typed_casrn_is_checked(sessions_dir, lookup, typed):
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn=typed), _seen(), confirmed=True)
+    assert e.value.code == "invalid_casrn"
+    assert not (sessions_dir / NEW).exists()
+
+
+def test_a_typed_casrn_other_than_the_lookups_is_refused(sessions_dir, lookup):
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(casrn="50-00-0"), _seen(), confirmed=True)
+    assert e.value.code == "identity_changed"
+    assert e.value.details["looked_up"] == {"name": "Bisphenol A", "casrn": "80-05-7"}
+    assert not (sessions_dir / NEW).exists()
+
+
+def test_a_wrong_name_is_refused_even_with_a_typed_casrn(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, _identity(name="Bisphenol B", casrn="80-05-7"), _seen(),
+                          confirmed=True)
+    assert e.value.code == "identity_changed"
+
+
+def test_record_identity_with_a_typed_casrn(sessions_dir, lookup):
+    lookup["found"]["identity"]["casrn"] = None
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(f"{NEW}_nb", _identity(casrn=""), confirmed=True)
+    assert e.value.code == "identity_incomplete"
+    record_identity_step(f"{NEW}_nb", _identity(casrn="80-05-7"), confirmed=True)
+    ident = json.loads((d / "identity.json").read_text())
+    assert ident["casrn"] == "80-05-7" and ident["identity_source"]["casrn_from"] == "person"
+
+
 def test_the_casrn_check_digit():
     from workflow.steps import _casrn_check_digit_holds
     for good in ("80-05-7", "41997-13-1", "106-46-7", "3380-34-5", "7732-18-5"):

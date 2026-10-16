@@ -287,6 +287,27 @@ class TestCreate:
         listed = [c["dtxsid"] for c in api.get("/api/v2/studies").json()["chemicals"]]
         assert NEW in listed
 
+    def test_create_with_a_typed_casrn_when_pubchem_has_none(self, store, api, resolver,
+                                                              monkeypatch):
+        """Decided 2026-10-16: the lookup serves needs ["casrn"]; without it the
+        create is refused identity_incomplete with words saying to type it;
+        with a typed one it is created and recorded as the person's."""
+        monkeypatch.setitem(BPA, "casrn", "")
+        found = api.get(f"/api/v2/chemicals/{NEW}").json()
+        assert found["identity"]["casrn"] is None and found["needs"] == ["casrn"]
+        assert "Type it before going on" in found["needs_say"]
+        err = _envelope(api.post("/api/v2/studies", json=_create_body(api)),
+                        "identity_incomplete", 400)
+        assert err["details"]["needs"] == ["casrn"] and "Type the CAS number" in err["say"]
+        body = _create_body(api)
+        body["identity"]["casrn"] = "80-05-8"
+        _envelope(api.post("/api/v2/studies", json=body), "invalid_casrn", 400)
+        body["identity"]["casrn"] = "80-05-7"
+        resp = api.post("/api/v2/studies", json=body)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["identity"]["casrn"] == "80-05-7"
+        assert resp.json()["identity"]["source"]["casrn_from"] == "person"
+
     def test_create_twice(self, store, api, resolver):
         body = _create_body(api)
         assert api.post("/api/v2/studies", json=body).status_code == 201
