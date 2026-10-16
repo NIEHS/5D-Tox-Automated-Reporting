@@ -35,11 +35,11 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | M4 Study facts | not started | | | | |
 | M5 Method and document pins | not started | | | | |
 | M6 Data approval | not started | | | | |
-| P1 Process | not started | | | | |
+| P1 Process | not started; **carry:** a pending identity becomes "Test Compound" in Process (`pipeline/process_integrated.py:1554-1562`); must be "[name pending]", never a silent default | | | | |
 | P2 Change impact | not started | | | | |
 | D1 Review | not started | | | | |
 | D2 Narrative generation | not started | | | | |
-| D3 Preview and deliverables | not started | | | | |
+| D3 Preview and deliverables | not started; **carry:** a pending identity previews as "Test Article" / "000-00-0" (`rendering/preview_surface.py:139-140`); must be "[… pending]" | | | | |
 | D4 Hand-off and return | not started | | | | |
 | D5 Configurator | not started | | | | |
 | D6 Bookshelf hook-up | not started | | | | Q17 |
