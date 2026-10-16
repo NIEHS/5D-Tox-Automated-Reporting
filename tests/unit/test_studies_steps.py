@@ -133,7 +133,6 @@ def test_create_refuses_a_format_that_changed(sessions_dir, lookup):
 @pytest.mark.parametrize("identity,confirmed,code", [
     (_identity(), False, "identity_unconfirmed"),
     (_identity(source={"kind": "stated"}), True, "identity_unconfirmed"),
-    (_identity(casrn=""), True, "identity_incomplete"),
     (_identity(name="  "), True, "identity_incomplete"),
     (_identity(casrn="80-05-8"), True, "invalid_casrn"),
     (_identity(casrn="80-5-7"), True, "invalid_casrn"),
@@ -166,7 +165,8 @@ def test_create_with_no_lookup_creates_nothing(sessions_dir, lookup):
 
 
 # ---------------------------------------------------------------------------
-# A CAS number the person types: only when the lookup gives none (2026-10-16)
+# The CAS number never blocks: the lookup's, a typed one, or none (2026-10-16,
+# revised: only the DTXSID is required)
 # ---------------------------------------------------------------------------
 
 def test_create_with_a_typed_casrn_when_the_lookup_has_none(sessions_dir, lookup):
@@ -175,23 +175,42 @@ def test_create_with_a_typed_casrn_when_the_lookup_has_none(sessions_dir, lookup
     ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
     assert ident["casrn"] == "80-05-7" and ident["name"] == "Bisphenol A"
     assert ident["identity_source"]["casrn_from"] == "person"
-    assert studies.study_row(NEW)["identity"]["source"]["casrn_from"] == "person"
+    row = studies.study_row(NEW)
+    assert row["identity"]["source"]["casrn_from"] == "person" and row["notes"] == []
 
 
 def test_a_looked_up_casrn_is_recorded_as_the_lookups(sessions_dir, lookup):
     create_study_step(NEW, _identity(), _seen(), confirmed=True)
     ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
-    assert ident["identity_source"]["casrn_from"] == "lookup"
+    assert ident["casrn"] == "80-05-7" and ident["identity_source"]["casrn_from"] == "lookup"
 
 
-def test_a_missing_casrn_the_lookup_lacks_says_to_type_it(sessions_dir, lookup):
-    from workflow.refusals import explain
+def test_a_looked_up_casrn_left_out_of_the_identity_sent_is_still_recorded(sessions_dir, lookup):
+    create_study_step(NEW, _identity(casrn=""), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["casrn"] == "80-05-7" and ident["identity_source"]["casrn_from"] == "lookup"
+
+
+@pytest.mark.parametrize("sent", [None, "", "  "])
+def test_create_without_a_casrn_when_the_lookup_has_none(sessions_dir, lookup, sent):
     lookup["found"]["identity"]["casrn"] = None
+    create_study_step(NEW, _identity(casrn=sent), _seen(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["name"] == "Bisphenol A" and ident["casrn"] is None
+    assert ident["identity_source"]["kind"] == "lookup"
+    assert ident["identity_source"]["casrn_from"] is None
+    row = studies.study_row(NEW)
+    assert row["identity"]["casrn"] is None and row["identity"]["source"]["casrn_from"] is None
+    assert [n["code"] for n in row["notes"]] == ["casrn_pending"]
+    assert row["notes"][0]["level"] == "warn" and "CAS number is pending" in row["notes"][0]["say"]
+
+
+def test_a_missing_name_says_to_look_up_again(sessions_dir, lookup):
+    from workflow.refusals import explain
     with pytest.raises(StudyRefusal) as e:
-        create_study_step(NEW, _identity(casrn=None), _seen(), confirmed=True)
-    assert e.value.code == "identity_incomplete" and e.value.details["needs"] == ["casrn"]
-    say = explain(e.value)["error"]["say"]
-    assert "gives no CAS number for Bisphenol A" in say and "Type the CAS number" in say
+        create_study_step(NEW, _identity(name=""), _seen(), confirmed=True)
+    assert e.value.code == "identity_incomplete"
+    assert "look the chemical up again" in explain(e.value)["error"]["say"]
     assert not (sessions_dir / NEW).exists()
 
 
@@ -220,15 +239,139 @@ def test_a_wrong_name_is_refused_even_with_a_typed_casrn(sessions_dir, lookup):
     assert e.value.code == "identity_changed"
 
 
-def test_record_identity_with_a_typed_casrn(sessions_dir, lookup):
+def test_record_identity_with_a_typed_casrn_or_none(sessions_dir, lookup):
     lookup["found"]["identity"]["casrn"] = None
     d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
-    with pytest.raises(StudyRefusal) as e:
-        record_identity_step(f"{NEW}_nb", _identity(casrn=""), confirmed=True)
-    assert e.value.code == "identity_incomplete"
     record_identity_step(f"{NEW}_nb", _identity(casrn="80-05-7"), confirmed=True)
     ident = json.loads((d / "identity.json").read_text())
     assert ident["casrn"] == "80-05-7" and ident["identity_source"]["casrn_from"] == "person"
+    d2 = _folder(sessions_dir, f"{NEW}_x", meta__json={"dtxsid": NEW})
+    record_identity_step(f"{NEW}_x", _identity(casrn=""), confirmed=True)
+    ident = json.loads((d2 / "identity.json").read_text())
+    assert ident["name"] == "Bisphenol A" and ident["casrn"] is None
+    assert ident["identity_source"]["casrn_from"] is None
+
+
+# ---------------------------------------------------------------------------
+# Create with the identity pending: the lookup does not know the DTXSID, or
+# cannot be reached (2026-10-16, revised)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def no_cached_lookup(monkeypatch):
+    """The 10-minute lookup cache, empty (and emptied again after)."""
+    monkeypatch.setattr(studies, "_LOOKUPS", {})
+
+
+def test_create_with_the_identity_pending(sessions_dir, lookup, no_cached_lookup):
+    lookup["found"] = None    # the lookup knows nothing; it is not consulted anyway
+    assert create_study_step(NEW, None, _seen(), confirmed=False,
+                             identity_pending=True) == {"id": NEW}
+    folder = sessions_dir / NEW
+    assert sorted(p.name for p in folder.iterdir()) == ["identity.json", "meta.json"]
+    ident = json.loads((folder / "identity.json").read_text())
+    assert set(ident) == {"dtxsid", "identity_source"} and ident["dtxsid"] == NEW
+    assert ident["identity_source"]["kind"] == "pending"
+    assert ident["identity_source"]["pending_since"]
+    row = studies.study_row(NEW)
+    assert row["kind"] == "study" and row["stands"]["phase"] == "EMPTY"
+    assert row["identity"]["name"] is None and row["identity"]["casrn"] is None
+    assert row["identity"]["source"]["kind"] == "pending"
+    assert row["identity"]["source"]["casrn_from"] is None
+    assert row["notes"] == [{"level": "warn", "code": "identity_pending",
+                             "say": "The chemical's name and CAS number are pending: look it "
+                                    "up when the service can be reached."}]
+    chem = next(c for c in studies.list_studies()["chemicals"] if c["dtxsid"] == NEW)
+    assert chem["name"] is None and chem["casrn"] is None and chem["primary"] == NEW
+
+
+def test_a_pending_create_keeps_the_other_refusals(sessions_dir, lookup, no_cached_lookup):
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(f"{NEW}_v2", None, _seen(), confirmed=False, identity_pending=True)
+    assert e.value.code == "study_id_has_suffix"
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, None, {"definition": "x", "hash": "0" * 16}, confirmed=False,
+                          identity_pending=True)
+    assert e.value.code == "format_changed"
+    with pytest.raises(StudyRefusal) as e:   # pending, or an identity: not both
+        create_study_step(NEW, _identity(), _seen(), confirmed=True, identity_pending=True)
+    assert e.value.code == "bad_request" and e.value.status_code == 422
+    assert not (sessions_dir / NEW).exists()
+    create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    assert e.value.code == "study_exists"
+
+
+def test_a_chemical_just_found_is_confirmed_not_left_pending(sessions_dir, no_cached_lookup,
+                                                             monkeypatch):
+    from workflow.refusals import explain
+    monkeypatch.setattr(studies.time, "monotonic", lambda: 1000.0)
+    studies._LOOKUPS[NEW] = (990.0, {**json.loads(json.dumps(LOOKUP))})
+    with pytest.raises(StudyRefusal) as e:
+        create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    assert e.value.code == "identity_unconfirmed"
+    assert "Confirm it instead" in explain(e.value)["error"]["say"]
+    assert not (sessions_dir / NEW).exists()
+    # A compound the service found but does not list the DTXSID for may be left pending.
+    studies._LOOKUPS[NEW][1]["dtxsid_matched"] = False
+    create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    assert (sessions_dir / NEW / "identity.json").is_file()
+    # So may one looked up more than 10 minutes ago.
+    monkeypatch.setattr(studies.time, "monotonic", lambda: 1000.0 + studies._LOOKUP_TTL_S)
+    assert studies.cached_lookup(NEW) is None
+
+
+def test_a_pending_identity_is_filled_later(sessions_dir, lookup, no_cached_lookup):
+    create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    record_identity_step(NEW, _identity(), confirmed=True)
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["dtxsid"] == NEW and ident["name"] == "Bisphenol A"
+    assert ident["casrn"] == "80-05-7" and ident["identity_source"]["kind"] == "lookup"
+    assert "pending_since" not in ident["identity_source"]
+    row = studies.study_row(NEW)
+    assert row["identity"]["source"]["kind"] == "lookup" and row["notes"] == []
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(NEW, _identity(), confirmed=True)
+    assert e.value.code == "identity_exists"
+
+
+def test_a_pending_identity_filled_from_a_lookup_with_no_casrn(sessions_dir, lookup,
+                                                               no_cached_lookup):
+    create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    lookup["found"]["identity"]["casrn"] = None
+    record_identity_step(NEW, _identity(casrn=None), confirmed=True)
+    row = studies.study_row(NEW)
+    assert row["identity"]["name"] == "Bisphenol A" and row["identity"]["casrn"] is None
+    assert [n["code"] for n in row["notes"]] == ["casrn_pending"]
+
+
+def test_a_pending_identity_still_cannot_be_filled_while_the_lookup_fails(sessions_dir, lookup,
+                                                                          no_cached_lookup):
+    create_study_step(NEW, None, _seen(), confirmed=False, identity_pending=True)
+    lookup["found"] = None
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(NEW, _identity(), confirmed=True)
+    assert e.value.code == "identity_not_found"
+    ident = json.loads((sessions_dir / NEW / "identity.json").read_text())
+    assert ident["identity_source"]["kind"] == "pending"
+
+
+def test_a_session_made_before_m1_without_a_name_is_noted(sessions_dir):
+    _folder(sessions_dir, NEW, identity__json={"dtxsid": NEW})
+    row = studies.study_row(NEW)
+    assert row["identity"]["source"]["kind"] == "unknown"
+    assert [n["code"] for n in row["notes"]] == ["identity_pending"]
+    assert "not recorded" in row["notes"][0]["say"]
+
+
+def test_no_identity_note_for_a_companion_a_report_or_an_id_with_no_chemical(sessions_dir):
+    _folder(sessions_dir, "DTXSID8_published", published_clone__json={"twin": "DTXSID8"})
+    _folder(sessions_dir, "DTXSID8", studies__json={"rat": "DTXSID8_rat"})
+    _folder(sessions_dir, "DTXSID_TEST", meta__json={})
+    for sid in ("DTXSID8_published", "DTXSID8", "DTXSID_TEST"):
+        codes = [n["code"] for n in studies.study_row(sid)["notes"]]
+        assert "identity_pending" not in codes and "casrn_pending" not in codes, sid
 
 
 def test_the_casrn_check_digit():
