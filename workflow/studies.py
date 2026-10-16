@@ -599,14 +599,20 @@ def format_hash(dtxsid: str) -> str:
 def identity_of(session: Path) -> dict:
     """The chemical as the session records it (identity.json): name, CASRN,
     short name, and how it was set (``source``). A value not on file is None;
-    a session made before M1 has no recorded provenance (``unknown``)."""
+    a session made before M1 has no recorded provenance (``unknown``).
+    ``source.casrn_from`` says who gave the CAS number: ``"lookup"``,
+    ``"person"`` (typed, the lookup had none), or None (not recorded)."""
     raw = _read_json(session / "identity.json")
     raw = raw if isinstance(raw, dict) else {}
     src = raw.get("identity_source") if isinstance(raw.get("identity_source"), dict) else {}
     return {"name": raw.get("name") or None, "casrn": raw.get("casrn") or None,
             "short_name": raw.get("abbreviation") or None,
             "source": {"kind": src.get("kind") or "unknown", "service": src.get("service"),
-                       "confirmed_at": src.get("confirmed_at")}}
+                       "confirmed_at": src.get("confirmed_at"),
+                       # "person" when the person typed the CAS number (the
+                       # lookup gave none); None for a session made before M1.
+                       "casrn_from": src.get("casrn_from") or (
+                           "lookup" if src.get("kind") == "lookup" else None)}}
 
 
 def last_changed(session: Path) -> str | None:
@@ -731,7 +737,8 @@ def study_row(dtxsid: str, index: StoreIndex | None = None) -> dict:
 
     identity = guarded(lambda: identity_of(session),
                        {"name": None, "casrn": None, "short_name": None,
-                        "source": {"kind": "unknown", "service": None, "confirmed_at": None}})
+                        "source": {"kind": "unknown", "service": None, "confirmed_at": None,
+                                   "casrn_from": None}})
     stood, processed, _phase = guarded(
         lambda: _phase_and_publish(dtxsid, kind, relations),
         ({"phase": None, "say": "Where this session stands can't be read", "next": None},
@@ -849,7 +856,18 @@ def _banner(row: dict, index: StoreIndex) -> dict | None:
             return {"level": "warning", "links": [],
                     "say": f"This session's id, {sid}, names no chemical: it was made by a tool or "
                            "a test."}
-        say = f"This session's id, {sid}, is not a chemical's DTXSID: it was made by a tool."
+        suffix = sid[len(chem):].lstrip("_-").lower()
+        from pipeline.deposit import SPECIES_TITLES
+        if suffix in SPECIES_TITLES:
+            # A report's studies are named <DTXSID>_<species>; no report lists
+            # this one (else it would be a member), so its report is gone.
+            say = (f"This session's id, {sid}, names a {suffix} study, as the studies of a "
+                   "report over several studies are named, but no report lists it: the report "
+                   "it belonged to may have been deleted.")
+        else:
+            say = (f"This session's id, {sid}, is not a chemical's DTXSID alone, and no report "
+                   "lists it: a tool made it, or it was a study of a report that has since been "
+                   "deleted.")
         if fmt.get("title_short"):
             say += f" Its report uses the format {fmt['title_short']}"
             theirs = format_summary(chem, "study", {}, published_record(report_of(chem)[0]),
@@ -917,7 +935,7 @@ def require_study_id(dtxsid: str) -> str:
 
 
 _RELATED_SAY = {"companion": "The published book's content",
-                "other": "Other session, made by a tool",
+                "other": "Other session",
                 "report": "A report over several studies",
                 "study": "A study"}
 
@@ -967,7 +985,11 @@ def lookup_chemical(dtxsid: str, *, fresh: bool = False) -> dict:
     """The chemical a DTXSID names, from PubChem (and the EPA CTX service when
     its key is set): ``{dtxsid, identity: {name, casrn, pubchem_cid,
     molecular_formula, molecular_weight, iupac_name, inchikey}, dtxsid_matched,
-    service, say_source, structure_url, looked_up_at}``.
+    service, say_source, structure_url, looked_up_at, needs, needs_say}``.
+
+    ``needs``: what the person must type before a study can be created,
+    ``["casrn"]`` when the service gives no CAS number, else ``[]``;
+    ``needs_say`` says so in plain words (None when nothing is needed).
 
     ``dtxsid_matched``: the service lists this DTXSID for the compound (PubChem's
     full synonym list, or CTX returned it). Refuses ``identity_not_found`` when
@@ -1009,6 +1031,12 @@ def lookup_chemical(dtxsid: str, *, fresh: bool = False) -> dict:
                       + ("" if ctx else " The CompTox (CTX) lookup is not set up on this server."),
         "structure_url": f"/api/v2/chemicals/{dtxsid}/structure.png",
         "looked_up_at": _now_z(),
+        # What the person must add before a study can be created: the CAS
+        # number, when the service gives none (decided 2026-10-16).
+        "needs": [] if found.casrn else ["casrn"],
+        "needs_say": None if found.casrn else (
+            f"{service} gives no CAS number for {found.name}. Type it before going on; it "
+            "will be recorded as stated by you."),
     }
     with _LOOKUP_LOCK:
         _LOOKUPS[dtxsid] = (time.monotonic(), dict(result))

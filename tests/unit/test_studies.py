@@ -297,6 +297,22 @@ def test_banners(store):
     assert [m["id"] for m in report["detail"]["members"]] == ["DTXSID1_rat", "DTXSID1_mouse"]
 
 
+def test_the_other_banner_is_true_of_a_former_member(store):
+    """F6: a report deleted, its studies are kind other; their banner must not
+    say a tool made them. A tool's copy is told apart from a former member
+    only by the id's suffix naming a species; nothing is invented."""
+    import shutil
+    shutil.rmtree(store / "DTXSID1")
+    rat = study_summary("DTXSID1_rat")
+    assert rat["kind"] == "other"
+    say = rat["detail"]["banner"]["say"]
+    assert "made by a tool" not in say and "a tool made it" not in say
+    assert "names a rat study" in say and "no report lists it" in say
+    tool = study_summary("DTXSID2_nb")["detail"]["banner"]["say"]
+    assert tool.startswith("This session's id, DTXSID2_nb, is not a chemical's DTXSID alone")
+    assert "a tool made it, or it was a study of a report that has since been deleted" in tool
+
+
 # ---------------------------------------------------------------------------
 # Creation check
 # ---------------------------------------------------------------------------
@@ -362,8 +378,17 @@ def test_a_lookup_found(resolver):
     assert out["identity"]["name"] == "Bisphenol A" and out["identity"]["casrn"] == "80-05-7"
     assert out["dtxsid_matched"] is True          # found past the resolver's cap of 20
     assert out["service"] == "PubChem" and "not set up" in out["say_source"]
+    assert out["needs"] == [] and out["needs_say"] is None
     answers.clear()                                # the cached answer stands for 10 minutes
     assert studies.lookup_chemical("DTXSID7020182")["identity"]["name"] == "Bisphenol A"
+
+
+def test_a_lookup_with_no_casrn_needs_one_typed(resolver):
+    answers, _ = resolver
+    answers["DTXSID7020182"] = {**BPA, "casrn": ""}
+    out = studies.lookup_chemical("DTXSID7020182")
+    assert out["identity"]["casrn"] is None and out["needs"] == ["casrn"]
+    assert out["needs_say"].startswith("PubChem gives no CAS number for Bisphenol A.")
 
 
 def test_a_lookup_that_does_not_list_the_dtxsid(resolver):

@@ -287,6 +287,27 @@ class TestCreate:
         listed = [c["dtxsid"] for c in api.get("/api/v2/studies").json()["chemicals"]]
         assert NEW in listed
 
+    def test_create_with_a_typed_casrn_when_pubchem_has_none(self, store, api, resolver,
+                                                              monkeypatch):
+        """Decided 2026-10-16: the lookup serves needs ["casrn"]; without it the
+        create is refused identity_incomplete with words saying to type it;
+        with a typed one it is created and recorded as the person's."""
+        monkeypatch.setitem(BPA, "casrn", "")
+        found = api.get(f"/api/v2/chemicals/{NEW}").json()
+        assert found["identity"]["casrn"] is None and found["needs"] == ["casrn"]
+        assert "Type it before going on" in found["needs_say"]
+        err = _envelope(api.post("/api/v2/studies", json=_create_body(api)),
+                        "identity_incomplete", 400)
+        assert err["details"]["needs"] == ["casrn"] and "Type the CAS number" in err["say"]
+        body = _create_body(api)
+        body["identity"]["casrn"] = "80-05-8"
+        _envelope(api.post("/api/v2/studies", json=body), "invalid_casrn", 400)
+        body["identity"]["casrn"] = "80-05-7"
+        resp = api.post("/api/v2/studies", json=body)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["identity"]["casrn"] == "80-05-7"
+        assert resp.json()["identity"]["source"]["casrn_from"] == "person"
+
     def test_create_twice(self, store, api, resolver):
         body = _create_body(api)
         assert api.post("/api/v2/studies", json=body).status_code == 201
@@ -444,6 +465,70 @@ class TestDelete:
                         json={"confirm_id": "DTXSID1", "preview_token": token}).status_code == 200
         rat = api.get("/api/v2/studies/DTXSID1_rat").json()
         assert rat["kind"] == "other" and rat["actions"]["delete"]["allowed"] is True
+
+    def test_a_delete_that_loses_the_race_is_not_found(self, store, api, monkeypatch):
+        """F3: the second of two delete POSTs reaches its dry run while the
+        first is removing the folder. Forced: the dry run's section read
+        removes the folder, then fails as the walk did (FileNotFoundError).
+        The answer is study_not_found, never a 500."""
+        import shutil
+
+        import workflow.read_model as rm
+
+        token = api.get("/api/v2/studies/DTXSID2/delete-preview").json()["preview_token"]
+
+        def walk(dtxsid, store_=None):
+            shutil.rmtree(store / dtxsid)
+            raise FileNotFoundError(f"{dtxsid}/narrative_runs/summary/r1.json")
+
+        monkeypatch.setattr(rm, "study_state", walk)
+        _envelope(api.post("/api/v2/studies/DTXSID2/delete",
+                           json={"confirm_id": "DTXSID2", "preview_token": token}),
+                  "study_not_found", 404)
+
+    def test_a_preview_of_a_vanishing_folder_is_not_found(self, store, api, monkeypatch):
+        import workflow.read_model as rm
+
+        def walk(dtxsid, store_=None):
+            (store / dtxsid).rename(store / f".deleting-{dtxsid}")
+            return {"sections": []}
+
+        monkeypatch.setattr(rm, "study_state", walk)
+        _envelope(api.get("/api/v2/studies/DTXSID2/delete-preview"), "study_not_found", 404)
+
+
+# ---------------------------------------------------------------------------
+# The old full reset (F2): refuses what the delete refuses
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+class TestOldReset:
+    def test_it_refuses_a_member_and_a_companion(self, store, api):
+        err = _envelope(api.post("/api/session/reset/DTXSID1_rat"), "member_of_report", 409)
+        assert err["details"]["parent"] == "DTXSID1"
+        assert err["say"] == "This is the rat study of the report DTXSID1. Deleting it would break that report."
+        _envelope(api.post("/api/session/reset/DTXSID2_published"), "read_only_session", 409)
+        assert (store / "DTXSID1_rat").is_dir() and (store / "DTXSID2_published").is_dir()
+
+    def test_it_refuses_a_run_in_flight(self, store, api, monkeypatch):
+        from workflow import studies
+        monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
+        err = _envelope(api.post("/api/session/reset/DTXSID2"), "run_in_flight", 409)
+        assert err["details"] == {"started_at": "2026-10-15T12:00:00Z"}
+        assert (store / "DTXSID2").is_dir()
+
+    def test_it_still_resets_a_study_without_a_token(self, store, api):
+        resp = api.post("/api/session/reset/DTXSID2_nb")
+        assert resp.status_code == 200 and resp.json() == {"ok": True}
+        assert not (store / "DTXSID2_nb").exists()
+
+    def test_an_absent_or_empty_id(self, store, api):
+        resp = api.post("/api/session/reset/DTXSID404")
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True, "message": "No session to reset"}
+        assert not (store / "DTXSID404").exists()
+        assert api.post("/api/session/reset/DTXSID9").json() == {"ok": True}   # empty folder
+        assert not (store / "DTXSID9").exists()
 
 
 # ---------------------------------------------------------------------------
