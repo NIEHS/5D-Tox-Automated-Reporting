@@ -272,6 +272,23 @@ def _megabytes(n: int) -> str:
     return f"{n / 1_000_000:.0f} MB" if n >= 1_000_000 else f"{max(1, round(n / 1000))} kB"
 
 
+# A family's section in words, for one with no name of its own.
+_FAMILY_WORDS = {"bm2": "result section", "genomics": "gene expression section"}
+
+
+def _section_words(row: dict) -> str:
+    """A section as the dialog names it: its title, as D1 shows it. A section
+    with no name of its own (no title, the title "unknown", or only its key:
+    Process names a table "unknown" when its endpoints match no data type) is
+    named by what the catalog knows of it, its family, and the file it is
+    saved as: "an unnamed result section saved as bm2_unknown"."""
+    key, title = row["key"], str(row.get("title") or "").strip()
+    if title and title.lower() != "unknown" and title != key:
+        return title
+    what = _FAMILY_WORDS.get(row.get("instance_of") or "", "section")
+    return f"an unnamed {what} saved as {key}"
+
+
 def _pin_words(folder: Path) -> str:
     """"The method profile pin (ntp-5day-2021, fixed) and the document
     definition pin (eras/niehs-2026, tracking)" from the pin files."""
@@ -382,12 +399,13 @@ def _dry_run(dtxsid: str, folder: Path) -> dict:
     from workflow.read_model import study_state
     on_disk = [r for r in study_state(dtxsid).get("sections", []) if r.get("has_file")]
     section_keys = {r["key"] for r in on_disk}
-    approved = [r.get("title") or r["key"] for r in on_disk if r.get("approved")]
+    approved = [_section_words(r) for r in on_disk if r.get("approved")]
+    approved = [a[:1].upper() + a[1:] for a in approved]   # each stands alone
     if on_disk:
         n = len(on_disk)
         state = ("none is approved" if not approved else
                  "all approved" if len(approved) == n else f"{len(approved)} approved")
-        titles = ", ".join(r.get("title") or r["key"] for r in on_disk)
+        titles = ", ".join(_section_words(r) for r in on_disk)
         deletes.append({"what": "sections",
                         "say": f"{n} report section" + ("" if n == 1 else "s")
                                + f" ({titles}); {state}"})
@@ -445,6 +463,8 @@ def _dry_run(dtxsid: str, folder: Path) -> dict:
         keeps.append({"what": "others",
                       "say": ("The other session of this chemical, " if len(others) == 1
                               else "The other sessions of this chemical, ") + ", ".join(others)})
+    if not keeps:   # the dialog always says what stays
+        keeps.append({"what": "nothing_else", "say": "Nothing outside the study is affected"})
 
     size = _dir_bytes(folder)
     cost = f"{_megabytes(size)} will be freed."

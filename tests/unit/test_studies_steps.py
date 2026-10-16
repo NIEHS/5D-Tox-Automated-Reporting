@@ -522,3 +522,26 @@ def test_reset_removes_a_study_and_forgets_it(sessions_dir):
     with pytest.raises(StudyRefusal) as e:
         reset_session_step("DTXSID2_nb")
     assert e.value.code == "study_not_found"
+
+
+# ---------------------------------------------------------------------------
+# The dialog's words (F5)
+# ---------------------------------------------------------------------------
+
+def test_a_section_with_no_name_is_named_plainly(study):
+    """bm2_unknown.json (Process names a table "unknown" when its endpoints
+    match no data type) is not listed as "unknown"."""
+    (study / "bm2_unknown.json").write_text(json.dumps(
+        {"platform": "unknown", "title": "unknown", "approved": True}))
+    c = delete_study_dry_run("DTXSID5032498")["confirm"]
+    sections = next(d["say"] for d in c["deletes"] if d["what"] == "sections")
+    assert "an unnamed result section saved as bm2_unknown" in sections
+    assert "Body Weight" in sections and "(Body Weight, unknown" not in sections
+    assert ", unknown," not in sections
+    assert "An unnamed result section saved as bm2_unknown" in c["approvals_lost"]
+
+
+def test_the_dry_run_always_says_what_stays(sessions_dir, output_dir):
+    _folder(sessions_dir, "DTXSID3", identity__json={"name": "X"}, meta__json={})
+    c = delete_study_dry_run("DTXSID3")["confirm"]
+    assert c["keeps"] == [{"what": "nothing_else", "say": "Nothing outside the study is affected"}]
