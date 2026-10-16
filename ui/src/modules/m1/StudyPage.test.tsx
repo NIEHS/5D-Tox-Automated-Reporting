@@ -1,12 +1,14 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { focusManager } from '@tanstack/react-query'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
+import { M1_CHEMICALS, M1_DETAILS, STATE_APPROVED, STATE_RUNNING } from '../../api/mocks/fixtures'
+import type { StudyDetail } from '../../api/types'
 import { emptyM1Db, removeMockStudy, touchMockStudy } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
 import { running } from '../../api/mocks/runs'
 import { renderApp } from '../../test/render'
-import { openStudyPage } from './testing'
+import { DAMAGED_NOTE, openStudyPage } from './testing'
 
 /** The study's pages: in a drawer on a narrow window (jsdom's). */
 async function studyMenu(user: ReturnType<typeof renderApp>['user']) {
@@ -94,6 +96,36 @@ describe('S3 the study page', () => {
     expect(menu.getByRole('link', { name: 'Review the report' })).toBeInTheDocument()
   })
 
+  it('review 1 (spec S1/S3): a study whose format could not be read still opens: the note, and "[format pending]" in the format card', async () => {
+    const d = structuredClone<StudyDetail>(M1_DETAILS['DTXSID5032498']!)
+    d.format = null
+    d.detail.format = null
+    d.notes = [DAMAGED_NOTE('DTXSID5032498')]
+    server.use(http.get('/api/v2/studies/DTXSID5032498', () => HttpResponse.json(d)))
+    await openStudyPage('DTXSID5032498')
+    const card = screen.getByTestId('format-card')
+    expect(within(card).getByRole('button', { name: 'format is missing; show why' })).toHaveTextContent('[format pending]')
+    expect(within(card).getByTestId('format-unread')).toHaveTextContent('The report format could not be read')
+    // the page's note says why, and the rest of the page is there
+    expect(screen.getAllByRole('alert').some((a) => a.textContent?.includes(DAMAGED_NOTE('DTXSID5032498').say))).toBe(true)
+    expect(screen.getByTestId('chemical')).toBeInTheDocument()
+    expect(screen.getByTestId('delete-card')).toBeInTheDocument()
+  })
+
+  it('review 2: a report whose member folder is missing still opens; the member says it is missing, with no Open', async () => {
+    const d = structuredClone<StudyDetail>(M1_DETAILS['DTXSID1020431']!)
+    d.detail.members = d.detail.members!.map((m) => (m.id === 'DTXSID1020431_mouse' ? { id: m.id, key: 'mouse', exists: false as const } : m))
+    server.use(http.get('/api/v2/studies/DTXSID1020431', () => HttpResponse.json(d)))
+    await openStudyPage('DTXSID1020431')
+    const members = screen.getByTestId('members')
+    const mouse = within(members).getByText('DTXSID1020431_mouse').closest('tr') as HTMLElement
+    expect(mouse).toHaveTextContent("Missing: this study's folder is not in the store.")
+    expect(within(mouse).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(mouse).queryByRole('button', { name: 'Open' })).not.toBeInTheDocument()
+    const rat = within(members).getByText('DTXSID1020431_rat').closest('tr') as HTMLElement
+    expect(within(rat).getByRole('link', { name: 'Open DTXSID1020431_rat' })).toBeInTheDocument()
+  })
+
   it('AC31: a missing short name is pending, linking to Study facts', async () => {
     const { user } = await openStudyPage('DTXSID50469320')
     const p = within(screen.getByTestId('chemical')).getByRole('button', { name: 'short name is missing; show why' })
@@ -117,6 +149,70 @@ describe('S3 the study page', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Perfluorooctanoic acid')
     expect(screen.getByTestId('identity-source')).toHaveTextContent('Confirmed by a person from a PubChem lookup')
     expect(screen.queryByRole('button', { name: 'Look up the chemical' })).not.toBeInTheDocument()
+  })
+
+  it('2026-10-16: Look up the chemical, when PubChem gives no CAS number: the dialog asks for one; Save waits for it; the page then says it was stated by a person', async () => {
+    const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
+    pfoa.identity.casrn = null
+    pfoa.needs = ['casrn']
+    server.use(http.get('/api/v2/chemicals/DTXSID8031865', () => HttpResponse.json(pfoa)))
+    const { user } = await openStudyPage('DTXSID8031865_scratch')
+    await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
+    const dialog = await screen.findByRole('dialog')
+    const ask = await within(dialog).findByTestId('casrn-ask')
+    expect(ask).toHaveTextContent('PubChem gives no CAS number for this chemical. Type it from a source you trust')
+    const confirm = within(dialog).getByRole('checkbox', { name: /This is the chemical studied under/ })
+    const save = within(dialog).getByRole('button', { name: 'Save this identity' })
+    expect(confirm).toBeDisabled()
+    expect(save).toBeDisabled()
+    const field = within(ask).getByRole('textbox', { name: 'CAS number (required)' })
+    await user.type(field, '335-67-2')
+    expect(within(ask).getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    await user.clear(field)
+    await user.type(field, '335-67-1')
+    await waitFor(() => expect(confirm).toBeEnabled())
+    expect(save).toBeDisabled()
+    await user.click(confirm)
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('chemical')).toHaveTextContent('335-67-1'))
+    expect(screen.getByTestId('identity-source')).toHaveTextContent('CAS number stated by a person (the lookup gave none).')
+  })
+
+  it('review 3: Look up the chemical, when PubChem gives no name: Save is closed and the dialog says why', async () => {
+    const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
+    pfoa.identity.name = ''
+    let puts = 0
+    server.use(
+      http.get('/api/v2/chemicals/DTXSID8031865', () => HttpResponse.json(pfoa)),
+      http.put('/api/v2/studies/DTXSID8031865_scratch/identity', () => {
+        puts++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user } = await openStudyPage('DTXSID8031865_scratch')
+    await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByTestId('identity-incomplete')).toHaveTextContent(
+      "PubChem gives no name for this chemical, so this identity can't be saved from this lookup yet.",
+    )
+    expect(within(dialog).queryByTestId('casrn-ask')).not.toBeInTheDocument()
+    const save = within(dialog).getByRole('button', { name: 'Save this identity' })
+    expect(save).toBeDisabled()
+    await user.click(save)
+    expect(puts).toBe(0)
+  })
+
+  it('a CAS number a person stated is said so on the page; one from the lookup is not', async () => {
+    const d = structuredClone<StudyDetail>(M1_DETAILS['DTXSID50469320']!)
+    d.identity.source = { kind: 'lookup', service: 'PubChem', confirmed_at: '2026-10-16T09:00:00Z', casrn_from: 'person' }
+    server.use(http.get('/api/v2/studies/DTXSID50469320', () => HttpResponse.json(d)))
+    await openStudyPage('DTXSID50469320')
+    expect(screen.getByTestId('identity-source')).toHaveTextContent(
+      'Confirmed by a person from a PubChem lookup on 16 Oct 2026. CAS number stated by a person (the lookup gave none).',
+    )
   })
 
   it('AC33: the lookup is not offered on a session that has an identity, nor on one whose id names no chemical', async () => {
@@ -175,6 +271,35 @@ describe('S5 no such study', () => {
     renderApp('/studies/DTXSID7020182_rat')
     expect(await screen.findByText(/There is no study DTXSID7020182_rat/)).toBeInTheDocument()
     expect(screen.queryByText('Create a study of this chemical')).not.toBeInTheDocument()
+  })
+
+  it('F8: deleted in another tab, the page says "This study was deleted." when the window comes back into focus', async () => {
+    await openStudyPage('DTXSID5032498')
+    removeMockStudy('DTXSID5032498')
+    try {
+      // the app's query client re-reads on window focus (kit/queryClient.ts); so does the tests'
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+      expect(await screen.findByText('This study was deleted.')).toBeInTheDocument()
+      expect(screen.queryByText(/It may have been deleted/)).not.toBeInTheDocument()
+    } finally {
+      act(() => focusManager.setFocused(undefined))
+    }
+  })
+
+  it('F8: the study\'s own read answering 404 first (the state not yet re-read) still says "This study was deleted."', async () => {
+    const { queryClient } = await openStudyPage('DTXSID5032498')
+    removeMockStudy('DTXSID5032498')
+    await queryClient.invalidateQueries({ queryKey: ['study', 'DTXSID5032498', 'detail'] })
+    expect(await screen.findByText('This study was deleted.')).toBeInTheDocument()
+  })
+
+  it('F8: an id never seen keeps the plain not-found words', async () => {
+    renderApp('/studies/DTXSID7020182')
+    expect(await screen.findByText('There is no study DTXSID7020182. It may have been deleted.')).toBeInTheDocument()
+    expect(screen.queryByText('This study was deleted.')).not.toBeInTheDocument()
   })
 
   it('AC40: a page open on a study deleted elsewhere says "This study was deleted" on its next read', async () => {

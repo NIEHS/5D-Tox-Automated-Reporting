@@ -89,15 +89,7 @@ function Consequences({ dry, sectionTitle }: { dry: DryRun; sectionTitle: (key: 
           <Typography.Text strong>It will delete:</Typography.Text>
           <ul style={{ margin: '4px 0 0' }}>
             {dry.deletes.map((d) => (
-              <li key={d.what}>
-                {d.say ? (
-                  <>
-                    {d.say} <Typography.Text type="secondary">({d.what})</Typography.Text>
-                  </>
-                ) : (
-                  d.what
-                )}
-              </li>
+              <li key={d.what}>{d.say || d.what}</li>
             ))}
           </ul>
         </section>
@@ -108,10 +100,10 @@ function Consequences({ dry, sectionTitle }: { dry: DryRun; sectionTitle: (key: 
             {dry.approvals_lost.length === 1 ? 'This approval will be lost:' : `These ${dry.approvals_lost.length} approvals will be lost:`}
           </Typography.Text>
           <ul style={{ margin: '4px 0 0' }}>
-            {dry.approvals_lost.map((k) => {
-              const title = sectionTitle(k)
-              return <li key={k}>{title ? <Typography.Text>{title}</Typography.Text> : <Typography.Text code>{k}</Typography.Text>}</li>
-            })}
+            {dry.approvals_lost.map((k) => (
+              // a section key is shown by its title; a value that is no key (a title already) as it is
+              <li key={k}>{sectionTitle(k) ?? k}</li>
+            ))}
           </ul>
         </section>
       )}
@@ -120,22 +112,14 @@ function Consequences({ dry, sectionTitle }: { dry: DryRun; sectionTitle: (key: 
           <Typography.Text strong>It will keep:</Typography.Text>
           <ul style={{ margin: '4px 0 0' }}>
             {dry.keeps.map((k) => (
-              <li key={k.what}>
-                {k.say ? (
-                  <>
-                    {k.say} <Typography.Text type="secondary">({k.what})</Typography.Text>
-                  </>
-                ) : (
-                  k.what
-                )}
-              </li>
+              <li key={k.what}>{k.say || k.what}</li>
             ))}
           </ul>
         </section>
       )}
       {dry.cost?.say && (
         <Typography.Paragraph style={{ margin: 0 }}>
-          <Typography.Text strong>To redo it: </Typography.Text>
+          <Typography.Text strong>Cost: </Typography.Text>
           {dry.cost.say}
         </Typography.Paragraph>
       )}

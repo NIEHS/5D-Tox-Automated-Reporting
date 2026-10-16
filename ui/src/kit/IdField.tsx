@@ -40,10 +40,14 @@ export function IdField({ kind, value = '', onChange, onCheck, label, id, disabl
   const dtxsid = isDtxsidKind(kind)
   const shape = (text: string) => (dtxsid ? text.toUpperCase() : text)
   const pattern = data?.patterns?.[kind]
-  const check: IdCheck | null = isPending ? null : checkId(kind, value, pattern)
+  // a DTXSID must also be an id the store can hold (the served session-id rule bounds its length)
+  const storeRule = dtxsid ? data?.patterns?.session_id : undefined
+  const check: IdCheck | null = isPending ? null : checkId(kind, value, pattern, storeRule)
   const name = label ?? ID_LABELS[kind]
+  // while "Use DTXSID…?" is offered for pasted text, only the offer is shown, not the error beside it
+  const offering = offer !== null && offer !== value
 
-  const showProblem = check !== null && check.ok !== true && (touched || check.ok === null)
+  const showProblem = !offering && check !== null && check.ok !== true && (touched || check.ok === null)
   const good = check?.ok === true
   const onCheckRef = useRef(onCheck)
   useEffect(() => {
@@ -96,7 +100,7 @@ export function IdField({ kind, value = '', onChange, onCheck, label, id, disabl
           {check.say}
         </Typography.Text>
       )}
-      {offer && offer !== value && (
+      {offering && (
         <Space size={4} wrap data-testid="id-offer">
           <Typography.Text style={{ fontSize: 13 }}>The pasted text holds a DTXSID.</Typography.Text>
           <Button

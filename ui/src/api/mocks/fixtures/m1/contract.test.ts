@@ -51,7 +51,7 @@ describe('M1 fixtures', () => {
       expect(d, r.id).toBeDefined()
       const { detail, ...row } = d!
       expect(row, r.id).toEqual(r)
-      expect(Object.keys(detail.format), r.id).toEqual(expect.arrayContaining(['brings', 'pin', 'title', 'say', 'source']))
+      expect(Object.keys(detail.format ?? {}), r.id).toEqual(expect.arrayContaining(['brings', 'pin', 'title', 'say', 'source']))
       expect('members' in detail, r.id).toBe(r.kind === 'report')
     }
   })

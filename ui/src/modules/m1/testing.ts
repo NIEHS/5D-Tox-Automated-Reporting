@@ -31,3 +31,14 @@ export async function openStudyPage(id: string) {
   await screen.findByTestId('where-it-stands')
   return r
 }
+
+/** The note the backend serves for a damaged file (workflow/refusals.py `damaged_session_file`). */
+export function DAMAGED_NOTE(id: string, file = 'document_definition.json') {
+  return {
+    level: 'error',
+    code: 'damaged_session_file',
+    say:
+      `One of this study's saved files is damaged and can't be read (${id}/${file}). Nothing was changed. ` +
+      'Tell the maintainer: the file must be repaired or restored before work on this study can go on.',
+  }
+}

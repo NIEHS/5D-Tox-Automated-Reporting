@@ -106,7 +106,8 @@ export function identitySourceSay(source: IdentitySource | null | undefined): st
   if (!source || source.kind === 'unknown') return 'On file; how it was set is not recorded.'
   if (source.kind === 'lookup') {
     const day = dayOf(source.confirmed_at)
-    return `Confirmed by a person from a ${source.service ?? 'chemical'} lookup${day ? ` on ${day}` : ''}.`
+    const said = `Confirmed by a person from a ${source.service ?? 'chemical'} lookup${day ? ` on ${day}` : ''}.`
+    return source.casrn_from === 'person' ? `${said} CAS number stated by a person (the lookup gave none).` : said
   }
   if (source.kind === 'stated') return 'Stated by a person, not confirmed by a lookup.'
   return `Origin not recognised ("${source.kind}"); treat it as unchecked.`
@@ -136,3 +137,10 @@ export function appPath(href: string): { inApp: boolean; to: string } {
   if (href === '/app') return { inApp: true, to: '/' }
   return { inApp: false, to: href }
 }
+
+/** Why the format could not be read: the backend's note, or plain words when it sent none. */
+export function formatUnreadSay(s: StudyRow): string {
+  const note = s.notes.find((n) => n.code === 'damaged_session_file') ?? s.notes.find((n) => n.level === 'error')
+  return note?.say ?? "The report format of this session could not be read."
+}
+

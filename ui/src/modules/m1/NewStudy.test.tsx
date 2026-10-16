@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { M1_CHECK_PFHXSAM } from '../../api/mocks/fixtures'
+import { M1_CHECK_PFHXSAM, M1_CHEMICALS } from '../../api/mocks/fixtures'
 import { removeMockStudy } from '../../api/mocks/m1'
 import { server } from '../../api/mocks/node'
 import { renderApp } from '../../test/render'
@@ -53,8 +53,27 @@ describe('S2 step 1: the DTXSID', () => {
     await user.click(input)
     await user.paste('https://comptox.epa.gov/dashboard/chemical/details/DTXSID7020182')
     expect(input).not.toHaveValue('DTXSID7020182')
+    // F7: only the offer, not the red "A DTXSID starts with…" beside it
+    expect(screen.queryByText(/A DTXSID starts with 'DTXSID'/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Use DTXSID7020182?' }))
     expect(input).toHaveValue('DTXSID7020182')
+  })
+
+  it('F7: an id longer than the store can hold (80 digits) is refused on the screen; Next stays disabled; it is never sent', async () => {
+    let checks = 0
+    server.use(
+      http.get('/api/v2/studies/:dtxsid/creation-check', () => {
+        checks++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user, input, next } = await openNew()
+    await user.click(input)
+    await user.paste(`DTXSID${'7'.repeat(80)}`)
+    expect(screen.getByText(/longer than any DTXSID the application can hold/)).toBeInTheDocument()
+    await act(() => new Promise((r) => setTimeout(r, 450)))
+    expect(next()).toBeDisabled()
+    expect(checks).toBe(0)
   })
 
   it('AC17: an existing study is named, with Open it; Next stays disabled; nothing is written', async () => {
@@ -153,6 +172,109 @@ describe('S2 step 2: the chemical and the format', () => {
     expect(create).toBeDisabled()
   })
 
+  it('2026-10-16: PubChem gives no CAS number: the person is asked for one; Create waits for a valid one and the tick; it is sent as stated by the person', async () => {
+    let sent: { casrn: string | null; source: { casrn_from?: string } } | null = null
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') {
+        sent = ((await request.clone().json()) as { identity: typeof sent }).identity
+      }
+    })
+    try {
+      const { user } = await toStep2('DTXSID3333333333')
+      const ask = await screen.findByTestId('casrn-ask')
+      expect(ask).toHaveTextContent('PubChem gives no CAS number for this chemical. Type it from a source you trust')
+      const field = within(ask).getByRole('textbox', { name: 'CAS number (required)' })
+      const confirm = screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })
+      const create = screen.getByRole('button', { name: 'Create study' })
+      expect(confirm).toBeDisabled()
+      expect(create).toBeDisabled()
+      expect(screen.getByTestId('casrn-wait')).toHaveTextContent('Type a valid CAS number above first.')
+
+      // a mistyped check digit: the spec's words; still no create
+      await user.type(field, '80-05-8')
+      expect(within(ask).getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+      expect(confirm).toBeDisabled()
+      expect(create).toBeDisabled()
+
+      await user.clear(field)
+      await user.type(field, '80-05-7')
+      await waitFor(() => expect(confirm).toBeEnabled())
+      expect(create).toBeDisabled()
+      await user.click(confirm)
+      expect(create).toBeEnabled()
+
+      // changing the number after ticking unticks: what was confirmed changed
+      await user.type(field, '1')
+      expect(confirm).not.toBeChecked()
+      expect(create).toBeDisabled()
+      await user.type(field, '{Backspace}')
+      await waitFor(() => expect(confirm).toBeEnabled())
+      await user.click(confirm)
+
+      await user.click(create)
+      expect(await screen.findByText('Study DTXSID3333333333 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(sent).toMatchObject({ casrn: '80-05-7', source: { kind: 'lookup', casrn_from: 'person' } })
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('2026-10-16: a lookup that gives a CAS number asks for none, and sends no casrn_from', async () => {
+    let sent: { source: Record<string, unknown> } | null = null
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') {
+        sent = ((await request.clone().json()) as { identity: typeof sent }).identity
+      }
+    })
+    try {
+      const { user } = await toStep2('DTXSID7020182')
+      await screen.findByTestId('confirm-label')
+      expect(screen.queryByTestId('casrn-ask')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('checkbox', { name: /I checked the DTXSID/ }))
+      await user.click(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ }))
+      await user.click(screen.getByRole('button', { name: 'Create study' }))
+      await screen.findByText(/Study DTXSID7020182 created/)
+      expect(sent!.source).not.toHaveProperty('casrn_from')
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('review 3: a lookup with no name is still a dead end: the tick is closed, the screen says why, no field to type a name', async () => {
+    const bpa = structuredClone(M1_CHEMICALS['DTXSID7020182']!)
+    bpa.identity.name = ''
+    bpa.identity.casrn = null
+    bpa.dtxsid_matched = true
+    let posts = 0
+    server.use(
+      http.get('/api/v2/chemicals/DTXSID7020182', () => HttpResponse.json(bpa)),
+      http.post('/api/v2/studies', () => {
+        posts++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user } = await toStep2('DTXSID7020182')
+    const why = await screen.findByTestId('identity-incomplete')
+    expect(why).toHaveTextContent("PubChem gives no name for this chemical, so a study can't be created from this lookup yet.")
+    expect(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })).toBeDisabled()
+    const create = screen.getByRole('button', { name: 'Create study' })
+    expect(create).toBeDisabled()
+    await user.click(create)
+    expect(posts).toBe(0)
+    expect(screen.queryByTestId('casrn-ask')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('review 3: a lookup whose CAS number fails its check digit offers no create either', async () => {
+    const bpa = structuredClone(M1_CHEMICALS['DTXSID7020182']!)
+    bpa.identity.casrn = '80-05-8'
+    bpa.dtxsid_matched = true
+    server.use(http.get('/api/v2/chemicals/DTXSID7020182', () => HttpResponse.json(bpa)))
+    await toStep2('DTXSID7020182')
+    expect(await screen.findByTestId('identity-incomplete')).toHaveTextContent('(80-05-8) is not a valid one')
+    expect(screen.getByRole('button', { name: 'Create study' })).toBeDisabled()
+  })
+
   it('AC22: a DTXSID PubChem does not know: the error, Back to the id, no name, no way to create', async () => {
     await toStep2('DTXSID0000000001')
     const e = await screen.findByTestId('lookup-not-found')
@@ -198,6 +320,56 @@ describe('S2 step 3: created', () => {
     const src = await screen.findByTestId('identity-source')
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     expect(src).toHaveTextContent(`Confirmed by a person from a PubChem lookup on ${today}.`)
+  })
+
+  it('F9: Back from the success view goes to the studies list; the filled-in form can\'t be reached again, and nothing is sent twice', async () => {
+    let posts = 0
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') posts++
+    })
+    try {
+      const { user, router } = await toStep2('DTXSID7020182')
+      await user.click(await screen.findByRole('checkbox', { name: /I checked the DTXSID/ }))
+      await user.click(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ }))
+      await user.click(screen.getByRole('button', { name: 'Create study' }))
+      expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/studies/new')
+      expect(router.state.location.search).toBe('?created=DTXSID7020182')
+
+      await act(() => router.navigate(-1))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/studies'))
+      expect(await screen.findByRole('heading', { name: 'Studies' })).toBeInTheDocument()
+      // the form's place was taken by the list: one more Back reaches no form
+      await act(() => router.navigate(-1))
+      expect(router.state.location.pathname).toBe('/studies')
+      expect(screen.queryByRole('textbox', { name: "The chemical's DTXSID" })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Create study' })).not.toBeInTheDocument()
+
+      // Forward returns to the success view, read from the backend; still no second create
+      await act(() => router.navigate(1))
+      expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(posts).toBe(1)
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('F9: the success view\'s address, opened afresh (a reload), shows the study as the backend serves it, never the form', async () => {
+    const check = (await (await fetch('/api/v2/studies/DTXSID7020182/creation-check')).json()) as { format: { definition: string; hash: string } }
+    const made = await fetch('/api/v2/studies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dtxsid: 'DTXSID7020182',
+        identity: { name: 'Bisphenol A', casrn: '80-05-7', pubchem_cid: 6623, source: { kind: 'lookup', service: 'PubChem', looked_up_at: 'x' } },
+        confirmed: true, dtxsid_checked_by_person: true, format_seen: check.format,
+      }),
+    })
+    expect(made.status).toBe(201)
+    renderApp('/studies/new?created=DTXSID7020182')
+    expect(await screen.findByText('Study DTXSID7020182 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+    expect(screen.getByText(/It will be written in NIEHS Report, as published in 2026/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: "The chemical's DTXSID" })).not.toBeInTheDocument()
   })
 
   it('AC26: two tabs at step 2 for the same id: the second create is refused with Open it; one study exists', async () => {
