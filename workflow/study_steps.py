@@ -13,6 +13,7 @@ workflow.refusals.
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -133,6 +134,42 @@ def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | No
     return {"id": dtxsid}
 
 
+@contextmanager
+def _study_lock(dtxsid: str):
+    """Hold the study's folder exclusively while an act checks it and then
+    changes it, so two requests on one study cannot both pass the check
+    (two people filling its identity at once; a double-clicked delete). The
+    lock is ``flock`` on the folder itself: no file is added to the study, so
+    the delete's token does not change. It holds across threads and processes
+    on this machine.
+
+    Refuses ``study_not_found`` when the folder is absent, or when it was
+    renamed away (deleted) while this request waited for the lock. Yields the
+    folder."""
+    import fcntl
+    import os
+
+    from workflow.studies import StudyRefusal, session_folder
+
+    folder = session_folder(dtxsid)
+    gone = StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
+    try:
+        fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+    except (FileNotFoundError, NotADirectoryError):
+        raise gone from None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            same = os.stat(folder).st_ino == os.fstat(fd).st_ino
+        except FileNotFoundError:
+            same = False
+        if not same:   # deleted (renamed away) while this request waited
+            raise gone
+        yield folder
+    finally:
+        os.close(fd)   # releases the lock
+
+
 @step_provenance
 def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
                          dtxsid_checked_by_person: bool = False) -> dict:
@@ -142,13 +179,25 @@ def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
     (``read_only_session``), and one whose identity.json already names the
     chemical (``identity_exists``: changing it is not done here, Q-M1-11).
     Keeps what identity.json already holds besides (the short name).
-    Returns ``{"id": dtxsid}``."""
+
+    The check and the write are one act per study (``_study_lock``): of two
+    people saving at once, one fills the identity and the other is refused
+    ``identity_exists``. Returns ``{"id": dtxsid}``."""
     import json
     import os
+    import uuid
 
     from common.session_files import read_json_file
     from workflow.studies import (
         StudyRefusal, chemical_dtxsid, session_exists, session_folder, session_kind)
+
+    def current_identity(folder: Path) -> dict:
+        current = read_json_file(folder / "identity.json")
+        current = current if isinstance(current, dict) else {}
+        if current.get("name"):
+            raise StudyRefusal("identity_exists", f"{dtxsid}/identity.json already names "
+                               f"{current['name']!r}", 409)
+        return current
 
     folder = session_folder(dtxsid)
     if not session_exists(dtxsid):
@@ -157,20 +206,21 @@ def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
     if kind in ("companion", "report"):
         raise StudyRefusal("read_only_session",
                            f"{dtxsid} is a {kind}; its identity is not filled here", 409)
-    current = read_json_file(folder / "identity.json")
-    current = current if isinstance(current, dict) else {}
-    if current.get("name"):
-        raise StudyRefusal("identity_exists", f"{dtxsid}/identity.json already names "
-                           f"{current['name']!r}", 409)
+    current_identity(folder)   # refused before the lookup, when it is already there
     chem = chemical_dtxsid(dtxsid)
     if not chem:
         raise StudyRefusal("invalid_study_id", f"{dtxsid} names no chemical to look up", 400,
                            {"id": dtxsid})
     record = _confirmed_identity(chem, identity, confirmed, dtxsid_checked_by_person)
-    record = {**current, **record, "dtxsid": dtxsid}
-    tmp = folder / ".identity.json.tmp"
-    tmp.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, folder / "identity.json")
+    with _study_lock(dtxsid) as folder:
+        current = current_identity(folder)   # again, now that no one else can write it
+        record = {**current, **record, "dtxsid": dtxsid}
+        tmp = folder / f".identity.json.{uuid.uuid4().hex[:8]}.tmp"
+        try:
+            tmp.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, folder / "identity.json")
+        finally:
+            tmp.unlink(missing_ok=True)
     return {"id": dtxsid}
 
 

@@ -211,6 +211,64 @@ def test_record_identity_refusals(sessions_dir, lookup):
     assert e.value.code == "invalid_study_id"
 
 
+def test_simultaneous_identity_fills_give_one_success(sessions_dir, monkeypatch):
+    """F4: three people save the identity at once. All three pass the first
+    check (the lookup holds them until all have), so only the per-study lock
+    keeps the check-then-write atomic: one fills it, two are refused
+    identity_exists, no server error, no temp file left behind."""
+    import threading
+
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW},
+                identity__json={"abbreviation": "BPA"})
+    gate = threading.Barrier(3, timeout=10)
+
+    def held_lookup(dtxsid, *, fresh=False):
+        gate.wait()
+        return {**json.loads(json.dumps(LOOKUP)), "dtxsid": dtxsid}
+
+    monkeypatch.setattr(studies, "lookup_chemical", held_lookup)
+    results: list = []
+
+    def save():
+        try:
+            results.append(record_identity_step(f"{NEW}_nb", _identity(), confirmed=True))
+        except StudyRefusal as exc:
+            results.append(exc.code)
+        except Exception as exc:   # the failure F4 found: a FileNotFoundError
+            results.append(repr(exc))
+
+    threads = [threading.Thread(target=save) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+    assert sorted(map(str, results)) == sorted(
+        [str({"id": f"{NEW}_nb"}), "identity_exists", "identity_exists"]), results
+    ident = json.loads((d / "identity.json").read_text())
+    assert ident["name"] == "Bisphenol A" and ident["abbreviation"] == "BPA"
+    assert not [p for p in d.iterdir() if p.name.endswith(".tmp")]
+
+
+def test_record_identity_on_a_study_deleted_meanwhile(sessions_dir, lookup, monkeypatch):
+    """The study is deleted (renamed away) between the checks and the write:
+    study_not_found, and nothing is written where it was."""
+    from workflow import study_steps
+
+    d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
+    real = study_steps._confirmed_identity
+
+    def then_deleted(*a, **k):
+        out = real(*a, **k)
+        d.rename(sessions_dir / ".deleting-x")
+        return out
+
+    monkeypatch.setattr(study_steps, "_confirmed_identity", then_deleted)
+    with pytest.raises(StudyRefusal) as e:
+        record_identity_step(f"{NEW}_nb", _identity(), confirmed=True)
+    assert e.value.code == "study_not_found" and e.value.status_code == 404
+    assert not d.exists()
+
+
 # ---------------------------------------------------------------------------
 # Delete: the dry run, then the act
 # ---------------------------------------------------------------------------
