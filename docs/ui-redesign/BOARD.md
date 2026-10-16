@@ -23,14 +23,14 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
 | C1 legal actions enforced | **merged** into `ui-redesign` (623f003, wave 1) | – | 2026-10-15 (D1 = B) | orchestrator-verified (full suite: only the known docx failure; guard 11/11); maintainer demo pending | |
 | C2 owned content protected | **merged** (623f003, wave 1); its section tests now seed INTEGRATED studies (C1 refuses Process before integration) | – | 2026-10-15 | orchestrator-verified; maintainer demo pending | |
-| C3 saves merge and check | not started | | | | Q10 |
+| C3 saves merge and check | spec running (`ui-c3-spec`), Q10 answered 2026-10-16 | ui-backend-engineer (spec stage) | | | |
 | C4 side-effect-free reads | spec ready (`modules/c4/`), **awaiting the maintainer** (D1–D7) | | | | C1 merged ✓ |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
 | M1 Studies | **merged with its fix round** (2e3bfcd): test (`modules/m1/test.md`) and review (`modules/m1/review.md`) findings fixed; a missing CAS number is asked for (2026-10-16); demo on 9200 | – | 2026-10-15 | **awaiting the maintainer's done sign-off**; open: delete during Process (C5 or stopgap) | |
-| M2 Study files | spec ready, **awaiting the maintainer** (Q-M2-1…11) | | | | C3, C4, C8 (specified against them) |
+| M2 Study files | questions answered 2026-10-16; **spec revision** running (`ui-m2-design`) | ui-interaction-designer | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started; **carry:** `integrate_step` overwrites a confirmed `identity.json` with the request body (`workflow/steps.py:432`, M1 review 4) | | | | |
 | M4 Study facts | not started | | | | |
 | M5 Method and document pins | not started | | | | |
