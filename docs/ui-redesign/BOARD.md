@@ -29,7 +29,7 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 | C6 derived readiness | not started | | | | Q2–Q5 |
 | C7 currency covers every input | not started | | | | Q2, Q5 |
 | C8 dry-run and undo | not started | | | | Q9 |
-| M1 Studies | **merged** (623f003, wave 1; demo on 9200); tested (`modules/m1/test.md`: 39/41) and reviewed (`modules/m1/review.md`: ready with fixes); fix round running (`ui-m1-fix-be`, `ui-m1-fix-fe`) | ui-adversarial-tester, ui-reviewer | 2026-10-15 | | |
+| M1 Studies | **merged with its fix round** (2e3bfcd): test (`modules/m1/test.md`) and review (`modules/m1/review.md`) findings fixed; a missing CAS number is asked for (2026-10-16); demo on 9200 | – | 2026-10-15 | **awaiting the maintainer's done sign-off**; open: delete during Process (C5 or stopgap) | |
 | M2 Study files | spec ready, **awaiting the maintainer** (Q-M2-1…11) | | | | C3, C4, C8 (specified against them) |
 | M3 Integration and the dataset | not started; **carry:** `integrate_step` overwrites a confirmed `identity.json` with the request body (`workflow/steps.py:432`, M1 review 4) | | | | |
 | M4 Study facts | not started | | | | |
