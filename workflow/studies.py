@@ -849,7 +849,18 @@ def _banner(row: dict, index: StoreIndex) -> dict | None:
             return {"level": "warning", "links": [],
                     "say": f"This session's id, {sid}, names no chemical: it was made by a tool or "
                            "a test."}
-        say = f"This session's id, {sid}, is not a chemical's DTXSID: it was made by a tool."
+        suffix = sid[len(chem):].lstrip("_-").lower()
+        from pipeline.deposit import SPECIES_TITLES
+        if suffix in SPECIES_TITLES:
+            # A report's studies are named <DTXSID>_<species>; no report lists
+            # this one (else it would be a member), so its report is gone.
+            say = (f"This session's id, {sid}, names a {suffix} study, as the studies of a "
+                   "report over several studies are named, but no report lists it: the report "
+                   "it belonged to may have been deleted.")
+        else:
+            say = (f"This session's id, {sid}, is not a chemical's DTXSID alone, and no report "
+                   "lists it: a tool made it, or it was a study of a report that has since been "
+                   "deleted.")
         if fmt.get("title_short"):
             say += f" Its report uses the format {fmt['title_short']}"
             theirs = format_summary(chem, "study", {}, published_record(report_of(chem)[0]),
@@ -917,7 +928,7 @@ def require_study_id(dtxsid: str) -> str:
 
 
 _RELATED_SAY = {"companion": "The published book's content",
-                "other": "Other session, made by a tool",
+                "other": "Other session",
                 "report": "A report over several studies",
                 "study": "A study"}
 

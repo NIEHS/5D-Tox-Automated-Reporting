@@ -297,6 +297,22 @@ def test_banners(store):
     assert [m["id"] for m in report["detail"]["members"]] == ["DTXSID1_rat", "DTXSID1_mouse"]
 
 
+def test_the_other_banner_is_true_of_a_former_member(store):
+    """F6: a report deleted, its studies are kind other; their banner must not
+    say a tool made them. A tool's copy is told apart from a former member
+    only by the id's suffix naming a species; nothing is invented."""
+    import shutil
+    shutil.rmtree(store / "DTXSID1")
+    rat = study_summary("DTXSID1_rat")
+    assert rat["kind"] == "other"
+    say = rat["detail"]["banner"]["say"]
+    assert "made by a tool" not in say and "a tool made it" not in say
+    assert "names a rat study" in say and "no report lists it" in say
+    tool = study_summary("DTXSID2_nb")["detail"]["banner"]["say"]
+    assert tool.startswith("This session's id, DTXSID2_nb, is not a chemical's DTXSID alone")
+    assert "a tool made it, or it was a study of a report that has since been deleted" in tool
+
+
 # ---------------------------------------------------------------------------
 # Creation check
 # ---------------------------------------------------------------------------
