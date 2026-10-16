@@ -721,6 +721,35 @@ R4).
 - **Q-M2-11. Removed files after "Start over".** Proposed: deleted with the rest,
   and the dialog says so.
 
+### Answered 2026-10-16 (the maintainer)
+
+- **Q-M2-1: C, yes.** Keeping one file of a conflict moves the other to the removed
+  files (restorable, with the reason recorded).
+- **Q-M2-2: no in-app choice.** Redundant files are flagged as a conflict; the person
+  arbitrates **outside the app** (fixes the files, then brings them in again or
+  removes one). The app offers no "keep one" for them.
+- **Q-M2-3: A, yes,** a `.bm2` is not required for apical platforms. **But:** when
+  apical data is in a `.bm2`, it may hold imputed values for doses missing in the
+  corresponding study file. That is intentional, and there is a rule for what to do
+  (the orchestrator found it built as `pipeline.bmd_project_schema._detect_imputed_cells`
+  + `_meta.imputed_cells` + the imputation footnote, ADR-0017 §"Two distinct
+  inference mechanisms"; to be confirmed by the maintainer as the rule meant). The
+  check must not flag such imputed values as a mismatch.
+- **Q-M2-4: yes.** Every file is confirmed before integration.
+- **Q-M2-5: A, yes.** A `.bm2` holding several test articles blocks, with "Keep only
+  this study's experiments".
+- **Q-M2-6: yes.** One-row-per-animal files are classified by content.
+- **Q-M2-7: yes to both.** (a) Allowed with the acknowledgment and "[units pending]";
+  (b) workbook units read from the Key sheet.
+- **Q-M2-8: no size limit.**
+- **Q-M2-9: flag, as Q-M2-2.** An exact copy under another name is flagged as a
+  conflict, not refused; the person arbitrates outside the app.
+- **Q-M2-10: yes, and flag it as it happens.** A same-name replacement keeps the old
+  file among the removed files; the person is told, while bringing the file in, that
+  it replaces one, and confirms.
+- **Q-M2-11: no.** "Start over" does not delete the removed files. **Keep a record of
+  the files, and keep a record of the integrated data.**
+
 ## 12. Acceptance criteria
 
 Tested in a headed browser against the app on a **scratch store**, with
