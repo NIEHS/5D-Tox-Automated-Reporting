@@ -151,7 +151,7 @@ describe('S3 the study page', () => {
     expect(screen.queryByRole('button', { name: 'Look up the chemical' })).not.toBeInTheDocument()
   })
 
-  it('2026-10-16: Look up the chemical, when PubChem gives no CAS number: the dialog asks for one; Save waits for it; the page then says it was stated by a person', async () => {
+  it('2026-10-16 (revised): Look up the chemical, when PubChem gives no CAS number: asked for, optional; a typed one must be valid; the page then says it was stated by a person', async () => {
     const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
     pfoa.identity.casrn = null
     pfoa.needs = ['casrn']
@@ -160,14 +160,18 @@ describe('S3 the study page', () => {
     await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
     const dialog = await screen.findByRole('dialog')
     const ask = await within(dialog).findByTestId('casrn-ask')
-    expect(ask).toHaveTextContent('PubChem gives no CAS number for this chemical. Type it from a source you trust')
+    // no needs_say served here: the screen's own words
+    expect(ask).toHaveTextContent('PubChem gives no CAS number for Perfluorooctanoic acid. If you have it from a source you trust')
+    expect(ask).toHaveTextContent('Without it, the study shows "[CASRN pending]".')
     const confirm = within(dialog).getByRole('checkbox', { name: /This is the chemical studied under/ })
     const save = within(dialog).getByRole('button', { name: 'Save this identity' })
-    expect(confirm).toBeDisabled()
+    // empty is allowed: the tick opens
+    await waitFor(() => expect(confirm).toBeEnabled())
     expect(save).toBeDisabled()
-    const field = within(ask).getByRole('textbox', { name: 'CAS number (required)' })
+    const field = within(ask).getByRole('textbox', { name: 'CAS number (optional)' })
     await user.type(field, '335-67-2')
     expect(within(ask).getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+    expect(confirm).toBeDisabled()
     expect(save).toBeDisabled()
     await user.clear(field)
     await user.type(field, '335-67-1')
@@ -181,7 +185,37 @@ describe('S3 the study page', () => {
     expect(screen.getByTestId('identity-source')).toHaveTextContent('CAS number stated by a person (the lookup gave none).')
   })
 
-  it('review 3: Look up the chemical, when PubChem gives no name: Save is closed and the dialog says why', async () => {
+  it('2026-10-16 (revised): Look up the chemical with no CAS number and none typed: Save needs only the tick; the name fills, the CAS number stays pending', async () => {
+    const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
+    pfoa.identity.casrn = null
+    pfoa.needs = ['casrn']
+    let sent: { casrn: string | null; source: Record<string, unknown> } | null = null
+    server.use(http.get('/api/v2/chemicals/DTXSID8031865', () => HttpResponse.json(pfoa)))
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'PUT') sent = ((await request.clone().json()) as { identity: typeof sent }).identity
+    })
+    try {
+      const { user } = await openStudyPage('DTXSID8031865_scratch')
+      await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
+      const dialog = await screen.findByRole('dialog')
+      await within(dialog).findByTestId('casrn-ask')
+      const confirm = within(dialog).getByRole('checkbox', { name: /This is the chemical studied under/ })
+      await waitFor(() => expect(confirm).toBeEnabled())
+      await user.click(confirm)
+      await user.click(within(dialog).getByRole('button', { name: 'Save this identity' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() => expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Perfluorooctanoic acid'))
+      expect(sent!.casrn).toBeNull()
+      expect(sent!.source).not.toHaveProperty('casrn_from')
+      const chem = screen.getByTestId('chemical')
+      expect(within(chem).getByRole('button', { name: 'CASRN is missing; show why' })).toHaveTextContent('[CASRN pending]')
+      expect(screen.queryByRole('button', { name: 'Look up the chemical' })).not.toBeInTheDocument()
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('2026-10-16 (revised): Look up the chemical, when PubChem gives no name: no name field, Save closed, and the dialog says the study stays pending', async () => {
     const pfoa = structuredClone(M1_CHEMICALS['DTXSID8031865']!)
     pfoa.identity.name = ''
     let puts = 0
@@ -195,14 +229,77 @@ describe('S3 the study page', () => {
     const { user } = await openStudyPage('DTXSID8031865_scratch')
     await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
     const dialog = await screen.findByRole('dialog')
-    expect(await within(dialog).findByTestId('identity-incomplete')).toHaveTextContent(
-      "PubChem gives no name for this chemical, so this identity can't be saved from this lookup yet.",
-    )
+    const why = await within(dialog).findByTestId('identity-no-name')
+    expect(why).toHaveTextContent('PubChem found a compound for DTXSID8031865 but gives no name for it')
+    expect(why).toHaveTextContent('Nothing is changed: the study keeps its name and CAS number pending')
     expect(within(dialog).queryByTestId('casrn-ask')).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
     const save = within(dialog).getByRole('button', { name: 'Save this identity' })
     expect(save).toBeDisabled()
     await user.click(save)
     expect(puts).toBe(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Close; keep it pending' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Look up the chemical' })).toBeInTheDocument()
+  })
+
+  it('2026-10-16 (revised): Look up the chemical, when PubChem does not know the DTXSID or cannot be reached: says the study stays pending; nothing is sent', async () => {
+    let puts = 0
+    let reachable = false
+    server.use(
+      http.get('/api/v2/chemicals/DTXSID8031865', () =>
+        reachable
+          ? HttpResponse.json({ error: { code: 'identity_not_found', status: 404, message: 'x', say: 'PubChem has no chemical with the DTXSID DTXSID8031865.', fix: null, details: {} } }, { status: 404 })
+          : HttpResponse.json({ error: { code: 'identity_lookup_unreachable', status: 503, message: 'x', say: 'The chemical lookup service (PubChem) could not be reached. Nothing was created.', fix: null, details: {} } }, { status: 503 }),
+      ),
+      http.put('/api/v2/studies/DTXSID8031865_scratch/identity', () => {
+        puts++
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const { user } = await openStudyPage('DTXSID8031865_scratch')
+    await user.click(screen.getByRole('button', { name: 'Look up the chemical' }))
+    const dialog = await screen.findByRole('dialog')
+    const down = await within(dialog).findByTestId('lookup-unreachable')
+    expect(down).toHaveTextContent('Nothing is changed: the study keeps its name and CAS number pending')
+    reachable = true
+    await user.click(within(down).getByRole('button', { name: 'Try again' }))
+    const nf = await within(dialog).findByTestId('lookup-not-found')
+    expect(nf).toHaveTextContent('PubChem has no chemical with the DTXSID DTXSID8031865.')
+    expect(nf).toHaveTextContent('can be looked up again later from this page')
+    expect(within(dialog).getByRole('button', { name: 'Save this identity' })).toBeDisabled()
+    await user.click(within(dialog).getByRole('button', { name: 'Close; keep it pending' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(puts).toBe(0)
+  })
+
+  it('2026-10-16 (revised): a study created with its chemical pending: "[name pending]", "[CASRN pending]", the pending provenance, and Look up the chemical fills it', async () => {
+    const check = (await (await fetch('/api/v2/studies/DTXSID7020182/creation-check')).json()) as { format: { definition: string; hash: string } }
+    const made = await fetch('/api/v2/studies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dtxsid: 'DTXSID7020182', identity: null, identity_pending: true, confirmed: true, dtxsid_checked_by_person: true, format_seen: check.format }),
+    })
+    expect(made.status).toBe(201)
+    expect(((await made.json()) as StudyDetail).identity.source.kind).toBe('pending')
+    const { user } = await openStudyPage('DTXSID7020182')
+    const chem = screen.getByTestId('chemical')
+    expect(within(chem).getByRole('button', { name: 'name is missing; show why' })).toHaveTextContent('[name pending]')
+    expect(within(chem).getByRole('button', { name: 'CASRN is missing; show why' })).toHaveTextContent('[CASRN pending]')
+    expect(screen.getByTestId('identity-source')).toHaveTextContent('Pending: the study was created before its chemical was looked up. Look it up below.')
+
+    await user.click(within(chem).getByRole('button', { name: 'Look up the chemical' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText('Bisphenol A')).toBeInTheDocument()
+    // Bisphenol A's fixture: PubChem does not list the DTXSID; the check tick comes first
+    await user.click(within(dialog).getByRole('checkbox', { name: /I checked the DTXSID DTXSID7020182/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: /This is the chemical studied under DTXSID7020182/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Save this identity' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Bisphenol A'))
+    expect(screen.getByTestId('chemical')).toHaveTextContent('80-05-7')
+    expect(screen.getByTestId('identity-source')).toHaveTextContent('Confirmed by a person from a PubChem lookup')
+    expect(screen.queryByRole('button', { name: 'Look up the chemical' })).not.toBeInTheDocument()
   })
 
   it('a CAS number a person stated is said so on the page; one from the lookup is not', async () => {
