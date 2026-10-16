@@ -58,3 +58,19 @@ describe('M1 real answers fit the front-end types', () => {
     for (const m of members.filter((x) => !isMissingMember(x))) expect((m as StudyRow).stands, m.id).toBeDefined()
   })
 })
+
+describe('M1 real answers: a study created with its chemical pending (2026-10-16)', () => {
+  it('the row says pending, with a note, and nothing invented', () => {
+    const d = sample<StudyDetail>('study.pending')
+    expect(d.identity.name).toBeNull()
+    expect(d.identity.casrn).toBeNull()
+    expect(d.identity.source.kind).toBe('pending')
+    expect(d.notes.map((n) => n.code)).toContain('identity_pending')
+    expect(Object.keys(d.identity.source).sort()).toEqual(['casrn_from', 'confirmed_at', 'kind', 'service'])
+  })
+
+  it('the pending create answers a row; sending an identity with it is refused', () => {
+    expect((sample<StudyRow>('create.pending')).identity.source.kind).toBe('pending')
+    expect(sample<{ error: { code: string } }>('create.pending_with_identity').error.code).toBe('bad_request')
+  })
+})
