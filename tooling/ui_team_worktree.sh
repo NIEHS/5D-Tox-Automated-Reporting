@@ -32,7 +32,7 @@ usage() { echo "usage: $0 add NAME [BASE] | relink NAME | remove NAME | list" >&
 # The orchestrator's links to untracked data, at any depth, as "path<TAB>target"
 # (git's own and the dependency folders skipped; .claude/ has its own rules).
 data_links() {
-  (cd "$SRC" && find . \( -path ./.git -o -path ./.venv -o -path ./ui/node_modules -o -path ./.claude \) -prune \
+  (cd "$SRC" && find . \( -path ./.git -o -path ./ui/node_modules -o -path ./.claude \) -prune \
        -o -type l -printf '%P\t%l\n')
 }
 
