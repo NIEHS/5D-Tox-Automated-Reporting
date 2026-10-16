@@ -23,7 +23,8 @@
       "source": {
         "kind": "unknown",
         "service": null,
-        "confirmed_at": null
+        "confirmed_at": null,
+        "casrn_from": null
       }
     },
     "stands": {
@@ -32,7 +33,7 @@
       "next": null
     },
     "processed": false,
-    "last_changed": "2026-10-15T20:10:23Z",
+    "last_changed": "2026-10-16T11:55:26Z",
     "format": {
       "definition": "session:document.yaml",
       "source": "session",

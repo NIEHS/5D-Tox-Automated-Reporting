@@ -15,7 +15,7 @@
         },
         {
           "what": "sections",
-          "say": "5 report sections (Background, Body Weight, Organ Weight, unknown, Summary); none is approved"
+          "say": "5 report sections (Background, Body Weight, Organ Weight, an unnamed result section saved as bm2_unknown, Summary); none is approved"
         },
         {
           "what": "dataset",
@@ -50,11 +50,11 @@
       ],
       "approvals_lost": [],
       "cost": {
-        "say": "151 MB will be freed."
+        "say": "53 MB will be freed."
       },
       "reason_required": false
     },
     "type_to_confirm": "DTXSID5032498",
-    "preview_token": "sha256:1a6b1afa095a3bdbe7343e2f5f7707feb0dc48ccb7abf8216a43cc07ed7a72ce"
+    "preview_token": "sha256:a40aec93ac1d90d6be40c86c78ccb511e896175fc0137989628142022d3349f7"
   }
 }

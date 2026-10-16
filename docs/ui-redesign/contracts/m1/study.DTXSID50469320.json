@@ -25,7 +25,8 @@
       "source": {
         "kind": "unknown",
         "service": null,
-        "confirmed_at": null
+        "confirmed_at": null,
+        "casrn_from": null
       }
     },
     "stands": {
@@ -37,7 +38,7 @@
       }
     },
     "processed": true,
-    "last_changed": "2026-10-15T20:10:23Z",
+    "last_changed": "2026-10-16T11:55:26Z",
     "format": {
       "definition": "studies/DTXSID50469320/document",
       "source": "study",

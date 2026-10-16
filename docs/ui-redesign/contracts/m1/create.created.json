@@ -11,7 +11,7 @@
         "source": {
           "kind": "lookup",
           "service": "PubChem",
-          "looked_up_at": "2026-10-15T20:10:51Z"
+          "looked_up_at": "2026-10-16T11:55:52Z"
         }
       },
       "confirmed": true,
@@ -42,7 +42,8 @@
       "source": {
         "kind": "lookup",
         "service": "PubChem",
-        "confirmed_at": "2026-10-15T20:10:54Z"
+        "confirmed_at": "2026-10-16T11:55:56Z",
+        "casrn_from": "lookup"
       }
     },
     "stands": {
@@ -54,7 +55,7 @@
       }
     },
     "processed": false,
-    "last_changed": "2026-10-15T20:10:54Z",
+    "last_changed": "2026-10-16T11:55:56Z",
     "format": {
       "definition": "eras/niehs-2026",
       "source": "default",

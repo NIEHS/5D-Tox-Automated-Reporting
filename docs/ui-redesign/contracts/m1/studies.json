@@ -32,7 +32,8 @@
               "source": {
                 "kind": "lookup",
                 "service": "PubChem",
-                "confirmed_at": "2026-10-15T20:10:54Z"
+                "confirmed_at": "2026-10-16T11:55:56Z",
+                "casrn_from": "lookup"
               }
             },
             "stands": {
@@ -44,7 +45,7 @@
               }
             },
             "processed": false,
-            "last_changed": "2026-10-15T20:10:54Z",
+            "last_changed": "2026-10-16T11:55:56Z",
             "format": {
               "definition": "eras/niehs-2026",
               "source": "default",
@@ -102,7 +103,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -114,7 +116,7 @@
               }
             },
             "processed": true,
-            "last_changed": "2026-10-15T20:10:23Z",
+            "last_changed": "2026-10-16T11:55:26Z",
             "format": {
               "definition": "studies/DTXSID50469320/document",
               "source": "study",
@@ -165,7 +167,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -174,7 +177,7 @@
               "next": null
             },
             "processed": false,
-            "last_changed": "2026-10-15T20:10:23Z",
+            "last_changed": "2026-10-16T11:55:26Z",
             "format": {
               "definition": "session:document.yaml",
               "source": "session",
@@ -227,7 +230,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -310,7 +314,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -375,7 +380,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -440,7 +446,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -503,7 +510,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -581,7 +589,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -646,7 +655,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -711,7 +721,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -774,7 +785,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -843,7 +855,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -906,7 +919,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -975,7 +989,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1038,7 +1053,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1107,7 +1123,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1170,7 +1187,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1239,7 +1257,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1302,7 +1321,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1371,7 +1391,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1434,7 +1455,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1503,7 +1525,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1566,7 +1589,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1635,7 +1659,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1698,7 +1723,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1767,7 +1793,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1830,7 +1857,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1899,7 +1927,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -1962,7 +1991,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -2031,7 +2061,8 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
@@ -2099,18 +2130,19 @@
               "source": {
                 "kind": "unknown",
                 "service": null,
-                "confirmed_at": null
+                "confirmed_at": null,
+                "casrn_from": null
               }
             },
             "stands": {
-              "phase": "APPROVED",
-              "say": "Data reviewed",
+              "phase": "VALIDATED",
+              "say": "Files validated, not yet integrated",
               "next": {
-                "say": "Review the report's sections",
-                "fix": "D1"
+                "say": "Integrate the data",
+                "fix": "M3"
               }
             },
-            "processed": true,
+            "processed": false,
             "last_changed": "2026-10-11T15:30:04Z",
             "format": {
               "definition": "eras/niehs-2026",
@@ -2123,9 +2155,9 @@
             },
             "published": null,
             "bookshelf": {
-              "on_shelf": true,
-              "url": "/Bookshelf/DTXSID5032498",
-              "say": "On the Bookshelf (draft)"
+              "on_shelf": false,
+              "url": null,
+              "say": "Not yet: the study has no report (it has not been processed)"
             },
             "actions": {
               "open": {
@@ -2162,7 +2194,8 @@
           "source": {
             "kind": "unknown",
             "service": null,
-            "confirmed_at": null
+            "confirmed_at": null,
+            "casrn_from": null
           }
         },
         "stands": {
@@ -2209,6 +2242,6 @@
         ]
       }
     ],
-    "generated_at": "2026-10-15T20:10:55Z"
+    "generated_at": "2026-10-16T11:55:56Z"
   }
 }

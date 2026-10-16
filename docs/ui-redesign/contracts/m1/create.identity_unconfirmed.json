@@ -11,7 +11,7 @@
         "source": {
           "kind": "lookup",
           "service": "PubChem",
-          "looked_up_at": "2026-10-15T20:10:51Z"
+          "looked_up_at": "2026-10-16T11:55:52Z"
         }
       },
       "confirmed": false,

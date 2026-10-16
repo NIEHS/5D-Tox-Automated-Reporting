@@ -32,7 +32,8 @@
       "source": {
         "kind": "unknown",
         "service": null,
-        "confirmed_at": null
+        "confirmed_at": null,
+        "casrn_from": null
       }
     },
     "stands": {
@@ -130,7 +131,8 @@
             "source": {
               "kind": "unknown",
               "service": null,
-              "confirmed_at": null
+              "confirmed_at": null,
+              "casrn_from": null
             }
           },
           "stands": {
@@ -195,7 +197,8 @@
             "source": {
               "kind": "unknown",
               "service": null,
-              "confirmed_at": null
+              "confirmed_at": null,
+              "casrn_from": null
             }
           },
           "stands": {

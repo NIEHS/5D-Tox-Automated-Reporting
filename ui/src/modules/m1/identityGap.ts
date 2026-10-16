@@ -34,7 +34,10 @@ export function identityNeed(lookup: ChemicalLookup, outcome: string, casrnPatte
   if (!casrn?.trim() || lookup.needs?.includes('casrn')) {
     return {
       kind: 'casrn',
-      say: `${svc} gives no CAS number for this chemical. Type it from a source you trust (the CompTox dashboard, the study's own records); it will be recorded as stated by you.`,
+      // the backend's words when it serves them
+      say:
+        lookup.needs_say ??
+        `${svc} gives no CAS number for this chemical. Type it from a source you trust (the CompTox dashboard, the study's own records); it will be recorded as stated by you.`,
     }
   }
   // the pattern is the backend's; when it has not loaded, the backend decides
@@ -53,7 +56,7 @@ export function identityNeed(lookup: ChemicalLookup, outcome: string, casrnPatte
 /**
  * The identity sent with a create or an identity fill: everything from the
  * lookup, except the CAS number when the person typed it, which is then
- * marked as theirs (`casrn_from: "person"`, PROPOSED 2026-10-16).
+ * marked as theirs (`casrn_from: "person"`, 2026-10-16).
  */
 export function identityToSend(lookup: ChemicalLookup, need: IdentityNeed, typedCasrn: string): ConfirmedIdentity {
   const typed = need.kind === 'casrn'

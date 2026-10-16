@@ -607,11 +607,12 @@ export interface ChemicalLookup {
   structure_url: string | null
   looked_up_at: string
   /**
-   * PROPOSED (maintainer decision 2026-10-16): what the person must supply
-   * before the identity can be used; ["casrn"] when the lookup gave no CAS
-   * number. Absent from older backends.
+   * What the person must supply before the identity can be used (maintainer,
+   * 2026-10-16): ["casrn"] when the lookup gave no CAS number, else [].
    */
   needs?: ('casrn' | (string & {}))[]
+  /** the backend's plain words for `needs`; null when nothing is needed */
+  needs_say?: string | null
 }
 
 /** The identity a person confirmed (contract §2.6 `identity`). */
@@ -619,7 +620,7 @@ export interface ConfirmedIdentity {
   name: string
   casrn: string | null
   pubchem_cid: number | null
-  /** `casrn_from: "person"` when the person typed the CAS number (PROPOSED, 2026-10-16) */
+  /** `casrn_from: "person"` when the person typed the CAS number (2026-10-16); the backend records it from the lookup */
   source: { kind: 'lookup'; service: string; looked_up_at: string; casrn_from?: 'person' }
 }
 

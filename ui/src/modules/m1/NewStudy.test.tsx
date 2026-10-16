@@ -182,7 +182,7 @@ describe('S2 step 2: the chemical and the format', () => {
     try {
       const { user } = await toStep2('DTXSID3333333333')
       const ask = await screen.findByTestId('casrn-ask')
-      expect(ask).toHaveTextContent('PubChem gives no CAS number for this chemical. Type it from a source you trust')
+      expect(ask).toHaveTextContent('PubChem gives no CAS number for Bisphenol A. Type it before going on') // the backend's needs_say
       const field = within(ask).getByRole('textbox', { name: 'CAS number (required)' })
       const confirm = screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })
       const create = screen.getByRole('button', { name: 'Create study' })

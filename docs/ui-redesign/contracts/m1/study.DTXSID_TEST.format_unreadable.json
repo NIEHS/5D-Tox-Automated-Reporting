@@ -1,0 +1,78 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies/DTXSID_TEST"
+  },
+  "status": 200,
+  "body": {
+    "id": "DTXSID_TEST",
+    "kind": "other",
+    "chemical_dtxsid": null,
+    "chemical_dtxsid_from": null,
+    "relations": {
+      "parent": null,
+      "members": [],
+      "companion": null,
+      "twin": null,
+      "others": []
+    },
+    "identity": {
+      "name": null,
+      "casrn": null,
+      "short_name": null,
+      "source": {
+        "kind": "unknown",
+        "service": null,
+        "confirmed_at": null,
+        "casrn_from": null
+      }
+    },
+    "stands": {
+      "phase": "EMPTY",
+      "say": "No files yet",
+      "next": {
+        "say": "Bring in the study's files",
+        "fix": "M2"
+      }
+    },
+    "processed": false,
+    "last_changed": "2026-10-16T11:56:13Z",
+    "format": null,
+    "published": null,
+    "bookshelf": {
+      "on_shelf": false,
+      "url": null,
+      "say": "Not yet: the session has no report"
+    },
+    "actions": {
+      "open": {
+        "allowed": true
+      },
+      "delete": {
+        "allowed": true,
+        "code": null,
+        "say": null
+      }
+    },
+    "notes": [
+      {
+        "level": "warn",
+        "code": "not_a_chemical_id",
+        "say": "Made by a tool or a test; its id names no chemical."
+      },
+      {
+        "level": "error",
+        "code": "damaged_session_file",
+        "say": "One of this study's saved files is damaged and can't be read (DTXSID_TEST/document_definition.json). Nothing was changed. Tell the maintainer: the file must be repaired or restored before work on this study can go on."
+      }
+    ],
+    "detail": {
+      "banner": {
+        "level": "warning",
+        "links": [],
+        "say": "This session's id, DTXSID_TEST, names no chemical: it was made by a tool or a test."
+      },
+      "format": null
+    }
+  }
+}

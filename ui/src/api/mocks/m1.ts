@@ -208,7 +208,7 @@ function checkFor(dtxsid: string): CreationCheck {
   const existing = exists(dtxsid) ? { id: dtxsid, kind: db.details.get(dtxsid)!.kind } : null
   const related = [...db.details.values()]
     .filter((d) => exists(d.id) && d.id !== dtxsid && d.chemical_dtxsid === dtxsid)
-    .map((d) => ({ id: d.id, kind: d.kind, say: d.kind === 'companion' ? "The published book's content" : d.kind === 'member' ? 'Part of a report over several studies' : 'Other session, made by a tool' }))
+    .map((d) => ({ id: d.id, kind: d.kind, say: d.kind === 'companion' ? "The published book's content" : d.kind === 'member' ? 'Part of a report over several studies' : 'Other session' }))
   const format = clone(base.format)
   // the mock's format hash: the contract's, or a stand-in where it gives none
   if (!format.hash || format.hash.startsWith('[')) format.hash = `mock-${format.definition}`
@@ -448,7 +448,9 @@ export function createM1Handlers({ lookupDelayMs = 0 }: { lookupDelayMs?: number
           ? { ...clone(M1_CHEMICALS['DTXSID7020182']!), dtxsid: id, dtxsid_matched: true, structure_url: null, identity: { ...clone(M1_CHEMICALS['DTXSID7020182']!.identity), casrn: null } }
           : undefined)
       // PROPOSED (2026-10-16): a lookup without a CAS number says the person must give one
-      if (found) return HttpResponse.json({ ...found, looked_up_at: new Date().toISOString(), ...(found.identity.casrn ? {} : { needs: ['casrn'] }) })
+      if (found) return HttpResponse.json({ ...found, looked_up_at: new Date().toISOString(), ...(found.identity.casrn
+        ? { needs: [], needs_say: null }
+        : { needs: ['casrn'], needs_say: `${found.service} gives no CAS number for ${found.identity.name}. Type it before going on; it will be recorded as stated by you.` }) })
       return m1Envelope({
         error: { ...M1_CHEM_NOT_FOUND.error, message: `PubChem lookup failed for name '${id}'`, say: `PubChem has no chemical with the DTXSID ${id}. A single mistyped digit gives another chemical or none. Check the id on the CompTox dashboard.` },
       })

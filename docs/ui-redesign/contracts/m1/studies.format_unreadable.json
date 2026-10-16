@@ -1,0 +1,2107 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/studies"
+  },
+  "status": 200,
+  "body": {
+    "chemicals": [
+      {
+        "dtxsid": "DTXSID50469320",
+        "name": "Perfluorohexanesulfonamide",
+        "casrn": "41997-13-1",
+        "primary": "DTXSID50469320",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID50469320",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID50469320",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID50469320_published",
+              "twin": null,
+              "others": [
+                "DTXSID50469320_nb"
+              ]
+            },
+            "identity": {
+              "name": "Perfluorohexanesulfonamide",
+              "casrn": "41997-13-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-16T11:55:58Z",
+            "format": {
+              "definition": "studies/DTXSID50469320/document",
+              "source": "study",
+              "era": "eras/niehs-2023",
+              "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+              "title_short": "NIEHS Report, March 2023",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-10 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered."
+            },
+            "published": {
+              "report": "NIEHS-10",
+              "date": "2023-03",
+              "nbk": "NBK589955"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID50469320",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID50469320_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID50469320",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID50469320",
+              "others": []
+            },
+            "identity": {
+              "name": "Perfluorohexanesulfonamide",
+              "casrn": "41997-13-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-16T11:55:58Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-10's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-10",
+              "date": "2023-03",
+              "nbk": "NBK589955"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID50469320_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID50469320_nb",
+            "kind": "other",
+            "chemical_dtxsid": "DTXSID50469320",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": [
+                "DTXSID50469320"
+              ]
+            },
+            "identity": {
+              "name": "Perfluorohexanesulfonamide",
+              "casrn": "41997-13-1",
+              "short_name": "PFHxSAm",
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-13T13:46:23Z",
+            "format": {
+              "definition": "eras/niehs-2026",
+              "source": "default",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "This session's id is not a chemical's DTXSID, so it uses the format for new studies. A study under DTXSID50469320 would use NIEHS-10's format."
+            },
+            "published": null,
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID50469320_nb",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": [
+              {
+                "level": "warn",
+                "code": "not_a_chemical_id",
+                "say": "Made by a tool; its id is not a chemical's DTXSID."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID7020182",
+        "name": "Bisphenol A",
+        "casrn": "80-05-7",
+        "primary": "DTXSID7020182",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID7020182",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID7020182",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Bisphenol A",
+              "casrn": "80-05-7",
+              "short_name": null,
+              "source": {
+                "kind": "lookup",
+                "service": "PubChem",
+                "confirmed_at": "2026-10-16T11:55:56Z",
+                "casrn_from": "lookup"
+              }
+            },
+            "stands": {
+              "phase": "EMPTY",
+              "say": "No files yet",
+              "next": {
+                "say": "Bring in the study's files",
+                "fix": "M2"
+              }
+            },
+            "processed": false,
+            "last_changed": "2026-10-16T11:55:56Z",
+            "format": {
+              "definition": "eras/niehs-2026",
+              "source": "default",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026."
+            },
+            "published": null,
+            "bookshelf": {
+              "on_shelf": false,
+              "url": null,
+              "say": "Not yet: the study has no report (it has not been processed)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID1020431",
+        "name": "1,4-Dichlorobenzene",
+        "casrn": "106-46-7",
+        "primary": "DTXSID1020431",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID1020431",
+            "kind": "report",
+            "chemical_dtxsid": "DTXSID1020431",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [
+                {
+                  "key": "rat",
+                  "id": "DTXSID1020431_rat"
+                },
+                {
+                  "key": "mouse",
+                  "id": "DTXSID1020431_mouse"
+                }
+              ],
+              "companion": "DTXSID1020431_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "1,4-Dichlorobenzene",
+              "casrn": "106-46-7",
+              "short_name": "1,4-DCB",
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "A report over 2 studies; its studies are being prepared",
+              "next": {
+                "say": "Finish the member studies",
+                "fix": "M1"
+              }
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T11:33:57Z",
+            "format": {
+              "definition": "studies/DTXSID1020431/document",
+              "source": "study",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 1,
+              "say": "This chemical has a published report, NIEHS-13 (April 2026). The report is written in that book's format: the NIEHS Report as published in 2026, with 1 change."
+            },
+            "published": {
+              "report": "NIEHS-13",
+              "date": "2026-04",
+              "nbk": "NBK621744"
+            },
+            "bookshelf": {
+              "on_shelf": false,
+              "url": null,
+              "say": "Not yet: its studies have not all been processed"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID1020431_rat",
+            "kind": "member",
+            "chemical_dtxsid": "DTXSID1020431",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": "DTXSID1020431",
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "1,4-Dichlorobenzene",
+              "casrn": "106-46-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:42:28Z",
+            "format": {
+              "definition": "studies/DTXSID1020431/document",
+              "source": "study",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 1,
+              "say": "Written as part of the report DTXSID1020431, in its format."
+            },
+            "published": {
+              "report": "NIEHS-13",
+              "date": "2026-04",
+              "nbk": "NBK621744"
+            },
+            "bookshelf": {
+              "on_shelf": false,
+              "url": "/Bookshelf/DTXSID1020431",
+              "say": "Part of DTXSID1020431's book"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "member_of_report",
+                "say": "This is the rat study of the report DTXSID1020431. Deleting it would break that report."
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID1020431_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID1020431",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID1020431",
+              "others": []
+            },
+            "identity": {
+              "name": "1,4-Dichlorobenzene",
+              "casrn": "106-46-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:44Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-13's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-13",
+              "date": "2026-04",
+              "nbk": "NBK621744"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1020431_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID6020430",
+        "name": "1,2-Dichlorobenzene",
+        "casrn": "95-50-1",
+        "primary": "DTXSID6020430",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID6020430",
+            "kind": "report",
+            "chemical_dtxsid": "DTXSID6020430",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [
+                {
+                  "key": "rat",
+                  "id": "DTXSID6020430_rat"
+                },
+                {
+                  "key": "mouse",
+                  "id": "DTXSID6020430_mouse"
+                }
+              ],
+              "companion": "DTXSID6020430_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "1,2-Dichlorobenzene",
+              "casrn": "95-50-1",
+              "short_name": "1,2-DCB",
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "A report over 2 studies",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T11:34:30Z",
+            "format": {
+              "definition": "studies/DTXSID6020430/document",
+              "source": "study",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-12 (April 2026). The report is written in that book's format: the NIEHS Report as published in 2026, unaltered."
+            },
+            "published": {
+              "report": "NIEHS-12",
+              "date": "2026-04",
+              "nbk": "NBK621711"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID6020430",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID6020430_mouse",
+            "kind": "member",
+            "chemical_dtxsid": "DTXSID6020430",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": "DTXSID6020430",
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": [
+                "DTXSID6020430_rat"
+              ]
+            },
+            "identity": {
+              "name": "1,2-Dichlorobenzene",
+              "casrn": "95-50-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:46:06Z",
+            "format": {
+              "definition": "studies/DTXSID6020430/document",
+              "source": "study",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "Written as part of the report DTXSID6020430, in its format."
+            },
+            "published": {
+              "report": "NIEHS-12",
+              "date": "2026-04",
+              "nbk": "NBK621711"
+            },
+            "bookshelf": {
+              "on_shelf": false,
+              "url": "/Bookshelf/DTXSID6020430",
+              "say": "Part of DTXSID6020430's book"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "member_of_report",
+                "say": "This is the mouse study of the report DTXSID6020430. Deleting it would break that report."
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID6020430_rat",
+            "kind": "member",
+            "chemical_dtxsid": "DTXSID6020430",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": "DTXSID6020430",
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": [
+                "DTXSID6020430_mouse"
+              ]
+            },
+            "identity": {
+              "name": "1,2-Dichlorobenzene",
+              "casrn": "95-50-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:42:42Z",
+            "format": {
+              "definition": "studies/DTXSID6020430/document",
+              "source": "study",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "Written as part of the report DTXSID6020430, in its format."
+            },
+            "published": {
+              "report": "NIEHS-12",
+              "date": "2026-04",
+              "nbk": "NBK621711"
+            },
+            "bookshelf": {
+              "on_shelf": false,
+              "url": "/Bookshelf/DTXSID6020430",
+              "say": "Part of DTXSID6020430's book"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "member_of_report",
+                "say": "This is the rat study of the report DTXSID6020430. Deleting it would break that report."
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID6020430_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID6020430",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID6020430",
+              "others": []
+            },
+            "identity": {
+              "name": "1,2-Dichlorobenzene",
+              "casrn": "95-50-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:41Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-12's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-12",
+              "date": "2026-04",
+              "nbk": "NBK621711"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID6020430_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID1022477",
+        "name": "2,3-Benzofluorene",
+        "casrn": "243-17-4",
+        "primary": "DTXSID1022477",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID1022477",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID1022477",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID1022477_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "2,3-Benzofluorene",
+              "casrn": "243-17-4",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:37:20Z",
+            "format": {
+              "definition": "studies/DTXSID1022477/document",
+              "source": "study",
+              "era": "eras/niehs-2023",
+              "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+              "title_short": "NIEHS Report, March 2023",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-09 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, unaltered."
+            },
+            "published": {
+              "report": "NIEHS-09",
+              "date": "2023-03",
+              "nbk": "NBK589973"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1022477",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID1022477_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID1022477",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID1022477",
+              "others": []
+            },
+            "identity": {
+              "name": "2,3-Benzofluorene",
+              "casrn": "243-17-4",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:36Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-09's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-09",
+              "date": "2023-03",
+              "nbk": "NBK589973"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1022477_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID2029905",
+        "name": "1,1,2,2-Tetrahydroperfluoro-1-dodecanol",
+        "casrn": "865-86-1",
+        "primary": "DTXSID2029905",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID2029905",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID2029905",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID2029905_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "1,1,2,2-Tetrahydroperfluoro-1-dodecanol",
+              "casrn": "865-86-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:37:28Z",
+            "format": {
+              "definition": "studies/DTXSID2029905/document",
+              "source": "study",
+              "era": "eras/niehs-2023",
+              "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+              "title_short": "NIEHS Report, March 2023",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-08 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, with its own series details."
+            },
+            "published": {
+              "report": "NIEHS-08",
+              "date": "2023-03",
+              "nbk": "NBK589991"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID2029905",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID2029905_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID2029905",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID2029905",
+              "others": []
+            },
+            "identity": {
+              "name": "1,1,2,2-Tetrahydroperfluoro-1-dodecanol",
+              "casrn": "865-86-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:34Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-08's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-08",
+              "date": "2023-03",
+              "nbk": "NBK589991"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID2029905_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID00190950",
+        "name": "6:1 Fluorotelomer Alcohol",
+        "casrn": "375-82-6",
+        "primary": "DTXSID00190950",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID00190950",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID00190950",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID00190950_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "6:1 Fluorotelomer Alcohol",
+              "casrn": "375-82-6",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:36:08Z",
+            "format": {
+              "definition": "studies/DTXSID00190950/document",
+              "source": "study",
+              "era": "eras/niehs-2023",
+              "title": "NIEHS Report, as published in March 2023 (NIEHS-07 … 10)",
+              "title_short": "NIEHS Report, March 2023",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-07 (March 2023). The study is written in that book's format: the NIEHS Report as published in March 2023, with its own series details."
+            },
+            "published": {
+              "report": "NIEHS-07",
+              "date": "2023-03",
+              "nbk": "NBK590009"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID00190950",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID00190950_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID00190950",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID00190950",
+              "others": []
+            },
+            "identity": {
+              "name": "6:1 Fluorotelomer Alcohol",
+              "casrn": "375-82-6",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:32Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-07's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-07",
+              "date": "2023-03",
+              "nbk": "NBK590009"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID00190950_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID4021391",
+        "name": "Tricresyl Phosphate",
+        "casrn": "1330-78-5",
+        "primary": "DTXSID4021391",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID4021391",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID4021391",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID4021391_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Tricresyl Phosphate",
+              "casrn": "1330-78-5",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:33:14Z",
+            "format": {
+              "definition": "studies/DTXSID4021391/document",
+              "source": "study",
+              "era": "eras/niehs-2022",
+              "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+              "title_short": "NIEHS Report, October 2022",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-06 (October 2022). The study is written in that book's format: the NIEHS Report as published in October 2022, unaltered."
+            },
+            "published": {
+              "report": "NIEHS-06",
+              "date": "2022-10",
+              "nbk": "NBK585460"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID4021391",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID4021391_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID4021391",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID4021391",
+              "others": []
+            },
+            "identity": {
+              "name": "Tricresyl Phosphate",
+              "casrn": "1330-78-5",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:29Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-06's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-06",
+              "date": "2022-10",
+              "nbk": "NBK585460"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID4021391_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID4028880",
+        "name": "Isopropylated Phenol Phosphate",
+        "casrn": "68937-41-7",
+        "primary": "DTXSID4028880",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID4028880",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID4028880",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID4028880_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Isopropylated Phenol Phosphate",
+              "casrn": "68937-41-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:33:30Z",
+            "format": {
+              "definition": "studies/DTXSID4028880/document",
+              "source": "study",
+              "era": "eras/niehs-2022",
+              "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+              "title_short": "NIEHS Report, October 2022",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-05 (October 2022). The study is written in that book's format: the NIEHS Report as published in October 2022, unaltered."
+            },
+            "published": {
+              "report": "NIEHS-05",
+              "date": "2022-10",
+              "nbk": "NBK585459"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID4028880",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID4028880_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID4028880",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID4028880",
+              "others": []
+            },
+            "identity": {
+              "name": "Isopropylated Phenol Phosphate",
+              "casrn": "68937-41-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:27Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-05's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-05",
+              "date": "2022-10",
+              "nbk": "NBK585459"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID4028880_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID3025465",
+        "name": "Isodecyl Diphenyl Phosphate",
+        "casrn": "29761-21-5",
+        "primary": "DTXSID3025465",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID3025465",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID3025465",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID3025465_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Isodecyl Diphenyl Phosphate",
+              "casrn": "29761-21-5",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:25:06Z",
+            "format": {
+              "definition": "studies/DTXSID3025465/document",
+              "source": "study",
+              "era": "eras/niehs-2022",
+              "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+              "title_short": "NIEHS Report, October 2022",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-04 (October 2022). The study is written in that book's format: the NIEHS Report as published in October 2022, with its own series details."
+            },
+            "published": {
+              "report": "NIEHS-04",
+              "date": "2022-10",
+              "nbk": "NBK585457"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID3025465",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID3025465_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID3025465",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID3025465",
+              "others": []
+            },
+            "identity": {
+              "name": "Isodecyl Diphenyl Phosphate",
+              "casrn": "29761-21-5",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:25Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-04's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-04",
+              "date": "2022-10",
+              "nbk": "NBK585457"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID3025465_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID6024701",
+        "name": "tert-Butylphenyl Diphenyl Phosphate",
+        "casrn": "56803-37-3",
+        "primary": "DTXSID6024701",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID6024701",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID6024701",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID6024701_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "tert-Butylphenyl Diphenyl Phosphate",
+              "casrn": "56803-37-3",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:22:01Z",
+            "format": {
+              "definition": "studies/DTXSID6024701/document",
+              "source": "study",
+              "era": "eras/niehs-2022",
+              "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+              "title_short": "NIEHS Report, October 2022",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-03 (October 2022). The study is written in that book's format: the NIEHS Report as published in October 2022, with its own series details."
+            },
+            "published": {
+              "report": "NIEHS-03",
+              "date": "2022-10",
+              "nbk": "NBK585458"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID6024701",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID6024701_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID6024701",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID6024701",
+              "others": []
+            },
+            "identity": {
+              "name": "tert-Butylphenyl Diphenyl Phosphate",
+              "casrn": "56803-37-3",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:23Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-03's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-03",
+              "date": "2022-10",
+              "nbk": "NBK585458"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID6024701_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID1025300",
+        "name": "2-Ethylhexyl Diphenyl Phosphate",
+        "casrn": "1241-94-7",
+        "primary": "DTXSID1025300",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID1025300",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID1025300",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID1025300_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "2-Ethylhexyl Diphenyl Phosphate",
+              "casrn": "1241-94-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:22:16Z",
+            "format": {
+              "definition": "studies/DTXSID1025300/document",
+              "source": "study",
+              "era": "eras/niehs-2022",
+              "title": "NIEHS Report, as published in October 2022 (NIEHS-02 … 06), one file",
+              "title_short": "NIEHS Report, October 2022",
+              "changes": 0,
+              "say": "This chemical has a published report, NIEHS-02 (October 2022). The study is written in that book's format: the NIEHS Report as published in October 2022, with its own series details."
+            },
+            "published": {
+              "report": "NIEHS-02",
+              "date": "2022-10",
+              "nbk": "NBK585461"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1025300",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID1025300_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID1025300",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID1025300",
+              "others": []
+            },
+            "identity": {
+              "name": "2-Ethylhexyl Diphenyl Phosphate",
+              "casrn": "1241-94-7",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:21Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds NIEHS-02's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "NIEHS-02",
+              "date": "2022-10",
+              "nbk": "NBK585461"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1025300_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID1021952",
+        "name": "Triphenyl Phosphate",
+        "casrn": "115-86-6",
+        "primary": "DTXSID1021952",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID1021952",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID1021952",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": "DTXSID1021952_published",
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Triphenyl Phosphate",
+              "casrn": "115-86-6",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-12T11:22:31Z",
+            "format": {
+              "definition": "studies/DTXSID1021952/document",
+              "source": "study",
+              "era": "eras/ntp-rr-2018",
+              "title": "NTP Research Report, as published in December 2018 (RR-8)",
+              "title_short": "NTP Research Report, 2018",
+              "changes": 0,
+              "say": "This chemical has a published report, RR-8 (December 2018). The study is written in that book's format: the NTP Research Report as published in 2018, unaltered."
+            },
+            "published": {
+              "report": "RR-8",
+              "date": "2018-12",
+              "nbk": "NBK535511"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1021952",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          },
+          {
+            "id": "DTXSID1021952_published",
+            "kind": "companion",
+            "chemical_dtxsid": "DTXSID1021952",
+            "chemical_dtxsid_from": "id_prefix",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": "DTXSID1021952",
+              "others": []
+            },
+            "identity": {
+              "name": "Triphenyl Phosphate",
+              "casrn": "115-86-6",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": null,
+              "say": "The published book's content (read-only)",
+              "next": null
+            },
+            "processed": false,
+            "last_changed": "2026-10-13T14:47:18Z",
+            "format": {
+              "definition": "session:document.yaml",
+              "source": "session",
+              "era": null,
+              "title": "The published book's own structure",
+              "title_short": "As published",
+              "changes": 0,
+              "say": "This session holds RR-8's own content and structure, built from the published book."
+            },
+            "published": {
+              "report": "RR-8",
+              "date": "2018-12",
+              "nbk": "NBK535511"
+            },
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID1021952_published",
+              "say": "The published content, on the Bookshelf"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": false,
+                "code": "read_only_session",
+                "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here."
+              }
+            },
+            "notes": []
+          }
+        ]
+      },
+      {
+        "dtxsid": "DTXSID7037717",
+        "name": "Bisphenol AF",
+        "casrn": "1478-61-1",
+        "primary": "DTXSID7037717",
+        "can_create": false,
+        "sessions": [
+          {
+            "id": "DTXSID7037717",
+            "kind": "study",
+            "chemical_dtxsid": "DTXSID7037717",
+            "chemical_dtxsid_from": "id",
+            "relations": {
+              "parent": null,
+              "members": [],
+              "companion": null,
+              "twin": null,
+              "others": []
+            },
+            "identity": {
+              "name": "Bisphenol AF",
+              "casrn": "1478-61-1",
+              "short_name": null,
+              "source": {
+                "kind": "unknown",
+                "service": null,
+                "confirmed_at": null,
+                "casrn_from": null
+              }
+            },
+            "stands": {
+              "phase": "APPROVED",
+              "say": "Data reviewed",
+              "next": {
+                "say": "Review the report's sections",
+                "fix": "D1"
+              }
+            },
+            "processed": true,
+            "last_changed": "2026-10-11T16:17:43Z",
+            "format": {
+              "definition": "eras/niehs-2026",
+              "source": "default",
+              "era": "eras/niehs-2026",
+              "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+              "title_short": "NIEHS Report, 2026",
+              "changes": 0,
+              "say": "No published report is on file for this chemical, so the study uses the format for new studies: the NIEHS Report as published in 2026."
+            },
+            "published": null,
+            "bookshelf": {
+              "on_shelf": true,
+              "url": "/Bookshelf/DTXSID7037717",
+              "say": "On the Bookshelf (draft)"
+            },
+            "actions": {
+              "open": {
+                "allowed": true
+              },
+              "delete": {
+                "allowed": true,
+                "code": null,
+                "say": null
+              }
+            },
+            "notes": []
+          }
+        ]
+      }
+    ],
+    "unassigned": [
+      {
+        "id": "DTXSID_TEST",
+        "kind": "other",
+        "chemical_dtxsid": null,
+        "chemical_dtxsid_from": null,
+        "relations": {
+          "parent": null,
+          "members": [],
+          "companion": null,
+          "twin": null,
+          "others": []
+        },
+        "identity": {
+          "name": null,
+          "casrn": null,
+          "short_name": null,
+          "source": {
+            "kind": "unknown",
+            "service": null,
+            "confirmed_at": null,
+            "casrn_from": null
+          }
+        },
+        "stands": {
+          "phase": "EMPTY",
+          "say": "No files yet",
+          "next": {
+            "say": "Bring in the study's files",
+            "fix": "M2"
+          }
+        },
+        "processed": false,
+        "last_changed": "2026-10-16T11:56:13Z",
+        "format": null,
+        "published": null,
+        "bookshelf": {
+          "on_shelf": false,
+          "url": null,
+          "say": "Not yet: the session has no report"
+        },
+        "actions": {
+          "open": {
+            "allowed": true
+          },
+          "delete": {
+            "allowed": true,
+            "code": null,
+            "say": null
+          }
+        },
+        "notes": [
+          {
+            "level": "warn",
+            "code": "not_a_chemical_id",
+            "say": "Made by a tool or a test; its id names no chemical."
+          },
+          {
+            "level": "error",
+            "code": "damaged_session_file",
+            "say": "One of this study's saved files is damaged and can't be read (DTXSID_TEST/document_definition.json). Nothing was changed. Tell the maintainer: the file must be repaired or restored before work on this study can go on."
+          }
+        ]
+      }
+    ],
+    "generated_at": "2026-10-16T11:56:13Z"
+  }
+}
