@@ -162,7 +162,7 @@ describe('<IdField>', () => {
     const input = await screen.findByRole('textbox', { name: 'CAS number' })
     await waitFor(() => expect(input).toBeEnabled())
     await user.type(input, '80-05-8')
-    expect(screen.getByText(/check digit doesn't match/)).toBeInTheDocument()
+    expect(screen.getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
   })
 
   it('shows the example from the backend as the placeholder', async () => {

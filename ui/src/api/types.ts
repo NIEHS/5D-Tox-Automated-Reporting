@@ -433,6 +433,11 @@ export interface IdentitySource {
   kind: 'lookup' | 'stated' | 'unknown' | (string & {})
   service: string | null
   confirmed_at: string | null
+  /**
+   * PROPOSED (maintainer decision 2026-10-16): "person" when the lookup gave
+   * no CAS number and a person typed it. Absent from older backends.
+   */
+  casrn_from?: 'lookup' | 'person' | (string & {}) | null
 }
 
 export interface StudyIdentity {
@@ -601,6 +606,12 @@ export interface ChemicalLookup {
   say_source: string
   structure_url: string | null
   looked_up_at: string
+  /**
+   * PROPOSED (maintainer decision 2026-10-16): what the person must supply
+   * before the identity can be used; ["casrn"] when the lookup gave no CAS
+   * number. Absent from older backends.
+   */
+  needs?: ('casrn' | (string & {}))[]
 }
 
 /** The identity a person confirmed (contract §2.6 `identity`). */
@@ -608,7 +619,8 @@ export interface ConfirmedIdentity {
   name: string
   casrn: string | null
   pubchem_cid: number | null
-  source: { kind: 'lookup'; service: string; looked_up_at: string }
+  /** `casrn_from: "person"` when the person typed the CAS number (PROPOSED, 2026-10-16) */
+  source: { kind: 'lookup'; service: string; looked_up_at: string; casrn_from?: 'person' }
 }
 
 /** POST /api/v2/studies (contract §2.6) */

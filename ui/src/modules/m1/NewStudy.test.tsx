@@ -172,8 +172,77 @@ describe('S2 step 2: the chemical and the format', () => {
     expect(create).toBeDisabled()
   })
 
-  it('review 3: a lookup with no CAS number offers no create: the tick is closed and the screen says why; no request is sent', async () => {
+  it('2026-10-16: PubChem gives no CAS number: the person is asked for one; Create waits for a valid one and the tick; it is sent as stated by the person', async () => {
+    let sent: { casrn: string | null; source: { casrn_from?: string } } | null = null
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') {
+        sent = ((await request.clone().json()) as { identity: typeof sent }).identity
+      }
+    })
+    try {
+      const { user } = await toStep2('DTXSID3333333333')
+      const ask = await screen.findByTestId('casrn-ask')
+      expect(ask).toHaveTextContent('PubChem gives no CAS number for this chemical. Type it from a source you trust')
+      const field = within(ask).getByRole('textbox', { name: 'CAS number (required)' })
+      const confirm = screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })
+      const create = screen.getByRole('button', { name: 'Create study' })
+      expect(confirm).toBeDisabled()
+      expect(create).toBeDisabled()
+      expect(screen.getByTestId('casrn-wait')).toHaveTextContent('Type a valid CAS number above first.')
+
+      // a mistyped check digit: the spec's words; still no create
+      await user.type(field, '80-05-8')
+      expect(within(ask).getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+      expect(confirm).toBeDisabled()
+      expect(create).toBeDisabled()
+
+      await user.clear(field)
+      await user.type(field, '80-05-7')
+      await waitFor(() => expect(confirm).toBeEnabled())
+      expect(create).toBeDisabled()
+      await user.click(confirm)
+      expect(create).toBeEnabled()
+
+      // changing the number after ticking unticks: what was confirmed changed
+      await user.type(field, '1')
+      expect(confirm).not.toBeChecked()
+      expect(create).toBeDisabled()
+      await user.type(field, '{Backspace}')
+      await waitFor(() => expect(confirm).toBeEnabled())
+      await user.click(confirm)
+
+      await user.click(create)
+      expect(await screen.findByText('Study DTXSID3333333333 created: Bisphenol A (80-05-7)')).toBeInTheDocument()
+      expect(sent).toMatchObject({ casrn: '80-05-7', source: { kind: 'lookup', casrn_from: 'person' } })
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('2026-10-16: a lookup that gives a CAS number asks for none, and sends no casrn_from', async () => {
+    let sent: { source: Record<string, unknown> } | null = null
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/studies') {
+        sent = ((await request.clone().json()) as { identity: typeof sent }).identity
+      }
+    })
+    try {
+      const { user } = await toStep2('DTXSID7020182')
+      await screen.findByTestId('confirm-label')
+      expect(screen.queryByTestId('casrn-ask')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('checkbox', { name: /I checked the DTXSID/ }))
+      await user.click(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ }))
+      await user.click(screen.getByRole('button', { name: 'Create study' }))
+      await screen.findByText(/Study DTXSID7020182 created/)
+      expect(sent!.source).not.toHaveProperty('casrn_from')
+    } finally {
+      server.events.removeAllListeners()
+    }
+  })
+
+  it('review 3: a lookup with no name is still a dead end: the tick is closed, the screen says why, no field to type a name', async () => {
     const bpa = structuredClone(M1_CHEMICALS['DTXSID7020182']!)
+    bpa.identity.name = ''
     bpa.identity.casrn = null
     bpa.dtxsid_matched = true
     let posts = 0
@@ -186,14 +255,13 @@ describe('S2 step 2: the chemical and the format', () => {
     )
     const { user } = await toStep2('DTXSID7020182')
     const why = await screen.findByTestId('identity-incomplete')
-    expect(why).toHaveTextContent("PubChem gives no CAS number for this chemical, so a study can't be created from this lookup yet.")
-    const confirm = screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })
-    expect(confirm).toBeDisabled()
+    expect(why).toHaveTextContent("PubChem gives no name for this chemical, so a study can't be created from this lookup yet.")
+    expect(screen.getByRole('checkbox', { name: /This is the chemical I am studying/ })).toBeDisabled()
     const create = screen.getByRole('button', { name: 'Create study' })
     expect(create).toBeDisabled()
     await user.click(create)
     expect(posts).toBe(0)
-    // no field to type a CAS number in (a stated identity is ruled out, Q-M1-3)
+    expect(screen.queryByTestId('casrn-ask')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 

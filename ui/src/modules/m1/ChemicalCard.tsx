@@ -3,7 +3,9 @@ import { Alert, Card, Checkbox, Descriptions, Image, Space, Typography } from 'a
 import { useState } from 'react'
 import { m1Paths } from '../../api/m1'
 import type { ChemicalLookup } from '../../api/types'
+import { IdField } from '../../kit/IdField'
 import { Pending } from '../../kit/Pending'
+import type { IdentityNeed } from './identityGap'
 
 /**
  * "The chemical" (M1 spec §3 S2 step 2): what the lookup found, shown for a
@@ -41,7 +43,7 @@ export function ChemicalCard({ lookup }: { lookup: ChemicalLookup }) {
             <Descriptions.Item label="Name">
               <Typography.Text strong>{id.name}</Typography.Text>
             </Descriptions.Item>
-            <Descriptions.Item label="CASRN">{id.casrn ?? <Pending label="CASRN" cause="The lookup gave no CAS number." />}</Descriptions.Item>
+            <Descriptions.Item label="CASRN">{id.casrn ?? <Pending label="CASRN" cause="The lookup gave no CAS number. Type it below, from a source you trust." />}</Descriptions.Item>
             <Descriptions.Item label="DTXSID">
               <Space size={6} wrap>
                 <Typography.Text style={{ fontFamily: 'monospace' }}>{lookup.dtxsid}</Typography.Text>
@@ -89,6 +91,13 @@ export function ChemicalCard({ lookup }: { lookup: ChemicalLookup }) {
  * The confirm tick(s) under the chemical. When the lookup could not match the
  * DTXSID, a second tick ("I checked…") must come first; the first stays
  * disabled until it does.
+ *
+ * When the lookup found the chemical but gave no CAS number (`need.kind ===
+ * 'casrn'`, maintainer 2026-10-16), the person types it first: the confirm
+ * tick stays disabled until it passes the served pattern and its check
+ * digit. Changing it unticks the confirmation (what was confirmed changed).
+ * When nothing can be done here (`blocked`), the ticks are closed and why is
+ * said instead.
  */
 export function ConfirmChemical({
   lookup,
@@ -97,7 +106,11 @@ export function ConfirmChemical({
   checked,
   onConfirmed,
   onChecked,
-  blocked,
+  need,
+  casrn,
+  casrnOk,
+  onCasrn,
+  onCasrnOk,
 }: {
   lookup: ChemicalLookup
   label: React.ReactNode
@@ -105,22 +118,47 @@ export function ConfirmChemical({
   checked: boolean
   onConfirmed: (v: boolean) => void
   onChecked: (v: boolean) => void
-  /** why the identity can't be used (identityGap); the ticks are then closed and this is said instead */
-  blocked?: string | null
+  need: IdentityNeed
+  /** the CAS number the person typed (only when `need.kind === 'casrn'`), and whether it passes the served rule */
+  casrn: string
+  casrnOk: boolean
+  onCasrn: (value: string) => void
+  onCasrnOk: (ok: boolean) => void
 }) {
   const needsCheck = !lookup.dtxsid_matched
-  if (blocked) {
+  if (need.kind === 'blocked') {
     return (
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-        <Alert type="error" showIcon data-testid="identity-incomplete" title={blocked} />
+        <Alert type="error" showIcon data-testid="identity-incomplete" title={need.say} />
         <Checkbox checked={false} disabled>
           {label}
         </Checkbox>
       </Space>
     )
   }
+  const askCasrn = need.kind === 'casrn'
+  const waitingForCasrn = askCasrn && !casrnOk
   return (
-    <Space orientation="vertical" size="small">
+    <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+      {askCasrn && (
+        <Card size="small" title="The CAS number" data-testid="casrn-ask">
+          <Space orientation="vertical" size="small" style={{ width: '100%', maxWidth: 420 }}>
+            <Typography.Text>{need.say}</Typography.Text>
+            <IdField
+              kind="casrn"
+              id="m1-casrn"
+              label="CAS number (required)"
+              value={casrn}
+              onChange={(v) => {
+                // what was confirmed changed: confirm again
+                onConfirmed(false)
+                onCasrn(v)
+              }}
+              onCheck={onCasrnOk}
+            />
+          </Space>
+        </Card>
+      )}
       {needsCheck && (
         <Checkbox
           checked={checked}
@@ -132,9 +170,18 @@ export function ConfirmChemical({
           I checked the DTXSID {lookup.dtxsid} on the CompTox dashboard
         </Checkbox>
       )}
-      <Checkbox checked={confirmed} disabled={needsCheck && !checked} onChange={(e) => onConfirmed(e.target.checked)}>
+      <Checkbox
+        checked={confirmed}
+        disabled={(needsCheck && !checked) || waitingForCasrn}
+        onChange={(e) => onConfirmed(e.target.checked)}
+      >
         {label}
       </Checkbox>
+      {waitingForCasrn && (
+        <Typography.Text type="secondary" data-testid="casrn-wait">
+          Type a valid CAS number above first.
+        </Typography.Text>
+      )}
     </Space>
   )
 }

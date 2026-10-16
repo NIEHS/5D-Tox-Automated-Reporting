@@ -8,7 +8,7 @@ import { Refusal } from '../../kit/Refusal'
 import { invalidateStudy } from '../../kit/useStudyState'
 import { useVocabularies } from '../../kit/useVocabularies'
 import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
-import { identityGap } from './identityGap'
+import { identityNeed, identityToSend, type IdentityNeed } from './identityGap'
 import { STUDIES_KEY, useChemicalLookup } from './queries'
 
 /**
@@ -33,15 +33,12 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
   const lookup = useChemicalLookup(dtxsid)
   const [confirmed, setConfirmed] = useState(false)
   const [checked, setChecked] = useState(false)
-  const save = useMutation<StudyRow, ApiError, ChemicalLookup>({
-    mutationFn: (l) =>
+  const [casrn, setCasrn] = useState('')
+  const [casrnOk, setCasrnOk] = useState(false)
+  const save = useMutation<StudyRow, ApiError, { lookup: ChemicalLookup; need: IdentityNeed }>({
+    mutationFn: ({ lookup: l, need: n }) =>
       recordIdentity(studyId, {
-        identity: {
-          name: l.identity.name,
-          casrn: l.identity.casrn,
-          pubchem_cid: l.identity.pubchem_cid,
-          source: { kind: 'lookup', service: l.service, looked_up_at: l.looked_up_at },
-        },
+        identity: identityToSend(l, n, casrn),
         confirmed: true,
         dtxsid_checked_by_person: checked,
       }),
@@ -54,7 +51,14 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
   const l = lookup.data
   const casrnRule = useVocabularies().data?.patterns.casrn
   // never offer a save the backend would refuse (identity_incomplete, invalid_casrn)
-  const gap = l ? identityGap(l, "this identity can't be saved", casrnRule) : null
+  const need = l ? identityNeed(l, "this identity can't be saved", casrnRule) : null
+  const canSave =
+    Boolean(l) &&
+    need !== null &&
+    need.kind !== 'blocked' &&
+    (need.kind !== 'casrn' || casrnOk) &&
+    confirmed &&
+    (l?.dtxsid_matched || checked)
   return (
     <Modal
       open
@@ -63,8 +67,8 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
       mask={{ closable: false }}
       onCancel={() => !save.isPending && onClose()}
       okText="Save this identity"
-      okButtonProps={{ disabled: !l || Boolean(gap) || !confirmed || (!l.dtxsid_matched && !checked), loading: save.isPending }}
-      onOk={() => l && save.mutate(l)}
+      okButtonProps={{ disabled: !canSave, loading: save.isPending }}
+      onOk={() => l && need && canSave && save.mutate({ lookup: l, need })}
       cancelText="Cancel"
       destroyOnHidden
     >
@@ -99,7 +103,11 @@ function LookupModal({ studyId, dtxsid, onClose }: { studyId: string; dtxsid: st
               checked={checked}
               onConfirmed={setConfirmed}
               onChecked={setChecked}
-              blocked={gap}
+              need={need ?? { kind: 'ok' }}
+              casrn={casrn}
+              casrnOk={casrnOk}
+              onCasrn={setCasrn}
+              onCasrnOk={setCasrnOk}
               label={`This is the chemical studied under ${studyId}.`}
             />
             {save.error && <Refusal error={save.error} studyId={studyId} title="The identity was not saved" />}

@@ -11,7 +11,7 @@ import { moduleById, moduleRoute, studyRoute } from '../../kit/modules'
 import { Refusal } from '../../kit/Refusal'
 import { useVocabularies } from '../../kit/useVocabularies'
 import { ChemicalCard, ConfirmChemical } from './ChemicalCard'
-import { identityGap } from './identityGap'
+import { identityNeed, identityToSend, type IdentityNeed } from './identityGap'
 import { FormatNotice } from './FormatNotice'
 import { STUDIES_KEY, useChemicalLookup, useCreationCheck, useStudyDetail } from './queries'
 import { kindLabel } from './words'
@@ -154,16 +154,14 @@ function StepConfirm({
   const [formatChanged, setFormatChanged] = useState(false)
   const casrnRule = useVocabularies().data?.patterns.casrn
 
-  const create = useMutation<StudyRow, ApiError, { lookup: ChemicalLookup; check: CreationCheck }>({
-    mutationFn: ({ lookup: l, check: c }) =>
+  const [casrn, setCasrn] = useState('')
+  const [casrnOk, setCasrnOk] = useState(false)
+
+  const create = useMutation<StudyRow, ApiError, { lookup: ChemicalLookup; check: CreationCheck; need: IdentityNeed }>({
+    mutationFn: ({ lookup: l, check: c, need: n }) =>
       createStudy({
         dtxsid,
-        identity: {
-          name: l.identity.name,
-          casrn: l.identity.casrn,
-          pubchem_cid: l.identity.pubchem_cid,
-          source: { kind: 'lookup', service: l.service, looked_up_at: l.looked_up_at },
-        },
+        identity: identityToSend(l, n, casrn),
         confirmed: true,
         dtxsid_checked_by_person: checked,
         format_seen: { definition: c.format.definition, hash: c.format.hash ?? null },
@@ -229,8 +227,15 @@ function StepConfirm({
   const formatWords = c ? c.format.title : null
   const confirmNeeds = !l.dtxsid_matched && !checked
   // never offer a create the backend would refuse (identity_incomplete, invalid_casrn)
-  const gap = identityGap(l, "a study can't be created", casrnRule)
-  const canCreate = !gap && Boolean(c) && confirmed && !confirmNeeds && !check.isFetching && !create.isPending
+  const need = identityNeed(l, "a study can't be created", casrnRule)
+  const canCreate =
+    need.kind !== 'blocked' &&
+    (need.kind !== 'casrn' || casrnOk) &&
+    Boolean(c) &&
+    confirmed &&
+    !confirmNeeds &&
+    !check.isFetching &&
+    !create.isPending
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%', maxWidth: 880 }}>
@@ -256,7 +261,11 @@ function StepConfirm({
           checked={checked}
           onConfirmed={setConfirmed}
           onChecked={setChecked}
-          blocked={gap}
+          need={need}
+          casrn={casrn}
+          casrnOk={casrnOk}
+          onCasrn={setCasrn}
+          onCasrnOk={setCasrnOk}
           label={
             <span data-testid="confirm-label">
               This is the chemical I am studying, and the study will be written in <em>{formatWords}</em>.
@@ -279,7 +288,7 @@ function StepConfirm({
         <Button onClick={onBack} disabled={create.isPending}>
           Back
         </Button>
-        <Button type="primary" disabled={!canCreate} loading={create.isPending} onClick={() => c && create.mutate({ lookup: l, check: c })}>
+        <Button type="primary" disabled={!canCreate} loading={create.isPending} onClick={() => c && canCreate && create.mutate({ lookup: l, check: c, need })}>
           Create study
         </Button>
       </Space>

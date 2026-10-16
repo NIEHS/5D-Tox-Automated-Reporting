@@ -114,7 +114,8 @@ export function checkId(kind: IdKind, value: string, pattern: IdPattern | undefi
   if (!re.test(value)) return { ok: false, say: `${pattern.say} For example: ${pattern.example}.` }
 
   if (kind === 'casrn' && !casrnCheckDigitOk(value)) {
-    return { ok: false, say: "This CAS number's check digit doesn't match the other digits; a digit is probably mistyped." }
+    // M1 spec §4's words
+    return { ok: false, say: "This CASRN's check digit doesn't match; a digit is probably mistyped." }
   }
   return { ok: true }
 }
