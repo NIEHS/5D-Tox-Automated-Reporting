@@ -107,9 +107,11 @@ export function identitySourceSay(source: IdentitySource | null | undefined): st
   if (source.kind === 'lookup') {
     const day = dayOf(source.confirmed_at)
     const said = `Confirmed by a person from a ${source.service ?? 'chemical'} lookup${day ? ` on ${day}` : ''}.`
-    return source.casrn_from === 'person' ? `${said} CAS number stated by a person (the lookup gave none).` : said
+    if (source.casrn_from === 'person') return `${said} CAS number stated by a person (the lookup gave none).`
+    return said
   }
   if (source.kind === 'stated') return 'Stated by a person, not confirmed by a lookup.'
+  if (source.kind === 'pending') return "Pending: the study was created before its chemical was looked up. Look it up below."
   return `Origin not recognised ("${source.kind}"); treat it as unchecked.`
 }
 

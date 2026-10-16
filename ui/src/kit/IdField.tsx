@@ -14,6 +14,9 @@ import { useVocabularies } from './useVocabularies'
  * "save" closed until it is. An id that cannot be checked (the rule did not
  * load) is never reported good.
  *
+ * `optional`: an empty field is acceptable (no message, `onCheck` reports
+ * true once the rule has loaded); anything typed is checked as usual.
+ *
  * A DTXSID (kinds `dtxsid` and `study_id`) is made upper case as it is typed,
  * visibly in the field. Pasted text loses its spaces at either end. When
  * pasted text holds exactly one DTXSID but is not one (a CompTox address),
@@ -29,10 +32,12 @@ export interface IdFieldProps {
   id?: string
   disabled?: boolean
   onBlur?: () => void
+  /** an empty value is acceptable; a typed one must still be right */
+  optional?: boolean
   inputProps?: Omit<InputProps, 'value' | 'onChange' | 'status' | 'disabled' | 'onBlur' | 'onPaste'>
 }
 
-export function IdField({ kind, value = '', onChange, onCheck, label, id, disabled, onBlur, inputProps }: IdFieldProps) {
+export function IdField({ kind, value = '', onChange, onCheck, label, id, disabled, onBlur, optional, inputProps }: IdFieldProps) {
   const { data, isPending } = useVocabularies()
   const helpId = useId()
   const [touched, setTouched] = useState(value !== '')
@@ -42,20 +47,22 @@ export function IdField({ kind, value = '', onChange, onCheck, label, id, disabl
   const pattern = data?.patterns?.[kind]
   // a DTXSID must also be an id the store can hold (the served session-id rule bounds its length)
   const storeRule = dtxsid ? data?.patterns?.session_id : undefined
-  const check: IdCheck | null = isPending ? null : checkId(kind, value, pattern, storeRule)
+  const emptyOptional = Boolean(optional) && value === ''
+  const check: IdCheck | null = isPending || emptyOptional ? null : checkId(kind, value, pattern, storeRule)
   const name = label ?? ID_LABELS[kind]
   // while "Use DTXSID…?" is offered for pasted text, only the offer is shown, not the error beside it
   const offering = offer !== null && offer !== value
 
   const showProblem = !offering && check !== null && check.ok !== true && (touched || check.ok === null)
   const good = check?.ok === true
+  const acceptable = good || (emptyOptional && !isPending)
   const onCheckRef = useRef(onCheck)
   useEffect(() => {
     onCheckRef.current = onCheck
   })
   useEffect(() => {
-    onCheckRef.current?.(good)
-  }, [good])
+    onCheckRef.current?.(acceptable)
+  }, [acceptable])
 
   return (
     <Space orientation="vertical" size={2} style={{ width: '100%' }}>

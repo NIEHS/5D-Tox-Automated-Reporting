@@ -430,7 +430,12 @@ export interface Stands {
 }
 
 export interface IdentitySource {
-  kind: 'lookup' | 'stated' | 'unknown' | (string & {})
+  /**
+   * `pending` (PROPOSED, maintainer decision 2026-10-16, revised): the study
+   * was created with its chemical not yet looked up (the lookup did not know
+   * the DTXSID, or could not be reached); it stays so until it is filled.
+   */
+  kind: 'lookup' | 'stated' | 'pending' | 'unknown' | (string & {})
   service: string | null
   confirmed_at: string | null
   /**
@@ -587,6 +592,7 @@ export interface CreationCheck {
 }
 
 export interface ChemicalIdentity {
+  /** empty when the service found a compound but gives no name (the study can then only be created pending) */
   name: string
   casrn: string | null
   pubchem_cid: number | null
@@ -607,8 +613,9 @@ export interface ChemicalLookup {
   structure_url: string | null
   looked_up_at: string
   /**
-   * What the person must supply before the identity can be used (maintainer,
-   * 2026-10-16): ["casrn"] when the lookup gave no CAS number, else [].
+   * What the person is asked for (maintainer, 2026-10-16, revised):
+   * ["casrn"] when the lookup gave no CAS number, else []. Asked, not
+   * required: the person may go on without it.
    */
   needs?: ('casrn' | (string & {}))[]
   /** the backend's plain words for `needs`; null when nothing is needed */
@@ -618,17 +625,37 @@ export interface ChemicalLookup {
 /** The identity a person confirmed (contract §2.6 `identity`). */
 export interface ConfirmedIdentity {
   name: string
+  /** null when the lookup gave none and the person typed none (2026-10-16, revised): it shows as pending */
   casrn: string | null
   pubchem_cid: number | null
   /** `casrn_from: "person"` when the person typed the CAS number (2026-10-16); the backend records it from the lookup */
   source: { kind: 'lookup'; service: string; looked_up_at: string; casrn_from?: 'person' }
 }
 
-/** POST /api/v2/studies (contract §2.6) */
-export interface CreateStudyRequest {
+/** POST /api/v2/studies (contract §2.6): with a confirmed identity, or with the chemical pending. */
+export type CreateStudyRequest = CreateStudyConfirmed | CreateStudyPending
+
+export interface CreateStudyConfirmed {
   dtxsid: string
   identity: ConfirmedIdentity
+  identity_pending?: false
   confirmed: true
+  dtxsid_checked_by_person: boolean
+  format_seen: { definition: string; hash: string | null }
+}
+
+/**
+ * PROPOSED (maintainer decision 2026-10-16, revised): the lookup did not know
+ * the DTXSID, could not be reached, or gave no name; the person creates the
+ * study anyway, with its chemical pending, after confirming that and the
+ * format. The saved identity's `source.kind` is then "pending".
+ */
+export interface CreateStudyPending {
+  dtxsid: string
+  identity: null
+  identity_pending: true
+  confirmed: true
+  /** the person ticked "I checked the DTXSID on the CompTox dashboard" (always true here) */
   dtxsid_checked_by_person: boolean
   format_seen: { definition: string; hash: string | null }
 }

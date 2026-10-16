@@ -82,9 +82,9 @@ describe('checkId', () => {
   })
 })
 
-function Host({ kind, onCheck }: { kind: IdKind; onCheck: (ok: boolean) => void }) {
+function Host({ kind, onCheck, optional }: { kind: IdKind; onCheck: (ok: boolean) => void; optional?: boolean }) {
   const [v, setV] = useState('')
-  return <IdField kind={kind} value={v} onChange={setV} onCheck={onCheck} />
+  return <IdField kind={kind} value={v} onChange={setV} onCheck={onCheck} optional={optional} />
 }
 
 describe('<IdField>', () => {
@@ -163,6 +163,31 @@ describe('<IdField>', () => {
     await waitFor(() => expect(input).toBeEnabled())
     await user.type(input, '80-05-8')
     expect(screen.getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+  })
+
+  it('optional: empty is acceptable once the rule has loaded, with no message; a typed value is still checked', async () => {
+    const onCheck = vi.fn()
+    const { user } = renderWithApp(<Host kind="casrn" onCheck={onCheck} optional />)
+    const input = await screen.findByRole('textbox', { name: 'CAS number' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await waitFor(() => expect(onCheck).toHaveBeenLastCalledWith(true))
+    await user.type(input, '80-05-8')
+    expect(screen.getByText("This CASRN's check digit doesn't match; a digit is probably mistyped.")).toBeInTheDocument()
+    expect(onCheck).toHaveBeenLastCalledWith(false)
+    await user.clear(input)
+    expect(screen.queryByText(/check digit/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Type the CAS number/)).not.toBeInTheDocument()
+    expect(onCheck).toHaveBeenLastCalledWith(true)
+    await user.type(input, '80-05-7')
+    expect(onCheck).toHaveBeenLastCalledWith(true)
+  })
+
+  it('not optional: an empty CAS number is not acceptable', async () => {
+    const onCheck = vi.fn()
+    renderWithApp(<Host kind="casrn" onCheck={onCheck} />)
+    const input = await screen.findByRole('textbox', { name: 'CAS number' })
+    await waitFor(() => expect(input).toBeEnabled())
+    expect(onCheck).not.toHaveBeenCalledWith(true)
   })
 
   it('shows the example from the backend as the placeholder', async () => {
