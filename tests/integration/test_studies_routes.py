@@ -289,16 +289,13 @@ class TestCreate:
 
     def test_create_with_a_typed_casrn_when_pubchem_has_none(self, store, api, resolver,
                                                               monkeypatch):
-        """Decided 2026-10-16: the lookup serves needs ["casrn"]; without it the
-        create is refused identity_incomplete with words saying to type it;
-        with a typed one it is created and recorded as the person's."""
+        """Decided 2026-10-16, revised: the lookup serves needs ["casrn"] as an
+        ask; a typed CAS number is checked and recorded as the person's."""
         monkeypatch.setitem(BPA, "casrn", "")
         found = api.get(f"/api/v2/chemicals/{NEW}").json()
         assert found["identity"]["casrn"] is None and found["needs"] == ["casrn"]
-        assert "Type it before going on" in found["needs_say"]
-        err = _envelope(api.post("/api/v2/studies", json=_create_body(api)),
-                        "identity_incomplete", 400)
-        assert err["details"]["needs"] == ["casrn"] and "Type the CAS number" in err["say"]
+        assert "Type it if you have it" in found["needs_say"]
+        assert "Otherwise it shows as pending." in found["needs_say"]
         body = _create_body(api)
         body["identity"]["casrn"] = "80-05-8"
         _envelope(api.post("/api/v2/studies", json=body), "invalid_casrn", 400)
@@ -307,6 +304,115 @@ class TestCreate:
         assert resp.status_code == 201, resp.text
         assert resp.json()["identity"]["casrn"] == "80-05-7"
         assert resp.json()["identity"]["source"]["casrn_from"] == "person"
+        assert resp.json()["notes"] == []
+
+    def test_create_without_a_casrn_when_pubchem_has_none(self, store, api, resolver,
+                                                          monkeypatch):
+        """No CAS number from the lookup and none typed: created, the CAS
+        number pending and named in the row's notes."""
+        monkeypatch.setitem(BPA, "casrn", "")
+        resp = api.post("/api/v2/studies", json=_create_body(api))
+        assert resp.status_code == 201, resp.text
+        row = resp.json()
+        assert row["identity"]["name"] == "Bisphenol A" and row["identity"]["casrn"] is None
+        assert row["identity"]["source"]["kind"] == "lookup"
+        assert row["identity"]["source"]["casrn_from"] is None
+        assert [n["code"] for n in row["notes"]] == ["casrn_pending"]
+        ident = json.loads((store / NEW / "identity.json").read_text())
+        assert ident["casrn"] is None and ident["identity_source"]["casrn_from"] is None
+
+    def test_create_with_the_identity_pending(self, store, api, resolver):
+        """The lookup does not know the DTXSID: the person may still create
+        the study, saying so (identity null, identity_pending true)."""
+        sid = "DTXSID0000000001"
+        _envelope(api.get(f"/api/v2/chemicals/{sid}"), "identity_not_found", 404)
+        check = api.get(f"/api/v2/studies/{sid}/creation-check").json()
+        body = {"dtxsid": sid, "identity": None, "identity_pending": True,
+                "format_seen": {"definition": check["format"]["definition"],
+                                "hash": check["format"]["hash"]}}
+        resp = api.post("/api/v2/studies", json=body)
+        assert resp.status_code == 201, resp.text
+        row = resp.json()
+        assert row["id"] == sid and row["kind"] == "study"
+        assert row["identity"] == {"name": None, "casrn": None, "short_name": None,
+                                   "source": {"kind": "pending", "service": None,
+                                              "confirmed_at": None, "casrn_from": None}}
+        assert row["notes"] == [{"level": "warn", "code": "identity_pending",
+                                 "say": "The chemical's name and CAS number are pending: look "
+                                        "it up when the service can be reached."}]
+        assert row["stands"]["next"] == {"say": "Bring in the study's files", "fix": "M2"}
+        ident = json.loads((store / sid / "identity.json").read_text())
+        assert set(ident) == {"dtxsid", "identity_source"}
+        assert ident["identity_source"]["kind"] == "pending"
+        _envelope(api.post("/api/v2/studies", json=body), "study_exists", 409)
+
+    def test_create_pending_when_the_lookup_is_unreachable_then_fill(self, store, api,
+                                                                     monkeypatch):
+        import requests
+
+        from narrative import chem_resolver as cr
+        from workflow import studies
+        studies._LOOKUPS.clear()
+        monkeypatch.setattr(cr, "RATE_LIMIT", 0)
+        monkeypatch.delenv("CTX_API_KEY", raising=False)
+        real_get = cr.requests.get
+        monkeypatch.setattr(cr.requests, "get",
+                            lambda *a, **k: (_ for _ in ()).throw(requests.ConnectionError("down")))
+        _envelope(api.get(f"/api/v2/chemicals/{NEW}"), "identity_lookup_unreachable", 503)
+        check = api.get(f"/api/v2/studies/{NEW}/creation-check").json()
+        resp = api.post("/api/v2/studies", json={
+            "dtxsid": NEW, "identity": None, "identity_pending": True,
+            "format_seen": {"definition": check["format"]["definition"],
+                            "hash": check["format"]["hash"]}})
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["identity"]["source"]["kind"] == "pending"
+        # The service is back: "Look up the chemical" fills it.
+        monkeypatch.setattr(cr.requests, "get", real_get)
+
+        def resolve(query, query_type="auto", ctx_api_key=""):
+            found = cr.ChemicalIdentity(dtxsid=query)
+            for k, v in BPA.items():
+                setattr(found, k, v)
+            return found
+        monkeypatch.setattr(cr, "resolve_chemical", resolve)
+        monkeypatch.setattr(cr, "pubchem_synonyms", lambda cid: [NEW])
+        found = api.get(f"/api/v2/chemicals/{NEW}").json()
+        resp = api.put(f"/api/v2/studies/{NEW}/identity", json={
+            "identity": {"name": found["identity"]["name"], "casrn": found["identity"]["casrn"],
+                         "source": {"kind": "lookup"}}, "confirmed": True})
+        assert resp.status_code == 200, resp.text
+        row = resp.json()
+        assert row["identity"]["name"] == "Bisphenol A" and row["identity"]["casrn"] == "80-05-7"
+        assert row["identity"]["source"]["kind"] == "lookup" and row["notes"] == []
+        studies._LOOKUPS.clear()
+
+    def test_pending_refusals(self, store, api, resolver):
+        check = api.get(f"/api/v2/studies/{NEW}/creation-check").json()
+        seen = {"definition": check["format"]["definition"], "hash": check["format"]["hash"]}
+        # A chemical just found is confirmed, not left pending.
+        api.get(f"/api/v2/chemicals/{NEW}")
+        err = _envelope(api.post("/api/v2/studies", json={
+            "dtxsid": NEW, "identity": None, "identity_pending": True, "format_seen": seen}),
+            "identity_unconfirmed", 400)
+        assert err["details"]["looked_up"]["name"] == "Bisphenol A"
+        # Pending and an identity at once.
+        _envelope(api.post("/api/v2/studies", json={**_create_body(api), "identity_pending": True}),
+                  "bad_request", 422)
+        for over, code, status in (
+                ({"dtxsid": "DTXSID7020182_v2"}, "study_id_has_suffix", 400),
+                ({"dtxsid": "7020182"}, "invalid_study_id", 400),
+                ({"format_seen": None}, "format_changed", 409)):
+            body = {"dtxsid": NEW, "identity": None, "identity_pending": True,
+                    "format_seen": seen, **over}
+            _envelope(api.post("/api/v2/studies", json=body), code, status)
+        _envelope(api.post("/api/v2/studies", json={
+            "dtxsid": "DTXSID2", "identity": None, "identity_pending": True,
+            "format_seen": {"hash": api.get("/api/v2/studies/DTXSID2/creation-check")
+                            .json()["format"]["hash"]}}), "study_exists", 409)
+        # Without identity_pending, no identity is still refused.
+        studies_body = {"dtxsid": NEW, "identity": None, "format_seen": seen, "confirmed": True}
+        _envelope(api.post("/api/v2/studies", json=studies_body), "identity_unconfirmed", 400)
+        assert not (store / NEW).exists() and not (store / "DTXSID7020182_v2").exists()
 
     def test_create_twice(self, store, api, resolver):
         body = _create_body(api)
@@ -345,7 +451,7 @@ class TestCreate:
         assert not (store / NEW).exists() and not (store / "DTXSID7020182_v2").exists()
 
     @pytest.mark.parametrize("ident,code,status", [
-        ({"casrn": ""}, "identity_incomplete", 400),
+        ({"name": ""}, "identity_incomplete", 400),
         ({"casrn": "80-05-8"}, "invalid_casrn", 400),
         ({"name": "Bisphenol B"}, "identity_changed", 409),
         ({"source": {"kind": "stated"}}, "identity_unconfirmed", 400),

@@ -599,9 +599,11 @@ def format_hash(dtxsid: str) -> str:
 def identity_of(session: Path) -> dict:
     """The chemical as the session records it (identity.json): name, CASRN,
     short name, and how it was set (``source``). A value not on file is None;
-    a session made before M1 has no recorded provenance (``unknown``).
+    a session made before M1 has no recorded provenance (``unknown``); one
+    created with its identity pending (the DTXSID alone) is ``pending``.
     ``source.casrn_from`` says who gave the CAS number: ``"lookup"``,
-    ``"person"`` (typed, the lookup had none), or None (not recorded)."""
+    ``"person"`` (typed, the lookup had none), or None (none on file, or not
+    recorded)."""
     raw = _read_json(session / "identity.json")
     raw = raw if isinstance(raw, dict) else {}
     src = raw.get("identity_source") if isinstance(raw.get("identity_source"), dict) else {}
@@ -610,9 +612,29 @@ def identity_of(session: Path) -> dict:
             "source": {"kind": src.get("kind") or "unknown", "service": src.get("service"),
                        "confirmed_at": src.get("confirmed_at"),
                        # "person" when the person typed the CAS number (the
-                       # lookup gave none); None for a session made before M1.
-                       "casrn_from": src.get("casrn_from") or (
-                           "lookup" if src.get("kind") == "lookup" else None)}}
+                       # lookup gave none); None when there is none, and for a
+                       # session made before M1.
+                       "casrn_from": src.get("casrn_from") if "casrn_from" in src else (
+                           "lookup" if src.get("kind") == "lookup" and raw.get("casrn")
+                           else None)}}
+
+
+def _identity_notes(identity: dict, kind: str, chem: str | None) -> list[dict]:
+    """The chemical's identity gaps, named (a pending identity is a visible gap,
+    never a silent one): its name and CAS number, or its CAS number alone. A
+    companion or a report is filled elsewhere, and a session whose id names
+    no chemical has nothing to look up, so neither is noted here."""
+    if kind in ("companion", "report") or not chem:
+        return []
+    if not identity["name"]:
+        say = ("The chemical's name and CAS number are pending: look it up when the service "
+               "can be reached." if identity["source"]["kind"] == "pending" else
+               "The chemical's name and CAS number are not recorded: look the chemical up.")
+        return [{"level": "warn", "code": "identity_pending", "say": say}]
+    if not identity["casrn"]:
+        return [{"level": "warn", "code": "casrn_pending",
+                 "say": "The chemical's CAS number is pending: none is recorded for it."}]
+    return []
 
 
 def last_changed(session: Path) -> str | None:
@@ -747,6 +769,7 @@ def study_row(dtxsid: str, index: StoreIndex | None = None) -> dict:
     published = guarded(lambda: _published_of(dtxsid, kind, clone), None)
     fmt = guarded(lambda: format_summary(dtxsid, kind, relations, published), None)
     verdict = delete_verdict(dtxsid, kind, relations, index)
+    notes.extend(_identity_notes(identity, kind, kind_info["chemical_dtxsid"]))
     if kind == "other":
         chem = kind_info["chemical_dtxsid"]
         notes.insert(0, {"level": "warn", "code": "not_a_chemical_id",
@@ -987,9 +1010,12 @@ def lookup_chemical(dtxsid: str, *, fresh: bool = False) -> dict:
     molecular_formula, molecular_weight, iupac_name, inchikey}, dtxsid_matched,
     service, say_source, structure_url, looked_up_at, needs, needs_say}``.
 
-    ``needs``: what the person must type before a study can be created,
-    ``["casrn"]`` when the service gives no CAS number, else ``[]``;
-    ``needs_say`` says so in plain words (None when nothing is needed).
+    ``needs``: what the lookup could not give and the person is asked for,
+    ``["casrn"]`` when the service gives no CAS number, else ``[]``. It is an
+    ask, not a block (the maintainer, 2026-10-16, revised: only the DTXSID is
+    required): the study can be created without it, and the CAS number then
+    shows as pending. ``needs_say`` says so in plain words (None when nothing
+    is asked).
 
     ``dtxsid_matched``: the service lists this DTXSID for the compound (PubChem's
     full synonym list, or CTX returned it). Refuses ``identity_not_found`` when
@@ -1031,16 +1057,27 @@ def lookup_chemical(dtxsid: str, *, fresh: bool = False) -> dict:
                       + ("" if ctx else " The CompTox (CTX) lookup is not set up on this server."),
         "structure_url": f"/api/v2/chemicals/{dtxsid}/structure.png",
         "looked_up_at": _now_z(),
-        # What the person must add before a study can be created: the CAS
-        # number, when the service gives none (decided 2026-10-16).
+        # What the person is asked for: the CAS number, when the service gives
+        # none. An ask, not a block (decided 2026-10-16, revised).
         "needs": [] if found.casrn else ["casrn"],
         "needs_say": None if found.casrn else (
-            f"{service} gives no CAS number for {found.name}. Type it before going on; it "
-            "will be recorded as stated by you."),
+            f"{service} gives no CAS number for {found.name}. Type it if you have it; it is "
+            "recorded as stated by you. Otherwise it shows as pending."),
     }
     with _LOOKUP_LOCK:
         _LOOKUPS[dtxsid] = (time.monotonic(), dict(result))
     return result
+
+
+def cached_lookup(dtxsid: str) -> dict | None:
+    """The lookup of the DTXSID that found a chemical in the last 10 minutes,
+    or None. No network: a create with its identity pending uses it to refuse
+    leaving pending a chemical the lookup did find."""
+    with _LOOKUP_LOCK:
+        hit = _LOOKUPS.get(dtxsid)
+    if hit and time.monotonic() - hit[0] < _LOOKUP_TTL_S:
+        return dict(hit[1])
+    return None
 
 
 def chemical_structure(dtxsid: str) -> bytes:

@@ -388,7 +388,9 @@ def test_a_lookup_with_no_casrn_needs_one_typed(resolver):
     answers["DTXSID7020182"] = {**BPA, "casrn": ""}
     out = studies.lookup_chemical("DTXSID7020182")
     assert out["identity"]["casrn"] is None and out["needs"] == ["casrn"]
-    assert out["needs_say"].startswith("PubChem gives no CAS number for Bisphenol A.")
+    assert out["needs_say"] == ("PubChem gives no CAS number for Bisphenol A. Type it if you "
+                                "have it; it is recorded as stated by you. Otherwise it "
+                                "shows as pending.")
 
 
 def test_a_lookup_that_does_not_list_the_dtxsid(resolver):
