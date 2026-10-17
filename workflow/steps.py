@@ -25,6 +25,8 @@ mock patches `workflow.steps.integrate_pool` (see the route rewire + conftest).
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -379,6 +381,45 @@ def _write_metadata_headers(file_path, platform: str, data_type: str) -> None:
 # integrate
 # ---------------------------------------------------------------------------
 
+# What integrate_pool writes over in the session folder: the dataset and the
+# two sidecars read beside it.
+_DATASET_FILES = ("integrated.json", "_category_lookup.json", "genomics.sidecar.json")
+
+
+def _keep_dataset_files(session_dir: Path) -> dict:
+    """Copy the dataset files an integration will overwrite into a scratch
+    folder inside the session; ``{"dir", "had": {name: bool}}``."""
+    import tempfile
+    session_dir = Path(session_dir)
+    if not session_dir.is_dir():                 # nothing on disk to overwrite
+        return {"dir": None, "had": {}}
+    keep = Path(tempfile.mkdtemp(prefix=".integrating-", dir=session_dir))
+    had = {}
+    for name in _DATASET_FILES:
+        src = session_dir / name
+        had[name] = src.is_file()
+        if had[name]:
+            shutil.copy2(src, keep / name)
+    return {"dir": keep, "had": had}
+
+
+def _restore_dataset_files(session_dir: Path, kept: dict) -> None:
+    """Put back what ``_keep_dataset_files`` kept; remove what was not there."""
+    session_dir = Path(session_dir)
+    for name, had in kept["had"].items():
+        if had:
+            os.replace(kept["dir"] / name, session_dir / name)
+        else:
+            (session_dir / name).unlink(missing_ok=True)
+
+
+def _check_dataset(dtxsid: str, integrated: dict) -> None:
+    """The schema every read of the dataset applies, applied before anything
+    is recorded on it (BMDProjectValidationError when it fails)."""
+    from pipeline.bmd_project_schema import load_and_validate
+    load_and_validate(integrated, source=f"DTXSID={dtxsid} (integration)")
+
+
 @step_provenance
 def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict:
     """Merge the pool into a unified BMDProject and cache it.
@@ -455,6 +496,11 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     approval = store.read_json(dtxsid, "metadata_approved.json")
     approved_metadata = approval.get("metadata") if isinstance(approval, dict) else None
 
+    # integrate_pool writes the new dataset (and its two sidecars) over the old
+    # ones in place. Keep the old ones until the new dataset has passed the
+    # schema: a failure puts them back, so the study is left as it was, never
+    # with a dataset no read accepts behind an "integrated, current" phase.
+    kept = _keep_dataset_files(session_dir)
     try:
         integrated = integrate_pool(
             dtxsid,
@@ -466,9 +512,14 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             llm_generate_json=_llm_generate_json,
             approved_metadata=approved_metadata or None,
         )
+        _check_dataset(dtxsid, integrated)
     except Exception as e:
+        _restore_dataset_files(session_dir, kept)
         logger.exception("Pool integration failed for %s", dtxsid)
         raise StepError(f"Integration failed: {e}", status_code=500)
+    finally:
+        if kept["dir"] is not None:
+            shutil.rmtree(kept["dir"], ignore_errors=True)
 
     # The dataset changed, so the data approval made on the old one no longer
     # holds (C1 D5: archived, never deleted). A failed merge leaves it alone.
@@ -503,7 +554,6 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # so re-integration makes it stale too. Remove it (rebuilt on next process)
     # so a re-integrated-but-not-yet-reprocessed session can't be queried against
     # old data.
-    import shutil
     (session_dir / "session.duckdb").unlink(missing_ok=True)
     shutil.rmtree(session_dir / "session_parquet", ignore_errors=True)
     # NB: genomics.sidecar.json is NOT wiped here — integrate_pool (above) just
