@@ -18,22 +18,20 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 
 ## Data-integrity findings (outside any one module)
 
-- **2026-10-16, reproduced by the orchestrator:** a study table with empty cells is
-  **silently left out of the combined dataset**. T9 (`_scratch/m2-design/testdata/
-  T9_blank_cells`: female body-weight table with 61 empty cells, male complete):
-  the check raises no error, integration succeeds, and `integrated.json` holds only
-  the male experiment. This is the cause of the earlier "workbook-only" loss (the
-  five dropped tables are exactly those with empty cells) and drops the 2026
-  package's own body-weight and organ-weight tables. Owner: core track (bmdx-pipe
-  integration); M2's check must at least refuse it until fixed.
-- **2026-10-16, C3 spec, checked in the code by the orchestrator:** integration can
-  fail **after** writing. `integrate_step` writes `integrated.json`, archives the data
-  approval and records the basis, then `reapply_study_design` loads the dataset; when
-  that load fails schema validation the phase still reads INTEGRATED and "current"
-  while every read of the dataset answers 422. Fix: write to a temporary file and
-  commit only after the load succeeds. Owner: C1 follow-up or M3.
-- The `.bm2` read cache (LMDB, 1 GB map) cannot hold a 251 MB project: `MDB_MAP_FULL`
-  on an empty cache, so that project is re-read at every check.
+- **FIXED 2026-10-17 (bmdx-pipe a32498d, on its `master`, not pushed):** a study table
+  with empty cells was silently left out of the combined dataset. The workbook
+  converter wrote a missing value as an empty cell; BMDExpress's parser refuses an
+  empty cell and the Java helper then skipped the whole table with a warning. Now
+  the converter writes NaN (as the CSV converter already did), and the Java helper
+  stops with an error on any table it can't read. NIEHS-10's six workbooks alone now
+  give all 12 experiments (before: 7). No session in the store holds a workbook in
+  `files/`, so no existing dataset was affected.
+- **FIXED 2026-10-17 (rlm-bmdx 0dec6e3, merged e8b9816):** integration could fail
+  after writing, leaving "integrated, current" over a dataset no read accepts. The
+  merged dataset is now checked against the schema before anything is recorded, and
+  a failure puts the old dataset back. Reproduced and verified on a scratch NIEHS-10.
+- **Open:** the `.bm2` read cache (LMDB, 1 GB map) cannot hold a 251 MB project
+  (`MDB_MAP_FULL` on an empty cache), so that project is re-read at every check.
 
 ## Modules
 
