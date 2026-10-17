@@ -18,10 +18,14 @@ class TestPoolIntegrate:
 
     def _make_integrated(self):
         """Minimal integrated BMDProject for mock return."""
+        # schema-valid: integration checks the merged dataset before recording it
         return {
+            "name": "integrated",
             "doseResponseExperiments": [
                 {
                     "name": "BodyWeight_Male",
+                    "treatments": [{"name": "0", "dose": 0.0}, {"name": "1", "dose": 4.0},
+                                   {"name": "2", "dose": 12.0}],
                     "experimentDescription": {
                         "platform": "Body Weight",
                         "data_type": "tox_study",
@@ -32,8 +36,12 @@ class TestPoolIntegrate:
                 },
             ],
             "_meta": {
+                "dtxsid": "DTXSID50469320",
+                "integrated_at": "2026-10-17T00:00:00+00:00",
                 "source_files": {
-                    "Body Weight": {"filename": "body_weight_truth_male.txt"},
+                    "Body Weight": {"file_id": "body_weight_truth_male.txt",
+                                    "filename": "body_weight_truth_male.txt",
+                                    "tier": "txt_csv", "file_count": 1},
                 },
             },
         }

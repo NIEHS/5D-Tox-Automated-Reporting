@@ -253,9 +253,14 @@ def mock_bmdx_pipe():
         # IntegrateProject.java — merges files into unified BMDProject.
         # Patched at workflow.steps (ADR-0014 step 2 moved the call site there
         # from web_routes.pool_routes when the handler was unwrapped).
+        # The smallest dataset the BMDProject schema accepts: integration
+        # checks the merged dataset before recording anything on it.
         "integrate_pool": patch(
             "workflow.steps.integrate_pool",
-            return_value={"doseResponseExperiments": [], "_meta": {}},
+            return_value={"name": "integrated", "doseResponseExperiments": [],
+                          "_meta": {"dtxsid": "DTXSID50469320",
+                                    "integrated_at": "2026-10-17T00:00:00+00:00",
+                                    "source_files": {}}},
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
         "build_table_data": patch(

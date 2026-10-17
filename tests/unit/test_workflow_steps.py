@@ -221,10 +221,18 @@ def test_integrate_step_success_caches_and_summarizes(sessions_dir):
                                          "coverage_matrix": {"Body Weight|tox_study": {}}}},
     )
     integrated = {
+        "name": "integrated",
         "doseResponseExperiments": [
-            {"name": "BW_Male", "probeResponses": [{}, {}]},
+            {"name": "BW_Male", "treatments": [{"name": "0", "dose": 0.0}],
+             "probeResponses": [{"probe": {"id": "SD0"}, "responses": [1.0]},
+                                {"probe": {"id": "SD5"}, "responses": [2.0]}],
+             "experimentDescription": {"platform": "Body Weight", "provider": "Apical",
+                                       "sex": "male"}},
         ],
-        "_meta": {"source_files": {"Body Weight": {"experiment_count": 1}}},
+        "_meta": {"dtxsid": "DTXSID_VC", "integrated_at": "2026-10-17T00:00:00+00:00",
+                  "source_files": {"Body Weight": {"file_id": "bw.csv", "filename": "bw.csv",
+                                                   "tier": "txt_csv", "file_count": 1,
+                                                   "experiment_count": 1}}},
         "bMDResult": [],
         "categoryAnalysisResults": [],
     }
@@ -248,8 +256,11 @@ def test_integrate_step_success_caches_and_summarizes(sessions_dir):
 
 
 def _integrated_min():
-    return {"doseResponseExperiments": [], "_meta": {}, "bMDResult": [],
-            "categoryAnalysisResults": []}
+    # the smallest dataset the BMDProject schema accepts (integration checks it)
+    return {"name": "DTXSID_VC", "doseResponseExperiments": [], "bMDResult": [],
+            "categoryAnalysisResults": [],
+            "_meta": {"dtxsid": "DTXSID_VC", "integrated_at": "2026-10-17T00:00:00+00:00",
+                      "source_files": {}}}
 
 
 def test_reintegration_withdraws_and_archives_the_data_approval(tmp_path, sessions_dir):
@@ -706,3 +717,38 @@ def test_i1_materialize_with_the_fake_store_never_overwrites_owned_text(monkeypa
          "narrative": [], "cat_signature": {}}]})
     materialize_result_sections("DTXSID_FK", store)
     assert store.sections["bm2_body-weight"]["review"]["since_version"] == 1
+
+
+# --- integration commits only a dataset the schema accepts ------------------
+
+def test_a_dataset_the_schema_refuses_leaves_the_study_as_it_was(tmp_path, sessions_dir):
+    # integrate_pool writes integrated.json in place; when the result fails the
+    # schema every read applies, the old dataset comes back, the data approval
+    # stays, and no basis is recorded (it once read "integrated, current" over
+    # a dataset every read refused).
+    import json
+    sdir = tmp_path / "DTXSID_VC"
+    (sdir / "files").mkdir(parents=True)
+    (sdir / "animal_report.json").write_text(json.dumps({"total_animals": 40}))
+    old = _integrated_min()
+    (sdir / "integrated.json").write_text(json.dumps(old))
+    store = FakeStore(fingerprints={"f1": object()}, real_dir=sdir,
+                      present={"integrated.json", "animal_report.json"},
+                      docs=_validated())
+    store._docs["validation_report.json"]["coverage_matrix"] = {"Body Weight|tox_study": {}}
+
+    def writes_a_bad_dataset(*a, **k):
+        bad = {"doseResponseExperiments": "not a list"}
+        (sdir / "integrated.json").write_text(json.dumps(bad))
+        (sdir / "_category_lookup.json").write_text("{}")
+        return bad
+
+    with patch("workflow.steps.integrate_pool", side_effect=writes_a_bad_dataset):
+        with pytest.raises(StepError) as ei:
+            integrate_step("DTXSID_VC", None, store)
+    assert ei.value.status_code == 500
+    assert json.loads((sdir / "integrated.json").read_text()) == old
+    assert not (sdir / "_category_lookup.json").exists()      # was not there before
+    assert (sdir / "animal_report.json").exists()
+    assert "integration_basis.json" not in store._docs
+    assert not list(sdir.glob(".integrating-*"))
