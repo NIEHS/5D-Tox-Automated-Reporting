@@ -132,9 +132,14 @@ public class IntegrateProject {
             DoseResponseExperiment exp = ExperimentFileUtil.getInstance()
                 .readFile(txtFile, true);
 
+            // A table BMDExpress can't read is an error, never a silent skip:
+            // skipping it would leave its data out of the combined dataset
+            // while the integration reports success.  ExperimentFileUtil has
+            // already printed why (the line and column) on stderr.
             if (exp == null) {
-                System.err.println("    WARNING: Failed to parse " + txtPath + " — skipping");
-                continue;
+                System.err.println("Error: could not read " + txtPath +
+                    " (see the line above for the line and column); nothing was written");
+                System.exit(3);
             }
 
             // Set unique name BEFORE adding — the public overload uses allowed=0,

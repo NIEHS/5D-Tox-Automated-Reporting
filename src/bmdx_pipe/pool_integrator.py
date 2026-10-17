@@ -369,12 +369,15 @@ def xlsx_to_pivot_txt(
         lines.append("\t".join(["Dose"] + [
             str(animal_dose_map.get(a, 0)) for a in animals
         ]))
-        # Row 3+: endpoints
+        # Row 3+: endpoints.  A missing value is written as "NaN", as the
+        # CSV converter does: Java's ExperimentFileUtil rejects an empty cell
+        # as non-numeric (and the whole table with it), but reads NaN as a
+        # missing value BMDExpress skips during modeling.
         for endpoint, animal_vals in info["endpoints"].items():
             values = []
             for a in animals:
                 v = animal_vals.get(a)
-                values.append(str(v) if v is not None else "")
+                values.append(str(v) if v is not None else "NaN")
             lines.append("\t".join([endpoint] + values))
 
         # Write to file
