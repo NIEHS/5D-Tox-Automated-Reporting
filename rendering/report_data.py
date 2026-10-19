@@ -932,6 +932,20 @@ def _build_methods_sections_from_tree() -> list[dict]:
     return sections
 
 
+def _definition_fact(dtxsid: str, key: str):
+    """One study-level fact of the study's document definition (ADR-0029,
+    view_config.study_document_facts: its Foreword, its dose words …), else the
+    shared template's."""
+    from common.dtxsid import is_valid_dtxsid
+    from document_model.view_config import study_document_facts
+
+    if is_valid_dtxsid(dtxsid):
+        return study_document_facts(dtxsid)[key]
+    from document_model import document_template
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    return getattr(document_template, f"load_{key}")(ACTIVE_TEMPLATE)
+
+
 def _series_issn(dtxsid: str) -> str:
     """The series ISSN the study's document definition states (its book_meta,
     ADR-0029 — the NIEHS Report series has had two), else the shared
@@ -1114,40 +1128,15 @@ def scaffold_report_data(
         # ==============================================================
 
         # --- Foreword ---
-        # Verbatim from NIEHS Report 10 page ii.  This text is identical
-        # across all NIEHS reports — it describes the NIEHS mission and
-        # the report series.  No study-specific content.
-        # Foreword — fixed NIEHS boilerplate.  Each paragraph is an INLINE-CONTENT
-        # list (render_common inline model): plain-string runs interleaved with
-        # {"type": "ext-link", ...} units carrying the reference's embedded
-        # hyperlinks (NIEHS, DTT, the report website, PubMed).  All three surfaces
-        # render these as real links (docx w:hyperlink / LaTeX \href / HTML <a>).
-        "foreword": {"paragraphs": [
-            [
-                "The ",
-                {"type": "ext-link",
-                 "text": "National Institute of Environmental Health Sciences (NIEHS)",
-                 "href": "https://www.niehs.nih.gov/"},
-                " is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.",
-            ],
-            [
-                "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the ",
-                {"type": "ext-link",
-                 "text": "Division of Translational Toxicology (DTT)",
-                 "href": "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm"},
-                " at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.",
-            ],
-            [
-                "NIEHS reports are available free of charge on the ",
-                {"type": "ext-link",
-                 "text": "NIEHS/DTT website",
-                 "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm"},
-                " and cataloged in ",
-                {"type": "ext-link", "text": "PubMed",
-                 "href": "https://pubmed.ncbi.nlm.nih.gov/"},
-                ", a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).",
-            ],
-        ]},
+        # The series' fixed text, as the study's document definition states it
+        # (its `foreword:`, ADR-0029): each paragraph an INLINE-CONTENT list
+        # (render_common's inline model) — plain-string runs and ext-link units,
+        # rendered as real links on every surface.
+        "foreword": {"paragraphs": _definition_fact(dtxsid, "foreword")},
+        # The words the headings name the dose by, per route ("Dose Selection
+        # Rationale" for gavage, "Exposure Concentration …" for inhalation),
+        # filled into this study's tree by document_tree.study_tree.
+        "dose_terms": _definition_fact(dtxsid, "dose_terms"),
 
         # --- Authors / Contributors (ADR-0028: two front-matter parts) ---
         # Names are study-specific (front_matter.json) → empty until supplied.

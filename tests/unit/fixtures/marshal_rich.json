@@ -676,6 +676,16 @@
       "type": "appendix"
     }
   ],
+  "dose_terms": {
+    "gavage": {
+      "dose": "Dose",
+      "internal_dose": "Internal Dose"
+    },
+    "inhaled": {
+      "dose": "Exposure Concentration",
+      "internal_dose": "Internal Concentration"
+    }
+  },
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "figure_entries": [
     {

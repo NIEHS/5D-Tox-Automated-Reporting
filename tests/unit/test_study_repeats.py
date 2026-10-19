@@ -227,3 +227,35 @@ def test_a_route_gate_names_a_known_route():
         instantiate([{"region": "body", "children": [
             {"id": "x", "type": "narrative", "title": "X", "data_key": "x",
              "study_title": "X for ${species}"}]}])
+
+
+def _dose_words_tree():
+    return instantiate([{"region": "body", "children": [
+        {"id": "rationale", "type": "narrative", "title": "${dose_term} Selection Rationale",
+         "data_key": "methods", "methods_key": "dose_rationale"},
+        {"id": "internal", "type": "heading-only", "title": "${internal_dose_term} Assessment"}]}])
+
+
+_DOSE_TERMS = {"gavage": {"dose": "Dose", "internal_dose": "Internal Dose"},
+               "inhaled": {"dose": "Exposure Concentration",
+                           "internal_dose": "Internal Concentration"}}
+
+
+def test_the_dose_words_follow_the_route():
+    """A gavage study's headings say "Dose" (NIEHS-07 … 10), an inhaled
+    study's "Exposure Concentration" (NIEHS-12, 13) — the definition's words."""
+    def titles(route):
+        facts = {"study_design": {"route": route}, "dose_terms": _DOSE_TERMS}
+        return [n.title for n in study_tree(_dose_words_tree(), None, None, facts)]
+    assert titles("gavage") == ["Dose Selection Rationale", "Internal Dose Assessment"]
+    assert titles("inhaled") == ["Exposure Concentration Selection Rationale",
+                                 "Internal Concentration Assessment"]
+
+
+def test_a_route_with_no_dose_words_is_a_placeholder():
+    """A route the definition names no words for (dermal) never borrows
+    another route's."""
+    facts = {"study_design": {"route": "transdermal"}, "dose_terms": _DOSE_TERMS}
+    (rationale, _) = study_tree(_dose_words_tree(), None, None, facts)
+    assert rationale.title.startswith("[Placeholder: the document definition names the dose")
+    assert "transdermal" in rationale.title

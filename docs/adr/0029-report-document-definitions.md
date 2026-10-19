@@ -185,10 +185,21 @@ state only for that reason follows the study's data, not the era:
   - Appendix A (Chemical Characterization and Generation of Chamber
     Concentrations);
   - the Theoretical Inhaled Dose section and its Supplemental Data files.
-- **Dose words.** The headings name the dose as the 2026 books do, whatever
-  the route: "Exposure Concentration Selection Rationale" and "Internal
-  Concentration Assessment". This was the user's decision (2026-10-12), over
-  the oral books' "Dose Selection Rationale" / "Internal Dose Assessment".
+- **Dose words.** The headings name the dose by the study's route. The
+  definition's `dose_terms:` block gives the words per route, and they fill
+  `${dose_term}` / `${internal_dose_term}` in the titles
+  (`document_tree.dose_term_values`). By gavage: "Dose Selection Rationale",
+  "Internal Dose Assessment" (NIEHS-07 … 10). By inhalation: "Exposure
+  Concentration Selection Rationale", "Internal Concentration Assessment"
+  (NIEHS-12, 13). A route the definition names no words for (dermal, feed …)
+  prints a placeholder rather than another route's words. This is the user's
+  decision (2026-10-19). It supersedes the concentration words for every
+  route (2026-10-12).
+- **Foreword.** A definition states the series' Foreword (`foreword:`, its
+  paragraphs, with `[text](url)` links). The shared template's is the
+  2022–2023 books' text. `eras/niehs-2026` states the 2026 books' rewording:
+  no "The NIEHS Report series began in 2022", and "This report is available
+  … on the NIEHS website".
 - **A single study.** `study_title` is the title of each study's copy when a
   report covers several studies ("Study Design for ${species}", "${species}").
   A single study's copy keeps the node's own `title`. For "Study Design" that

@@ -12,6 +12,9 @@ another definition and states only how it differs:
     book_meta: {...}                  # deep-merged over the base's
     phrasing: {...}                   # the generated prose's wording, deep-merged
                                       # likewise (document_model.phrasing)
+    foreword: [...]                   # the series' Foreword, replacing the base's
+    dose_terms: {route: {...}}        # the words headings name the dose by, per
+                                      # route (${dose_term}), deep-merged
     changes:                          # applied in order
       - set: appendix-d               # replace fields on a node (null removes one)
         title: New title
@@ -46,7 +49,8 @@ from common.dtxsid import validate_dtxsid
 
 PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
-                              "phrasing", "tissue_order", "abstract_genes", "changes"})
+                              "phrasing", "tissue_order", "abstract_genes", "foreword",
+                              "dose_terms", "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -73,8 +77,8 @@ def is_extension(raw) -> bool:
 def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
     """The raw template mapping for `name` with every ``extends`` resolved: the
     base's mapping (all its sibling blocks), its ``document`` altered by
-    ``changes``, ``book_meta`` and ``phrasing`` deep-merged and ``packaging`` /
-    ``tissue_order`` overridden.  A full
+    ``changes``, ``book_meta``, ``phrasing`` and ``dose_terms`` deep-merged and
+    ``packaging`` / ``tissue_order`` / ``foreword`` overridden.  A full
     template comes back as read."""
     if name in _seen:
         raise ValueError(f"definition {name!r}: extends cycle {' -> '.join((*_seen, name))}")
@@ -97,12 +101,16 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["tissue_order"] = raw["tissue_order"]
     if "abstract_genes" in raw:
         out["abstract_genes"] = raw["abstract_genes"]
+    if "foreword" in raw:
+        out["foreword"] = raw["foreword"]
     if raw.get("object_position"):
         out["object_position"] = {**(out.get("object_position") or {}), **raw["object_position"]}
     if raw.get("book_meta"):
         out["book_meta"] = _deep_merge(out.get("book_meta") or {}, raw["book_meta"])
     if raw.get("phrasing"):
         out["phrasing"] = _deep_merge(out.get("phrasing") or {}, raw["phrasing"])
+    if raw.get("dose_terms"):
+        out["dose_terms"] = _deep_merge(out.get("dose_terms") or {}, raw["dose_terms"])
     for i, change in enumerate(raw.get("changes") or []):
         try:
             apply_change(out["document"], change)

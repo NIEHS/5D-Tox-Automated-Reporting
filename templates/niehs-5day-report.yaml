@@ -639,6 +639,15 @@ book_meta:
     license_href: https://creativecommons.org/publicdomain/zero/1.0/
     statement: This is a work of the US government and distributed under the terms of the Public Domain
 
+# ADR-0029: the series' Foreword, as NIEHS-05 … 10 print it (NIEHS-02 … 04
+# link the DTT pages at their earlier dntp addresses).  Each paragraph is
+# text; [text](url) is a link (document_template.load_foreword).  An era that
+# words it otherwise states its own.
+foreword:
+- "The [National Institute of Environmental Health Sciences (NIEHS)](https://www.niehs.nih.gov/) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+- "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the [Division of Translational Toxicology (DTT)](https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
+- "NIEHS reports are available free of charge on the [NIEHS/DTT website](https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm) and cataloged in [PubMed](https://pubmed.ncbi.nlm.nih.gov/), a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+
 # ADR-0029: how the BITS is packaged and where tables/figures sit.  The body's
 # float (Bookshelf shows a card that opens the object); the appendices' are
 # anchored in the text (shown in full) — as NIEHS-07 … 10 have them.

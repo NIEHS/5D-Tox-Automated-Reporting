@@ -276,6 +276,26 @@ def caption_values(facts: dict | None, design: dict | None = None) -> dict:
                           str(facts["chemical_name"]))
 
 
+def dose_term_values(facts: dict | None) -> dict:
+    """The heading fields ``${dose_term}`` / ``${internal_dose_term}``: the words
+    the definition names the dose by (its ``dose_terms``) for the study's route
+    — "Dose" / "Internal Dose" by gavage, "Exposure Concentration" / "Internal
+    Concentration" by inhalation.  A route the definition names no words for
+    gets a visible placeholder, never another route's words; {} when the
+    definition states none."""
+    facts = facts or {}
+    terms = facts.get("dose_terms")
+    if not terms:
+        return {}
+    route = (facts.get("study_design") or {}).get("route")
+    words = terms.get(route)
+    if not words:
+        gap = (f"[Placeholder: the document definition names the dose for no route "
+               f"{route or '(none recorded)'}]")
+        return {"dose_term": gap, "internal_dose_term": gap}
+    return {"dose_term": words["dose"], "internal_dose_term": words["internal_dose"]}
+
+
 def _has_title_fields(nodes) -> bool:
     return any("${" in (n.title or "") or "${" in (n.caption or "")
                or _has_title_fields(n.children or []) for n in nodes)
@@ -456,9 +476,11 @@ def study_tree(base, collected, authored=None, facts=None):
        deposit is (its DOI, else its local url), else `missing_content_text`,
        else pending.
     4. Study facts in titles and captions: `${chemical_name}` (TITLE_FIELDS)
-       from `facts` (the report data), and the animals and treatment
+       from `facts` (the report data), the animals and treatment
        `${subject}` / `${treatment}` (caption_values; in a per-study copy, that
-       study's); a field the facts lack stays as written.
+       study's), and the dose words `${dose_term}` / `${internal_dose_term}`
+       for the study's route (dose_term_values); a field the facts lack stays
+       as written.
     5. Repeated sections (`repeat:`): one copy per species of the study's
        deposit, per study of a report over several, or per genomic tissue
        (repeat_items, _expand_repeats).
@@ -491,6 +513,7 @@ def study_tree(base, collected, authored=None, facts=None):
         _take_in_untitled(nodes)
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     values.update(caption_values(facts))
+    values.update(dose_term_values(facts))
     if values and _has_title_fields(nodes):
         if nodes is base:
             import copy

@@ -257,19 +257,22 @@ def study_definition_name(dtxsid: str) -> str | None:
 def study_document_facts(dtxsid: str) -> dict:
     """The study-level facts of the definition a study renders from (ADR-0029):
     ``book_meta`` (the series, publisher, permissions), ``packaging``,
-    ``object_position``, ``tissue_order``, ``abstract_genes`` and ``phrasing``, from the
-    study's definition, else the definition of a new study (DEFAULT_DEFINITION)."""
+    ``object_position``, ``tissue_order``, ``abstract_genes``, ``phrasing``,
+    ``foreword`` and ``dose_terms``, from the study's definition, else the
+    definition of a new study (DEFAULT_DEFINITION)."""
     from document_model.document_definition import definition_name
     from document_model.document_template import (
-        load_abstract_genes, load_book_meta, load_object_position, load_packaging,
-        load_phrasing, load_tissue_order,
+        load_abstract_genes, load_book_meta, load_dose_terms, load_foreword,
+        load_object_position, load_packaging, load_phrasing, load_tissue_order,
     )
     name = definition_name(dtxsid)
     return {"book_meta": load_book_meta(name), "packaging": load_packaging(name),
             "object_position": load_object_position(name),
             "tissue_order": load_tissue_order(name),
             "abstract_genes": load_abstract_genes(name),
-            "phrasing": load_phrasing(name)}
+            "phrasing": load_phrasing(name),
+            "foreword": load_foreword(name),
+            "dose_terms": load_dose_terms(name)}
 
 
 # ---------------------------------------------------------------------------

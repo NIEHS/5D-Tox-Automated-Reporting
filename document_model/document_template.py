@@ -38,6 +38,7 @@ from __future__ import annotations
 # Imports
 # ---------------------------------------------------------------------------
 
+import re
 from dataclasses import fields
 from pathlib import Path
 
@@ -906,6 +907,69 @@ def load_phrasing(name: str) -> dict:
     except PhrasingError as e:
         raise ValueError(f"template {name!r}: {e}") from None
     return block
+
+
+_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def load_foreword(name: str) -> list:
+    """The Foreword the definition states (``foreword:``, ADR-0029): a list of
+    paragraphs, each a string whose ``[text](url)`` links become inline
+    ext-link units (render_common's inline model).  [] when the definition
+    states none, except a session's snapshot pinned before the block existed,
+    which takes the shared template's."""
+    from rendering.render_common import make_ext_link
+    from document_model.definition_pin import PINNED
+    raw = _load_raw(name)
+    paras = raw.get("foreword") if isinstance(raw, dict) else None
+    if paras is None:
+        if name.startswith(PINNED):
+            # A snapshot pinned before definitions stated the Foreword rendered
+            # the shared template's.
+            from document_model.document_tree import ACTIVE_TEMPLATE
+            if (TEMPLATES_DIR / f"{ACTIVE_TEMPLATE}.yaml").exists():
+                return load_foreword(ACTIVE_TEMPLATE)
+        return []
+    if not isinstance(paras, list) or not all(isinstance(p, str) and p.strip() for p in paras):
+        raise ValueError(f"template {name!r}: foreword is a list of paragraphs, got {paras!r}")
+    out = []
+    for text in paras:
+        runs, pos = [], 0
+        for m in _LINK.finditer(text):
+            if m.start() > pos:
+                runs.append(text[pos:m.start()])
+            runs.append(make_ext_link(m.group(1), m.group(2)))
+            pos = m.end()
+        if pos < len(text):
+            runs.append(text[pos:])
+        out.append(runs)
+    return out
+
+
+_DOSE_TERM_KEYS = frozenset({"dose", "internal_dose"})
+
+
+def load_dose_terms(name: str) -> dict:
+    """The words the definition's headings name the dose by, per route
+    (``dose_terms:``, ADR-0029): ``{route: {dose, internal_dose}}`` — "Dose" /
+    "Internal Dose" for gavage, "Exposure Concentration" / "Internal
+    Concentration" for inhalation.  {} when the definition states none."""
+    from pipeline.study_design import ROUTES
+    raw = _load_raw(name)
+    terms = raw.get("dose_terms") if isinstance(raw, dict) else None
+    if terms is None:
+        return {}
+    if not isinstance(terms, dict):
+        raise ValueError(f"template {name!r}: dose_terms is a mapping of routes, got {terms!r}")
+    for route, words in terms.items():
+        if route not in ROUTES:
+            raise ValueError(f"template {name!r}: dose_terms route {route!r} is not one of "
+                             f"{list(ROUTES)}")
+        if (not isinstance(words, dict) or set(words) != _DOSE_TERM_KEYS
+                or not all(isinstance(w, str) and w for w in words.values())):
+            raise ValueError(f"template {name!r}: dose_terms.{route} states "
+                             f"{sorted(_DOSE_TERM_KEYS)}, got {words!r}")
+    return terms
 
 
 def load_abstract_genes(name: str) -> bool:

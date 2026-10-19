@@ -190,3 +190,19 @@ def test_a_study_without_a_definition_is_written_to_the_latest_generation():
     from document_model.document_definition import DEFAULT_DEFINITION, definition_name
     assert DEFAULT_DEFINITION == "eras/niehs-2026"
     assert definition_name("DTXSID0000002") == DEFAULT_DEFINITION
+
+
+def test_the_2026_books_word_the_foreword_their_own_way():
+    """NIEHS-12, 13 reword the Foreword (no "began in 2022", "This report is
+    available … on the NIEHS website"); the shared template keeps the
+    2022–2023 books' text.  Links stay links."""
+    from document_model.document_template import load_foreword
+    new = load_foreword("eras/niehs-2026")
+    old = load_foreword("niehs-5day-report")
+    assert len(new) == len(old) == 3
+    assert new[2][0] == "This report is available free of charge on the "
+    assert new[2][1] == {"type": "ext-link", "text": "NIEHS website",
+                         "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports"}
+    assert not any("began in 2022" in r for p in new for r in p if isinstance(r, str))
+    assert old[1][0].startswith("The NIEHS Report series began in 2022.")
+    assert load_foreword("eras/niehs-2023") == old
