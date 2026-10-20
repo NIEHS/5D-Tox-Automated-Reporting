@@ -18,6 +18,11 @@
 # theoretical inhaled dose), and a single study's
 # per-study sections are no sub-sections (`study_title`: "Study Design", the
 # prose straight under "Animal Condition …", as single-study books print it).
+# A study with no internal dose data (no Tissue Concentration) has no Internal
+# Dose sections at all — the Methods subsection, the Results section and the
+# appendix — as the books without it have none (NIEHS-02 … 06), rather than
+# sections saying it was not assessed; the later appendices letter up.  The
+# user's decision (2026-10-20).
 # The headings name the dose by the study's route (dose_terms below): an
 # inhaled study's "Exposure Concentration Selection Rationale" and "Internal
 # Concentration Assessment" (NIEHS-12, 13), a gavage study's "Dose Selection
@@ -32,6 +37,9 @@ extends: eras/niehs-2023
 dose_terms:
   gavage: {dose: Dose, internal_dose: Internal Dose}
   inhaled: {dose: Exposure Concentration, internal_dose: Internal Concentration}
+# The 2026 books describe the organs alphabetically (Heart, Kidney, Liver,
+# Lung, Ovary), where the 2023 books put the liver first.
+organ_description_order: []
 # The 2026 books' Foreword (NIEHS-12, 13): reworded, without "The NIEHS Report
 # series began in 2022", and "This report" on "the NIEHS website".
 foreword:
@@ -176,6 +184,7 @@ changes:
     title: "${dose_term} Selection Rationale"
   - set: mm-internal-dose
     title: "${internal_dose_term} Assessment"
+    drop_when_uncollected: true
 
   # ── Results: the apical results grouped; a summary closing the gene set
   # analysis; the theoretical inhaled dose, then the internal concentrations.
@@ -270,6 +279,8 @@ changes:
   - set: internal-dose
     type: heading-only
     narrative_key: null
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
   - insert:
     - {id: internal-dose-study, type: narrative+tables, title: "", study_title: "${species}",
        narrative_key: internal_dose, repeat: study_species}
@@ -338,6 +349,8 @@ changes:
   # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
   - set: appendix-a
     title: "${internal_dose_term} Assessment"
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
   - move: appendix-a-body
     into: appendix-a
   - remove: appendix-a-quantitation

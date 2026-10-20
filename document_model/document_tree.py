@@ -242,6 +242,23 @@ def prune_uncollected_tables(tree, collected):
     return _prune(copy.deepcopy(tree))
 
 
+def _has_drops(nodes) -> bool:
+    return any(n.drop_when_uncollected or _has_drops(n.children or []) for n in nodes)
+
+
+def _drop_uncollected(nodes: list, collected: set) -> list:
+    """Leave out the nodes (with their subtrees) marked `drop_when_uncollected`
+    whose `requires_platform` the study did not collect.  Mutates the (already
+    copied) nodes; returns the kept list."""
+    out = []
+    for node in nodes:
+        if node.drop_when_uncollected and platform_gate_closed(node, collected):
+            continue
+        node.children = _drop_uncollected(node.children or [], collected)
+        out.append(node)
+    return out
+
+
 def _has_route_gates(nodes) -> bool:
     return any(n.requires_route or _has_route_gates(n.children or []) for n in nodes)
 
@@ -467,7 +484,8 @@ def study_tree(base, collected, authored=None, facts=None):
     itself when nothing applies:
 
     1. Not-collected domains (`collected`): apical table nodes for uncollected
-       domains are dropped.
+       domains are dropped, and so are the sections marked
+       `drop_when_uncollected` whose `requires_platform` was not collected.
     2. Data gates (`requires_platform`): a node whose domain(s) were not collected
        keeps its heading but its subtree is dropped and it states the fact
        (`not_collected_text`).
@@ -491,6 +509,11 @@ def study_tree(base, collected, authored=None, facts=None):
     nodes = base
     if collected:
         nodes = prune_uncollected_tables(base, collected)
+        if _has_drops(nodes):
+            if nodes is base:
+                import copy
+                nodes = copy.deepcopy(base)
+            nodes = _drop_uncollected(nodes, set(collected))
     design = (facts or {}).get("study_design") or {}
     if _has_route_gates(nodes):
         if nodes is base:

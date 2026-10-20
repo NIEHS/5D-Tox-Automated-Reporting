@@ -2212,14 +2212,15 @@ def supplied_files(node: DocNode, data: dict) -> list[SuppliedFile]:
 def supplied_files_pending(node: DocNode, data: dict) -> str | None:
     """The visible note a derived list shows instead of entries: no deposit is
     known for the study; its local supplemental folder (a deposit not yet
-    made, pipeline.deposit.load_deposit) holds no file of this kind; or the
-    recorded deposit holds none."""
+    made, pipeline.deposit.load_deposit) holds no file of this kind, which the
+    deposit made at publication supplies; or the recorded deposit holds none."""
     if node.binding != "derived" or supplied_files(node, data):
         return None
     deposit = data.get("deposit")
     if not deposit:
         return "[Supplemental files pending: no data deposit has been recorded for this study.]"
     if deposit.get("local"):
-        return ("[Supplemental files pending: listed from the deposit when the publishing "
-                "package is created.]")
+        # Gathered locally, none of this kind yet: the deposit made at
+        # publication supplies them (the user's wording, 2026-10-20).
+        return "To be assigned at publication."
     return "No files of this kind were deposited for this study."

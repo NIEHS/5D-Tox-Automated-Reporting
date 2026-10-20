@@ -1086,6 +1086,13 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     efdr = load_efdr(dtxsid)
     attach_genomics_appendix(data, render_tree, efdr, phrasing,
                              session_method(dtxsid).efdr_generation() if efdr else None)
+    # The organ-weight appendix: the organs the study weighed, described in the
+    # definition's words (rendering.organ_descriptions).
+    from document_model.view_config import study_document_facts
+    from rendering.organ_descriptions import attach_organ_descriptions, study_weighed_organs
+    _facts = study_document_facts(dtxsid)
+    attach_organ_descriptions(data, study_weighed_organs(dtxsid), _facts["organ_descriptions"],
+                              _facts["organ_description_order"])
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

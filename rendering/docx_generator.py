@@ -1728,7 +1728,12 @@ def _render_supplementary_material(doc: Document, node: DocNode, data: dict) -> 
     vocabulary/style base is active)."""
     pending = supplied_files_pending(node, data)
     if pending:
-        _add_pending(doc, pending.strip("[]"))
+        # A bracketed note is a placeholder; anything else is a statement the
+        # report makes ("To be assigned at publication."), printed as text.
+        if pending.startswith("["):
+            _add_pending(doc, pending.strip("[]"))
+        else:
+            doc.add_paragraph(_clean(pending))
         return
     title_style = _pstyle_or_default(doc, data, "supplementary_material_title")
     file_style = _pstyle_or_default(doc, data, "supplementary_material_filename")

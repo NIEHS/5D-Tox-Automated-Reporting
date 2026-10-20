@@ -195,6 +195,20 @@ state only for that reason follows the study's data, not the era:
   prints a placeholder rather than another route's words. This is the user's
   decision (2026-10-19). It supersedes the concentration words for every
   route (2026-10-12).
+- **Sections about data the study lacks.** `drop_when_uncollected: true`
+  with `requires_platform` leaves a section out, subtree included, when the
+  study collected none of that data. Without the flag, the section stays and
+  states `not_collected_text`. In the 2026 era the Internal Dose Methods
+  subsection, Results section and appendix carry the flag, so a study with
+  no Tissue Concentration has none of them, as NIEHS-02 … 06 have none. The
+  later appendices take the freed letter. This is the user's decision
+  (2026-10-20).
+- **Organ Weight Descriptions.** The appendix describes the organs the study
+  weighed (its integrated organ-weight endpoints, not the report's table,
+  which a view may narrow) and the tissues it sequenced. The texts are the
+  definition's `organ_descriptions`, in `organ_description_order`
+  (`rendering.organ_descriptions`). The rule reproduces all eleven books'
+  lists. The 2026 era orders them alphabetically.
 - **Foreword.** A definition states the series' Foreword (`foreword:`, its
   paragraphs, with `[text](url)` links). The shared template's is the
   2022–2023 books' text. `eras/niehs-2026` states the 2026 books' rewording:

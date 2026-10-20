@@ -115,6 +115,11 @@ class DocNode:
         missing_content_text: Shippable statement rendered when the study supplies
                         no `session_content`.  Unset ⇒ a pending placeholder (the
                         content is required and still has to be authored).
+        drop_when_uncollected: With `requires_platform`: a study that collected
+                        none of those domains has no such section at all (it
+                        is left out, with its subtree) instead of stating
+                        `not_collected_text` — the books with no internal dose
+                        data have no Internal Dose appendix (NIEHS-02 … 06).
         first_copy:     Inside a repeated section: kept in its first copy only,
                         and not scoped — it renders from the whole report's
                         data.  The 2026 books' tables shared by the studies,
@@ -255,6 +260,7 @@ class DocNode:
     deposit_text: str | None = None
     caption_suffix: str | None = None
     first_copy: bool = False
+    drop_when_uncollected: bool = False
     study_title: str | None = None
     requires_route: str | None = None
     entry_narrative: bool | None = None

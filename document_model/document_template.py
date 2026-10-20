@@ -469,6 +469,11 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
             raise ValueError(f"template node {node_id!r}: only a section or a table may repeat")
     if entry.get("first_copy") not in (None, True, False):
         raise ValueError(f"template node {node_id!r}: first_copy is true or false")
+    if entry.get("drop_when_uncollected") not in (None, True, False):
+        raise ValueError(f"template node {node_id!r}: drop_when_uncollected is true or false")
+    if entry.get("drop_when_uncollected") and not entry.get("requires_platform"):
+        raise ValueError(f"template node {node_id!r}: drop_when_uncollected needs "
+                         f"requires_platform (the data the section is about)")
     if entry.get("caption_suffix") is not None and node_type != "genomics-section":
         raise ValueError(f"template node {node_id!r}: caption_suffix is only valid on a "
                          f"genomics-section")
@@ -944,6 +949,34 @@ def load_foreword(name: str) -> list:
             runs.append(text[pos:])
         out.append(runs)
     return out
+
+
+def load_organ_descriptions(name: str) -> dict:
+    """The definition's ``organ_descriptions`` ({organ: its description, the
+    books' text}) for the appendix "Organ Weight Descriptions"
+    (rendering.organ_descriptions); {} when it states none."""
+    raw = _load_raw(name)
+    texts = raw.get("organ_descriptions") if isinstance(raw, dict) else None
+    if texts is None:
+        return {}
+    if not isinstance(texts, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) and v.strip() for k, v in texts.items()):
+        raise ValueError(f"template {name!r}: organ_descriptions is {{organ: description}}, "
+                         f"got {texts!r}")
+    return texts
+
+
+def load_organ_description_order(name: str) -> list[str]:
+    """The order the appendix describes organs in (``organ_description_order``);
+    the organs it does not name follow alphabetically.  [] = alphabetical."""
+    raw = _load_raw(name)
+    order = raw.get("organ_description_order") if isinstance(raw, dict) else None
+    if order is None:
+        return []
+    if not isinstance(order, list) or not all(isinstance(o, str) for o in order):
+        raise ValueError(f"template {name!r}: organ_description_order is a list of organs, "
+                         f"got {order!r}")
+    return order
 
 
 _DOSE_TERM_KEYS = frozenset({"dose", "internal_dose"})

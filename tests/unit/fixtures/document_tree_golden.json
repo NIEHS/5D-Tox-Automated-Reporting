@@ -569,11 +569,12 @@
       {
         "children": [
           {
+            "data_key": "organ_weight_descriptions",
             "id": "appendix-e-body",
             "level": 3,
             "region": "back",
             "title": "",
-            "type": "freeform-block"
+            "type": "narrative"
           }
         ],
         "id": "appendix-e-descriptions",

@@ -457,12 +457,12 @@ document:
       type: heading-only
       title: Organ Weight Descriptions
       children:
+      # One paragraph per organ the study weighed or sequenced, in the
+      # definition's words (organ_descriptions below; rendering.organ_descriptions).
       - id: appendix-e-body
-        type: freeform-block
+        type: narrative
         title: ""
-        content_file:
-          latex: freeform/appendix-e.tex
-          html: freeform/appendix-e.html
+        data_key: organ_weight_descriptions
   - id: appendix-f
     type: appendix
     element: book-app
@@ -638,6 +638,21 @@ book_meta:
   permissions:
     license_href: https://creativecommons.org/publicdomain/zero/1.0/
     statement: This is a work of the US government and distributed under the terms of the Public Domain
+
+# ADR-0029: the appendix "Organ Weight Descriptions" — one paragraph per organ
+# the study weighed or sequenced (rendering.organ_descriptions), "Organ:" in
+# bold then its text, in organ_description_order and then alphabetically.  The
+# texts are the published books', identical in every book that prints them
+# (Brain: NIEHS-02 … 06; Kidney, Heart: NIEHS-07 … 13; Lung, Ovary: NIEHS-12,
+# 13; Liver: all).  An organ with no text here prints a placeholder.
+organ_description_order: [Brain, Liver, Kidney, Heart]
+organ_descriptions:
+  Brain: "As the principal organ responsible for cognition and control of organ systems and bodily functions, the brain is largely shielded from toxic insults sufficiently severe to affect its weight. Because of this resistance to change, brain weight is often used as a denominator in determinations of other organ weight ratio changes. Other than in cases of grossly observable effects in the brain at necropsy, significant differences in brain weight in subacute toxicity studies are unlikely an effect of chemical exposure. More likely, changes in brain weight are the result of randomization (i.e., sorting of animals into groups for which the mean and standard deviation are significantly different at the outset of study, making it appear that there is an exposure-related difference when it is rather a byproduct of natural variation and chance)."
+  Liver: "The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+  Kidney: "The kidneys remove waste products and xenobiotics from the body, balance blood electrolytes, regulate blood pressure through the release of hormones, synthesize the active form of vitamin D, and control the production of erythropoiesis. In subacute studies, changes in kidney weight may reflect renal toxicity (particularly if accompanied by increases in other markers of kidney toxicity, e.g., increased Kim-1) and/or tubular hypertrophy. Decreased kidney weights in subacute studies are typically of unknown toxicological significance."
+  Heart: "The heart drives the circulatory system, supplying oxygen and essential macro- and micronutrients to the tissues. Increased heart weight in subacute studies would indicate severe cardiotoxicity, compensatory myocardial hypertrophy, and/or pulmonary injury. Decreased heart weight in subacute studies is often of unknown toxicological significance; however, it may be caused by decreased load on the heart from dehydration or modulation of contractility."
+  Lung: "The lung is the main respiratory organ and is primarily responsible for gas exchange but also aids in regulating blood pH and protecting the body from pathogens. An increase in lung weight following short-term exposure is a sensitive indicator of direct pulmonary toxicity. This change is typically driven by an acute inflammatory response, characterized by edema (fluid accumulation) and the infiltration of immune cells like neutrophils and macrophages. It is considered an adverse finding that signals local irritation and cellular injury. While the magnitude of the weight increase often correlates with the dose, a definitive interpretation of the nature and severity of the damage requires correlation with histopathological examination of the lung tissue. Conversely, a decrease in absolute lung weight is less common and usually points to significant systemic toxicity rather than a direct lung effect. The primary cause is often severe body weight loss (inanition), which leads to a proportional, catabolic reduction in the mass of most organs. In this scenario, the toxicological interpretation hinges on the relative lung-to-body-weight ratio, as an increase in this ratio can unmask a direct pulmonary effect that is otherwise obscured by the animal’s poor overall condition."
+  Ovary: "The ovary is the female gamete-producing organ and produces and releases essential sex hormones. Changes in ovarian weight are a key indicator of reproductive toxicity, often resulting from hormonal disruption. A decrease in weight is the more frequent and concerning finding, typically signaling an adverse impact on fertility. This can be caused by a direct toxic effect on ovarian cells, leading to follicular atresia, or by disruption of the Hypothalamic-Pituitary-Gonadal (HPG) axis. It may also occur as a secondary consequence of severe systemic toxicity and body weight loss, which suppresses reproductive function. An increase in ovarian weight is less common but also indicates significant reproductive perturbation, possibly from hormonal overstimulation, inflammation, or cysts. For any change in weight, the interpretation is critically dependent on context. The animal’s estrous cycle stage must be considered, as weight fluctuates naturally. Ultimately, a definitive conclusion about the cause and severity of the effect (either increased or decreased weight) is not possible without histopathological correlation to examine the underlying microscopic structure of the ovary."
 
 # ADR-0029: the series' Foreword, as NIEHS-05 … 10 print it (NIEHS-02 … 04
 # link the DTT pages at their earlier dntp addresses).  Each paragraph is

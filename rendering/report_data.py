@@ -715,6 +715,12 @@ def marshal_export_data(
     else:
         method = None
     attach_genomics_appendix(data, active_tree, efdr, phrasing, method)
+    from common.dtxsid import is_valid_dtxsid
+    from rendering.organ_descriptions import attach_organ_descriptions, study_weighed_organs
+    _dtx = body.get("dtxsid", "")
+    attach_organ_descriptions(data, study_weighed_organs(_dtx) if is_valid_dtxsid(_dtx) else [],
+                              _definition_fact(_dtx, "organ_descriptions"),
+                              _definition_fact(_dtx, "organ_description_order"))
     name_report_in_peer_review(data)
     return data
 

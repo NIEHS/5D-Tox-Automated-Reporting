@@ -638,11 +638,12 @@
         {
           "children": [
             {
+              "data_key": "organ_weight_descriptions",
               "id": "appendix-e-body",
               "level": 3,
               "region": "back",
               "title": "",
-              "type": "freeform-block"
+              "type": "narrative"
             }
           ],
           "id": "appendix-e-descriptions",
@@ -810,6 +811,17 @@
     "sections": []
   },
   "most_potent_gene_sets_matrix": null,
+  "organ_weight_descriptions": {
+    "paragraphs": [
+      [
+        {
+          "text": "Liver:",
+          "type": "bold"
+        },
+        " The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+      ]
+    ]
+  },
   "orientations": {
     "table-body-weight": "landscape"
   },

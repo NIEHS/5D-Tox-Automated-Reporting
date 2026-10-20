@@ -13,6 +13,8 @@ another definition and states only how it differs:
     phrasing: {...}                   # the generated prose's wording, deep-merged
                                       # likewise (document_model.phrasing)
     foreword: [...]                   # the series' Foreword, replacing the base's
+    organ_descriptions: {organ: text} # the organ-weight appendix's texts, merged
+    organ_description_order: [...]    # the order it describes organs in
     dose_terms: {route: {...}}        # the words headings name the dose by, per
                                       # route (${dose_term}), deep-merged
     changes:                          # applied in order
@@ -50,7 +52,8 @@ from common.dtxsid import validate_dtxsid
 PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
                               "phrasing", "tissue_order", "abstract_genes", "foreword",
-                              "dose_terms", "changes"})
+                              "dose_terms", "organ_descriptions", "organ_description_order",
+                              "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -103,6 +106,11 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["abstract_genes"] = raw["abstract_genes"]
     if "foreword" in raw:
         out["foreword"] = raw["foreword"]
+    if "organ_description_order" in raw:
+        out["organ_description_order"] = raw["organ_description_order"]
+    if raw.get("organ_descriptions"):
+        out["organ_descriptions"] = {**(out.get("organ_descriptions") or {}),
+                                     **raw["organ_descriptions"]}
     if raw.get("object_position"):
         out["object_position"] = {**(out.get("object_position") or {}), **raw["object_position"]}
     if raw.get("book_meta"):
