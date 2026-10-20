@@ -1,7 +1,9 @@
 """Study-design facts come from the recorded metadata, never protocol defaults."""
 
+from narrative.abstract_methods import build_abstract_methods
 from narrative.methods_design import (
     assemble_methods_sections, build_chemistry, build_dose_selection, build_study_design,
+    refresh_data_built,
 )
 from narrative.methods_models import MethodsContext
 from pipeline.study_design import (
@@ -123,6 +125,40 @@ def test_recorded_design_appears_in_methods():
                              "by gavage in corn oil once daily")
     marker = scan_pending_markers(design)[0]
     assert "route" not in marker and "animal source" in marker
+
+
+def test_a_member_study_names_its_substance_not_its_session():
+    # NIEHS-12/13's rat and mouse member sessions are "<DTXSID>_rat" / "_mouse".
+    ctx = _ctx()
+    ctx.dtxsid = "DTXSID1020431_rat"
+    chem = build_chemistry(ctx)[0]
+    assert "(CASRN 3380-34-5; DTXSID1020431)." in chem
+
+
+def test_a_render_rebuilds_the_data_built_subsections_from_the_cached_context():
+    cached = [{"key": "chemistry", "heading": "Chemistry", "level": 3,
+               "paragraphs": ["stale wording"]},
+              {"key": "clinical_obs", "heading": "Clinical Observations", "level": 4,
+               "paragraphs": ["LLM text"]}]
+    out = refresh_data_built(cached, _ctx().to_dict())
+    assert out[0]["paragraphs"][0].startswith("The test article was Triclosan")
+    assert out[1]["paragraphs"] == ["LLM text"]
+    assert refresh_data_built(cached, None) is cached
+
+
+def test_the_abstract_names_each_bmr_as_used():
+    ctx = _ctx(has_gene_expression=True, ge_organs=["liver"],
+               bmr_type="Std. Dev.", bmr_factor=1.0)
+    assert "one standard deviation was used to model all endpoints." in \
+        build_abstract_methods(ctx)
+    ctx.bmr_type, ctx.bmr_factor = "Relative Deviation", 0.25
+    ctx.apical_bmr = ("Standard Deviation", 1.0)
+    text = build_abstract_methods(ctx)
+    assert ("one standard deviation was used to model all apical endpoints, whereas a "
+            "benchmark response of a 25% relative deviation was used to model the gene "
+            "expression data.") in text
+    ctx.bmr_type = ctx.bmr_factor = ctx.apical_bmr = None
+    assert "benchmark response" in scan_pending_markers(build_abstract_methods(ctx))[0]
 
 
 def test_assembly_keeps_skeleton_order_and_ignores_llm_for_data_keys():

@@ -56,6 +56,7 @@
   "genomics_sections": {},
   "methods": {
     "context": {
+      "apical_bmr": null,
       "best_model_selection": null,
       "biosampling_doses": [],
       "bmdexpress_version": null,
@@ -191,7 +192,7 @@
         "key": "chemistry",
         "level": 3,
         "paragraphs": [
-          "The test article was the test chemical (DTXSID_TEST). Dose formulations were prepared in corn oil. [Placeholder: the test article source and lot, identity and purity analyses, storage conditions, and dose formulation analyses are not in the study data]"
+          "The test article was the test chemical. Dose formulations were prepared in corn oil. [Placeholder: the test article source and lot, identity and purity analyses, storage conditions, and dose formulation analyses are not in the study data]"
         ],
         "table": null
       }

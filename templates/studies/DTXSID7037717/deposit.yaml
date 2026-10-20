@@ -1,0 +1,21 @@
+# Bisphenol AF (C08002-01): the supplemental files gathered so far, in
+# sessions/DTXSID7037717/supplemental/ — the BMDExpress project and its text
+# exports (assets/BPAF_All_BMDExp_Files_0926.zip) and the study's individual
+# animal weights (C08002-01's rows of the IAD STQ extracts).  Captions in the
+# 2026 books' wording (NIEHS-12, 13: "BMDExpress Expression Data Heart",
+# "Curve Fit Rat Heart" …).  No DOI until the publishing package is created.
+captions:
+  BPAF_0826.bm2: BMDExpress Project File (bm2 Format)
+  BPAF_0926.json: BMDExpress Project File (JSON Format)
+  BPAF_Kidney_BMDExpress_Expression_Data.txt: BMDExpress Expression Data Kidney
+  BPAF_Liver_BMDExpress_Expression_Data.txt: BMDExpress Expression Data Liver
+  "BPAF_Kidney_Genomic_Benchmark_Dose_Analysis .txt": Benchmark Dose Analysis Kidney
+  "BPAF_Liver_Genomic_Benchmark_Dose_Analysis .txt": Benchmark Dose Analysis Liver
+  BPAF_Kidney_BMDExpress_GO_Biological_Process_BMD_Results.txt: BMDExpress GO Biological Process BMD Results Kidney
+  BPAF_Liver_BMDExpress_GO_Biological_Process_BMD_Results.txt: BMDExpress GO Biological Process BMD Results Liver
+  BPAF_Kidney_BMDExpress_Individual_Gene_BMD_Results.txt: BMDExpress Individual Gene BMD Results Kidney
+  BPAF_Liver_BMDExpress_Individual_Gene_BMD_Results.txt: BMDExpress Individual Gene BMD Results Liver
+  BPAF_Kidney_Curve_Fit.txt: Curve Fit Kidney
+  BPAF_Liver_Curve_Fit.txt: Curve Fit Liver
+  BPAF_Kidney_One-way_ANOVA_Analysis.txt: One-way ANOVA Kidney
+  BPAF_Liver_One-way_ANOVA_Analysis.txt: One-way ANOVA Liver

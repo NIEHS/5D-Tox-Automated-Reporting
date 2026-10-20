@@ -41,6 +41,24 @@ from narrative.narrative_helpers import _format_dose_list, _format_organ_list
 
 
 
+_FACTOR_WORDS = {1.0: "one", 2.0: "two", 0.5: "one half of"}
+
+
+def _bmr_words(bmr_type, factor) -> str | None:
+    """A BMR as the books word it: ("Standard Deviation", 1.0) → "one standard
+    deviation"; a relative deviation as a percentage change, ("Relative
+    Deviation", 0.25) → "a 25% relative deviation".  None when unknown."""
+    if not bmr_type or factor is None:
+        return None
+    kind = str(bmr_type).strip().lower().replace("std. dev.", "standard deviation")
+    if kind in ("sd", "standard deviation", "std"):
+        word = _FACTOR_WORDS.get(float(factor), f"{float(factor):g}")
+        return f"{word} standard deviation"
+    if kind in ("rel_dev", "relative deviation"):
+        return f"a {float(factor) * 100:g}% relative deviation"
+    return f"{float(factor):g} {kind}"
+
+
 def build_abstract_methods(ctx: MethodsContext) -> str:
     """
     Build the Abstract → Methods paragraph from a MethodsContext.
@@ -128,15 +146,29 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
         bmd_clause += f" and transcriptional changes in the {organs_str}"
     bmd_clause += "."
 
-    # --- BMR description ---
-    # Default to NIEHS protocol: "one standard deviation"
-    bmr_desc = "one standard deviation"
-    if ctx.bmr_factor is not None and ctx.bmr_type:
-        # e.g., bmr_factor=1.0, bmr_type="Std. Dev." → "one standard deviation"
-        factor_words = {1.0: "one", 2.0: "two", 0.5: "one half of"}
-        word = factor_words.get(ctx.bmr_factor, str(ctx.bmr_factor))
-        type_clean = ctx.bmr_type.lower().replace("std. dev.", "standard deviation").strip()
-        bmr_desc = f"{word} {type_clean}" if word else type_clean
+    # --- BMR sentence ---
+    # Each BMR as it was used: the apical BMDs' (``ctx.apical_bmr``, from the
+    # BMD summary) and the transcriptomic analyses' (the .bm2's, bmr_type /
+    # bmr_factor).  One sentence for all endpoints when they agree (NIEHS-02 …
+    # 10: "A benchmark response of one standard deviation was used to model
+    # all endpoints."); else each named (NIEHS-12, 13: "… 1 standard deviation
+    # from the mean was used to model all apical endpoints, whereas a benchmark
+    # response set to a 25% change in the median response was used to model
+    # the gene expression data.").
+    genomic = (_bmr_words(ctx.bmr_type, ctx.bmr_factor)
+               if ctx.has_gene_expression and ctx.ge_organs else None)
+    apical = _bmr_words(*(ctx.apical_bmr or (None, None))) or (
+        None if genomic else _bmr_words(ctx.bmr_type, ctx.bmr_factor))
+    if apical and genomic and apical != genomic:
+        bmr_sentence = (f" A benchmark response of {apical} was used to model all apical "
+                        f"endpoints, whereas a benchmark response of {genomic} was used to "
+                        f"model the gene expression data.")
+    elif apical or genomic:
+        bmr_sentence = f" A benchmark response of {apical or genomic} was used to model all endpoints."
+    else:
+        # Never the protocol's usual BMR assumed: say it is missing.
+        bmr_sentence = (" [Placeholder: the benchmark response used to model the "
+                        "endpoints is not in the study data]")
 
     # --- Assemble the paragraph ---
     paragraph = (
@@ -156,8 +188,7 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
         f"{'exposure' if inhaled else 'dose was administered'}, animals were euthanized, standard "
         f"toxicological measures were assessed{assay_clause}."
         f"{bmd_clause}"
-        f" A benchmark response of {bmr_desc} was used to model all "
-        f"endpoints."
+        f"{bmr_sentence}"
     )
 
     return paragraph

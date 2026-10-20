@@ -111,7 +111,8 @@ def build_dose_selection(ctx: MethodsContext) -> list[str]:
 def build_chemistry(ctx: MethodsContext) -> list[str]:
     from pipeline.study_design import is_air_concentration, vehicle_phrase
 
-    ids = [f"CASRN {ctx.casrn}" if ctx.casrn else "", ctx.dtxsid or ""]
+    from common.dtxsid import substance_dtxsid
+    ids = [f"CASRN {ctx.casrn}" if ctx.casrn else "", substance_dtxsid(ctx.dtxsid)]
     ids = [i for i in ids if i]
     chem = ctx.chemical_name or "The test article"
     sentences = [f"The test article was {chem}{' (' + '; '.join(ids) + ')' if ids else ''}."]
@@ -158,3 +159,20 @@ def assemble_methods_sections(
             sections.append(MethodsSection(heading=heading, level=level, key=key,
                                            paragraphs=paragraphs))
     return sections
+
+
+def refresh_data_built(sections: list[dict], context: dict | None) -> list[dict]:
+    """Cached Methods ``sections`` with each data-built subsection rebuilt from
+    the cached ``context``: they are deterministic, so a render picks up a
+    change to their wording without the Process run that wrote the cache (and
+    its LLM-written subsections).  The sections as given without a context."""
+    if not isinstance(context, dict) or not context:
+        return sections
+    ctx = MethodsContext.from_dict(context)
+    out = []
+    for section in sections:
+        key = section.get("key") if isinstance(section, dict) else None
+        if key in _BUILDERS:
+            section = {**section, "paragraphs": _BUILDERS[key](ctx)}
+        out.append(section)
+    return out

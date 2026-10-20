@@ -7,7 +7,7 @@
       },
       {
         "label": "Methods",
-        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. A benchmark response of one standard deviation was used to model all endpoints."
+        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. [Placeholder: the benchmark response used to model the endpoints is not in the study data]"
       },
       {
         "label": "Results",
@@ -882,6 +882,13 @@
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
+      "label": "4",
+      "ready": false,
+      "scope": null,
+      "table_number": 4,
+      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
+    },
+    {
       "label": "B-1",
       "ready": false,
       "scope": "B",
@@ -901,13 +908,6 @@
       "scope": "D",
       "table_number": 2,
       "title": "BMDExpress/ToxicR Analysis Configuration"
-    },
-    {
-      "label": "4",
-      "ready": false,
-      "scope": null,
-      "table_number": 4,
-      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
   ],
   "test_article": {

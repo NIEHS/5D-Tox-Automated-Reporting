@@ -161,12 +161,18 @@ phrasing:
 changes:
   # ── Materials and Methods: Chemistry first, with the test article's
   # procurement and the vapor generation, monitoring and chamber atmosphere.
+  # Chemistry is a bare heading; what the data say of the test article (the
+  # data-built `chemistry` text) is its procurement and characterization.
   - move: mm-chemistry
     before: mm-study-design
+  - set: mm-chemistry
+    type: heading-only
+    data_key: null
+    methods_key: null
   - insert:
     - {id: mm-chem-procurement, type: narrative, data_key: methods,
        title: "Procurement and Characterization of ${chemical_name}",
-       methods_key: chemistry_procurement}
+       methods_key: chemistry}
     - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
        title: Vapor Generation and Exposure System, methods_key: vapor_generation,
        requires_route: inhaled}

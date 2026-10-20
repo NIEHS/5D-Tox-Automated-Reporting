@@ -41,12 +41,19 @@ changes:
     into: peer-review
 
   # ── Materials and Methods ───────────────────────────────────────────────
+  # Chemistry is a bare heading; what the data say of the test article (the
+  # data-built `chemistry` text) is its procurement, characterization and
+  # formulation.
+  - set: mm-chemistry
+    type: heading-only
+    data_key: null
+    methods_key: null
   - insert:
     - id: mm-chemistry-procurement
       type: narrative
       title: Procurement, Characterization, and Formulation
       data_key: methods
-      methods_key: chemistry_procurement
+      methods_key: chemistry
     into: mm-chemistry
   - remove: mm-body-organ-wt
   - set: mm-stat-apical

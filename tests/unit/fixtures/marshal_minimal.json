@@ -1150,27 +1150,6 @@
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
-      "label": "B-1",
-      "ready": false,
-      "scope": "B",
-      "table_number": 1,
-      "title": "Animal Numbers and FASTQ Data File Names"
-    },
-    {
-      "label": "D-1",
-      "ready": true,
-      "scope": "D",
-      "table_number": 1,
-      "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints"
-    },
-    {
-      "label": "D-2",
-      "ready": false,
-      "scope": "D",
-      "table_number": 2,
-      "title": "BMDExpress/ToxicR Analysis Configuration"
-    },
-    {
       "label": "9",
       "ready": false,
       "scope": null,
@@ -1197,6 +1176,27 @@
       "scope": null,
       "table_number": 12,
       "title": "Top Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
+    },
+    {
+      "label": "B-1",
+      "ready": false,
+      "scope": "B",
+      "table_number": 1,
+      "title": "Animal Numbers and FASTQ Data File Names"
+    },
+    {
+      "label": "D-1",
+      "ready": true,
+      "scope": "D",
+      "table_number": 1,
+      "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints"
+    },
+    {
+      "label": "D-2",
+      "ready": false,
+      "scope": "D",
+      "table_number": 2,
+      "title": "BMDExpress/ToxicR Analysis Configuration"
     }
   ],
   "test_article": {
