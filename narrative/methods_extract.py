@@ -214,6 +214,21 @@ def _collect_bm2_analysis_metadata(bm2_json: dict) -> dict:
     return merged
 
 
+def _is_transcriptomic(bm2_json: dict) -> bool:
+    """Whether a BMDExpress project holds gene expression (probe responses on
+    a chip), not apical endpoints."""
+    for e in bm2_json.get("doseResponseExperiments") or []:
+        chip = e.get("chip") if isinstance(e, dict) else None
+        # A chip shared across experiments is written once, then by @ref (an
+        # int); an apical project's is BMDExpress' "generic" placeholder.
+        if isinstance(chip, dict):
+            provider = str(chip.get("provider") or "").strip().lower()
+            name = str(chip.get("name") or chip.get("geoName") or "").strip().lower()
+            if provider and provider != "generic" and name != "generic":
+                return True
+    return False
+
+
 # The category-analysis note lines that state a GO gene-set filter.
 _GO_FILTER_NOTE_KEYS = (
     "Remove BMD > Highest Dose", "Remove BMD with R^2", "Remove genes with BMD/BMDL",
@@ -394,9 +409,26 @@ def extract_methods_context(
                 ctx.has_gene_expression = True
 
     # --- BMDExpress analysis metadata from .bm2 files ---
-    for fid, bm2_json in bm2_jsons.items():
-        if not isinstance(bm2_json, dict):
+    # The transcriptomic analysis' settings (its BMR, models, prefilter) are
+    # the gene-expression project's: when the pool also holds apical projects
+    # (a study's "Body weight.bm2" …, fitted at their own BMR), they are not.
+    projects = [j for j in bm2_jsons.values() if isinstance(j, dict)]
+    transcriptomic = [j for j in projects if _is_transcriptomic(j)]
+    # Each apical project's BMR, by the platform its file was fingerprinted as.
+    platform_of = {}
+    for fp in (fingerprints or {}).values():
+        fpd = fp if isinstance(fp, dict) else getattr(fp, "__dict__", {})
+        name = str(fpd.get("filename") or "")
+        if name.lower().endswith(".bm2") and fpd.get("platform"):
+            platform_of[name[:-4]] = fpd["platform"]
+    for stem, bm2_json in bm2_jsons.items():
+        if not isinstance(bm2_json, dict) or bm2_json in transcriptomic:
             continue
+        meta = _collect_bm2_analysis_metadata(bm2_json)
+        if stem in platform_of and meta.get("bmr_type") and meta.get("bmr_factor") is not None:
+            ctx.apical_bmrs = {**(ctx.apical_bmrs or {}),
+                               platform_of[stem]: [meta["bmr_type"], meta["bmr_factor"]]}
+    for bm2_json in transcriptomic or projects:
         meta = _collect_bm2_analysis_metadata(bm2_json)
         if meta:
             # Apply to context (first non-None wins for each field)

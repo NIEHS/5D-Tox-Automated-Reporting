@@ -255,3 +255,33 @@ def test_the_inhalation_method_names_the_study_type():
     assert administration_phrase(f) == "by whole-body inhalation"
     plain = study_design_facts(_integrated(species="rat", articleRoute="inhaled"))
     assert (plain["inhalation"], study_type_label(plain)) == (None, "Inhalation Studies")
+
+
+def test_the_abstract_names_each_apical_domains_bmr_when_they_differ():
+    # The February 2026 DTT method: clinical chemistry at 25% RD, the rest at 1 SD.
+    ctx = _ctx(has_gene_expression=True, ge_organs=["liver"],
+               bmr_type="Relative Deviation", bmr_factor=0.25,
+               apical_bmrs={"Body Weight": ["Standard Deviation", 1.0],
+                            "Organ Weight": ["Standard Deviation", 1.0],
+                            "Clinical Chemistry": ["Relative Deviation", 0.25]})
+    assert ("A benchmark response of one standard deviation was used to model the body "
+            "weight and organ weight endpoints, and a benchmark response of a 25% relative "
+            "deviation was used to model the clinical chemistry endpoints and the gene "
+            "expression data.") in build_abstract_methods(ctx)
+
+
+def test_the_transcriptomic_settings_are_the_gene_expression_projects():
+    from narrative.methods_extract import _is_transcriptomic, extract_methods_context
+
+    def project(provider, bmr, factor):
+        notes = ["BMR Type: " + bmr, f"BMR Factor: {factor}"]
+        return {"doseResponseExperiments": [{"chip": {"provider": provider, "name": provider}}],
+                "bMDResult": [{"analysisInfo": {"notes": notes}}]}
+    apical = project("generic", "Standard Deviation", 1.0)
+    genomic = project("BioSpyder", "Relative Deviation", 0.25)
+    assert _is_transcriptomic(genomic) and not _is_transcriptomic(apical)
+    ctx = extract_methods_context(
+        {"name": "X"}, {"f1": {"filename": "Body weight.bm2", "platform": "Body Weight"}},
+        bm2_jsons={"Body weight": apical, "Gene Expression": genomic})
+    assert (ctx.bmr_type, ctx.bmr_factor) == ("Relative Deviation", 0.25)
+    assert ctx.apical_bmrs == {"Body Weight": ["Standard Deviation", 1.0]}

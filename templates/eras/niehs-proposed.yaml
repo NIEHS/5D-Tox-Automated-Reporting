@@ -19,6 +19,10 @@
 #       "Gene Set Clusters" — the same gene sets clustered by shared genes
 #         (k-means on their Jaccard overlap), placed by BMD.
 #   - Front matter: a list of the body's figures after the list of tables.
+#   - An appendix, after the gene set and gene definitions: how the semantic
+#     map and its clusters were derived, how the gene set clusters were made,
+#     how the two relate, and per analysis every active gene set with both of
+#     its clusters (by gene set cluster, then by semantic cluster).
 # The wording of both sections is proposed (phrasing.genomic_figures below),
 # for review with the drafts.
 extends: eras/niehs-2026
@@ -35,6 +39,27 @@ phrasing:
     clusters:
       intro: "The same gene sets are grouped by the genes they share ({figures}). They were clustered by k-means on the overlap of their genes (Jaccard distance), with as many clusters as the square root of the number of gene sets, rounded. Each row is a cluster, the clusters ordered from the top by the lowest BMD among their gene sets; each gene set is placed at its BMD {statistic} ({unit}, log scale), sized by its number of genes with a BMD, and colored by its semantic cluster on the semantic map (gray when it falls in none or is not on the map)."
       note: "{gene_sets} gene sets in {clusters} clusters, each at its BMD {statistic}."
+    appendix_cite: " How the map, its semantic clusters and the gene set clusters were derived, how the two relate, and the gene sets in each cluster are in Appendix {appendix}."
+    method:
+      map:
+      - "The semantic map places Gene Ontology (GO) biological process terms in two dimensions by their meaning ({map_figures}). It was supplied to this project as a table of {terms} GO biological process terms with their coordinates on the map and their clusters (anc2vec_embeddings_umap_projection_coordinates_hdbscan_clusters_40-500.csv), and it is the same in every report. Its source names how it was derived, in three steps."
+      - "First, each GO term was embedded as a numeric vector by anc2vec, which learns embeddings of GO terms that preserve their relationships in the ontology: a term's ancestors, its sub-ontology and its descendants (Edera et al. 2022). Terms with related meanings have similar vectors. Second, the vectors were projected to two dimensions by uniform manifold approximation and projection (UMAP; McInnes et al. 2018), which keeps terms that are near one another in the embedding near one another on the map; the map's two axes have no units and no meaning of their own. Third, the terms were clustered by hierarchical density-based spatial clustering of applications with noise (HDBSCAN; McInnes et al. 2017), which groups terms lying in dense regions together and leaves terms in sparse regions in no cluster. The result is {clusters} semantic clusters; {unclustered} of the {terms} terms are in none. The clusters are numbered from 0; the numbers are labels only."
+      - "[Placeholder: the GO release the map was built from, which terms it includes (the 40–500 in its source's name), the anc2vec embedding size, the UMAP and HDBSCAN settings, and whether HDBSCAN clustered the two-dimensional map or the embeddings are not recorded with the map]"
+      - "A report places each active gene set on the map by its GO ID, in the color of the term's semantic cluster. A gene set whose GO term the map does not hold (one added to the Gene Ontology since, or outside the terms the map includes) cannot be placed; each figure's note gives how many."
+      clusters:
+      - "The gene set clusters group the active gene sets of one analysis — one tissue of one sex — by the genes they share ({cluster_figures}). They are computed from the study's data, for each analysis, each time the report is built."
+      - "Each gene set is taken as its active genes: the genes in the gene set that passed all of the BMD analysis filters. For each pair of gene sets, the Jaccard distance is one minus the number of active genes the two share divided by the number in either, so 0 for two gene sets with the same active genes and 1 for two with none in common. Each gene set is described by its distances to all of the others, and these profiles were clustered by k-means, with as many clusters as the square root of the number of gene sets, rounded; k-means++ starting centers, a fixed random seed and 50 iterations make the clustering the same each time the same data are analyzed. A gene set with no active genes is in no cluster."
+      - "In each figure, each row is a gene set cluster, the rows ordered from the top by the lowest BMD among their gene sets. Each gene set is a point at its BMD {statistic} ({unit}, log scale), its size growing with its number of active genes, its color its semantic cluster on the map (gray when it is in none or not on the map). The cluster numbers are labels only, and differ from one analysis to another."
+      relation:
+      - "The two clusterings group the same gene sets by different evidence. A semantic cluster is a property of the GO terms alone: terms the Gene Ontology relates, whatever the study, the same in every report. A gene set cluster is a property of this study's data: gene sets whose responding genes overlap, whether the ontology relates them or not."
+      - "The gene set cluster figures color each gene set by its semantic cluster, so the two can be read together. A row of one color is a group of gene sets that share both genes and meaning: one biological response, seen through several overlapping GO terms. A row of many colors is a group of genes that several distinct kinds of process share. A color that recurs across many rows is a kind of process affected through different sets of genes. On the semantic map, a cluster with many active gene sets is a kind of process the test article affected; the gene set cluster figure then shows at what dose."
+      - "The tables that follow list every active gene set of each analysis with both of its clusters: first by gene set cluster, in the figure's order (lowest BMD first), then by semantic cluster."
+    membership:
+      by_cluster_headers: [Gene Set Cluster, Semantic Cluster, GO ID, GO Biological Process, "BMD {statistic} ({unit})"]
+      by_semantic_headers: [Semantic Cluster, Gene Set Cluster, GO ID, GO Biological Process, "BMD {statistic} ({unit})"]
+      none: none
+      off_map: not on the map
+      footnote: "GO = Gene Ontology; BMD = benchmark dose. Semantic cluster: the GO term's cluster on the semantic map (none: in no cluster; not on the map: a term the map does not hold). Gene set cluster: the k-means cluster of the gene set's active genes (none: a gene set with no active genes)."
 
 changes:
   - insert:
@@ -60,3 +85,33 @@ changes:
          caption: "Active ${organ} Gene Ontology Biological Process Gene Sets Clustered by Shared Genes, by Benchmark Dose, for ${subject} ${treatment}",
          data_key: gene_set_cluster_figures}
     before: gene-set-summary
+  # The appendix that explains the two figures and lists each cluster's gene
+  # sets, after the gene set and gene definitions; the figures' sections cite it.
+  - insert:
+    - id: appendix-gene-set-figures
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Gene Ontology Semantic Map and Gene Set Clusters
+      cited_as: genomic-figures-appendix
+      children:
+      - {id: appendix-gene-set-map-method, type: narrative, title: The Semantic Map and Its Clusters,
+         data_key: gene_set_map_method}
+      - {id: appendix-gene-set-cluster-method, type: narrative, title: The Gene Set Clusters,
+         data_key: gene_set_cluster_method}
+      - {id: appendix-gene-set-figures-relation, type: narrative,
+         title: How the Semantic Clusters and the Gene Set Clusters Relate,
+         data_key: gene_set_figures_relation}
+      - id: appendix-gene-set-membership
+        type: heading-only
+        title: Cluster Membership
+        children:
+        - {id: table-gene-set-cluster-membership, type: data-table, repeat: genomic_analyses,
+           title: "Active ${organ} Gene Ontology Biological Process Gene Sets by Gene Set Cluster",
+           caption: "Active ${organ} Gene Ontology Biological Process Gene Sets by Gene Set Cluster, for ${subject} ${treatment}",
+           data_key: gene_set_cluster_membership}
+        - {id: table-gene-set-semantic-membership, type: data-table, repeat: genomic_analyses,
+           title: "Active ${organ} Gene Ontology Biological Process Gene Sets by Semantic Cluster",
+           caption: "Active ${organ} Gene Ontology Biological Process Gene Sets by Semantic Cluster, for ${subject} ${treatment}",
+           data_key: gene_set_semantic_membership}
+    after: appendix-gene-definitions

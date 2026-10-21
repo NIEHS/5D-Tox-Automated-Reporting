@@ -225,8 +225,17 @@ state only for that reason follows the study's data, not the era:
     "Gene Set Clusters": an opening paragraph, then a figure per genomic
     analysis (`repeat: genomic_analyses`, a tissue of one sex), its image
     the Process step's chart for that analysis (`rendering.genomic_figures`);
-  - a list of the body's figures after the list of tables.
-  Their wording is `phrasing.genomic_figures`, proposed for review.
+  - a list of the body's figures after the list of tables;
+  - an appendix, "Gene Ontology Semantic Map and Gene Set Clusters"
+    (`cited_as: genomic-figures-appendix`, which the opening paragraphs
+    cite): how the map and its semantic clusters were derived (anc2vec →
+    UMAP → HDBSCAN, settings the map's file does not record left as a
+    placeholder), how the gene set clusters are made, how the two relate,
+    and per analysis two membership tables — every active gene set with both
+    of its clusters, by gene set cluster and by semantic cluster.
+  Their wording is `phrasing.genomic_figures`, proposed for review. On the
+  HTML and Bookshelf surfaces the figures are inline SVG, each marker titled
+  with its GO term (the hover text); print surfaces take the PNG.
 - **A figure per analysis.** `repeat: genomic_analyses` makes one copy per
   tissue × sex (× study), scoped by `scope_analysis` ("liver-male",
   `document_tree.analysis_key`); a payload keyed `by_analysis` gives each

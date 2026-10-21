@@ -183,6 +183,23 @@ SCHEMA: dict = {
             "intro": _t("figures", "statistic", "unit"),
             "note": _t("gene_sets", "clusters", "statistic"),
         },
+        # The sentence the intros close with, citing the appendix.
+        "appendix_cite": _t("appendix"),
+        # The appendix: each a list of paragraph templates.
+        "method": {
+            "map": _List(1, frozenset({"terms", "clusters", "unclustered", "map_figures",
+                                       "cluster_figures"}), at_least=True),
+            "clusters": _List(1, frozenset({"statistic", "unit", "map_figures",
+                                            "cluster_figures"}), at_least=True),
+            "relation": _List(1, frozenset({"map_figures", "cluster_figures"}), at_least=True),
+        },
+        "membership": {
+            "by_cluster_headers": _List(5, frozenset({"statistic", "unit"})),
+            "by_semantic_headers": _List(5, frozenset({"statistic", "unit"})),
+            "none": _t(),
+            "off_map": _t(),
+            "footnote": _t(),
+        },
     },
 }
 

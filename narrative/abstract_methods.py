@@ -28,7 +28,7 @@ the shim to assemble the Abstract block.
 from __future__ import annotations
 
 from narrative.methods_models import MethodsContext
-from narrative.narrative_helpers import _format_dose_list, _format_organ_list
+from narrative.narrative_helpers import _format_dose_list, _format_organ_list, _join_oxford
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,10 @@ from narrative.narrative_helpers import _format_dose_list, _format_organ_list
 
 
 _FACTOR_WORDS = {1.0: "one", 2.0: "two", 0.5: "one half of"}
+# An apical domain as the BMR sentence names its endpoints.
+_DOMAIN_WORDS = {"Body Weight": "body weight", "Organ Weight": "organ weight",
+                 "Clinical Chemistry": "clinical chemistry", "Hematology": "hematology",
+                 "Hormones": "hormone", "Tissue Concentration": "tissue concentration"}
 
 
 def _bmr_words(bmr_type, factor) -> str | None:
@@ -157,9 +161,29 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     # the gene expression data.").
     genomic = (_bmr_words(ctx.bmr_type, ctx.bmr_factor)
                if ctx.has_gene_expression and ctx.ge_organs else None)
-    apical = _bmr_words(*(ctx.apical_bmr or (None, None))) or (
-        None if genomic else _bmr_words(ctx.bmr_type, ctx.bmr_factor))
-    if apical and genomic and apical != genomic:
+    # The apical projects' own BMRs, by domain (ctx.apical_bmrs): when they
+    # differ, each BMR names what it modeled ("A benchmark response of one
+    # standard deviation was used to model the body weight, … endpoints, and a
+    # benchmark response of a 25% relative deviation was used to model the
+    # clinical chemistry endpoints and the gene expression data.").
+    by_domain: dict[str, list[str]] = {}
+    for platform, bmr in (ctx.apical_bmrs or {}).items():
+        words = _bmr_words(*bmr) if isinstance(bmr, (list, tuple)) and len(bmr) == 2 else None
+        if words:
+            by_domain.setdefault(words, []).append(_DOMAIN_WORDS.get(platform, platform.lower()))
+    if len(by_domain) == 1:
+        apical = next(iter(by_domain))
+    else:
+        apical = _bmr_words(*(ctx.apical_bmr or (None, None))) or (
+            None if genomic else _bmr_words(ctx.bmr_type, ctx.bmr_factor))
+    if len(by_domain) > 1:
+        groups = {w: [f"the {_join_oxford(sorted(d))} endpoints"] for w, d in by_domain.items()}
+        if genomic:
+            groups.setdefault(genomic, []).append("the gene expression data")
+        bmr_sentence = " " + ", and ".join(
+            f"{'A' if i == 0 else 'a'} benchmark response of {w} was used to model "
+            f"{' and '.join(what)}" for i, (w, what) in enumerate(groups.items())) + "."
+    elif apical and genomic and apical != genomic:
         bmr_sentence = (f" A benchmark response of {apical} was used to model all apical "
                         f"endpoints, whereas a benchmark response of {genomic} was used to "
                         f"model the gene expression data.")

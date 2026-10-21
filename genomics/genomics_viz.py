@@ -135,6 +135,40 @@ _SVG_ID_ATTR = _re.compile(
 _SVG_URL_REF = _re.compile(r'(url\(#)([A-Za-z_][\w\-:.]*)(\))')
 
 
+_SVG_TRACE = _re.compile(r'(?=<g class="trace scatter)')
+_SVG_POINT = _re.compile(r'<path class="point"([^>]*?)/>')
+
+
+def _hover_titles(svg: str, fig) -> str:
+    """Give each plotted marker of a Plotly static SVG its hover text as an SVG
+    <title> (the browser shows it on hover), so the figure an HTML surface
+    shows inline names each gene set as the interactive chart did.  Plotly
+    writes one ``trace scatter`` group per trace and one ``point`` path per
+    point, in the figure's data order; a trace with no hover text (the map's
+    reference terms) is left as is."""
+    import html as _html
+    parts = _SVG_TRACE.split(svg)
+    if len(parts) - 1 != len(fig.data):
+        return svg                       # not the layout this relies on
+    out = [parts[0]]
+    for trace, part in zip(fig.data, parts[1:]):
+        texts = list(trace.text) if getattr(trace, "text", None) is not None and \
+            not isinstance(trace.text, str) else []
+        if not texts or getattr(trace, "hoverinfo", None) == "skip":
+            out.append(part)
+            continue
+        it = iter(texts)
+
+        def _title(m, it=it):
+            text = next(it, None)
+            if text is None:
+                return m.group(0)
+            label = _html.escape(str(text).replace("<br>", "\n"))
+            return f'<path class="point"{m.group(1)}><title>{label}</title></path>'
+        out.append(_SVG_POINT.sub(_title, part))
+    return "".join(out)
+
+
 def _namespace_svg_ids(svg: str, prefix: str) -> str:
     """
     Rewrite every ID reference in a Plotly SVG so it carries a unique
@@ -1062,7 +1096,7 @@ def render_chart_images(
         # IDs are namespaced so multiple charts coexist in one DOM without
         # Plotly's auto-generated clip-path IDs colliding across <svg>s.
         png_bytes = fig.to_image(format="png", scale=2)
-        svg_raw = fig.to_image(format="svg").decode("utf-8")
+        svg_raw = _hover_titles(fig.to_image(format="svg").decode("utf-8"), fig)
         prefix = _SVG_PREFIX.get(ct.name, ct.name)
         svg = _namespace_svg_ids(svg_raw, f"{prefix}-{svg_ns_suffix}")
 
@@ -1085,6 +1119,17 @@ def render_chart_images(
     import math
     with_bmd = [gs for gs in gene_sets
                 if gs.get("bmd") is not None and math.isfinite(float(gs["bmd"]))]
+    # Each gene set's two clusters — its semantic cluster on the map (None:
+    # its GO term is not on the map; -1: on the map, in no cluster) and its
+    # gene-overlap cluster — for the appendix that lists them
+    # (rendering.genomic_figures).
+    result["members"] = [
+        {"go_id": gs.get("go_id"), "go_term": gs.get("go_term"),
+         "bmd": float(gs["bmd"]) if gs in with_bmd else None,
+         "semantic": (_UMAP_LOOKUP[gs["go_id"]].get("cluster", -1)
+                      if gs.get("go_id") in _UMAP_LOOKUP else None),
+         "overlap": (clusters or {}).get(gs.get("go_id"), -1)}
+        for gs in gene_sets]
     result["counts"] = {
         "gene_sets": len(gene_sets),
         "on_map": sum(1 for gs in gene_sets if gs.get("go_id") in _UMAP_LOOKUP),

@@ -553,6 +553,26 @@ def figure_payload(node: DocNode, data: dict) -> dict | None:
     return payload or None
 
 
+_SVG_SIZE = re.compile(r'^(<svg\b[^>]*?)\swidth="[^"]*"\sheight="[^"]*"')
+
+
+def inline_svg(svg: str, alt: str = "") -> str:
+    """A figure's SVG (a data figure payload's ``svg``: a chart whose markers
+    carry their hover text as <title>s) for inline use on an HTML surface:
+    scaled to its container by its viewBox, and labelled for assistive
+    technology.  Inline, the browser shows each marker's title on hover — an
+    <img> would not."""
+    out = _SVG_SIZE.sub(r'\1 width="100%"', svg.strip(), count=1)
+    if alt:
+        out = out.replace("<svg ", f'<svg role="img" aria-label="{_esc_attr(alt)}" ', 1)
+    return out
+
+
+def _esc_attr(text: str) -> str:
+    return (str(text).replace("&", "&amp;").replace('"', "&quot;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
+
+
 def authored_table_matrix(node: DocNode) -> dict | None:
     """
     EXTRACT for an `authored-table` node whose supplied markup is HTML: the

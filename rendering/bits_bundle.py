@@ -264,6 +264,8 @@ def bundle_zip(xml, images: dict[str, str] | None = None) -> bytes:
         for name, content in split_book(xml).items():
             zf.writestr(name, content)
         for name, b64 in (images or {}).items():
+            if isinstance(b64, dict):        # a chart with its SVG: the PNG is the file
+                b64 = b64.get("png") or ""
             raw = b64.split(",", 1)[1] if b64.startswith("data:") else b64
             zf.writestr(name, base64.b64decode(raw))
     return buf.getvalue()

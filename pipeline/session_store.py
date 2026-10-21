@@ -128,16 +128,41 @@ def latest_session_cache(session: Path, glob_pattern: str) -> Path | None:
 def cached_bm2_jsons(session: Path) -> dict[str, dict]:
     """The deserialized BMDProject of every uploaded .bm2 in the session's
     files/, keyed by file stem, from the bm2 cache (the BMDExpress / BMDS
-    versions, models and BMR the Methods text reports). A .bm2 not in the cache
-    is left out; bm2_cache.get_json logs a failed read itself."""
+    versions, models and BMR the Methods text reports).  A .bm2 not in the cache
+    yet is exported (Java) and cached: fingerprinting exports only a .bm2 whose
+    name does not say what it holds, so one named for its platform ("Body
+    weight.bm2", "Gene Expression-….bm2") was never read.  One that cannot be
+    read is left out, logged."""
     out: dict[str, dict] = {}
     files_dir = Path(session) / "files"
     if files_dir.exists():
-        for bm2_path in files_dir.glob("*.bm2"):
-            cached = bm2_cache.get_json(str(bm2_path))
+        for bm2_path in sorted(files_dir.glob("*.bm2")):
+            path = str(bm2_path.resolve())
+            cached = bm2_cache.get_json(path) or _export_bm2_json(path)
             if cached:
                 out[bm2_path.stem] = cached
     return out
+
+
+def _export_bm2_json(path: str) -> dict | None:
+    """A .bm2's BMDProject via the Java ExportBm2 helper, stored in the cache;
+    None (logged) when Java is unavailable or the export fails."""
+    import tempfile
+    from bmdx_pipe.apical_report import export_bm2
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            tmp = f.name
+        export_bm2(path, tmp, "NONE")
+        data = json.loads(Path(tmp).read_text(encoding="utf-8"))
+        bm2_cache.put_json(path, data)
+        return data
+    except Exception as e:  # noqa: BLE001 — a project we cannot read is left out
+        logger.warning("Could not read %s for its analysis settings: %s", path, e)
+        return None
+    finally:
+        if tmp:
+            Path(tmp).unlink(missing_ok=True)
 
 
 def bm2_slug(filename: str) -> str:

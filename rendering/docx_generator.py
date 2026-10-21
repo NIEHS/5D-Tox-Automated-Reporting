@@ -563,6 +563,7 @@ def _booktabs_table(
     merged_label_rows: bool = False,
     head_rows: list[list] | None = None,
     caption_units: list | None = None,
+    col_widths: list | None = None,
 ) -> None:
     """
     Append a booktabs-style table (top rule, header rule, bottom rule; no
@@ -582,6 +583,10 @@ def _booktabs_table(
     head_rows:          several header rows in place of ``headers``
                         (render_common.matrix_head_rows).  A cell, header or
                         footnote text may be an inline-unit list.
+    col_widths:         fractions of the text width per column, None for a
+                        column that shares what is left (the matrix's
+                        ``col_widths``, as LaTeX's p{} columns): long cell
+                        text then wraps in its own column, not in all of them.
     """
     head_rows = head_rows or ([headers] if headers else [])
     if caption:
@@ -626,11 +631,38 @@ def _booktabs_table(
             for run in _cell_runs(tr.cells[i].paragraphs[0], val):
                 _style_run(run, size_pt=_TABLE_PT)
 
+    if col_widths:
+        _set_column_widths(table, col_widths, ncols)
+
     # Outer top + bottom rules complete the booktabs frame.
     _set_edge_border(table._tbl, "top")
     _set_edge_border(table._tbl, "bottom")
 
     _add_footnotes(doc, footnotes)
+
+
+def _set_column_widths(table, col_widths: list, ncols: int) -> None:
+    """Fix the table's columns at fractions of the text width; the columns
+    with no fraction share the rest equally.  A Word cell's width includes
+    its padding, a LaTeX p{} column's does not (the fractions total less than
+    1 to leave room for it), so fractions that cover every column are scaled
+    to the full width."""
+    text_width = _PAGE_WIDTH - 2 * _MARGIN
+    fractions = (list(col_widths) + [None] * ncols)[:ncols]
+    free = [i for i, f in enumerate(fractions) if not f]
+    if not free:
+        fractions = [f / sum(fractions) for f in fractions]
+    rest = max(0.0, 1.0 - sum(f for f in fractions if f))
+    widths = [int(text_width * (f if f else rest / len(free))) for f in fractions]
+    table.autofit = False
+    for i, column in enumerate(table.columns):
+        column.width = widths[i]
+    for tr in table._tbl.tr_lst:
+        at = 0
+        for tc in tr.tc_lst:
+            # A merged label row's one cell spans the columns it covers.
+            tc.width = sum(widths[at:at + tc.grid_span])
+            at += tc.grid_span
 
 
 def _add_footnotes(doc: Document, footnotes) -> None:
@@ -818,6 +850,7 @@ def _render_sample_counts_table(doc: Document, node: DocNode, data: dict) -> Non
         merged_label_rows=True,
         head_rows=head_rows,
         caption_units=rich,
+        col_widths=built.get("col_widths"),
     )
 
 

@@ -96,6 +96,7 @@ from rendering.render_common import (
     gene_table_headers,
     table_caption as _table_caption,
     figure_prefix,
+    inline_svg,
     figure_payload,
     list_entries,
 )
@@ -913,9 +914,12 @@ def _render_figure(node: DocNode, data: dict) -> str:
     src = png if png.startswith("data:") else f"data:{mimetype};base64,{png}"
     label = figure_prefix(node)
     display = f"{label}{descriptive}" if descriptive else ""
+    # A chart with an SVG renders it inline, so hovering a marker names it.
+    image = (inline_svg(payload["svg"], descriptive) if payload.get("svg")
+             else f'<img src="{src}" alt="{_esc(descriptive)}">')
     return (
         f'<figure class="report-figure">'
-        f'<img src="{src}" alt="{_esc(descriptive)}">'
+        f'{image}'
         f"<figcaption>{_esc(display)}"
         + "".join(f'<p class="fig-note">{_cell_html(n)}</p>' for n in payload.get("notes") or [])
         + "</figcaption></figure>"

@@ -174,7 +174,7 @@ def test_appendix_renders_with_pending_placeholder(scaffold):
     """Appendices render as heading + visible pending placeholder (the scaffold
     has no expression data, so Appendix C's PCA figure is pending)."""
     tex = generate_latex(scaffold)
-    assert r"\section{Appendix A. Internal Dose Assessment}" in tex
+    assert r"\section*{Appendix A. Internal Dose Assessment}" in tex
     assert "[Figure pending: Principal Component Analysis" in tex
 
 

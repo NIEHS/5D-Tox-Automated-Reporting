@@ -1,0 +1,45 @@
+# PFHxSAm (C20022-01) under the proposed standard: the supplemental files
+# this report was built from, in sessions/DTXSID50469320_proposed/supplemental/
+# — the February 2026 DTT re-analysis supplied to the project
+# (assets/given-2026/PFHxSAm.zip: BMDExpress 3.20.0156 projects and their
+# input matrices) and the study's individual animal data (the CEBS workbooks).
+# Not NIEHS-10's deposit (10.22427/NIEHS-DATA-NIEHS-10), which holds the 2021
+# analysis behind the published report.  Captions in the 2026 books' wording
+# (NIEHS-12, 13).  No DOI until a publishing package is created.
+kinds:
+  Body weight.bm2: apical
+  Clinical Chemistry.bm2: apical
+  Hematology.bm2: apical
+  Hormones.bm2: apical
+  Organ Weights.bm2: apical
+  female_body_weight.txt: apical
+  female_clin_chem.txt: apical
+  female_hematology.txt: apical
+  female_hormone_data.txt: apical
+  female_organ_weights.txt: apical
+  male_body_weight.txt: apical
+  male_clin_chem.txt: apical
+  male_hematology.txt: apical
+  male_hormone_data.txt: apical
+  male_organ_weights.txt: apical
+captions:
+  Body weight.bm2: BMDExpress Project File Body Weight (bm2 Format)
+  Clinical Chemistry.bm2: BMDExpress Project File Clinical Chemistry (bm2 Format)
+  Hematology.bm2: BMDExpress Project File Hematology (bm2 Format)
+  Hormones.bm2: BMDExpress Project File Hormones (bm2 Format)
+  Organ Weights.bm2: BMDExpress Project File Organ Weights (bm2 Format)
+  female_body_weight.txt: BMDExpress Input Data Body Weight Female
+  male_body_weight.txt: BMDExpress Input Data Body Weight Male
+  female_clin_chem.txt: BMDExpress Input Data Clinical Chemistry Female
+  male_clin_chem.txt: BMDExpress Input Data Clinical Chemistry Male
+  female_hematology.txt: BMDExpress Input Data Hematology Female
+  male_hematology.txt: BMDExpress Input Data Hematology Male
+  female_hormone_data.txt: BMDExpress Input Data Hormones Female
+  male_hormone_data.txt: BMDExpress Input Data Hormones Male
+  female_organ_weights.txt: BMDExpress Input Data Organ Weights Female
+  male_organ_weights.txt: BMDExpress Input Data Organ Weights Male
+  Gene Expression-Perflourohexane Sulfonamide.bm2: BMDExpress Project File Gene Expression (bm2 Format)
+  Kidney_PFHxSAm_Female_No0.txt: BMDExpress Expression Data Kidney Female
+  Kidney_PFHxSAm_Male_No0.txt: BMDExpress Expression Data Kidney Male
+  Liver_PFHxSAm_Female_No0.txt: BMDExpress Expression Data Liver Female
+  Liver_PFHxSAm_Male_No0.txt: BMDExpress Expression Data Liver Male
