@@ -549,7 +549,7 @@ def figure_payload(node: DocNode, data: dict) -> dict | None:
             "mimetype": _IMAGE_MIMETYPES.get(path.suffix.lower(), "application/octet-stream"),
             "caption": None,
         }
-    payload = data.get(node.data_key) if node.data_key else None
+    payload = scoped_value(node, data.get(node.data_key)) if node.data_key else None
     return payload or None
 
 
@@ -1376,13 +1376,16 @@ def matrix_head_rows(built: dict) -> list[list]:
 def scoped_value(node: DocNode, value):
     """A value a repeated node takes its own of: ``{"by_organ": {organ: …}}``
     gives a tissue's copy (``scope_organ``) its tissue's, ``{"by_species":
-    {study: …}}`` a study's copy its study's ("" for a single study's).  Any
-    other value as given."""
+    {study: …}}`` a study's copy its study's ("" for a single study's),
+    ``{"by_analysis": {key: …}}`` a genomic analysis' copy (``scope_analysis``,
+    document_tree.analysis_key) its analysis'.  Any other value as given."""
     if isinstance(value, dict):
         if "by_organ" in value:
             return value["by_organ"].get(node.scope_organ or "")
         if "by_species" in value:
             return value["by_species"].get(node.scope_species or "")
+        if "by_analysis" in value:
+            return value["by_analysis"].get(node.scope_analysis or "")
     return value
 
 

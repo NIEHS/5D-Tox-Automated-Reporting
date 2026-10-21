@@ -100,11 +100,11 @@ _COMPUTED_OR_SPECIAL = frozenset(
      "appendix_letter", "appendix_scope", "table_label", "figure_label",
      "sec_label",
      # ADR-0029: set when a `repeat` section is expanded per study.
-     "scope_species", "scope_organ"}
+     "scope_species", "scope_organ", "scope_analysis"}
 )
 
 # ADR-0029: what a section may repeat over (document_tree.study_tree).
-_REPEATS = ("deposit_species", "study_species", "genomic_organs")
+_REPEATS = ("deposit_species", "study_species", "genomic_organs", "genomic_analyses")
 # What generated prose may cite a node as (DocNode.cited_as).
 CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table")
 
@@ -465,8 +465,9 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
         if repeat not in _REPEATS:
             raise ValueError(f"template node {node_id!r}: repeat must be one of "
                              f"{list(_REPEATS)}, got {repeat!r}")
-        if role_for(node_type) not in ("sec", "table-wrap"):
-            raise ValueError(f"template node {node_id!r}: only a section or a table may repeat")
+        if role_for(node_type) not in ("sec", "table-wrap", "fig"):
+            raise ValueError(f"template node {node_id!r}: only a section, a table or a "
+                             f"figure may repeat")
     if entry.get("first_copy") not in (None, True, False):
         raise ValueError(f"template node {node_id!r}: first_copy is true or false")
     if entry.get("drop_when_uncollected") not in (None, True, False):

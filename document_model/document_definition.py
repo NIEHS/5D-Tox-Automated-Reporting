@@ -33,8 +33,9 @@ authored one.  An unknown id, a cycle or an unknown key fails loudly.
 The levels (ADR-0029): ``niehs-5day-report`` is the shared base grammar;
 ``eras/<era>`` reproduce the published report generations; a published
 study's ``studies/<DTXSID>/document`` extends its era.  A new study — one with
-no definition of its own — is written to the latest generation's
-(DEFAULT_DEFINITION, the 2026 books).
+no definition of its own — is written to the proposed standard
+(DEFAULT_DEFINITION: the 2026 books plus the sections proposed beyond them,
+eras/niehs-proposed).
 
 Import graph: document_template and this module import each other lazily
 (inside functions), so neither import-time order matters.
@@ -221,9 +222,10 @@ def apply_change(document: list, change: dict) -> None:
 # A study's definition
 # ---------------------------------------------------------------------------
 
-# The definition of a study with none of its own: the latest published
-# generation (NIEHS-12, 13, April 2026).
-DEFAULT_DEFINITION = "eras/niehs-2026"
+# The definition of a study with none of its own: the proposed standard — the
+# latest published generation (NIEHS-12, 13, April 2026) plus the sections
+# proposed beyond it (the user's decision, 2026-10-21).
+DEFAULT_DEFINITION = "eras/niehs-proposed"
 
 
 def study_definition_name(dtxsid: str) -> str | None:
@@ -232,9 +234,33 @@ def study_definition_name(dtxsid: str) -> str | None:
     return name if (_templates_dir() / f"{name}.yaml").exists() else None
 
 
+def report_of_member(dtxsid: str) -> str | None:
+    """The report session whose ``studies.json`` lists this session as one of
+    its studies (rendering.report_compose: NIEHS-12/13's ``<id>_rat`` /
+    ``<id>_mouse``); None for a session no report composes."""
+    import json
+    from common.paths import SESSIONS_DIR
+    for path in sorted(SESSIONS_DIR.glob("*/studies.json")):
+        try:
+            stated = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(stated, dict) and dtxsid in stated.values():
+            return path.parent.name
+    return None
+
+
 def current_definition_name(dtxsid: str) -> str:
-    """The definition the files give a study: its own, else DEFAULT_DEFINITION."""
-    return study_definition_name(dtxsid) or DEFAULT_DEFINITION
+    """The definition the files give a study: its own; else, for a study a
+    report composes, its report's (a member's data is written for it, and
+    alone it renders as that report's part); else DEFAULT_DEFINITION."""
+    own = study_definition_name(dtxsid)
+    if own:
+        return own
+    report = report_of_member(dtxsid)
+    if report and report != dtxsid:
+        return study_definition_name(report) or DEFAULT_DEFINITION
+    return DEFAULT_DEFINITION
 
 
 def definition_name(dtxsid: str) -> str:

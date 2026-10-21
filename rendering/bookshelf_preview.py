@@ -857,13 +857,16 @@ def render_book_file(xml_path: Path, published: str | None = None) -> str:
     return _build_html(read_bundle(path), base_dir, None, None, published)
 
 
-def chart_images(data: dict) -> dict[str, str]:
+def chart_images(data: dict, tree=None) -> dict[str, str]:
     """Build the {filename → base64 image} map render_book_xml inlines (and the
     `bits` bundle ships), from a marshalled report `data` dict: every genomics
     chart carries its own `filename` + `png_b64`
     (genomics_charts.attach_genomics_charts), and every tree `figure` node its
     payload (render_common.figure_payload — an appendix PCA plot, a supplied
-    diagram).  A non-PNG payload is stored as a data URI carrying its mimetype."""
+    diagram) — the nodes of ``tree``, the study's tree the BITS is generated
+    from (the shared template's when None), so a figure only a study's
+    definition places, or repeated per genomic analysis, has its image.  A
+    non-PNG payload is stored as a data URI carrying its mimetype."""
     from document_model.document_tree import render_nodes, walk_tree
     from rendering.render_common import figure_payload
 
@@ -883,7 +886,7 @@ def chart_images(data: dict) -> dict[str, str]:
             mime = payload.get("mimetype") or "image/png"
             out[fn] = b64 if mime == "image/png" else f"data:{mime};base64,{b64}"
 
-    walk_tree(render_nodes(data), visit)
+    walk_tree(render_nodes(data, tree), visit)
     return out
 
 

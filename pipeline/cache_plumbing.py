@@ -345,7 +345,7 @@ _GENOMICS_CACHE_SCHEMA_VERSION = 8  # bumped: GO active genes in display case (7
 # inputs.  Mixed into charts_hash on top of genomics_hash, so the
 # chart cache invalidates while the (slow + LLM-costed) genomics
 # pipeline cache stays warm.
-_CHARTS_CACHE_SCHEMA_VERSION = 3  # bumped: cluster scatter now K-means (was agglomerative)
+_CHARTS_CACHE_SCHEMA_VERSION = 4  # bumped: charts carry their bmd_stat + counts; cluster legend a titled column (3: K-means)
 
 
 def _hash_genomics(

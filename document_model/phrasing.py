@@ -168,6 +168,22 @@ SCHEMA: dict = {
         "headers": _List(4),
         "footnote": _t(),
     },
+    # The gene set figures' sections (rendering.genomic_figures): the semantic
+    # map and the gene-overlap clusters of each genomic analysis.
+    "genomic_figures": {
+        "span_one": _t("first"),
+        "span_two": _t("first", "last"),
+        "span_many": _t("first", "last"),
+        "map": {
+            "intro": _t("figures", "terms", "clusters"),
+            "note": _t("on_map", "gene_sets", "off_map"),
+            "note_all": _t("gene_sets"),
+        },
+        "clusters": {
+            "intro": _t("figures", "statistic", "unit"),
+            "note": _t("gene_sets", "clusters", "statistic"),
+        },
+    },
 }
 
 

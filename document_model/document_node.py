@@ -194,7 +194,8 @@ class DocNode:
                         2026 books' "G.3 Rats" / "G.4 Mice"); `study_species`:
                         per study of a report over several ("Study Design for
                         Rats"); `genomic_organs`: per tissue of the genomic
-                        analyses.  A copy is titled with its item, or fills
+                        analyses; `genomic_analyses`: per genomic analysis, a
+                        tissue of one sex (a figure per analysis).  A copy is titled with its item, or fills
                         `${species}` / `${organ}` in its title.  A single study
                         is one unscoped copy; with no deposit species the
                         section's children stand in its place, with no tissues
@@ -231,6 +232,10 @@ class DocNode:
                         its study's data (render_common.node_data).
         scope_organ:    COMPUTED likewise: the tissue a `genomic_organs` copy is
                         about; its gene set / gene prose is that tissue's.
+        scope_analysis: COMPUTED likewise: the genomic analysis (a tissue of one
+                        sex: "liver-male") a `genomic_analyses` copy is about; a
+                        data figure takes that analysis' payload
+                        (render_common.scoped_value, ``by_analysis``).
     """
     id: str
     title: str
@@ -280,3 +285,4 @@ class DocNode:
     repeat: str | None = None
     scope_species: str | None = None
     scope_organ: str | None = None
+    scope_analysis: str | None = None

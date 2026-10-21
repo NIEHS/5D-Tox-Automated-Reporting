@@ -29,6 +29,7 @@ Basis key:
 |---|---|---|
 | Structure, ordering, numbering, repeats per study/tissue, route gates | definition | decl |
 | 2026 genomic results, eFDR and definitions wording | `phrasing:` (ADR-0029 §11) | decl |
+| Gene set figures' sections wording (proposed) | `phrasing.genomic_figures` (eras/niehs-proposed) | decl |
 | Abstract names genes (2023) or gene sets only (2026) | `abstract_genes` | decl |
 | Tissue order | `tissue_order` | decl |
 | Dose words ("Exposure Concentration …") | node titles | decl |

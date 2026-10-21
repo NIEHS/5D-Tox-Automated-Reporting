@@ -721,6 +721,15 @@ def marshal_export_data(
     attach_organ_descriptions(data, study_weighed_organs(_dtx) if is_valid_dtxsid(_dtx) else [],
                               _definition_fact(_dtx, "organ_descriptions"),
                               _definition_fact(_dtx, "organ_description_order"))
+    # The gene set figures' sections, as the session-export path places them
+    # (rendering.genomic_figures).
+    if is_valid_dtxsid(_dtx):
+        from pipeline.session_store import SESSIONS_DIR, latest_session_cache
+        from rendering.genomic_figures import attach_genomic_figures
+        _charts = latest_session_cache(SESSIONS_DIR / _dtx, "_cache_charts_*.json")
+        if _charts is not None:
+            from common.session_files import read_json_file
+            attach_genomic_figures(data, active_tree, phrasing, read_json_file(_charts))
     name_report_in_peer_review(data)
     return data
 

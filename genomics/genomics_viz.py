@@ -801,6 +801,8 @@ def build_cluster_figure(
     unique_gene_clusters = set(p["gene_cluster"] for p in all_points)
     n_gene_clusters = len(unique_gene_clusters) if all_points else 1
     chart_height = max(180, n_gene_clusters * 29 + 72)
+    # Tall enough for the legend's column too (one row per semantic cluster).
+    chart_height = max(chart_height, len(by_umap_cluster) * 24 + 120)
 
     # Build custom y-axis tick labels showing the original cluster ID
     # at each ranked position.  Outlier (-1) is labeled "Outlier".
@@ -827,7 +829,7 @@ def build_cluster_figure(
         width=style.get("width", 1000),
         height=style.get("height") or chart_height,
         margin=dict(l=mg.get("l", 80), r=mg.get("r", 30),
-                    t=mg.get("t", 90), b=mg.get("b", 60)),
+                    t=mg.get("t", 30), b=mg.get("b", 60)),
         paper_bgcolor=style.get("paper_bgcolor", "#ffffff"),
         plot_bgcolor=style.get("plot_bgcolor", "#fafafa"),
         xaxis=dict(title=xtitle, type=xtype,
@@ -838,24 +840,17 @@ def build_cluster_figure(
             tickvals=tick_vals, ticktext=tick_text,
         ),
         hovermode="closest",
+        # A column at the right, titled: the horizontal legend wrapped into
+        # rows over the plot, under its centered title.
         legend=dict(
+            title=dict(text="<b>GO Term<br>Semantic Cluster</b>", font=dict(size=13)),
             font=dict(size=leg.get("font_size", 12)),
-            orientation="h",
-            x=0.5, y=1.02,
-            xanchor="center", yanchor="bottom",
-            itemwidth=45,
+            orientation="v",
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
+            itemsizing="constant",
+            tracegroupgap=0,
         ),
-    )
-
-    # Legend header as a centered annotation — Plotly's legend.title
-    # doesn't center properly with horizontal orientation.
-    fig_cluster.add_annotation(
-        text="<b>GO Term Semantic Cluster</b>",
-        xref="paper", yref="paper",
-        x=0.5, y=1.08,
-        xanchor="center", yanchor="bottom",
-        showarrow=False,
-        font=dict(size=13),
     )
     return fig_cluster
 
@@ -1083,6 +1078,20 @@ def render_chart_images(
         result[f"{ct.name}_caption"] = caption
 
     result["types"] = type_names
+    # What the figures show of the gene sets, for the text that presents them
+    # (rendering.genomic_figures): how many there were, how many the semantic
+    # map holds (the rest it cannot place), how many have a BMD to plot, and
+    # the gene-overlap clusters they fall in.
+    import math
+    with_bmd = [gs for gs in gene_sets
+                if gs.get("bmd") is not None and math.isfinite(float(gs["bmd"]))]
+    result["counts"] = {
+        "gene_sets": len(gene_sets),
+        "on_map": sum(1 for gs in gene_sets if gs.get("go_id") in _UMAP_LOOKUP),
+        "with_bmd": len(with_bmd),
+        "overlap_clusters": len({(clusters or {}).get(gs.get("go_id"), -1) for gs in with_bmd}
+                                - {-1}),
+    }
 
     # --- Cluster biology summary via Enrichr (cluster chart only) ---
     # Shares the `clusters` assignment built above so the chart and the summary
@@ -1235,6 +1244,9 @@ def render_chart_images_for_sections(
             result["label"] = f"{organ_title} ({sex_title})"
             result["organ"] = organ
             result["sex"] = sex
+            # The statistic the gene sets' BMDs are (the x axis of the cluster
+            # chart), for the figure's caption.
+            result["bmd_stat"] = bmd_stat
             out.append(result)
         except Exception as e:
             logger.warning("Chart rendering failed for %s: %s", key, e)

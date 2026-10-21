@@ -339,9 +339,45 @@ def _has_repeats(nodes) -> bool:
 
 # What each repeat is over, and the node field a copy is scoped by (ADR-0029).
 _REPEAT_SCOPE = {"deposit_species": "scope_species", "study_species": "scope_species",
-                 "genomic_organs": "scope_organ"}
+                 "genomic_organs": "scope_organ", "genomic_analyses": "scope_analysis"}
 _REPEAT_VARIABLE = {"deposit_species": "species", "study_species": "species",
-                    "genomic_organs": "organ"}
+                    "genomic_organs": "organ", "genomic_analyses": "organ"}
+
+
+def analysis_key(organ, sex=None, study=None) -> str:
+    """A genomic analysis' key ("liver-male"; "liver-rat-female" in a report
+    over several studies): what a `genomic_analyses` copy is scoped by and a
+    payload keyed ``by_analysis`` is keyed by."""
+    parts = [str(p).strip().lower().replace(" ", "-") for p in (organ, study, sex) if p]
+    return "-".join(parts)
+
+
+def _analysis_items(facts: dict, studies: list[dict]) -> list[dict]:
+    """The genomic analyses — each tissue of each sex (of each study), in the
+    tissues' order — with the caption fields of their animals ("Male Rats")."""
+    design = facts.get("study_design") or {}
+    designs = {s["key"]: (s.get("data") or {}).get("study_design") or {}
+               for s in facts.get("studies") or []}
+    out, seen = [], set()
+    for entry in facts.get("genomics_sections") or []:
+        organ = (entry.get("organ") or "").strip()
+        if not organ or entry.get("type") not in (None, "gene_set"):
+            continue
+        blocks = [b for b in entry.get("sexes") or [] if isinstance(b, dict)] or [entry]
+        for b in blocks:
+            sex = (b.get("sex") or "").strip().lower() or None
+            study = b.get("study") or None
+            key = analysis_key(organ, sex, study)
+            if key in seen:
+                continue
+            seen.add(key)
+            # In a report over several studies a group is labelled ("Female
+            # Rats", rendering.report_compose), not sexed: its study's animals.
+            base = designs.get(study, design)
+            fields = caption_values(facts, {**base, "sexes": [sex]} if sex and not study
+                                    else base)
+            out.append({"key": key, "title": organ[:1].upper() + organ[1:], "fields": fields})
+    return out
 
 
 def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
@@ -352,7 +388,10 @@ def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
       rendering.report_compose); a single study is one, unscoped (``key`` None),
       titled with its animals ("Rats"; "Animals" before any are recorded);
       ``fields`` are the study's caption fields (caption_values);
-    - genomic_organs: the tissues of the genomic analyses, in their order."""
+    - genomic_organs: the tissues of the genomic analyses, in their order;
+    - genomic_analyses: the genomic analyses, each tissue of one sex (and one
+      study), titled with the tissue; ``fields`` name its animals ("Male
+      Rats", caption_values)."""
     facts = facts or {}
     studies = [{"key": s["key"], "title": s["title"],
                 "fields": caption_values(facts, (s.get("data") or {}).get("study_design") or {})}
@@ -371,6 +410,7 @@ def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
         "deposit_species": list((facts.get("deposit") or {}).get("species") or []),
         "study_species": studies,
         "genomic_organs": [{"key": o.lower(), "title": o[:1].upper() + o[1:]} for o in organs],
+        "genomic_analyses": _analysis_items(facts, studies),
     }
 
 
@@ -445,7 +485,8 @@ def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
 # section keeps (everything else — what the section says and from what — is
 # the section's).
 _OWN_FIELDS = frozenset({"id", "title", "level", "children", "repeat", "region",
-                         "first_copy", "scope_species", "scope_organ", "study_title",
+                         "first_copy", "scope_species", "scope_organ", "scope_analysis",
+                         "study_title",
                          "requires_route", "sec_label", "appendix_letter", "appendix_scope"})
 
 

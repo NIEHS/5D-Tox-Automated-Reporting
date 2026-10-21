@@ -571,7 +571,7 @@ def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
         LaTeX emitter writes always has a file behind it.
     """
     import base64
-    from document_model.document_tree import DOCUMENT_TREE, walk_tree
+    from document_model.document_tree import render_nodes, walk_tree
     from rendering.render_common import figure_payload
 
     out: dict[str, bytes] = {}
@@ -595,7 +595,10 @@ def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
             out[name] = base64.b64decode(b64)
         except (ValueError, TypeError):
             return
-    walk_tree(DOCUMENT_TREE if tree is None else tree, _figure_node)
+    # The nodes the body renders (render_nodes, as generate_report_body walks
+    # them): the study's tree, with its repeated copies — a figure repeated per
+    # genomic analysis has a file per copy.
+    walk_tree(render_nodes(data, tree), _figure_node)
     return out
 
 
@@ -1118,6 +1121,13 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     _facts = study_document_facts(dtxsid)
     attach_organ_descriptions(data, study_weighed_organs(dtxsid), _facts["organ_descriptions"],
                               _facts["organ_description_order"])
+    # The gene set figures' sections (a definition places them): each genomic
+    # analysis' semantic map and gene-overlap clusters, from the Process
+    # step's charts (rendering.genomic_figures).
+    from pipeline.session_store import SESSIONS_DIR as _sessions_root
+    from rendering.genomic_figures import attach_genomic_figures
+    attach_genomic_figures(data, render_tree, phrasing, _load_json(latest_session_cache(
+        _sessions_root / dtxsid, "_cache_charts_*.json")))
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

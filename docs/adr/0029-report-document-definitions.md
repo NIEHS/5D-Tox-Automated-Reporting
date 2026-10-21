@@ -214,6 +214,24 @@ state only for that reason follows the study's data, not the era:
   2022–2023 books' text. `eras/niehs-2026` states the 2026 books' rewording:
   no "The NIEHS Report series began in 2022", and "This report is available
   … on the NIEHS website".
+- **The proposed standard.** `eras/niehs-proposed` extends `eras/niehs-2026`
+  with sections no published book has, and is the definition of a new study
+  (`DEFAULT_DEFINITION`). The published 2026 books keep extending
+  `eras/niehs-2026`. A study a report composes (NIEHS-12/13's `_rat` /
+  `_mouse`) takes its report's definition. This is the user's decision
+  (2026-10-21): the gene set figures are "proposed standards moving forward".
+  What it adds:
+  - under Gene Set Benchmark Dose Analysis, "Gene Ontology Semantic Map" and
+    "Gene Set Clusters": an opening paragraph, then a figure per genomic
+    analysis (`repeat: genomic_analyses`, a tissue of one sex), its image
+    the Process step's chart for that analysis (`rendering.genomic_figures`);
+  - a list of the body's figures after the list of tables.
+  Their wording is `phrasing.genomic_figures`, proposed for review.
+- **A figure per analysis.** `repeat: genomic_analyses` makes one copy per
+  tissue × sex (× study), scoped by `scope_analysis` ("liver-male",
+  `document_tree.analysis_key`); a payload keyed `by_analysis` gives each
+  copy its own (`render_common.scoped_value`). Figures may repeat, as
+  sections and tables do.
 - **A single study.** `study_title` is the title of each study's copy when a
   report covers several studies ("Study Design for ${species}", "${species}").
   A single study's copy keeps the node's own `title`. For "Study Design" that

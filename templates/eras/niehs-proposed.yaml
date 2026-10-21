@@ -1,0 +1,62 @@
+# eras/niehs-proposed — the NIEHS Report as proposed beyond the published
+# books: the 2026 generation (eras/niehs-2026) plus sections no published book
+# has yet.  Not a published era: the published 2026 books (NIEHS-12, 13) keep
+# extending eras/niehs-2026 and render as published.
+#
+# This is the definition of a NEW study, one without a definition of its own
+# (document_definition.DEFAULT_DEFINITION) — the user's decision (2026-10-21):
+# the gene set figures are "new sections that are proposed standards moving
+# forward".
+#
+# What it adds:
+#   - Results → Gene Set Benchmark Dose Analysis: two sections after the
+#     tissues' results, each a figure per genomic analysis (a tissue of one
+#     sex, `repeat: genomic_analyses`) from the Process step's charts
+#     (genomics.genomics_viz; rendering.genomic_figures):
+#       "Gene Ontology Semantic Map" — the analysis' active gene sets on the
+#         shared UMAP map of GO biological processes, colored by semantic
+#         cluster;
+#       "Gene Set Clusters" — the same gene sets clustered by shared genes
+#         (k-means on their Jaccard overlap), placed by BMD.
+#   - Front matter: a list of the body's figures after the list of tables.
+# The wording of both sections is proposed (phrasing.genomic_figures below),
+# for review with the drafts.
+extends: eras/niehs-2026
+
+phrasing:
+  genomic_figures:
+    span_one: "Figure {first}"
+    span_two: "Figure {first} and Figure {last}"
+    span_many: "Figure {first} to Figure {last}"
+    map:
+      intro: "The active GO biological process gene sets of each tissue are shown on a semantic map of GO biological processes ({figures}). The map is the same in every report: {terms} GO biological process terms (the small gray points), placed by their relationships in the Gene Ontology so that terms with related meanings lie close together, and grouped into {clusters} semantic clusters. Each active gene set is a larger point in the color of its semantic cluster (gray when it falls in none), so the figure shows which kinds of biological process the gene expression changes fall in, whatever their potency."
+      note: "{on_map} of the {gene_sets} active gene sets are on the map; the other {off_map} are GO terms the map does not hold and are not shown."
+      note_all: "All {gene_sets} active gene sets are on the map."
+    clusters:
+      intro: "The same gene sets are grouped by the genes they share ({figures}). They were clustered by k-means on the overlap of their genes (Jaccard distance), with as many clusters as the square root of the number of gene sets, rounded. Each row is a cluster, the clusters ordered from the top by the lowest BMD among their gene sets; each gene set is placed at its BMD {statistic} ({unit}, log scale), sized by its number of genes with a BMD, and colored by its semantic cluster on the semantic map (gray when it falls in none or is not on the map)."
+      note: "{gene_sets} gene sets in {clusters} clusters, each at its BMD {statistic}."
+
+changes:
+  - insert:
+    - {id: figures-list, type: figures-list, title: Figures}
+    after: tables-list
+  - insert:
+    - id: gene-set-map
+      type: narrative
+      title: Gene Ontology Semantic Map
+      data_key: gene_set_map_intro
+      children:
+      - {id: figure-gene-set-map, type: figure, subtype: chart, repeat: genomic_analyses,
+         title: "Semantic Map of the Active ${organ} Gene Ontology Biological Process Gene Sets",
+         caption: "Semantic Map of the Active ${organ} Gene Ontology Biological Process Gene Sets, for ${subject} ${treatment}",
+         data_key: gene_set_map_figures}
+    - id: gene-set-clusters
+      type: narrative
+      title: Gene Set Clusters
+      data_key: gene_set_cluster_intro
+      children:
+      - {id: figure-gene-set-clusters, type: figure, subtype: chart, repeat: genomic_analyses,
+         title: "Active ${organ} Gene Ontology Biological Process Gene Sets Clustered by Shared Genes",
+         caption: "Active ${organ} Gene Ontology Biological Process Gene Sets Clustered by Shared Genes, by Benchmark Dose, for ${subject} ${treatment}",
+         data_key: gene_set_cluster_figures}
+    before: gene-set-summary
