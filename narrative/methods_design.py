@@ -49,7 +49,9 @@ def _dose_sentence_list(ctx: MethodsContext) -> str:
     return f"{_join_oxford(labels)} {ctx.dose_unit}"
 
 
-def build_study_design(ctx: MethodsContext) -> list[str]:
+def build_study_design(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    """``introduce``: the test article's first mention in the Materials and
+    Methods (its name and abbreviation; else the abbreviation alone)."""
     from pipeline.study_design import (
         administration_phrase, control_group, dose_noun, exposure_verb, subject_phrase,
         vehicle_phrase,
@@ -61,7 +63,8 @@ def build_study_design(ctx: MethodsContext) -> list[str]:
     animals = f"{sex_words.capitalize()} {subject}" if sex_words else subject.capitalize()
     how = " ".join(p for p in (administration_phrase(facts), vehicle_phrase(facts)) if p)
     days = ctx.duration_days
-    chem = ctx.chemical_name or "the test article"
+    chem = ((_introduced(ctx) if introduce or not ctx.abbreviation else ctx.abbreviation)
+            or "the test article")
 
     sentences = []
     doses = _dose_sentence_list(ctx)
@@ -90,7 +93,7 @@ def build_study_design(ctx: MethodsContext) -> list[str]:
     return [" ".join(sentences) + " " + _placeholder(missing)]
 
 
-def build_dose_selection(ctx: MethodsContext) -> list[str]:
+def build_dose_selection(ctx: MethodsContext, introduce: bool = True) -> list[str]:
     from narrative.methods_prompt import _dose_spacing_phrase
     from pipeline.study_design import is_air_concentration
 
@@ -108,11 +111,15 @@ def build_dose_selection(ctx: MethodsContext) -> list[str]:
         ["the rationale for the top dose, the lowest dose and the dose spacing"])])]
 
 
-def build_chemistry(ctx: MethodsContext) -> list[str]:
+def build_chemistry(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    """The test article identified: its name, then its abbreviation and
+    identifiers ("Perfluorohexanesulfonamide (PFHxSAm; CASRN …; DTXSID …)"),
+    wherever the section falls."""
     from pipeline.study_design import is_air_concentration, vehicle_phrase
 
     from common.dtxsid import substance_dtxsid
-    ids = [f"CASRN {ctx.casrn}" if ctx.casrn else "", substance_dtxsid(ctx.dtxsid)]
+    ids = [ctx.abbreviation, f"CASRN {ctx.casrn}" if ctx.casrn else "",
+           substance_dtxsid(ctx.dtxsid)]
     ids = [i for i in ids if i]
     chem = ctx.chemical_name or "The test article"
     sentences = [f"The test article was {chem}{' (' + '; '.join(ids) + ')' if ids else ''}."]
@@ -137,6 +144,28 @@ _BUILDERS = {
     "dose_selection": build_dose_selection,
     "chemistry": build_chemistry,
 }
+# The data-built subsections that name the test article, and whether one
+# introduces its abbreviation (Chemistry always does, with its identifiers).
+_NAMES_IT = {"study_design", "chemistry"}
+
+
+def _introduced(ctx: MethodsContext) -> str:
+    """The test article at its first mention: "Name (ABBR)", or the name."""
+    name = ctx.chemical_name or ""
+    return f"{name} ({ctx.abbreviation})" if name and ctx.abbreviation else name
+
+
+def _built(ctx: MethodsContext, keys: list[str]) -> dict[str, list[str]]:
+    """Each data-built subsection of ``keys`` (in the order the document
+    places them), the first that names the test article introducing its
+    abbreviation and the later ones using it — as the books do in each
+    section (NIEHS-10: Study Design first; the 2026 books: Chemistry)."""
+    out, named = {}, False
+    for key in keys:
+        if key in _BUILDERS and key not in out:
+            out[key] = _BUILDERS[key](ctx, introduce=not named)
+            named = named or key in _NAMES_IT
+    return out
 
 
 def assemble_methods_sections(
@@ -148,10 +177,11 @@ def assemble_methods_sections(
     MethodsContext, the rest from the LLM's {key: text} (multi-paragraph text
     split on blank lines; a key the LLM left empty is dropped)."""
     llm_texts = llm_texts or {}
+    built = _built(ctx, [key for key, _, _ in skeleton])
     sections = []
     for key, heading, level in skeleton:
         if key in _BUILDERS:
-            paragraphs = _BUILDERS[key](ctx)
+            paragraphs = built[key]
         else:
             text = llm_texts.get(key, "")
             paragraphs = [p.strip() for p in str(text).split("\n\n") if p.strip()]
@@ -161,18 +191,24 @@ def assemble_methods_sections(
     return sections
 
 
-def refresh_data_built(sections: list[dict], context: dict | None) -> list[dict]:
+def refresh_data_built(sections: list[dict], context: dict | None,
+                       order: list[str] | None = None) -> list[dict]:
     """Cached Methods ``sections`` with each data-built subsection rebuilt from
     the cached ``context``: they are deterministic, so a render picks up a
     change to their wording without the Process run that wrote the cache (and
-    its LLM-written subsections).  The sections as given without a context."""
+    its LLM-written subsections).  ``order``: the subsection keys in the order
+    the document places them (which one introduces the test article's
+    abbreviation); else the sections' order.  The sections as given without
+    a context."""
     if not isinstance(context, dict) or not context:
         return sections
     ctx = MethodsContext.from_dict(context)
+    keys = [s.get("key") for s in sections if isinstance(s, dict)]
+    built = _built(ctx, [k for k in (order or []) if k in keys] + keys)
     out = []
     for section in sections:
         key = section.get("key") if isinstance(section, dict) else None
-        if key in _BUILDERS:
-            section = {**section, "paragraphs": _BUILDERS[key](ctx)}
+        if key in built:
+            section = {**section, "paragraphs": built[key]}
         out.append(section)
     return out

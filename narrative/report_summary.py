@@ -87,6 +87,7 @@ def build_report_summary(
     apical_evaluated: bool | None = None,
     bmd_decimals: int | None = None,
     design: dict | None = None,
+    abbreviation: str = "",
 ) -> list[str]:
     """The Summary paragraphs (empty when there is nothing to summarize).
 
@@ -95,7 +96,9 @@ def build_report_summary(
     them and still have none with a BMD.  ``bmd_decimals`` is the report's BMD
     precision (default: the one the genomics extraction stamped).  ``design``
     is the study design (pipeline.study_design) for the species word; None ⇒
-    the standard design."""
+    the standard design.  ``abbreviation`` is the study's recorded short form
+    of the chemical: the Summary introduces it at the first mention and uses
+    it after (narrative.test_article)."""
     from pipeline.study_design import design_or_standard, species_plural
 
     animals = species_plural(design_or_standard(design))
@@ -129,7 +132,10 @@ def build_report_summary(
     approach = ("a transcriptomic approach and standard toxicological endpoints"
                 if apical_evaluated and genomics else
                 "a transcriptomic approach" if genomics else "standard toxicological endpoints")
-    intro = f"This study used {approach} to estimate the in vivo biological potency of {chemical_name}."
+    # The abstract's Background introduces the abbreviation when the study has one.
+    named = (abbreviation if abbreviation and abbreviation in abstract_background
+             else f"{chemical_name} ({abbreviation})" if abbreviation else chemical_name)
+    intro = f"This study used {approach} to estimate the in vivo biological potency of {named}."
     paragraphs.append(f"{abstract_background.strip()} {intro}".strip())
 
     # 2. Unreliable apical BMDs.

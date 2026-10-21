@@ -335,7 +335,8 @@ def build_abstract_results(
     # PK paragraph: only when MethodsContext carries pk_* aggregates
     if methods_ctx:
         pk = build_abstract_results_pk(
-            chemical_name=methods_ctx.get("chemical_name", "the test article"),
+            chemical_name=(methods_ctx.get("abbreviation")
+                           or methods_ctx.get("chemical_name", "the test article")),
             pk_concentrations=methods_ctx.get("pk_concentrations"),
             pk_half_lives=methods_ctx.get("pk_half_lives"),
             pk_timepoints=methods_ctx.get("pk_timepoints", []),

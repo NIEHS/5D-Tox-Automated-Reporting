@@ -84,6 +84,7 @@ class MethodsContext:
     """
     # --- Chemical identity ---
     chemical_name: str = ""
+    abbreviation: str = ""   # the study's recorded one; "" = none (narrative.test_article)
     casrn: str = ""
     dtxsid: str = ""
 

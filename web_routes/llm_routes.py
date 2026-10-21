@@ -725,9 +725,10 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
         )
 
     # Chemical name for the prompt's phrasing; fall back gracefully.
-    compound = (read_session_json(dtxsid, "identity.json") or {}).get(
-        "name", "the test article"
-    )
+    _identity = read_session_json(dtxsid, "identity.json") or {}
+    compound = _identity.get("name", "the test article")
+    from narrative.test_article import abbreviation_of
+    abbreviation = abbreviation_of(_identity)
 
     # Pick the primary BMD stat the same way the chart/narrative paths do —
     # the first key of any entry's gene_sets_by_stat (defaults to "median").
@@ -781,6 +782,7 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
             out = await generate_genomics_narrative_async(
                 dtxsid=dtxsid,
                 compound=compound,
+                abbreviation=abbreviation,
                 organ=entry.get("organ", organ),
                 sex=entry.get("sex", ""),
                 gene_sets=gene_sets_for_llm,

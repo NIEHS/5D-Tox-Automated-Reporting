@@ -30,6 +30,7 @@ import sys
 
 from narrative.chem_resolver import resolve_chemical
 from narrative.data_gatherer import BackgroundData, gather_all
+from narrative.test_article import naming_rule
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +139,7 @@ def build_prompt(data: BackgroundData) -> str:
 scientific prose with inline numbered references in [N] format.
 
 CHEMICAL: {identity.name} (CASRN: {identity.casrn})
+{naming_rule(identity.name, identity.abbreviation)}
 
 {STYLE_EXAMPLE}
 
@@ -535,6 +537,7 @@ def generate_background(data: BackgroundData,
         body_text=response,
         chemical_name=chemical_display_name,
         model=chosen_model,
+        abbreviation=data.identity.abbreviation,
     )
 
     return {
@@ -760,6 +763,7 @@ def distill_abstract_background(
     body_text: str,
     chemical_name: str,
     model: str = "",
+    abbreviation: str = "",
 ) -> str:
     """
     Second-pass LLM call: distill the body Background into a 2-sentence
@@ -780,6 +784,8 @@ def distill_abstract_background(
                        7 paragraphs + References section as one string).
         chemical_name: Test article name for use in the distillation.
         model:         Optional model override.
+        abbreviation:  The study's recorded abbreviation ("" when none):
+                       sentence 1 introduces it; the model never coins one.
 
     Returns:
         Two-sentence string, or "" if the distillation fails (non-fatal —
@@ -793,6 +799,7 @@ def distill_abstract_background(
         "fact-grounded abstract sentences.  Return ONLY valid JSON."
     )
 
+    introduced = f"{chemical_name} ({abbreviation})" if abbreviation else chemical_name
     prompt = f"""Below is the body Background section of a NIEHS toxicology report.
 Distill it into a 2-sentence Abstract → Background block.
 
@@ -805,7 +812,7 @@ Return ONLY a JSON object of this exact shape:
 {{"abstract_background": "<sentence 1> <sentence 2>"}}
 
 Sentence 1 template (chemistry / exposure):
-  "{chemical_name} ([abbreviation if mentioned in body]) is a member of
+  "{introduced} is a member of
    the [chemical class verbatim from body Paragraph 1] of compounds to
    which [1-clause exposure context — humans, environment, occupational]."
 
@@ -814,6 +821,7 @@ Sentence 2 template (knowledge state):
    [sparse | limited | well-characterized]."
 
 Rules:
+- {naming_rule(chemical_name, abbreviation)}
 - Use ONLY facts that appear in the body Background.  Do not introduce
   new claims, doses, mechanisms, or regulatory citations.
 - The chemical class wording must match what Paragraph 1 of the body says.

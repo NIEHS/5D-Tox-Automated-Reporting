@@ -15,6 +15,7 @@ from pipeline import prompt_store
 _PUB = "DTXSID50469320"     # NIEHS-10
 _UNPUB = "DTXSID5032498"    # Triclosan
 _VARS = {"draft_paragraphs": ["Liver weight rose at 36.7 (14.2) mg/kg."], "chemical_name": "X",
+         "naming": "Name the test article \"X\".",
          "species": "rats", "strain": "", "route": "", "duration_days": 5, "sexes": ["Male"],
          "dose_unit": "mg/kg", "dose_groups": [0, 10], "abstract_background": "",
          "apical_evaluated": True, "has_genomics": False}

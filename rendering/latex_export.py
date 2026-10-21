@@ -607,6 +607,17 @@ def _abstract_genes(dtxsid: str) -> bool:
     return study_document_facts(dtxsid)["abstract_genes"]
 
 
+def _methods_key_order(dtxsid: str, view: str | None) -> list[str]:
+    """The Materials and Methods subsection keys in the order the study's tree
+    places them."""
+    from document_model.document_tree import DOCUMENT_TREE, walk_tree
+    from document_model.view_config import DEFAULT_VIEW, build_view_tree
+    keys: list[str] = []
+    walk_tree(build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE,
+              lambda n: keys.append(n.methods_key) if n.methods_key else None)
+    return keys
+
+
 def load_session_data(
     dtxsid: str,
     chemical_name: str = "Test Article",
@@ -812,10 +823,15 @@ def load_session_data(
     # replaces the empty `sections` with the cached prose (mirrors the HTML
     # path at report_data.py).  Omitted ⇒ subsections stay "[Section pending]".
     methods_cache = _load_json(latest_session_cache(session_dir, "_cache_methods_*.json"))
+    if isinstance(methods_cache, dict) and isinstance(methods_cache.get("context"), dict):
+        # The test article's abbreviation is the study's as recorded now
+        # (identity.json), not as it was when the cache was written.
+        methods_cache["context"]["abbreviation"] = data.get("abbreviation", "")
     if isinstance(methods_cache, dict) and methods_cache.get("sections"):
         from narrative.methods_design import refresh_data_built
         data["methods"] = {"sections": refresh_data_built(
-            methods_cache["sections"], methods_cache.get("context"))}
+            methods_cache["sections"], methods_cache.get("context"),
+            _methods_key_order(dtxsid, view))}
 
     # ── Table 1: Final Sample Counts (the sample-counts-table tree node) ──
     # Built from the cached MethodsContext; when that context lacks

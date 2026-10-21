@@ -126,8 +126,13 @@ def overlay_abstract(
         _ctx = MethodsContext.from_dict(methods_context)
         abstract_updates["Methods"] = build_abstract_methods(_ctx)
 
-        # Deterministic study-purpose sentence appended to the LLM background.
+        # Deterministic study-purpose sentence appended to the LLM background:
+        # the abbreviation, once the Background introduced it; else this
+        # sentence introduces it (the abstract's Methods and Results use it).
         ta = _ctx.chemical_name or "the test article"
+        if _ctx.abbreviation:
+            ta = (_ctx.abbreviation if _ctx.abbreviation in (abstract_background or "")
+                  else f"{ta} ({_ctx.abbreviation})")
         descriptor = "transcriptomic" if _ctx.has_gene_expression else "toxicological"
         study_purpose_sentence = (
             f"A short-term, in vivo {descriptor} study was used to "

@@ -313,6 +313,7 @@ async def _build_apical_bmd_narrative(ctx):
             llm_paras: list[str] = []
             try:
                 from narrative.apical_bmd_llm import generate_apical_bmd_narrative_async
+                from narrative.test_article import abbreviation_of
                 llm_result = await generate_apical_bmd_narrative_async(
                     dtxsid=dtxsid,
                     compound_name=_chem_name,
@@ -321,6 +322,8 @@ async def _build_apical_bmd_narrative(ctx):
                     study_duration=f"{_days}-day" if _days else None,
                     dose_groups=_dose_groups,
                     design=_design,
+                    abbreviation=_methods_ctx.get("abbreviation") or abbreviation_of(
+                        read_session_json(dtxsid, "identity.json")),
                 )
                 llm_paras = llm_result.get("paragraphs", [])
                 if "error" in llm_result:
@@ -428,6 +431,7 @@ async def _build_genomics_llm_narratives(ctx):
             # back to the request's compound_name if identity is missing.
             _identity = read_session_json(dtxsid, "identity.json") or {}
             _llm_compound = _identity.get("name", compound_name)
+            from narrative.test_article import abbreviation_of
 
             # Override file: user's Lock/Unlock edits persist here and
             # WIN over any freshly generated LLM output for the same
@@ -447,6 +451,7 @@ async def _build_genomics_llm_narratives(ctx):
                     return key, await generate_genomics_narrative_async(
                         dtxsid=dtxsid,
                         compound=_llm_compound,
+                        abbreviation=abbreviation_of(_identity),
                         organ=organ,
                         sex=sex,
                         gene_sets=gene_sets_for_llm,

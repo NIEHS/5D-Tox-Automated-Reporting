@@ -288,6 +288,8 @@ def extract_methods_context(
 
     # --- Chemical identity ---
     ctx.chemical_name = identity.get("name", "the test chemical")
+    from narrative.test_article import abbreviation_of
+    ctx.abbreviation = abbreviation_of(identity)
     ctx.casrn = identity.get("casrn", "")
     ctx.dtxsid = identity.get("dtxsid", "")
 

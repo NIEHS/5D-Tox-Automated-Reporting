@@ -42,6 +42,9 @@ SECTIONS: dict[str, dict] = {
                                 "(narrative.report_summary): the facts code picked, as a list "
                                 "of paragraphs. Every number the output may state is here.",
             "chemical_name": "The test article's name.",
+            "naming": "How to name the test article: its name, then its recorded "
+                      "abbreviation, or, when the study records none, never a coined one "
+                      "(narrative.test_article).",
             "species": "The species, plural (e.g. \"rats\").",
             "strain": "The strain, when the data records it (else empty).",
             "route": "The route, when the data records it (e.g. \"gavage\", \"inhaled\"; else empty).",

@@ -90,8 +90,9 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     expression → skip the transcriptomics clauses).
     """
     # --- Test article display name ---
-    # Use abbreviation if present, else full name
-    ta_name = ctx.chemical_name or "the test article"
+    # The abbreviation when the study records one (the abstract's Background
+    # introduced it), else the full name.
+    ta_name = ctx.abbreviation or ctx.chemical_name or "the test article"
 
     # --- Sexes ("adult male and female") ---
     sexes = [s.lower() for s in ctx.sexes] if ctx.sexes else ["male", "female"]
