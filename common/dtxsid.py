@@ -52,3 +52,14 @@ def validate_dtxsid(value) -> str:
         f"invalid session id {shown}: expected 'DTXSID' followed by 1-64 "
         f"letters, digits, '_' or '-'"
     )
+
+
+_SUBSTANCE_RE = re.compile(r"^DTXSID\d+")
+
+
+def substance_dtxsid(session_id) -> str:
+    """The substance's DTXSID a session id names: a member study's
+    ("DTXSID1020431_rat") or a companion's ("…_published") id carries a
+    suffix the report must not print.  "" when it names none."""
+    m = _SUBSTANCE_RE.match(session_id or "")
+    return m.group(0) if m else ""

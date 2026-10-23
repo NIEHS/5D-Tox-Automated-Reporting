@@ -45,7 +45,6 @@ from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 from common.provenance import step_provenance
 from workflow.errors import StepError
 from workflow.store import PoolStore
-from workflow.studies import require_data_session
 
 logger = logging.getLogger(__name__)
 
@@ -55,24 +54,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @step_provenance
-def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
+def materialize_summary(dtxsid: str, store: PoolStore, *, policy=None) -> dict:
     """Write the report's Summary section (summary.json) from the session's
     results — narrative.report_summary, deterministic, the same inputs as the
     Abstract — as a provisional draft (approved=False, source="generated").
 
-    Through the section write gate (workflow.section_writes, C2) as a system
-    write: unchanged text writes nothing; text a person owns (approved, released
-    with PROTECTED, edited) is never replaced — the new text is HELD and a
-    `hold` event records that Process had a new Summary it did not apply. Its
-    own extra rule stands: it replaces only its own earlier output
+    Through the section write gate (workflow.section_writes) as a system
+    write: unchanged text writes nothing; under the C2 ``policy``
+    (safeguards.sections.ownership_policy) text a person owns (approved,
+    released with PROTECTED, edited) is never replaced — the new text is HELD
+    and a `hold` event records that Process had a new Summary it did not apply.
+    Its own extra rule stands: it replaces only its own earlier output
     (``source == "generated"``), never one the LLM route or a person saved.
-    Part of Process (C1: refused outside INTEGRATED / APPROVED).
 
     Returns ``{ok, written: bool, paragraphs: int, held?: {why, version}}``."""
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.PROCESS, store)
     from narrative.report_summary import build_report_summary
     from narrative.summary_llm import summary_inputs
     from workflow import section_writes
@@ -87,7 +82,7 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
         return {"ok": True, "written": False, "paragraphs": 0}
     out = section_writes.write_section(
         dtxsid, "summary", {"paragraphs": paragraphs, "source": "generated", "approved": False},
-        store, act="summary", actor="system", author="generated")
+        store, act="summary", actor="system", author="generated", policy=policy)
     result = {"ok": True, "written": out["outcome"] == "written",
               "paragraphs": len(paragraphs) if out["outcome"] == "written" else 0}
     if out["outcome"] == "held":
@@ -95,7 +90,7 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
     return result
 
 
-def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
+def materialize_result_sections(dtxsid: str, store: PoolStore, *, policy=None) -> dict:
     """Write the apical result sections from the Process cache to disk as section
     files, so the document surface shows them and the deliverable renders complete.
 
@@ -106,8 +101,9 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     (`slug = bm2_slug(title)`) carrying the SAME fields — a provisional, generated
     draft (`approved=False`).
 
-    Every file goes through the section write gate (workflow.section_writes, C2)
-    as a system write:
+    Every file goes through the section write gate (workflow.section_writes) as
+    a system write, under the C2 ``policy`` (safeguards.sections.ownership_policy;
+    without it every changed file is written, the prior archived):
       * content unchanged → nothing written (an approval stands; I5);
       * changed, not owned → the prior archived, the new written, a
         `generate/draft` event;
@@ -122,13 +118,8 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
 
     Genomics is deterministic and is NOT materialized here (ADR-0018). Returns
     `{ok, materialized, unchanged, needs_review: [{key, why, prior_version,
-    version, flips}], held}`; `materialized` = the files written. Part of Process
-    (C1: refused outside INTEGRATED / APPROVED).
+    version, flips}], held}`; `materialized` = the files written.
     """
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.PROCESS, store)
     from pipeline.session_db import _latest_cache
     from pipeline.session_store import bm2_slug
     from workflow import section_writes
@@ -173,7 +164,8 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         out = section_writes.write_section(
             dtxsid, section_key, data, store, act="materialize", actor="system",
             author="generated", on_owned=section_writes.REVIEW,
-            review={"why": "wording_changed" if flips else "numbers_changed", "flips": flips})
+            review={"why": "wording_changed" if flips else "numbers_changed", "flips": flips},
+            policy=policy)
 
         if out["outcome"] == "written":
             result["materialized"].append(section_key)
@@ -211,10 +203,6 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
     finds errors leaves them inert (the phase refuses their use), and one that
     no longer matches the integration's basis reads "integrate again".
     """
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.VALIDATE, store)
     files_dir = store.session_dir(dtxsid) / "files"
     if not files_dir.exists():
         raise StepError("No files directory found for this session", status_code=404)
@@ -264,10 +252,6 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
         raise StepError(
             "dtxsid, issue_index, and chosen_file_id are required", status_code=400
         )
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.RESOLVE, store)
 
 
     precedence = store.read_json(dtxsid, "precedence.json")
@@ -295,10 +279,6 @@ def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dic
     {ok, updated} where `updated` counts files whose headers were rewritten.
     A correction made after integration takes effect at the next integration.
     """
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.CONFIRM_CLASSIFICATION, store)
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
 
@@ -430,16 +410,12 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     Raises StepError(404) with no files, StepError(400) if validation hasn't run,
     StepError(500) if integration itself fails.
 
-    C1: refused outside VALIDATED / INTEGRATED / APPROVED (PhaseRefusal), and
-    when the validation it would pair with the fingerprints no longer matches
-    them (ValidationOutOfDate, the restart trap). A successful merge withdraws
+    Refused when the validation it would pair with the fingerprints no longer
+    matches them (ValidationOutOfDate, the restart trap: a core rule, it would
+    combine the wrong files); out of phase is the safeguards' refusal. A successful merge withdraws
     the data approval (archived under history/_data_approval/) and records the
     basis it was built from; it pins no method profile.
     """
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.INTEGRATE, store)
 
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
@@ -597,6 +573,19 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     }
 
 
+def record_study_design(dtxsid: str, fields: dict, store: PoolStore) -> int:
+    """Record stated study-design facts (route, vehicle, strain, …) the data
+    does not carry, in study_design.json, which every later integration
+    re-applies, and put them on every experiment now.  Returns the experiments
+    updated.  Written as given: that the values are the vocabulary's is the
+    safeguards' (safeguards.inputs)."""
+    from common.clock import now_iso
+    from pipeline.study_design import DESIGN_FILE
+
+    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
+    return reapply_study_design(dtxsid, store)
+
+
 def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
     """Put the session's stated design (study_design.json) on every experiment of
     the integrated project and save it, keeping the .bm2 copy in step as the
@@ -713,12 +702,8 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the AnimalReport as a plain dict. Raises StepError(404) with no
     files, StepError(400) if nothing fingerprinted, StepError(500) on failure.
-    Refused before integration (C1: APPROVE is legal at INTEGRATED/APPROVED).
+    (Refusing it before integration is the safeguards': C1.)
     """
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.APPROVE, store)
     session_path = store.session_dir(dtxsid)
     files_dir = session_path / "files"
     if not files_dir.exists():
@@ -879,13 +864,14 @@ def release_section_step(
 
     The voluntary human down-ratchet: `approved=False`, FINAL withdrawn,
     PROTECTED stands (C2 D1: a released section stays protected from machines;
-    only a person's explicit act replaces it). The reason is required (C2 D3)
-    and kept on the version trail (`revise/working`) and the `revised` marker.
+    only a person's explicit act replaces it). The reason is kept on the
+    version trail (`revise/working`) and the `revised` marker; requiring one is
+    the safeguards' (C2 D3).
 
     Returns ``{ok, section_key, approved: False, version, version_status,
     noop?}``; a section that is not approved changes nothing (``noop
     not_approved``, no event). Raises section_key_invalid (400),
-    section_not_found (404), reason_required (400).
+    section_not_found (404).
     """
     from workflow import section_writes as sw
     from workflow.ownership import content_hash
@@ -901,7 +887,7 @@ def release_section_step(
     if not data.get("approved"):
         return {**result, "version_status": sw.version_status(dtxsid, section_key, version, store),
                 "noop": _noop("not_approved")}
-    reason = sw.require_reason(reason, section_key, "reopen")
+    reason = (reason or "").strip() or None
 
     data["approved"] = False
     _demote_for_revise(data, reason)
@@ -944,7 +930,7 @@ _CURRENCY_KEYS = ("stale", "regenerated", "review", "wording_review")
 
 @step_provenance
 def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStore, *,
-                         reason: str = "") -> dict:
+                         reason: str = "", policy=None) -> dict:
     """Bring a past version of a section back as the current one (C2 §4.8, D3).
 
     The version is found in the archives (or is the current file); it works
@@ -953,13 +939,14 @@ def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStor
     number. It comes back as a DRAFT a person owns: not approved, PROTECTED
     (no machine replaces it; accepting it is a separate act). Restoring never
     clears currency: a stale or under-review current file passes its markers on.
-    The reason is required (D3) and kept on the `restore` event with
-    `from_version`.
+    The reason is kept on the `restore` event with `from_version`; the C2
+    ``policy`` (the safeguards) requires one.
 
     Returns ``{ok, section_key, version, from_version, approved: False,
     version_status: "working", noop?}``; restoring the current version is
     ``noop already_current``. Raises section_key_invalid (400),
-    version_not_found (404), version_content_missing (409), reason_required (400).
+    version_not_found (404), version_content_missing (409), and what the
+    policy raises.
     """
     from workflow import section_writes as sw
     from workflow.labels import Fact
@@ -974,7 +961,7 @@ def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStor
             "noop": _noop("already_current")}
     if current is not None and current.get("version") == version:
         return noop
-    reason = sw.require_reason(reason, section_key, "restore")
+    reason = (reason or "").strip() or None
 
     data = {k: v for k, v in target.items() if k not in STATE_KEYS}
     data["approved"] = False
@@ -985,7 +972,7 @@ def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStor
     out = sw.write_section(
         dtxsid, section_key, data, store, act="restore", actor="person",
         author=sw.author_of(target), force=True, reason=reason, cause="restore",
-        status="working", extra_event={"from_version": version})
+        status="working", extra_event={"from_version": version}, policy=policy)
     if out["outcome"] == "unchanged":
         return {**noop, "version": out["version"]}
     return {"ok": True, "section_key": section_key, "version": out["version"],
@@ -1001,8 +988,8 @@ def discard_section_step(dtxsid: str, section_key: str, store: PoolStore, *,
     stays monotonic and restore still reaches the text.
 
     Returns ``{ok, section_key, archived, version}``. Raises
-    section_key_invalid (400), section_not_found (404), section_owned (409:
-    an approved section is released first) and reason_required (400).
+    section_key_invalid (400), section_not_found (404). That an approved
+    section is released first, and the reason, are the safeguards'.
     """
     from workflow import section_writes as sw
 
@@ -1010,25 +997,7 @@ def discard_section_step(dtxsid: str, section_key: str, store: PoolStore, *,
     current = sw.read_prior(dtxsid, section_key, store)
     if current is None:
         raise sw.not_found(section_key, "discard")
-    if sw.is_locked(current):
-        raise sw.owned(section_key, "discard")
-    reason = sw.require_reason(reason, section_key, "discard")
+    reason = (reason or "").strip() or None
     out = sw.discard(dtxsid, section_key, store, act="discard", actor="person", reason=reason)
     return {"ok": True, "section_key": section_key, "archived": out["archived"],
             "version": out["version"]}
-
-
-# ---------------------------------------------------------------------------
-# Studies: create, fill a missing identity, delete (module M1). They live in
-# workflow.study_steps; re-exported so callers keep importing them from here.
-# ---------------------------------------------------------------------------
-
-from workflow.study_steps import (  # noqa: E402,F401
-    _casrn_check_digit_holds,
-    create_study_step,
-    delete_study_dry_run,
-    delete_study_step,
-    record_identity_step,
-    require_deletable,
-    reset_session_step,
-)

@@ -4,7 +4,9 @@ Author notebooks/workflow_walkthrough.ipynb programmatically.
 The notebook is the headless report workflow one step per cell: the same step
 functions `python -m tooling.generate_report` runs (which call the UI-agnostic
 core, `workflow.steps`, ADR-0014), so the notebook, the command line and the
-browser can never disagree about what a step does.  Each cell that changes the
+browser can never disagree about what a step does.  The browser and the
+command line also go through the safeguards (ADR-0031), which refuse what a
+person should not do; the notebook calls the core unguarded.  Each cell that changes the
 session ends by re-printing the DERIVED workflow state (phase + legal actions):
 the phase is a function of the files on disk, never stored.
 

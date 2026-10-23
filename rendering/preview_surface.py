@@ -104,7 +104,7 @@ def _render_surface(data, tree, surface, section_filter, downloads, shelf=None):
         # the BITS <graphic> only carries a filename.
         # A published report's own content (a companion) says so (published_from).
         return render_book_xml(
-            generate_bits(data, tree), images=chart_images(data), downloads=downloads,
+            generate_bits(data, tree), images=chart_images(data, tree), downloads=downloads,
             published=data.get("published_from"),
             generated_of=data.get("generated_of_published"), shelf=shelf,
         )
@@ -112,7 +112,7 @@ def _render_surface(data, tree, surface, section_filter, downloads, shelf=None):
         from rendering.jats_generator import generate_bits
         from rendering.bits_bundle import bundle_zip
         from rendering.bookshelf_preview import chart_images
-        return bundle_zip(generate_bits(data, tree), images=chart_images(data))
+        return bundle_zip(generate_bits(data, tree), images=chart_images(data, tree))
     if surface == "latex":
         raise NotImplementedError(
             f"Preview surface {surface!r} is provisioned but not implemented yet"

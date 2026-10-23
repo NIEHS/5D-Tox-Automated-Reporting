@@ -314,6 +314,11 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
     # back to a real file next to the page, then a visible placeholder.
     alt = _esc(label or caption_html)
     b64 = (images or {}).get(href)
+    svg = None
+    if isinstance(b64, dict):
+        # A chart with its SVG: the card shows the PNG, the full figure the
+        # SVG inline, whose markers name their gene sets on hover.
+        b64, svg = b64.get("png"), b64.get("svg")
     if b64:
         src = b64 if b64.startswith("data:") else f"data:image/png;base64,{b64}"
         img = f'<img src="{src}" alt="{alt}">'
@@ -338,8 +343,10 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
                 f'{lab_h3}<div class="caption">{paras}</div>{attrib}{notes}</div>')
     caption_div = f'<div class="caption"><p>{caption_html}</p></div>' if caption_html else ""
     # Full object (lightbox / hover), hidden in-flow.
+    from rendering.render_common import inline_svg
+    full = inline_svg(svg, label or "") if svg else img
     obj = (f'<div class="bk-object" id="{_esc(obj_id)}"><div class="figure bk_fig">'
-           f'<div class="graphic">{img}</div>{lab_h3}{caption_div}</div></div>')
+           f'<div class="graphic">{full}</div>{lab_h3}{caption_div}</div></div>')
     # Thumbnail card.
     thumb_cls = "bk-thumb bk-thumb-img" if have_img else "bk-thumb bk-thumb-missing"
     caption_card = f'<p class="float-caption">{caption_html}</p>' if caption_html else ""
@@ -857,13 +864,16 @@ def render_book_file(xml_path: Path, published: str | None = None) -> str:
     return _build_html(read_bundle(path), base_dir, None, None, published)
 
 
-def chart_images(data: dict) -> dict[str, str]:
+def chart_images(data: dict, tree=None) -> dict[str, str]:
     """Build the {filename → base64 image} map render_book_xml inlines (and the
     `bits` bundle ships), from a marshalled report `data` dict: every genomics
     chart carries its own `filename` + `png_b64`
     (genomics_charts.attach_genomics_charts), and every tree `figure` node its
     payload (render_common.figure_payload — an appendix PCA plot, a supplied
-    diagram).  A non-PNG payload is stored as a data URI carrying its mimetype."""
+    diagram) — the nodes of ``tree``, the study's tree the BITS is generated
+    from (the shared template's when None), so a figure only a study's
+    definition places, or repeated per genomic analysis, has its image.  A
+    non-PNG payload is stored as a data URI carrying its mimetype."""
     from document_model.document_tree import render_nodes, walk_tree
     from rendering.render_common import figure_payload
 
@@ -882,8 +892,10 @@ def chart_images(data: dict) -> dict[str, str]:
         if fn and b64:
             mime = payload.get("mimetype") or "image/png"
             out[fn] = b64 if mime == "image/png" else f"data:{mime};base64,{b64}"
+            if payload.get("svg"):
+                out[fn] = {"png": out[fn], "svg": payload["svg"]}
 
-    walk_tree(render_nodes(data), visit)
+    walk_tree(render_nodes(data, tree), visit)
     return out
 
 

@@ -118,9 +118,11 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     # cannot fill them with protocol defaults (pipeline.study_design).
     _not_recorded = "not recorded in the study data — do not state one"
     from pipeline.study_design import control_group, species_plural, subject_phrase
+    from narrative.test_article import naming_rule
     _subject = subject_phrase({"species": ctx.species, "strain": ctx.strain})
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
+- Naming: {naming_rule(ctx.chemical_name, ctx.abbreviation)}
 - Animals: {_subject if ctx.species else _not_recorded}
 {sex_line}
 - Route of administration: {ctx.route or _not_recorded}

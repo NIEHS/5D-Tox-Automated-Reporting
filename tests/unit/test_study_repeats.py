@@ -227,3 +227,61 @@ def test_a_route_gate_names_a_known_route():
         instantiate([{"region": "body", "children": [
             {"id": "x", "type": "narrative", "title": "X", "data_key": "x",
              "study_title": "X for ${species}"}]}])
+
+
+def _dose_words_tree():
+    return instantiate([{"region": "body", "children": [
+        {"id": "rationale", "type": "narrative", "title": "${dose_term} Selection Rationale",
+         "data_key": "methods", "methods_key": "dose_rationale"},
+        {"id": "internal", "type": "heading-only", "title": "${internal_dose_term} Assessment"}]}])
+
+
+_DOSE_TERMS = {"gavage": {"dose": "Dose", "internal_dose": "Internal Dose"},
+               "inhaled": {"dose": "Exposure Concentration",
+                           "internal_dose": "Internal Concentration"}}
+
+
+def test_the_dose_words_follow_the_route():
+    """A gavage study's headings say "Dose" (NIEHS-07 … 10), an inhaled
+    study's "Exposure Concentration" (NIEHS-12, 13) — the definition's words."""
+    def titles(route):
+        facts = {"study_design": {"route": route}, "dose_terms": _DOSE_TERMS}
+        return [n.title for n in study_tree(_dose_words_tree(), None, None, facts)]
+    assert titles("gavage") == ["Dose Selection Rationale", "Internal Dose Assessment"]
+    assert titles("inhaled") == ["Exposure Concentration Selection Rationale",
+                                 "Internal Concentration Assessment"]
+
+
+def test_a_route_with_no_dose_words_is_a_placeholder():
+    """A route the definition names no words for (dermal) never borrows
+    another route's."""
+    facts = {"study_design": {"route": "transdermal"}, "dose_terms": _DOSE_TERMS}
+    (rationale, _) = study_tree(_dose_words_tree(), None, None, facts)
+    assert rationale.title.startswith("[Placeholder: the document definition names the dose")
+    assert "transdermal" in rationale.title
+
+
+def _internal_dose_tree():
+    return instantiate([{"region": "back", "children": [
+        {"id": "app-a", "type": "appendix", "title": "Internal Dose Assessment",
+         "requires_platform": "Tissue Concentration", "drop_when_uncollected": True,
+         "children": [{"id": "app-a-body", "type": "freeform-block", "title": "",
+                       "session_content": "appendix-a"}]},
+        {"id": "app-b", "type": "appendix", "title": "Animal Identifiers"}]}])
+
+
+def test_a_section_about_uncollected_data_is_left_out():
+    """A study with no internal dose data has no Internal Dose appendix (as
+    NIEHS-02 … 06 have none), and the next appendix takes its letter."""
+    nodes = study_tree(_internal_dose_tree(), {"Body Weight"}, {}, {})
+    assert [(n.id, n.appendix_letter) for n in nodes] == [("app-b", "A")]
+    nodes = study_tree(_internal_dose_tree(), {"Body Weight", "Tissue Concentration"}, {}, {})
+    assert [(n.id, n.appendix_letter) for n in nodes] == [("app-a", "A"), ("app-b", "B")]
+
+
+def test_drop_when_uncollected_needs_the_data_it_is_about():
+    import pytest
+    with pytest.raises(ValueError, match="drop_when_uncollected needs requires_platform"):
+        instantiate([{"region": "body", "children": [
+            {"id": "x", "type": "narrative", "title": "X", "data_key": "x",
+             "drop_when_uncollected": True}]}])

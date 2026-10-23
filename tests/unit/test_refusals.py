@@ -1,5 +1,5 @@
 """
-Unit tests for workflow.refusals — the error envelope (MODULES.md §4.2).
+Unit tests for safeguards.refusals — every refusal explained in plain words.
 
 Every refusal the Gate 0 analyses quote (data §3.1, Process §6.1, document
 §9.1) maps to its code, keeps the backend's message verbatim and its status, and
@@ -12,10 +12,10 @@ import json
 import pytest
 
 from workflow.errors import GuardViolation, StepError
-from workflow.refusals import REFUSALS, classify, explain
+from safeguards.refusals import PLACES, REFUSALS, classify, explain
 
 # The modules a refusal may point at (MODULES.md §3), or None (the maintainer).
-_MODULES = {"M1", "M2", "M3", "M4", "M5", "M6", "P1", "P2", "D1", "D2", "D3", "D4", "D5", "D6", None}
+_PLACES = set(PLACES) | {None}
 
 
 @pytest.mark.parametrize("message,status,code", [
@@ -57,13 +57,13 @@ def test_section_not_found_names_the_section():
     assert body["code"] == "section_not_found"
     assert body["status"] == 404
     assert "“methods”" in body["say"]
-    assert body["fix"] == "D1"
+    assert body["fix"] == "sections"
 
 
 def test_every_code_says_something_and_points_at_a_module():
     for code, refusal in REFUSALS.items():
         assert refusal.say.strip(), code
-        assert refusal.fix in _MODULES, code
+        assert refusal.fix in _PLACES, code
         assert 400 <= refusal.status <= 599, code
         # plain words: no exception names, no file paths of the code base
         assert "Error" not in refusal.say and ".py" not in refusal.say, code
@@ -76,7 +76,7 @@ def test_guard_violations_from_the_real_guards():
     with pytest.raises(GuardViolation) as release:
         demote(frozenset({Fact.FINAL, Fact.PROTECTED}), Fact.FINAL)
     body = explain(release.value)["error"]
-    assert (body["code"], body["status"], body["fix"]) == ("release_reason_required", 409, "D1")
+    assert (body["code"], body["status"], body["fix"]) == ("release_reason_required", 409, "sections")
     assert body["message"] == str(release.value)
 
     with pytest.raises(GuardViolation) as stale:
@@ -96,7 +96,7 @@ def test_method_profile_errors_from_the_real_resolver(sessions_dir):
     with pytest.raises(mp.MethodProfileError) as changed:
         mp.session_method("DTXSID1", probe=False)
     body = explain(changed.value)["error"]
-    assert (body["code"], body["status"], body["fix"]) == ("method_profile_changed", 409, "M5")
+    assert (body["code"], body["status"], body["fix"]) == ("method_profile_changed", 409, "method_and_document")
 
     with pytest.raises(mp.MethodProfileError) as missing:
         mp.load_profile("no-such-profile")
@@ -121,7 +121,7 @@ def test_definition_pin_errors_from_the_real_pin(sessions_dir):
     with pytest.raises(dp.DefinitionPinError) as changed:
         dp.load_snapshot("DTXSID1")
     body = explain(changed.value)["error"]
-    assert (body["code"], body["status"], body["fix"]) == ("definition_pin_changed", 409, "M5")
+    assert (body["code"], body["status"], body["fix"]) == ("definition_pin_changed", 409, "method_and_document")
 
 
 def test_invalid_id_and_damaged_file(sessions_dir):
@@ -131,7 +131,7 @@ def test_invalid_id_and_damaged_file(sessions_dir):
     with pytest.raises(InvalidDtxsid) as bad:
         validate_dtxsid("../etc")
     body = explain(bad.value)["error"]
-    assert (body["code"], body["status"], body["fix"]) == ("invalid_study_id", 400, "M1")
+    assert (body["code"], body["status"], body["fix"]) == ("invalid_study_id", 400, "study")
     assert body["message"] == str(bad.value)
 
     (sessions_dir / "DTXSID1").mkdir()
@@ -175,11 +175,12 @@ def test_an_exception_naming_a_listed_code_is_taken_at_its_word():
                                   "version_not_found", "version_content_missing",
                                   "approve_content_retired", "approve_via_accept"])
 def test_c2_codes_are_in_the_closed_list(code):
-    assert code in REFUSALS and REFUSALS[code].fix in _MODULES
+    assert code in REFUSALS and REFUSALS[code].fix in _PLACES
 
 
 def test_a_section_refusal_names_its_code_and_details():
-    from workflow.section_writes import not_found, owned
+    from safeguards.sections import owned
+    from workflow.section_writes import not_found
     body = explain(owned("summary", "use_run"))["error"]
     assert body["code"] == "section_owned" and body["status"] == 409
     assert body["details"] == {"key": "summary", "act": "use_run"}
@@ -187,3 +188,22 @@ def test_a_section_refusal_names_its_code_and_details():
     assert body["code"] == "section_not_found" and body["status"] == 404
     assert body["message"] == "No 'bm2_x' section to reopen"
     assert "“bm2_x”" in body["say"] and "nothing to reopen" in body["say"]
+
+
+# --- a front end's own codes (register) ------------------------------------------
+
+def test_a_registered_code_is_explained_and_a_clash_refused(monkeypatch):
+    from safeguards import refusals as r
+    from safeguards.refusals import Refusal, Refused, explain, register
+    monkeypatch.setattr(r, "REFUSALS", dict(r.REFUSALS))
+    mine = Refusal(409, "A study of this chemical already exists ({id}).", "study")
+    register({"study_exists_x": mine})
+    register({"study_exists_x": mine})                       # the same again: fine
+    body = explain(Refused("study_exists_x", "exists", 409, {"id": "DTX1"}))["error"]
+    assert (body["code"], body["fix"], body["say"]) == (
+        "study_exists_x", "study", "A study of this chemical already exists (DTX1).")
+    with pytest.raises(ValueError, match="already defined"):
+        register({"section_owned": mine})
+    with pytest.raises(ValueError, match="not a place"):
+        register({"other_x": Refusal(400, "x", "M1")})
+    assert "other_x" not in r.REFUSALS

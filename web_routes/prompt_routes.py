@@ -214,11 +214,13 @@ async def api_prompt_runs(section: str, dtxsid: Dtxsid):
 @_guard
 async def api_prompt_use_run(section: str, dtxsid: Dtxsid, run_id: str):
     """Save a run's text as the section — a new, unapproved version of it —
-    through the section write gate (C2 §4.9): the prior text is archived and
-    the act recorded. A section a person approved is never replaced (C2 D6):
-    409 ``section_owned``; release it first, with a reason."""
+    through the section write gate under the C2 policy (safeguards.guarded):
+    the prior text is archived and the act recorded. A section a person
+    approved is never replaced (C2 D6): 409 ``section_owned``; release it
+    first, with a reason."""
+    from safeguards.guarded import write_section
+    from web_routes.refusal_response import refusal_response
     from workflow.errors import StepError
-    from workflow.section_writes import write_section
     from workflow.store import DiskPoolStore
     _section(section)
     run = prompt_store.load_run(dtxsid, section, run_id)
@@ -237,8 +239,7 @@ async def api_prompt_use_run(section: str, dtxsid: Dtxsid, run_id: str):
             extra_event={"run_id": run["run_id"], "model": model,
                          "template_version": run.get("template_version")})
     except StepError as e:
-        return JSONResponse({"error": e.message, "code": getattr(e, "code", None)},
-                            status_code=e.status_code)
+        return refusal_response(e)
     return JSONResponse({"ok": True, "version": out["version"]})
 
 

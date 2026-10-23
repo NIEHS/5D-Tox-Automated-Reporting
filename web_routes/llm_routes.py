@@ -24,6 +24,7 @@ import requests
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from web_routes.dtxsid_param import Dtxsid
+from web_routes.refusal_response import refusal_response
 
 from pipeline.session_store import SESSIONS_DIR, cached_bm2_jsons
 from common.session_files import read_session_json
@@ -194,6 +195,10 @@ async def api_generate(request: Request):
 
     # Reconstruct ChemicalIdentity from the JSON dict
     identity = ChemicalIdentity.from_dict(identity_dict)
+    who = (identity_dict.get("dtxsid") or identity_dict.get("name")
+           or identity_dict.get("casrn"))
+    from safeguards.refusals import Refused, error_body
+    from safeguards.sources import require_references, require_sources
 
     # Use SSE to stream progress updates
     async def event_stream():
@@ -218,6 +223,8 @@ async def api_generate(request: Request):
             # Yield all progress messages collected during gathering
             for msg in progress_messages:
                 yield _sse_event("progress", {"message": msg})
+            # The safeguards: no Background without its hazard sources.
+            require_sources(who, bg_data)
 
             # Step 2: generate the background with the LLM.
             yield _sse_event("progress", {
@@ -227,6 +234,7 @@ async def api_generate(request: Request):
             result = await loop.run_in_executor(
                 None, generate_background, bg_data, model,
             )
+            require_references(who, result)
 
             # Step 3: Return the complete result
             # Include the raw data for the export endpoint
@@ -235,6 +243,8 @@ async def api_generate(request: Request):
 
             yield _sse_event("complete", result)
 
+        except Refused as e:
+            yield _sse_event("error", error_body(e)[0])
         except Exception as e:
             yield _sse_event("error", {"error": str(e)})
 
@@ -638,9 +648,13 @@ async def api_generate_genomics_narrative(request: Request):
     # C2 §4.12 (b), D3: force bypasses the stored narrative, a person's act;
     # it needs a reason.
     force = bool(body.get("force", False))
-    if force and not str(body.get("reason") or "").strip():
-        return JSONResponse({"error": "A reason is required to regenerate 'genomics narrative'",
-                             "code": "reason_required"}, status_code=400)
+    if force:
+        from safeguards.sections import require_reason
+        from workflow.errors import StepError
+        try:
+            require_reason(body.get("reason"), "genomics narrative", "regenerate")
+        except StepError as e:
+            return refusal_response(e)
     result = await generate_genomics_narrative_async(
         dtxsid=body.get("dtxsid", ""),
         compound=identity.get("name", "the test article"),
@@ -736,9 +750,10 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
         )
 
     # Chemical name for the prompt's phrasing; fall back gracefully.
-    compound = (read_session_json(dtxsid, "identity.json") or {}).get(
-        "name", "the test article"
-    )
+    _identity = read_session_json(dtxsid, "identity.json") or {}
+    compound = _identity.get("name", "the test article")
+    from narrative.test_article import abbreviation_of
+    abbreviation = abbreviation_of(_identity)
 
     # Pick the primary BMD stat the same way the chart/narrative paths do —
     # the first key of any entry's gene_sets_by_stat (defaults to "median").
@@ -774,10 +789,14 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
         has_text = any(o.lower() == organ and paras for kind in ("gene_set", "gene_bmd")
                        for o, paras in (held.get(kind) or {}).items())
         reason = str(body.get("reason") or "").strip()
-        if has_text and not reason:
-            return JSONResponse(
-                {"error": f"A reason is required to regenerate 'genomics_{organ}'",
-                 "code": "reason_required"}, status_code=400)
+        if has_text:
+            # Throwing away a person's text needs a reason (the safeguards').
+            from safeguards.sections import require_reason
+            from workflow.errors import StepError
+            try:
+                require_reason(reason, f"genomics_{organ}", "regenerate")
+            except StepError as e:
+                return refusal_response(e)
         archive_genomics_overrides(dtxsid, organ, held, act="regenerate", actor="person",
                                    reason=reason or None, sexes=sexes)
         try:
@@ -806,6 +825,7 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
             out = await generate_genomics_narrative_async(
                 dtxsid=dtxsid,
                 compound=compound,
+                abbreviation=abbreviation,
                 organ=entry.get("organ", organ),
                 sex=entry.get("sex", ""),
                 gene_sets=gene_sets_for_llm,

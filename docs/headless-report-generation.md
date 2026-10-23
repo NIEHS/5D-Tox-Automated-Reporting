@@ -262,7 +262,7 @@ the same session finishes in seconds.
 | `--studies KEY=SESSION…` | A report over several studies (ADR-0029 §9), e.g. `rat=DTXSID1020431_rat mouse=DTXSID1020431_mouse`: each member is a study session built on its own first. Recorded as the session's `studies.json`; the report renders from them (implies `--render-only`). Combined tables group rows by study ("Rats" / "Mice") on the union of the studies' dose levels (NA where a study did not test a level); sections the definition repeats per study (`repeat: study_species`) render from that study's data |
 | `--deposit DIR` | The study's data deposit: the supplemental files deposited with the report. Recorded as the session's `deposit.json` (each file's size, kind and species, read from its name); the Supplemental Data appendix lists them, one section per kind (and, in the 2026 books, per species). Its `*_eFDR_Synthetic_Null_Analysis.zip` files are also analysed for the empirical false discovery rate (`efdr.json`, Appendix D.2; `python -m genomics.efdr <id> <zip…>` does it alone). `--deposit-exclude GLOB…` leaves out files in `DIR` that are not deposited (`build_published_reports` passes the Bookshelf package less the book's own XML, figures, `TOC.pdf`, `license.txt`, `SOURCE.txt`) |
 | `--front-matter FILE.json` | Front matter, as the Configure screen saves it to `front_matter.json`: `authors`, `contributors`, `publication` (`report_number`, `doi`, `report_date`) and `strain_designation`, the supplier designation the title prints after the strain, e.g. `{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}`. Keys the file gives replace the saved ones |
-| `--method-profile NAME` | The analysis method profile (`profiles/<name>.yaml`, ADR-0027): test family per platform, thresholds, BMD acceptance, internal-dose rules, GO ranking. `NAME` fixes the study on that profile; `newest` makes it track the newest profile as profiles are added. Required while no person has chosen the study's profile (a study with none, or one pinned by default): the run stops and names the profile it suggests, and Process refuses (`method_not_chosen`) until one is chosen. It is never chosen for you. A change of profile archives the old pin and recomputes. The log prints the profile, anything it asks for that the tool does not implement (`NOTE`), and every setting a `.bm2` analysis records differently (`WARNING`, also a `method_mismatch` in the validation report) |
+| `--method-profile NAME` | The analysis method profile (`profiles/<name>.yaml`, ADR-0027): test family per platform, thresholds, BMD acceptance, internal-dose rules, GO ranking. `NAME` fixes the study on that profile; `newest` makes it track the newest profile as profiles are added, which is also the default for a study with no pin. A change of profile archives the old pin and recomputes. The log prints the profile, anything it asks for that the tool does not implement (`NOTE`), and every setting a `.bm2` analysis records differently (`WARNING`, also a `method_mismatch` in the validation report) |
 | `--document-definition fixed\|track` | The report's document definition (ADR-0029 §12). `fixed` pins the definition as it is now: the report then renders from that snapshot (`sessions/<id>/document_definition.yaml`) whatever the templates say later, and the log notes when they have moved on. `track`, the default, renders from the current templates and records each change of definition in the session's history. Fix a finished report; run `fixed` again to take up a revised definition |
 | `--bmd-stats`, `--go-pct`, `--go-min-genes`, `--go-max-genes`, `--go-min-bmd` | GO gene-set table settings for this run, overriding the method profile's (ntp-5day-2025: `fifth_pct,median`, 5, 20, 500, 3). Omit them to use the profile |
 | `--reintegrate` | Run integration again even though `integrated.json` exists. This wipes the process caches, so processing starts from scratch. Without the flag, integration is skipped when `integrated.json` is already there |
@@ -693,17 +693,8 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
   `integrated.json` exists unless you pass `--reintegrate`. Route B always
   integrates. Integration puts back what people stated: the approved
   experiment metadata (`metadata_approved.json`) and the `--design` facts
-  (`study_design.json`). It pins no method profile. Re-integration withdraws
-  the data approval (`animal_report.json` moves to `history/_data_approval/`;
-  the animal report is approved again), and records what the dataset was
-  built from (`integration_basis.json`). Integration refuses
-  (`validation_out_of_date`) when the validation no longer matches the files
-  the server holds, for example after a restart re-scanned them: validate
-  again, then integrate.
-- **Every step checks the phase first.** A step its phase does not allow is
-  refused before it writes anything (409 `phase_not_allowed`, naming the phase
-  and the next step); the command line prints the message and, under it, the
-  same advice in plain words.
+  (`study_design.json`). It also re-pins the method profile when the study
+  tracks the newest one.
 - **Adding or replacing a file** after validation invalidates the downstream
   artifacts (validation report, `integrated.json`, animal report, caches),
   except the BMDS cache, whose hash is based on the data itself. Approved
@@ -1722,11 +1713,6 @@ A profile (`profiles/<name>.yaml`) states the whole analysis method.
   check. A revised method is a new file.
   - A study that tracks its series moves to the newest file automatically.
   - `--method-profile NAME` fixes a study on one profile.
-  - A person chooses the profile: nothing pins one by default, and Process
-    refuses (`method_not_chosen`) until a person has
-    (`pipeline.method_profile.require_person_pin`). The suggestion to propose,
-    `suggest_profile`, is the profile of the series whose expectations the
-    `.bm2`'s recorded settings contradict least, else the newest.
 - **Layers.** The built-in default, then the profile, then the study overlay's
   `methods:` block, then the request (CLI or UI). A study overlay or request
   may state any subset of keys. Every resolved value carries its source.

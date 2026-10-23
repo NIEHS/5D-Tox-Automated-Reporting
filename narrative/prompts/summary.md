@@ -26,6 +26,7 @@ Rewrite the draft as the report's Summary.
 - Keep one paragraph per draft paragraph unless two are clearer combined.
 - Write for a toxicologist: plain, precise, past tense, no hype, no speculation
   beyond the draft.
+- {{ naming }}
 {% if not apical_evaluated %}- The study measured no apical endpoints; do not imply that it did.
 {% endif %}{% if not has_genomics %}- The study has no transcriptomic results; do not imply that it did.
 {% endif %}

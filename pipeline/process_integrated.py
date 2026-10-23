@@ -313,6 +313,7 @@ async def _build_apical_bmd_narrative(ctx):
             llm_paras: list[str] = []
             try:
                 from narrative.apical_bmd_llm import generate_apical_bmd_narrative_async
+                from narrative.test_article import abbreviation_of
                 llm_result = await generate_apical_bmd_narrative_async(
                     dtxsid=dtxsid,
                     compound_name=_chem_name,
@@ -321,6 +322,8 @@ async def _build_apical_bmd_narrative(ctx):
                     study_duration=f"{_days}-day" if _days else None,
                     dose_groups=_dose_groups,
                     design=_design,
+                    abbreviation=_methods_ctx.get("abbreviation") or abbreviation_of(
+                        read_session_json(dtxsid, "identity.json")),
                 )
                 llm_paras = llm_result.get("paragraphs", [])
                 if "error" in llm_result:
@@ -428,6 +431,7 @@ async def _build_genomics_llm_narratives(ctx):
             # back to the request's compound_name if identity is missing.
             _identity = read_session_json(dtxsid, "identity.json") or {}
             _llm_compound = _identity.get("name", compound_name)
+            from narrative.test_article import abbreviation_of
 
             # Override file: user's Lock/Unlock edits persist here and
             # WIN over any freshly generated LLM output for the same
@@ -447,6 +451,7 @@ async def _build_genomics_llm_narratives(ctx):
                     return key, await generate_genomics_narrative_async(
                         dtxsid=dtxsid,
                         compound=_llm_compound,
+                        abbreviation=abbreviation_of(_identity),
                         organ=organ,
                         sex=sex,
                         gene_sets=gene_sets_for_llm,
@@ -1793,20 +1798,6 @@ _CONTENT_PAYLOAD_KEYS = (
 )
 
 
-def _require_processable(dtxsid: str, store) -> None:
-    """C1: refuse Process before it writes anything — outside INTEGRATED and
-    APPROVED (PhaseRefusal), and until a person has chosen the method profile
-    (MethodNotChosen: D1, the method is never chosen for them).
-    `_build_process_context` pins the definition and rewrites the
-    fingerprints, so this runs first."""
-    from pipeline.method_profile import require_person_pin
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-
-    require_legal(dtxsid, Action.PROCESS, store)
-    require_person_pin(dtxsid)
-
-
 async def run_process(dtxsid: str, params: dict, store) -> dict:
     """
     HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
@@ -1825,9 +1816,6 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
     run_data + run_document; this function stays the single eager pass the route
     and the golden oracle drive, so the 12-key payload is unchanged.
     """
-    from workflow.studies import require_data_session
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
 
     try:
@@ -1888,9 +1876,6 @@ async def run_document(dtxsid: str, params: dict, store) -> dict:
     the seam the eager document_step is built on, and the future home of a lazy /
     on-demand content regeneration path.
     """
-    from workflow.studies import require_data_session
-    require_data_session(dtxsid, store)  # R6: no data act on a companion or a report
-    _require_processable(dtxsid, store)
     ctx = _build_process_context(dtxsid, params, store)
     try:
         await run_data(ctx)

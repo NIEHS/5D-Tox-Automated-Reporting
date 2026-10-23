@@ -128,10 +128,11 @@ def _validated(**docs):
 
 def test_validate_step_no_files_is_refused_409():
     # C1: no files → EMPTY, where only ADD_FILES is legal (it was a 404).
-    from workflow.errors import PhaseRefusal
+    import safeguards.guarded as guarded
+    from safeguards.refusals import PhaseRefusal
     store = FakeStore(files_exist=False)
     with pytest.raises(PhaseRefusal) as ei:
-        validate_step("DTXSID_VC", store)
+        guarded.validate_step("DTXSID_VC", store)
     assert ei.value.status_code == 409
     assert ei.value.details["phase"] == "EMPTY"
 
@@ -184,10 +185,11 @@ def test_resolve_step_starts_fresh_when_no_precedence_file():
 def test_integrate_step_never_validated_is_refused_409():
     # C1: files but no validation report → UPLOADED, where INTEGRATE is refused
     # before anything is read (it was a 400 "no fingerprints").
-    from workflow.errors import PhaseRefusal
+    import safeguards.guarded as guarded
+    from safeguards.refusals import PhaseRefusal
     store = FakeStore(fingerprints={})
     with pytest.raises(PhaseRefusal) as ei:
-        integrate_step("DTXSID_VC", None, store)
+        guarded.integrate_step("DTXSID_VC", None, store)
     assert ei.value.status_code == 409
     assert ei.value.details["phase"] == "UPLOADED"
 
@@ -301,7 +303,7 @@ def test_integration_refuses_when_validation_is_out_of_date():
     # The restart trap: a cold re-scan minted new ids, so the coverage matrix
     # names files the fingerprints integration would use do not hold.
     from workflow.errors import ValidationOutOfDate
-    from workflow.refusals import explain
+    from safeguards.refusals import explain
 
     report = {"issues": [], "fingerprints": {"old-1": {"filename": "bw.csv"},
                                               "old-2": {"filename": "bw.bm2"}},
@@ -322,7 +324,7 @@ def test_integration_refuses_when_validation_is_out_of_date():
         "fingerprints; files added since validation: late.csv). Validate again, then "
         "integrate.")
     body = explain(ei.value)["error"]
-    assert (body["code"], body["fix"]) == ("validation_out_of_date", "M2")
+    assert (body["code"], body["fix"]) == ("validation_out_of_date", "files")
     assert body["say"].startswith("The file check is out of date")
 
 
@@ -338,21 +340,23 @@ def test_integration_passes_on_the_report_fingerprint_fallback():
 
 
 def test_integration_refused_at_validation_errors():
-    from workflow.errors import PhaseRefusal
+    from safeguards.refusals import PhaseRefusal
     store = FakeStore(fingerprints={"f1": {}}, present={"integrated.json"},
                       docs={"validation_report.json": {
                           "issues": [{"severity": "error"}], "coverage_matrix": {"x": {}}}})
+    import safeguards.guarded as guarded
     with patch("workflow.steps.integrate_pool") as merge:
         with pytest.raises(PhaseRefusal) as ei:
-            integrate_step("DTXSID_VC", None, store)
+            guarded.integrate_step("DTXSID_VC", None, store)
     merge.assert_not_called()
     assert ei.value.details["phase"] == "VALIDATION_ERRORS"
 
 
 def test_resolve_and_confirm_are_refused_before_validation():
-    from workflow.errors import PhaseRefusal
-    for call in (lambda st: resolve_step("DTXSID_VC", 0, "fid", st),
-                 lambda st: confirm_metadata_step("DTXSID_VC", {}, st)):
+    import safeguards.guarded as guarded
+    from safeguards.refusals import PhaseRefusal
+    for call in (lambda st: guarded.resolve_step("DTXSID_VC", 0, "fid", st),
+                 lambda st: guarded.confirm_metadata_step("DTXSID_VC", {}, st)):
         store = FakeStore()                      # files, never validated: UPLOADED
         with pytest.raises(PhaseRefusal):
             call(store)
@@ -393,8 +397,8 @@ def _integrated_session(sessions_dir, dtxsid="DTXSID_VC"):
 
 
 def test_materialize_is_refused_before_integration(sessions_dir):
-    from workflow.errors import PhaseRefusal
-    from workflow.steps import materialize_result_sections, materialize_summary
+    from safeguards.guarded import materialize_result_sections, materialize_summary
+    from safeguards.refusals import PhaseRefusal
     from workflow.store import DiskPoolStore
     d = sessions_dir / "DTXSID_VC"
     (d / "files").mkdir(parents=True)
@@ -462,7 +466,7 @@ def _seed_cache(d, cat_signature):
 
 def test_wording_review_stamped_on_flip_against_approved(sessions_dir):
     import json
-    from workflow.steps import materialize_result_sections
+    from safeguards.guarded import materialize_result_sections
     from workflow.store import DiskPoolStore
 
     d = _integrated_session(sessions_dir)
@@ -577,7 +581,8 @@ def test_i5_a_warm_materialize_with_nothing_changed_touches_no_file(sessions_dir
 def test_t2_changed_numbers_under_an_approval_are_knocked_down_with_a_record(sessions_dir):
     import json
     from pipeline.session_store import current_version_status, list_archived
-    from workflow.steps import accept_section_step, materialize_result_sections
+    from workflow.steps import accept_section_step
+    from safeguards.guarded import materialize_result_sections
     from workflow.store import DiskPoolStore
 
     d = _integrated_session(sessions_dir, "DTXSID_T2")
@@ -633,7 +638,7 @@ def _summary_inputs_patch(monkeypatch, paragraphs):
 def test_t4_materialize_summary_holds_a_released_protected_summary(sessions_dir, monkeypatch):
     import json
     from pipeline.session_store import read_version_history
-    from workflow.steps import (
+    from safeguards.guarded import (
         accept_section_step, materialize_summary, release_section_step,
     )
     from workflow.store import DiskPoolStore
@@ -696,7 +701,7 @@ def test_i1_materialize_with_the_fake_store_never_overwrites_owned_text(monkeypa
     # before the machine's replaces it (D2/A1), and the summary is held.
     import pipeline.session_db as session_db
     from tests.unit.section_store_fake import FakeSectionStore
-    from workflow.steps import materialize_result_sections
+    from safeguards.guarded import materialize_result_sections
 
     monkeypatch.setattr(session_db, "_latest_cache", lambda sdir, unit: {"sections": [
         {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": [2]},

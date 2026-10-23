@@ -29,14 +29,9 @@ def approve_experiment_metadata(dtxsid: str, metadata_by_name: dict, *, merge: b
     the browser's form sends the whole description.
 
     Returns {"updated": n, "bm2_exported": bool}.  Raises LookupError when the
-    session has no integrated data, and PhaseRefusal (C1) outside INTEGRATED /
-    APPROVED: the statements are written onto the dataset, and a dataset that a
-    later file check found errors in is not built on.
+    session has no integrated data.  (That the statements need a usable
+    dataset — INTEGRATED / APPROVED — is the safeguards': safeguards.guarded.)
     """
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.STATE_DATASET_FACTS)
-
     integrated = load_integrated(dtxsid)
     if integrated is None:
         raise LookupError("No integrated data found")

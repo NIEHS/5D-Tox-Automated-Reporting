@@ -96,30 +96,33 @@ def test_reset_deletes_the_integration_basis(client, sessions_dir):
     assert not (d / "integration_basis.json").exists()
 
 
-def test_a_guard_refusal_through_a_v2_route_is_the_envelope(sessions_dir):
-    """The refusal a guarded step raises reaches a /api/v2/ client as the §4.2
-    envelope (code, say and fix from the refusal itself). Today's old routes
-    keep their {"error": message} body with the 409; the routes C1 adds no
-    v2 endpoint of its own, so this mounts a throwaway one on V2Route."""
+def test_a_guard_refusal_reaches_a_client_explained(sessions_dir):
+    """The refusal a guarded act raises reaches a web client in the app's
+    {"error": message} body with its explanation beside it (code, say, fix:
+    web_routes.refusal_response)."""
     from fastapi import APIRouter, FastAPI
     from fastapi.testclient import TestClient
-    from web_routes.v2_routes import V2Route
-    from workflow.steps import validate_step
+    from safeguards.guarded import validate_step
+    from web_routes.refusal_response import refusal_response
+    from workflow.errors import StepError
     from workflow.store import DiskPoolStore
 
-    router = APIRouter(route_class=V2Route)
+    router = APIRouter()
 
     @router.post("/t/{dtxsid}")
     def validate(dtxsid: str):
-        return validate_step(dtxsid, DiskPoolStore())
+        try:
+            return validate_step(dtxsid, DiskPoolStore())
+        except StepError as e:
+            return refusal_response(e)
 
     app = FastAPI()
     app.include_router(router)
     (sessions_dir / "DTXSID_NOFILES").mkdir()
     r = TestClient(app).post("/t/DTXSID_NOFILES")
     assert r.status_code == 409
-    err = r.json()["error"]
-    assert (err["code"], err["status"], err["fix"]) == ("phase_not_allowed", 409, "M2")
-    assert err["say"] == ("Checking the files isn't possible yet. This study has no data "
-                          "files yet. Add the study's files first.")
-    assert err["details"]["next_action"] == "ADD_FILES"
+    body = r.json()
+    assert body["error"].startswith("VALIDATE refused for DTXSID_NOFILES")
+    assert (body["code"], body["fix"]) == ("phase_not_allowed", "files")
+    assert body["say"] == ("Checking the files isn't possible yet. This study has no data "
+                           "files yet. Add the study's files first.")

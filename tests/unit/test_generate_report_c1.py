@@ -14,11 +14,11 @@ import pytest
 
 def test_method_profile_is_required_until_a_person_chooses_one(sessions_dir):
     from pipeline import method_profile as mp
-    from tooling.generate_report import method_profile
+    from tooling.generate_report import _require_method_choice, method_profile
 
     (sessions_dir / "DTXSIDX").mkdir()
     with pytest.raises(SystemExit) as ei:
-        method_profile("DTXSIDX", None)
+        _require_method_choice("DTXSIDX")
     msg = str(ei.value)
     assert msg.startswith("--method-profile is needed: no one has chosen the analysis "
                           "method for DTXSIDX yet")
@@ -27,12 +27,13 @@ def test_method_profile_is_required_until_a_person_chooses_one(sessions_dir):
 
     mp.pin_profile("DTXSIDX", "newest", by="default")           # an old default pin
     with pytest.raises(SystemExit) as ei:
-        method_profile("DTXSIDX", None)
+        _require_method_choice("DTXSIDX")
     assert "(its current one was set by default)" in str(ei.value)
 
     method_profile("DTXSIDX", "ntp-5day-2021")                  # a person's choice
     assert mp.read_pin("DTXSIDX")["pinned_by"] == "user"
-    method_profile("DTXSIDX", None)                             # kept, no question
+    _require_method_choice("DTXSIDX")                           # kept, no question
+    method_profile("DTXSIDX", None)
 
 
 def test_a_refusal_prints_the_message_and_the_plain_words(sessions_dir, monkeypatch, capsys):

@@ -256,6 +256,24 @@ def _heading(level: int, title: str) -> str:
     return f"{cmd}{{{_escape_latex(title)}}}"
 
 
+def _section_heading(node: DocNode) -> str:
+    """A section's heading.  Inside an appendix the title carries the
+    appendix's own numbering ("C.1. Gene Expression Quality Control", as in
+    the reference), so the heading is unnumbered — LaTeX would otherwise
+    prefix the body section number ("15.1 C.1. …") — and is added to the
+    contents by hand."""
+    if node.appendix_scope and node.level > 0 and node.title:
+        return _unnumbered_heading(node.level, section_heading_text(node))
+    return _heading(node.level, section_heading_text(node))
+
+
+def _unnumbered_heading(level: int, title: str) -> str:
+    """A heading whose title carries its own number, put in the contents by hand."""
+    cmd = _HEADING_BY_LEVEL.get(level, r"\paragraph")
+    title = _escape_latex(title)
+    return f"{cmd}*{{{title}}}\n\\addcontentsline{{toc}}{{{cmd.lstrip(chr(92))}}}{{{title}}}"
+
+
 # Match an http/https URL up to the next whitespace.  Trailing sentence
 # punctuation (e.g. the period in "...11603678.") gets pulled back out in
 # _splice_urls so it stays in the prose and out of the clickable link.
@@ -396,10 +414,12 @@ def _render_narrative_family(node: DocNode, data: dict, pending_word: str) -> st
     \emph{[<pending_word> pending: <title>]} when the body is empty.  Callers
     pass "Section" or "Narrative" to preserve the pre-refactor per-type wording."""
     rc = resolve_narrative_content(node, data)
-    body = _emit_narrative_body(rc)
+    # An underscore in prose joins an identifier (a file name): it may break
+    # there, or a long one runs off the page.
+    body = _emit_narrative_body(rc).replace("\\_", "\\_\\allowbreak{}")
     if not body:
         body = f"\\emph{{[{pending_word} pending: {_escape_latex(node.title)}]}}"
-    return f"{_heading(node.level, section_heading_text(node))}\n\n{body}"
+    return f"{_section_heading(node)}\n\n{body}"
 
 
 def _render_front_matter(node: DocNode, data: dict) -> str:
@@ -499,19 +519,9 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
     and Sample Collection, Transcriptomics, Data Analysis).
 
     We emit only the heading.  The walker handles children separately
-    after this returns.
-
-    Inside an appendix the title carries the appendix's own numbering
-    ("C.1. Gene Expression Quality Control", as in the reference), so the
-    heading is unnumbered — LaTeX would otherwise prefix the body section
-    number ("15.1 C.1. …") — and is added to the contents by hand.
+    after this returns (inside an appendix, unnumbered: _section_heading).
     """
-    if node.appendix_scope and node.level > 0:
-        cmd = _HEADING_BY_LEVEL.get(node.level, r"\paragraph")
-        title = _escape_latex(section_heading_text(node))
-        toc_level = cmd.lstrip("\\")
-        return f"{cmd}*{{{title}}}\n\\addcontentsline{{toc}}{{{toc_level}}}{{{title}}}"
-    return _heading(node.level, section_heading_text(node))
+    return _section_heading(node)
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
@@ -527,7 +537,9 @@ def _render_appendix(node: DocNode, data: dict) -> str:
     appendix with no children still emits the visible "[Appendix body pending]"
     line.
     """
-    heading = _heading(node.level, appendix_heading_text(node))
+    # "Appendix C. …" is its own number: unnumbered, or LaTeX prints "17 Appendix C."
+    heading = (_unnumbered_heading(node.level, appendix_heading_text(node))
+               if node.level > 0 and node.title else "")
     scope = ""
     if node.appendix_letter:
         letter = node.appendix_letter
@@ -626,7 +638,7 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     """
     if node.appendix_scope:
         return _scoped_list(node, data, "table_entries", "Table")
-    return f"{_heading(node.level, section_heading_text(node))}\n\n\\listoftables"
+    return f"{_section_heading(node)}\n\n\\listoftables"
 
 
 def _scoped_list(node: DocNode, data: dict, key: str, kind: str | None) -> str:
@@ -639,7 +651,7 @@ def _scoped_list(node: DocNode, data: dict, key: str, kind: str | None) -> str:
     table entry gets \pageref{tab:<id>} where the tree node carries a label.
     """
     entries = list_entries(node, data, key)
-    heading = _heading(node.level, section_heading_text(node))
+    heading = _section_heading(node)
     if not entries:
         return f"{heading}\n\n\\emph{{[List pending: {_escape_latex(node.title)}]}}"
     lines = [heading, "", "\\begin{itemize}"]
@@ -920,7 +932,7 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     # render_common.bmd_summary_plan EXTRACT; this only EMITs the LaTeX (the
     # column-alignment spec stays here — it's presentation).
     plan = bmd_summary_plan(node, data)
-    heading = _heading(node.level, section_heading_text(node))
+    heading = _section_heading(node)
     prose = _render_paragraphs(plan.paragraphs)
 
     if plan.rows is None:
@@ -1010,7 +1022,7 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     # \includegraphics chart, the landscape wrap, and the ADR-0005 override +
     # anchor (transport) are LaTeX emit.
     role = genomics_role(node)
-    heading = _heading(node.level, section_heading_text(node))
+    heading = _section_heading(node)
     intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
     resolved = resolve_content_items(node, data)
@@ -1279,7 +1291,7 @@ def _render_freeform_page(node: DocNode, data: dict) -> str:
     so the page is isolated, an optional heading (skipped when title is empty),
     then the resolved LaTeX content verbatim (or a pending note).
     """
-    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
+    heading = _section_heading(node) if node.title else ""
     body = _freeform_body_latex(node)
     parts = ["\\clearpage"]
     if heading:
@@ -1293,7 +1305,7 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     Freeform AUTHORED content rendered inline (no forced page break).  Optional
     heading + the resolved LaTeX content verbatim (or a pending note).
     """
-    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
+    heading = _section_heading(node) if node.title else ""
     body = _freeform_body_latex(node)
     if heading:
         return f"{heading}\n\n{body}"
@@ -1507,7 +1519,7 @@ def _render_unimplemented(node: DocNode, data: dict) -> str:
     a future session can grep the output to verify the right placeholders
     appeared in the right places.
     """
-    heading = _heading(node.level, section_heading_text(node)) if node.level > 0 else ""
+    heading = _section_heading(node) if node.level > 0 else ""
     placeholder = _pending_placeholder(node.node_type)
     if heading:
         return f"{heading}\n\n{placeholder}"

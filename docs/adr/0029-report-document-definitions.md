@@ -185,10 +185,62 @@ state only for that reason follows the study's data, not the era:
   - Appendix A (Chemical Characterization and Generation of Chamber
     Concentrations);
   - the Theoretical Inhaled Dose section and its Supplemental Data files.
-- **Dose words.** The headings name the dose as the 2026 books do, whatever
-  the route: "Exposure Concentration Selection Rationale" and "Internal
-  Concentration Assessment". This was the user's decision (2026-10-12), over
-  the oral books' "Dose Selection Rationale" / "Internal Dose Assessment".
+- **Dose words.** The headings name the dose by the study's route. The
+  definition's `dose_terms:` block gives the words per route, and they fill
+  `${dose_term}` / `${internal_dose_term}` in the titles
+  (`document_tree.dose_term_values`). By gavage: "Dose Selection Rationale",
+  "Internal Dose Assessment" (NIEHS-07 … 10). By inhalation: "Exposure
+  Concentration Selection Rationale", "Internal Concentration Assessment"
+  (NIEHS-12, 13). A route the definition names no words for (dermal, feed …)
+  prints a placeholder rather than another route's words. This is the user's
+  decision (2026-10-19). It supersedes the concentration words for every
+  route (2026-10-12).
+- **Sections about data the study lacks.** `drop_when_uncollected: true`
+  with `requires_platform` leaves a section out, subtree included, when the
+  study collected none of that data. Without the flag, the section stays and
+  states `not_collected_text`. In the 2026 era the Internal Dose Methods
+  subsection, Results section and appendix carry the flag, so a study with
+  no Tissue Concentration has none of them, as NIEHS-02 … 06 have none. The
+  later appendices take the freed letter. This is the user's decision
+  (2026-10-20).
+- **Organ Weight Descriptions.** The appendix describes the organs the study
+  weighed (its integrated organ-weight endpoints, not the report's table,
+  which a view may narrow) and the tissues it sequenced. The texts are the
+  definition's `organ_descriptions`, in `organ_description_order`
+  (`rendering.organ_descriptions`). The rule reproduces all eleven books'
+  lists. The 2026 era orders them alphabetically.
+- **Foreword.** A definition states the series' Foreword (`foreword:`, its
+  paragraphs, with `[text](url)` links). The shared template's is the
+  2022–2023 books' text. `eras/niehs-2026` states the 2026 books' rewording:
+  no "The NIEHS Report series began in 2022", and "This report is available
+  … on the NIEHS website".
+- **The proposed standard.** `eras/niehs-proposed` extends `eras/niehs-2026`
+  with sections no published book has, and is the definition of a new study
+  (`DEFAULT_DEFINITION`). The published 2026 books keep extending
+  `eras/niehs-2026`. A study a report composes (NIEHS-12/13's `_rat` /
+  `_mouse`) takes its report's definition. This is the user's decision
+  (2026-10-21): the gene set figures are "proposed standards moving forward".
+  What it adds:
+  - under Gene Set Benchmark Dose Analysis, "Gene Ontology Semantic Map" and
+    "Gene Set Clusters": an opening paragraph, then a figure per genomic
+    analysis (`repeat: genomic_analyses`, a tissue of one sex), its image
+    the Process step's chart for that analysis (`rendering.genomic_figures`);
+  - a list of the body's figures after the list of tables;
+  - an appendix, "Gene Ontology Semantic Map and Gene Set Clusters"
+    (`cited_as: genomic-figures-appendix`, which the opening paragraphs
+    cite): how the map and its semantic clusters were derived (anc2vec →
+    UMAP → HDBSCAN, settings the map's file does not record left as a
+    placeholder), how the gene set clusters are made, how the two relate,
+    and per analysis two membership tables — every active gene set with both
+    of its clusters, by gene set cluster and by semantic cluster.
+  Their wording is `phrasing.genomic_figures`, proposed for review. On the
+  HTML and Bookshelf surfaces the figures are inline SVG, each marker titled
+  with its GO term (the hover text); print surfaces take the PNG.
+- **A figure per analysis.** `repeat: genomic_analyses` makes one copy per
+  tissue × sex (× study), scoped by `scope_analysis` ("liver-male",
+  `document_tree.analysis_key`); a payload keyed `by_analysis` gives each
+  copy its own (`render_common.scoped_value`). Figures may repeat, as
+  sections and tables do.
 - **A single study.** `study_title` is the title of each study's copy when a
   report covers several studies ("Study Design for ${species}", "${species}").
   A single study's copy keeps the node's own `title`. For "Study Design" that

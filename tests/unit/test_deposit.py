@@ -265,8 +265,8 @@ def test_an_empty_local_list_is_filled_at_packaging():
     from rendering.render_common import supplied_files_pending
     node = DocNode(id="f-apical", node_type="supplementary-material", title="",
                    binding="derived", deposit_group="apical")
-    assert "publishing package" in supplied_files_pending(node, {"deposit": {"local": True,
-                                                                             "files": []}})
+    assert supplied_files_pending(node, {"deposit": {"local": True, "files": []}}) == (
+        "To be assigned at publication.")
     assert supplied_files_pending(node, {"deposit": {"files": []}}) == (
         "No files of this kind were deposited for this study.")
 

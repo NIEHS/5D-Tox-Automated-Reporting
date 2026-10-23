@@ -94,7 +94,10 @@ def test_appendix_b_longtable_carries_scoped_caption_and_label_latex():
 def test_appendix_opens_its_numbering_scope_latex():
     app, _ = _appendix_b()
     out = latex_appendix(app, _data())
-    assert "\\section{Appendix B. Animal Identifiers}" in out
+    # "Appendix B." is its own number: unnumbered (no "15 Appendix B."), in
+    # the contents by hand.
+    assert "\\section*{Appendix B. Animal Identifiers}" in out
+    assert "\\addcontentsline{toc}{section}{Appendix B. Animal Identifiers}" in out
     assert "\\renewcommand{\\thetable}{B-\\arabic{table}}" in out
     assert "\\setcounter{figure}{0}" in out
     # Children carry the body: no pending stub, no roster inline.

@@ -18,10 +18,34 @@
 # theoretical inhaled dose), and a single study's
 # per-study sections are no sub-sections (`study_title`: "Study Design", the
 # prose straight under "Animal Condition …", as single-study books print it).
-# The dose is an "exposure concentration" ("Exposure Concentration Selection
-# Rationale", "Internal Concentration Assessment") whatever the route: these
-# books' words, the user's decision (2026-10-12).
+# A study with no internal dose data (no Tissue Concentration) has no Internal
+# Dose sections at all — the Methods subsection, the Results section and the
+# appendix — as the books without it have none (NIEHS-02 … 06), rather than
+# sections saying it was not assessed; the later appendices letter up.  The
+# user's decision (2026-10-20).
+# The headings name the dose by the study's route (dose_terms below): an
+# inhaled study's "Exposure Concentration Selection Rationale" and "Internal
+# Concentration Assessment" (NIEHS-12, 13), a gavage study's "Dose Selection
+# Rationale" and "Internal Dose Assessment" (NIEHS-07 … 10) — the user's
+# decision (2026-10-19), superseding "concentration whatever the route"
+# (2026-10-12).
 extends: eras/niehs-2023
+# The words the headings name the dose by, per route (${dose_term},
+# ${internal_dose_term}; document_tree.dose_term_values).  A route with no
+# words here (dermal, feed …) prints a placeholder until a book or the user
+# names them.
+dose_terms:
+  gavage: {dose: Dose, internal_dose: Internal Dose}
+  inhaled: {dose: Exposure Concentration, internal_dose: Internal Concentration}
+# The 2026 books describe the organs alphabetically (Heart, Kidney, Liver,
+# Lung, Ovary), where the 2023 books put the liver first.
+organ_description_order: []
+# The 2026 books' Foreword (NIEHS-12, 13): reworded, without "The NIEHS Report
+# series began in 2022", and "This report" on "the NIEHS website".
+foreword:
+- "The [National Institute of Environmental Health Sciences (NIEHS)](https://www.niehs.nih.gov/) is one of 27 institutes and centers of the National Institutes of Health, part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures, developing the next generation of environmental health scientists, and providing critical research, knowledge, and information to citizens and policymakers to help in their efforts to prevent hazardous exposures and reduce the risk of preventable disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+- "The environmental health sciences research described in this series is conducted primarily by the [Division of Translational Toxicology (DTT)](https://www.niehs.nih.gov/research/atniehs/dtt) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
+- "This report is available free of charge on the [NIEHS website](https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports) and cataloged in [PubMed](https://pubmed.ncbi.nlm.nih.gov/), a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
 # The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
 tissue_order: []
 # The abstract names gene sets, not individual genes (NIEHS-12, 13).
@@ -137,12 +161,18 @@ phrasing:
 changes:
   # ── Materials and Methods: Chemistry first, with the test article's
   # procurement and the vapor generation, monitoring and chamber atmosphere.
+  # Chemistry is a bare heading; what the data say of the test article (the
+  # data-built `chemistry` text) is its procurement and characterization.
   - move: mm-chemistry
     before: mm-study-design
+  - set: mm-chemistry
+    type: heading-only
+    data_key: null
+    methods_key: null
   - insert:
     - {id: mm-chem-procurement, type: narrative, data_key: methods,
        title: "Procurement and Characterization of ${chemical_name}",
-       methods_key: chemistry_procurement}
+       methods_key: chemistry}
     - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
        title: Vapor Generation and Exposure System, methods_key: vapor_generation,
        requires_route: inhaled}
@@ -157,9 +187,10 @@ changes:
     study_title: "Study Design for ${species}"
     repeat: study_species
   - set: mm-dose-rationale
-    title: Exposure Concentration Selection Rationale
+    title: "${dose_term} Selection Rationale"
   - set: mm-internal-dose
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
+    drop_when_uncollected: true
 
   # ── Results: the apical results grouped; a summary closing the gene set
   # analysis; the theoretical inhaled dose, then the internal concentrations.
@@ -208,7 +239,7 @@ changes:
   - move: internal-dose
     after: theoretical-inhaled-dose
   - set: internal-dose
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
 
   # ── Each study's results under the tables the studies share; each study's
   # internal concentrations (its own table); each tissue's gene set and gene
@@ -254,6 +285,8 @@ changes:
   - set: internal-dose
     type: heading-only
     narrative_key: null
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
   - insert:
     - {id: internal-dose-study, type: narrative+tables, title: "", study_title: "${species}",
        narrative_key: internal_dose, repeat: study_species}
@@ -321,7 +354,9 @@ changes:
   # B: the internal concentration method (the study's appendix-a content, with
   # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
   - set: appendix-a
-    title: Internal Concentration Assessment
+    title: "${internal_dose_term} Assessment"
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
   - move: appendix-a-body
     into: appendix-a
   - remove: appendix-a-quantitation

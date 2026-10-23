@@ -1375,9 +1375,9 @@ def _summary_endpoint_label(label: str, platform: str) -> str:
 
 # Relative tolerance for the bm2↔ToxicR overlap cross-check (task #34).  An
 # endpoint both engines model numerically is "validated" when they agree within
-# this; beyond it the endpoint is flagged as a divergence.  The blocking hard-stop
-# that consumes these divergences is DORMANT until the ToxicR engine matches the
-# .bm2 build (task #48) — see _BMD_HARD_STOP in process_integrated._build_bmd_summary.
+# this; beyond it the endpoint is flagged as a divergence, and the hard-stop
+# (_BMD_HARD_STOP in process_integrated, armed since the ToxicR engine matches the
+# .bm2 build, task #48) halts the run on it.
 _BMD_DIVERGENCE_TOL = 0.25
 
 
@@ -1524,8 +1524,8 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
     FILLS a bm2 endpoint that has no usable BMD (blank / NVM / UREP / NR) from a
     viable ToxicR fit; and, where BOTH engines produced a numeric BMD, records any
     divergence beyond `_BMD_DIVERGENCE_TOL` into `divergences`.  The blocking
-    hard-stop that would halt on a non-empty `divergences` is armed by
-    `_BMD_HARD_STOP` (currently off) — until then divergence is flag-only.
+    hard-stop (`_BMD_HARD_STOP` in process_integrated, armed) halts the run on a
+    non-empty `divergences`.
     """
     if entry.get("filled"):
         # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row);

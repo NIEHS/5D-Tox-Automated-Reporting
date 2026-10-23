@@ -138,11 +138,8 @@ the new file carries a `wording_review` flag.
 **Reads → writes.** `integrated.json`, the sidecars, `genomics.sidecar.json`,
 `_category_lookup.json`, `animal_report.json`, `method_profile.json`,
 `identity.json` → `_cache_*.json`, `.prepare_content.*`, `references.json`,
-`session.duckdb`, `bm2_<slug>.json`; `document_definition.json` kept current,
-and a method profile that tracks the newest moved to it. Process refuses before
-it writes anything when the study is not `INTEGRATED` or `APPROVED`
-(`phase_not_allowed`), and when no person has chosen its method profile
-(`method_not_chosen`, step 10).
+`session.duckdb`, `bm2_<slug>.json`; `method_profile.json` and
+`document_definition.json` kept current.
 
 **If it goes wrong.** Any failure in concern [1] raises `StepError` 500. An LLM
 failure in Methods leaves Methods empty. A content kind that fails is logged,
@@ -219,13 +216,16 @@ generate-then-save):
    hazard, ATSDR, IRIS, OSHA/NIOSH limits, drinking-water regulations,
    mechanism papers (Semantic Scholar), and CPDat use data, then lists what is
    missing. It records the sources it couldn't reach.
-3. **Refuses** if ATSDR or IRIS couldn't be reached: without the authoritative
-   hazard sources the section can't say what is known, or what isn't.
-4. `narrative.background_writer.generate_background`: one LLM call writes the
+3. `narrative.background_writer.generate_background`: one LLM call writes the
    paragraphs, citing the gathered sources by number; the citations are
    checked.
-5. **Refuses** to save prose with no references (its citations would point
-   nowhere). Otherwise saves `background.json` unapproved.
+4. Saves `background.json` unapproved.
+
+The app and the command line refuse more (`safeguards.sources`): no
+Background when ATSDR or IRIS couldn't be reached (without the authoritative
+hazard sources the section can't say what is known, or what isn't), and none
+saved with no references (its citations would point nowhere). Called from
+here, a Background may be drafted without them.
 
 With `BACKGROUND = False`, the reference session's Background is copied when
 it has one, as `build_published_reports` keeps it across rebuilds.
@@ -283,9 +283,11 @@ already accepted.
   section's version history without minting a new version.
 - `workflow.steps.release_section_step(dtxsid, key, store, reason=…)` reopens
   one: `approved: false`, FINAL withdrawn (PROTECTED stays), and the reason
-  recorded. The reason is required (it is refused with `reason_required`
-  without one). PROTECTED means no machine replaces the text; only a person's
-  explicit act does (C2).
+  recorded.
+- Refusing to ship while a section blocks is the safeguards'
+  (`safeguards.publish.require_publishable`): the app's download and Overleaf
+  bundle, and the command line, whose `--draft` is the one named override.
+  The renders below are a working view, and are not gated.
 
 **Reads → writes.** Section files (only when accepting or releasing).
 """)
@@ -300,7 +302,7 @@ for key, sec in sorted(store.read_section_dicts(DTXSID).items()):
 readiness = WorkflowEngine(DTXSID, store).publish_readiness()
 print("\ncan publish:", readiness["can_publish"], readiness["blocking"] or "")
 # accept_section_step(DTXSID, "bm2_body-weight", store)    # approve one section
-# release_section_step(DTXSID, "bm2_body-weight", store, reason="check the wording")   # and reopen it
+# release_section_step(DTXSID, "bm2_body-weight", store)   # and reopen it
 """)
 
 # ---------------------------------------------------------------------------

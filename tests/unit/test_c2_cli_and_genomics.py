@@ -52,22 +52,25 @@ def test_cli_background_writes_a_draft_and_archives_the_prior(gen, sessions_dir)
 
 
 def test_cli_background_never_replaces_an_approved_background(gen, sessions_dir, capsys):
+    # The command line passes the C2 policy (safeguards.sections); the notebook does not.
+    from safeguards.sections import ownership_policy
     from workflow.store import DiskPoolStore
     d = sessions_dir / ID
     d.mkdir(parents=True)
     mine = {"paragraphs": ["mine"], "approved": True, "facts": ["final", "protected"], "version": 1}
     (d / "background.json").write_text(json.dumps(mine))
-    gen.background(ID, {"pubchem_cid": 1}, "m", DiskPoolStore())
+    gen.background(ID, {"pubchem_cid": 1}, "m", DiskPoolStore(), policy=ownership_policy)
     assert _bg(d) == mine
     assert gen.background_calls == []                     # the LLM was not even asked
     assert "REFUSED" in capsys.readouterr().out
 
-    gen.background(ID, {"pubchem_cid": 1}, "m", DiskPoolStore(), force=True)   # no reason
+    gen.background(ID, {"pubchem_cid": 1}, "m", DiskPoolStore(), force=True,   # no reason
+                   policy=ownership_policy)
     assert _bg(d) == mine
     assert "reason_required" in capsys.readouterr().out
 
     gen.background(ID, {"pubchem_cid": 1}, "m", DiskPoolStore(), force=True,
-                   reason="new IRIS assessment")
+                   reason="new IRIS assessment", policy=ownership_policy)
     assert _bg(d)["paragraphs"] == ["machine background"] and _bg(d)["approved"] is False
     from pipeline.session_store import read_version_history
     e = read_version_history(ID, "background")[-1]

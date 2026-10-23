@@ -7,7 +7,7 @@
       },
       {
         "label": "Methods",
-        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. A benchmark response of one standard deviation was used to model all endpoints."
+        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. [Placeholder: the benchmark response used to model the endpoints is not in the study data]"
       },
       {
         "label": "Results",
@@ -638,11 +638,12 @@
         {
           "children": [
             {
+              "data_key": "organ_weight_descriptions",
               "id": "appendix-e-body",
               "level": 3,
               "region": "back",
               "title": "",
-              "type": "freeform-block"
+              "type": "narrative"
             }
           ],
           "id": "appendix-e-descriptions",
@@ -676,6 +677,16 @@
       "type": "appendix"
     }
   ],
+  "dose_terms": {
+    "gavage": {
+      "dose": "Dose",
+      "internal_dose": "Internal Dose"
+    },
+    "inhaled": {
+      "dose": "Exposure Concentration",
+      "internal_dose": "Internal Concentration"
+    }
+  },
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "figure_entries": [
     {
@@ -800,6 +811,17 @@
     "sections": []
   },
   "most_potent_gene_sets_matrix": null,
+  "organ_weight_descriptions": {
+    "paragraphs": [
+      [
+        {
+          "text": "Liver:",
+          "type": "bold"
+        },
+        " The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+      ]
+    ]
+  },
   "orientations": {
     "table-body-weight": "landscape"
   },
@@ -860,6 +882,13 @@
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
+      "label": "4",
+      "ready": false,
+      "scope": null,
+      "table_number": 4,
+      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
+    },
+    {
       "label": "B-1",
       "ready": false,
       "scope": "B",
@@ -879,13 +908,6 @@
       "scope": "D",
       "table_number": 2,
       "title": "BMDExpress/ToxicR Analysis Configuration"
-    },
-    {
-      "label": "4",
-      "ready": false,
-      "scope": null,
-      "table_number": 4,
-      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
   ],
   "test_article": {

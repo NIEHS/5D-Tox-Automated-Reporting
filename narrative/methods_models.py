@@ -84,6 +84,7 @@ class MethodsContext:
     """
     # --- Chemical identity ---
     chemical_name: str = ""
+    abbreviation: str = ""   # the study's recorded one; "" = none (narrative.test_article)
     casrn: str = ""
     dtxsid: str = ""
 
@@ -178,6 +179,14 @@ class MethodsContext:
     bmds_version: str | None = None
     bmr_type: str | None = None
     bmr_factor: float | None = None
+    # The apical BMDs' BMR as fit ((type, factor), the BMD summary's), when it
+    # differs in kind from the transcriptomic analyses' (bmr_type/bmr_factor).
+    apical_bmr: tuple | None = None
+    # Each apical domain's BMR as its BMDExpress project fit it ({platform:
+    # [type, factor]}), when the pool holds apical projects — they may differ
+    # by domain (the February 2026 DTT method: clinical chemistry at 25%
+    # relative deviation, the rest at 1 SD).
+    apical_bmrs: dict | None = None
     models_fit: list[str] | None = None
     constant_variance: bool | None = None
     # Pre-filter method for transcriptomics (Williams or CurveFit)

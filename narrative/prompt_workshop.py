@@ -24,9 +24,11 @@ actually printed.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 
+import common.paths as paths
 from common.clock import now_iso
 from common.paths import REPO_ROOT
 from narrative import prompt_templates
@@ -64,9 +66,39 @@ Return ONLY JSON: {"reply": "...", "proposed_template": "..." or null,
 "rationale": "..." or ""}"""
 
 
-# Which published report a session reproduces, and when it came out: core
-# predicates (workflow.studies, R7 of the M1 spec), kept importable from here.
-from workflow.studies import published_date, report_of  # noqa: E402,F401
+def report_of(dtxsid: str) -> tuple[str | None, str | None]:
+    """(published report, member study) for a session: ("NIEHS-10", None), or
+    ("NIEHS-13", "rat") for one study of a report over several studies (the
+    composed session's studies.json names its members), or (None, None) for an
+    unpublished study."""
+    try:
+        from tooling.build_published_reports import STUDIES
+    except ImportError:  # tooling absent in a slim deployment
+        return None, None
+    by_dtxsid = {row[0]: r for r, row in STUDIES.items()}
+    if dtxsid in by_dtxsid:
+        return by_dtxsid[dtxsid], None
+    for parent, report in by_dtxsid.items():
+        try:
+            members = json.loads((paths.SESSIONS_DIR / parent / "studies.json").read_text())
+        except (OSError, ValueError):
+            continue
+        for study, member in (members or {}).items():
+            if member == dtxsid:
+                return report, study
+    return None, None
+
+
+def published_date(report: str | None) -> str | None:
+    """When a published report came out ("2023-03"), from its Bookshelf bundle
+    breakdown; None for no report, or a bundle that is absent or undated."""
+    if not report:
+        return None
+    try:
+        meta = json.loads((BOOKSHELF / report / "breakdown" / "report.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return meta.get("published") or None
 
 
 def published_section(dtxsid: str, section: str) -> dict | None:

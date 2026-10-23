@@ -72,6 +72,26 @@ from common.dtxsid import InvalidDtxsid
 from common.session_files import UnreadableSessionFile
 
 
+from workflow.errors import GuardViolation, StepError
+from pipeline.method_profile import MethodProfileError
+from document_model.definition_pin import DefinitionPinError
+from styling_export.llm_endpoints import LLMEgressBlocked
+
+
+@app.exception_handler(StepError)
+@app.exception_handler(GuardViolation)
+@app.exception_handler(MethodProfileError)
+@app.exception_handler(DefinitionPinError)
+@app.exception_handler(LLMEgressBlocked)
+async def refusal_handler(request: Request, exc: Exception):
+    """A refusal no route caught — a step's, a guard's, a pin's, the LLM egress
+    guard's — answered with its status and its explanation (the {"error": …}
+    body plus code, say, fix: safeguards.refusals), not a bare 500."""
+    from web_routes.refusal_response import refusal_response
+    logger.warning("Refused %s: %s", request.url.path, exc)
+    return refusal_response(exc)
+
+
 @app.exception_handler(InvalidDtxsid)
 async def invalid_dtxsid_handler(request: Request, exc: InvalidDtxsid):
     """

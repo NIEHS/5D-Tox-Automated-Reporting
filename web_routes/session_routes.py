@@ -66,13 +66,10 @@ router = APIRouter()
 
 
 def _step_refusal(exc) -> JSONResponse:
-    """A section step's refusal in this module's {"error": …} shape, with its
-    code (workflow.refusals) beside the message."""
-    body = {"error": exc.message}
-    code = getattr(exc, "code", None)
-    if code:
-        body["code"] = code
-    return JSONResponse(body, status_code=exc.status_code)
+    """A step's refusal in this module's {"error": …} shape, explained
+    (web_routes.refusal_response)."""
+    from web_routes.refusal_response import refusal_response
+    return refusal_response(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -805,7 +802,6 @@ async def api_session_approve(request: Request):
       * the posted content differs → 409 ``approve_content_retired``;
       * no section file → 404 ``section_not_found``.
     It no longer writes identity.json or meta.json (C3 owns the identity).
-    The new interface calls POST /api/v2/studies/{id}/sections/{key}/accept.
 
     Input JSON: {"dtxsid", "section_type", "bm2_slug"? | "organ"/"sex"?, "data"}
     Returns {"ok", "section_type", "user_edited", "version"} (+ "noop").
@@ -813,7 +809,7 @@ async def api_session_approve(request: Request):
     from workflow.section_catalog import approvable_section_types
     from workflow.errors import StepError
     from workflow.ownership import content_hash
-    from workflow.steps import accept_section_step
+    from safeguards.guarded import accept_section_step
     from workflow.store import DiskPoolStore
 
     body = await request.json()
@@ -973,7 +969,7 @@ async def api_session_save_section(request: Request):
     Returns {"ok": true, "version": n}.
     """
     from workflow.errors import StepError
-    from workflow.section_writes import write_section
+    from safeguards.guarded import write_section
     from workflow.store import DiskPoolStore
 
     body = await request.json()
@@ -1027,7 +1023,7 @@ async def api_session_unapprove(request: Request):
     ``noop not_approved``.
     """
     from workflow.errors import StepError
-    from workflow.steps import release_section_step
+    from safeguards.guarded import release_section_step
     from workflow.store import DiskPoolStore
 
     body = await request.json()
@@ -1065,7 +1061,7 @@ async def api_session_discard_section(request: Request):
     Kept for the old interface (C2 D4); the new interface never calls it.
     """
     from workflow.errors import StepError
-    from workflow.steps import discard_section_step
+    from safeguards.guarded import discard_section_step
     from workflow.store import DiskPoolStore
 
     body = await request.json()
@@ -1109,13 +1105,12 @@ async def api_session_history(dtxsid: Dtxsid, section_key: str, version: int = 0
         {"version": 3, "approved_at": "…", "is_current": true}
       ]
     }
-    The new interface reads GET /api/v2/studies/{id}/sections/{key}/history.
     """
     from workflow import section_writes as sw
     from workflow.errors import StepError
-    from workflow.read_model import ReadOnlyDiskPoolStore
+    from workflow.store import DiskPoolStore
 
-    store = ReadOnlyDiskPoolStore()
+    store = DiskPoolStore()
     try:
         if version > 0:
             return JSONResponse(sw.read_version(dtxsid, section_key, version, store))
@@ -1150,7 +1145,7 @@ async def api_session_restore(dtxsid: Dtxsid, request: Request):
     current version answers ok with "message": "Already the current version".
     """
     from workflow.errors import StepError
-    from workflow.steps import restore_section_step
+    from safeguards.guarded import restore_section_step
     from workflow.store import DiskPoolStore
 
     try:
@@ -1296,15 +1291,15 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     # pipeline.metadata_approval: onto integrated.json (schema-validated —
     # a malformed description → 422 globally, disk untouched), the genomics
     # sidecar reconciled, .bm2 re-exported, metadata_approved.json written.
-    from pipeline.metadata_approval import approve_experiment_metadata
+    from safeguards.guarded import approve_experiment_metadata
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(
             None, approve_experiment_metadata, dtxsid, metadata_by_name)
     except LookupError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
-    except StepError as e:  # the phase guard (C1)
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+    except StepError as e:  # the safeguards (R6, C1)
+        return _step_refusal(e)
     updated_count, bm2_ok = result["updated"], result["bm2_exported"]
 
     return JSONResponse({
@@ -1325,15 +1320,16 @@ async def api_pool_remove_file(dtxsid: Dtxsid, filename: str):
     Reversible on disk: files move to sessions/<dtxsid>/_removed/<timestamp>/.
     Invalidates validation/integration when the pool had progressed past upload.
     400 for an invalid name, a sidecar, or a file not in the pool."""
-    from pipeline.pool_state import PoolFileError, remove_pool_file
+    from pipeline.pool_state import PoolFileError
+    from safeguards.guarded import remove_pool_file
     if not (SESSIONS_DIR / validate_dtxsid(dtxsid)).exists():
         return JSONResponse({"error": f"No session found for {dtxsid}"}, status_code=404)
     try:
         result = remove_pool_file(dtxsid, filename)
     except PoolFileError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-    except StepError as e:  # the phase guard (C1)
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+    except StepError as e:  # the safeguards (R6, C1)
+        return _step_refusal(e)
     return JSONResponse({"ok": True, **result})
 
 
@@ -1390,14 +1386,13 @@ async def api_pool_reset(dtxsid: Dtxsid):
             {"error": f"No session found for {dtxsid}"},
             status_code=404,
         )
-    # C1: a study with no files has nothing to reset (the logic is inline
-    # here until C8 moves it into the core with its dry run).
-    from workflow.engine import require_legal
-    from workflow.phases import Action
+    # The safeguards (R6, C1): no reset of a companion or a report, nor of a
+    # study with no files.
+    from safeguards.guarded import require_reset
     try:
-        require_legal(dtxsid, Action.RESET)
+        require_reset(dtxsid)
     except StepError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+        return _step_refusal(e)
 
     deleted_items = []
 
@@ -1502,26 +1497,49 @@ async def api_session_reset(dtxsid: Dtxsid):
 
     Unlike pool reset (which preserves identity and history), this removes
     EVERYTHING: the entire sessions/{dtxsid}/ directory including meta.json,
-    identity.json, background.json, history/, files/, and all approved sections,
-    and clears all in-memory server state for this chemical.
+    identity.json, background.json, history/, files/, and all approved sections.
 
-    Superseded by the M1 delete pair (``/api/v2/studies/{id}/delete-preview``
-    and ``…/delete``), and held to the same rule: a published book's content,
-    a member of a report or a study with a run in flight is refused, in the
-    §4.2 error envelope (workflow.study_steps.reset_session_step). It asks for
-    no typed id and no preview token. An absent id answers 200 "No session to
-    reset", as it always did.
+    Also clears all in-memory server state for this chemical (same as pool reset).
+
+    After this, the chemical identity form is still filled (from localStorage)
+    but the server has no record of any prior work.  The user starts completely
+    from scratch.  A published book's companion and a report over several
+    studies are refused (R6, safeguards.acts).
     """
-    from workflow.steps import reset_session_step
-    from workflow.studies import StudyRefusal, session_folder
-    from web_routes.v2_routes import envelope_response
+    _bm2_uploads = get_bm2_uploads()
+    _csv_uploads = get_csv_uploads()
+    _pool_fingerprints = get_pool_fingerprints()
+    _data_uploads = get_data_uploads()
+    _integrated_pool = get_integrated_pool()
 
-    if not session_folder(dtxsid).exists():
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
+    if not d.exists():
         return JSONResponse({"ok": True, "message": "No session to reset"})
+    # R6: a published book's companion, or a report over several studies, is
+    # not deleted here.
+    from safeguards.acts import require_data_session
     try:
-        reset_session_step(dtxsid)
-    except StudyRefusal as exc:
-        if exc.code == "study_not_found":   # deleted meanwhile: nothing left to reset
-            return JSONResponse({"ok": True, "message": "No session to reset"})
-        return envelope_response(exc)
+        require_data_session(dtxsid)
+    except StepError as e:
+        return _step_refusal(e)
+
+    # Delete the entire session directory tree
+    shutil.rmtree(d)
+
+    # Clear in-memory server state (same cleanup as pool reset)
+    session_files_prefix = str(d / "files")
+    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
+        stale_ids = [
+            fid for fid, info in store.items()
+            if info.get("temp_path", "").startswith(session_files_prefix)
+            or not os.path.exists(info.get("temp_path", ""))
+        ]
+        for fid in stale_ids:
+            del store[fid]
+
+    _pool_fingerprints.pop(dtxsid, None)
+    _integrated_pool.pop(dtxsid, None)
+
+    logger.info("Full session reset for %s — directory deleted", dtxsid)
+
     return JSONResponse({"ok": True})

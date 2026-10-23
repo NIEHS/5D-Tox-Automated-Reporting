@@ -242,6 +242,23 @@ def prune_uncollected_tables(tree, collected):
     return _prune(copy.deepcopy(tree))
 
 
+def _has_drops(nodes) -> bool:
+    return any(n.drop_when_uncollected or _has_drops(n.children or []) for n in nodes)
+
+
+def _drop_uncollected(nodes: list, collected: set) -> list:
+    """Leave out the nodes (with their subtrees) marked `drop_when_uncollected`
+    whose `requires_platform` the study did not collect.  Mutates the (already
+    copied) nodes; returns the kept list."""
+    out = []
+    for node in nodes:
+        if node.drop_when_uncollected and platform_gate_closed(node, collected):
+            continue
+        node.children = _drop_uncollected(node.children or [], collected)
+        out.append(node)
+    return out
+
+
 def _has_route_gates(nodes) -> bool:
     return any(n.requires_route or _has_route_gates(n.children or []) for n in nodes)
 
@@ -276,6 +293,26 @@ def caption_values(facts: dict | None, design: dict | None = None) -> dict:
                           str(facts["chemical_name"]))
 
 
+def dose_term_values(facts: dict | None) -> dict:
+    """The heading fields ``${dose_term}`` / ``${internal_dose_term}``: the words
+    the definition names the dose by (its ``dose_terms``) for the study's route
+    — "Dose" / "Internal Dose" by gavage, "Exposure Concentration" / "Internal
+    Concentration" by inhalation.  A route the definition names no words for
+    gets a visible placeholder, never another route's words; {} when the
+    definition states none."""
+    facts = facts or {}
+    terms = facts.get("dose_terms")
+    if not terms:
+        return {}
+    route = (facts.get("study_design") or {}).get("route")
+    words = terms.get(route)
+    if not words:
+        gap = (f"[Placeholder: the document definition names the dose for no route "
+               f"{route or '(none recorded)'}]")
+        return {"dose_term": gap, "internal_dose_term": gap}
+    return {"dose_term": words["dose"], "internal_dose_term": words["internal_dose"]}
+
+
 def _has_title_fields(nodes) -> bool:
     return any("${" in (n.title or "") or "${" in (n.caption or "")
                or _has_title_fields(n.children or []) for n in nodes)
@@ -302,9 +339,45 @@ def _has_repeats(nodes) -> bool:
 
 # What each repeat is over, and the node field a copy is scoped by (ADR-0029).
 _REPEAT_SCOPE = {"deposit_species": "scope_species", "study_species": "scope_species",
-                 "genomic_organs": "scope_organ"}
+                 "genomic_organs": "scope_organ", "genomic_analyses": "scope_analysis"}
 _REPEAT_VARIABLE = {"deposit_species": "species", "study_species": "species",
-                    "genomic_organs": "organ"}
+                    "genomic_organs": "organ", "genomic_analyses": "organ"}
+
+
+def analysis_key(organ, sex=None, study=None) -> str:
+    """A genomic analysis' key ("liver-male"; "liver-rat-female" in a report
+    over several studies): what a `genomic_analyses` copy is scoped by and a
+    payload keyed ``by_analysis`` is keyed by."""
+    parts = [str(p).strip().lower().replace(" ", "-") for p in (organ, study, sex) if p]
+    return "-".join(parts)
+
+
+def _analysis_items(facts: dict, studies: list[dict]) -> list[dict]:
+    """The genomic analyses — each tissue of each sex (of each study), in the
+    tissues' order — with the caption fields of their animals ("Male Rats")."""
+    design = facts.get("study_design") or {}
+    designs = {s["key"]: (s.get("data") or {}).get("study_design") or {}
+               for s in facts.get("studies") or []}
+    out, seen = [], set()
+    for entry in facts.get("genomics_sections") or []:
+        organ = (entry.get("organ") or "").strip()
+        if not organ or entry.get("type") not in (None, "gene_set"):
+            continue
+        blocks = [b for b in entry.get("sexes") or [] if isinstance(b, dict)] or [entry]
+        for b in blocks:
+            sex = (b.get("sex") or "").strip().lower() or None
+            study = b.get("study") or None
+            key = analysis_key(organ, sex, study)
+            if key in seen:
+                continue
+            seen.add(key)
+            # In a report over several studies a group is labelled ("Female
+            # Rats", rendering.report_compose), not sexed: its study's animals.
+            base = designs.get(study, design)
+            fields = caption_values(facts, {**base, "sexes": [sex]} if sex and not study
+                                    else base)
+            out.append({"key": key, "title": organ[:1].upper() + organ[1:], "fields": fields})
+    return out
 
 
 def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
@@ -315,7 +388,10 @@ def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
       rendering.report_compose); a single study is one, unscoped (``key`` None),
       titled with its animals ("Rats"; "Animals" before any are recorded);
       ``fields`` are the study's caption fields (caption_values);
-    - genomic_organs: the tissues of the genomic analyses, in their order."""
+    - genomic_organs: the tissues of the genomic analyses, in their order;
+    - genomic_analyses: the genomic analyses, each tissue of one sex (and one
+      study), titled with the tissue; ``fields`` name its animals ("Male
+      Rats", caption_values)."""
     facts = facts or {}
     studies = [{"key": s["key"], "title": s["title"],
                 "fields": caption_values(facts, (s.get("data") or {}).get("study_design") or {})}
@@ -334,6 +410,7 @@ def repeat_items(facts: dict | None) -> dict[str, list[dict]]:
         "deposit_species": list((facts.get("deposit") or {}).get("species") or []),
         "study_species": studies,
         "genomic_organs": [{"key": o.lower(), "title": o[:1].upper() + o[1:]} for o in organs],
+        "genomic_analyses": _analysis_items(facts, studies),
     }
 
 
@@ -408,7 +485,8 @@ def _expand_repeats(nodes: list, items: dict[str, list[dict]]) -> list:
 # section keeps (everything else — what the section says and from what — is
 # the section's).
 _OWN_FIELDS = frozenset({"id", "title", "level", "children", "repeat", "region",
-                         "first_copy", "scope_species", "scope_organ", "study_title",
+                         "first_copy", "scope_species", "scope_organ", "scope_analysis",
+                         "study_title",
                          "requires_route", "sec_label", "appendix_letter", "appendix_scope"})
 
 
@@ -447,7 +525,8 @@ def study_tree(base, collected, authored=None, facts=None):
     itself when nothing applies:
 
     1. Not-collected domains (`collected`): apical table nodes for uncollected
-       domains are dropped.
+       domains are dropped, and so are the sections marked
+       `drop_when_uncollected` whose `requires_platform` was not collected.
     2. Data gates (`requires_platform`): a node whose domain(s) were not collected
        keeps its heading but its subtree is dropped and it states the fact
        (`not_collected_text`).
@@ -456,9 +535,11 @@ def study_tree(base, collected, authored=None, facts=None):
        deposit is (its DOI, else its local url), else `missing_content_text`,
        else pending.
     4. Study facts in titles and captions: `${chemical_name}` (TITLE_FIELDS)
-       from `facts` (the report data), and the animals and treatment
+       from `facts` (the report data), the animals and treatment
        `${subject}` / `${treatment}` (caption_values; in a per-study copy, that
-       study's); a field the facts lack stays as written.
+       study's), and the dose words `${dose_term}` / `${internal_dose_term}`
+       for the study's route (dose_term_values); a field the facts lack stays
+       as written.
     5. Repeated sections (`repeat:`): one copy per species of the study's
        deposit, per study of a report over several, or per genomic tissue
        (repeat_items, _expand_repeats).
@@ -469,6 +550,11 @@ def study_tree(base, collected, authored=None, facts=None):
     nodes = base
     if collected:
         nodes = prune_uncollected_tables(base, collected)
+        if _has_drops(nodes):
+            if nodes is base:
+                import copy
+                nodes = copy.deepcopy(base)
+            nodes = _drop_uncollected(nodes, set(collected))
     design = (facts or {}).get("study_design") or {}
     if _has_route_gates(nodes):
         if nodes is base:
@@ -491,6 +577,7 @@ def study_tree(base, collected, authored=None, facts=None):
         _take_in_untitled(nodes)
     values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
     values.update(caption_values(facts))
+    values.update(dose_term_values(facts))
     if values and _has_title_fields(nodes):
         if nodes is base:
             import copy

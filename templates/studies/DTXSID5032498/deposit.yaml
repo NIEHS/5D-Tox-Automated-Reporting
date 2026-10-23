@@ -1,0 +1,21 @@
+# Triclosan (C03039C-01): the supplemental files gathered so far, in
+# sessions/DTXSID5032498/supplemental/ — the BMDExpress project and its text
+# exports (assets/Triclosan_All_BMDExp_Files_0926.zip) and the study's
+# individual animal weights (C03039C-01's rows of the IAD STQ extracts).
+# Captions in the 2026 books' wording (NIEHS-12, 13).  No DOI until the
+# publishing package is created.
+captions:
+  Triclosan_0826.bm2: BMDExpress Project File (bm2 Format)
+  Triclosan_0926.json: BMDExpress Project File (JSON Format)
+  Triclosan_Kidney_BMDExpress_Expression_Data.txt: BMDExpress Expression Data Kidney
+  Triclosan_Liver_BMDExpress_Expression_Data.txt: BMDExpress Expression Data Liver
+  "Triclosan_Kidney_Genomic_Benchmark_Dose_Analysis .txt": Benchmark Dose Analysis Kidney
+  "Triclosan_Liver_Genomic_Benchmark_Dose_Analysis .txt": Benchmark Dose Analysis Liver
+  Triclosan_Kidney_BMDExpress_GO_Biological_Process_BMD_Results.txt: BMDExpress GO Biological Process BMD Results Kidney
+  Triclosan_Liver_BMDExpress_GO_Biological_Process_BMD_Results.txt: BMDExpress GO Biological Process BMD Results Liver
+  Triclosan_Kidney_BMDExpress_Individual_Gene_BMD_Results.txt: BMDExpress Individual Gene BMD Results Kidney
+  Triclosan_Liver_BMDExpress_Individual_Gene_BMD_Results.txt.txt: BMDExpress Individual Gene BMD Results Liver
+  Triclosan_Kidney_Curve_Fit.txt: Curve Fit Kidney
+  Triclosan_Liver_Curve_Fit.txt: Curve Fit Liver
+  Triclosan_Kidney_One-way_ANOVA_Analysis.txt: One-way ANOVA Kidney
+  Triclosan_Liver_One-way_ANOVA_Analysis.txt: One-way ANOVA Liver

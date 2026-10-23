@@ -571,7 +571,7 @@ def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
         LaTeX emitter writes always has a file behind it.
     """
     import base64
-    from document_model.document_tree import DOCUMENT_TREE, walk_tree
+    from document_model.document_tree import render_nodes, walk_tree
     from rendering.render_common import figure_payload
 
     out: dict[str, bytes] = {}
@@ -595,13 +595,27 @@ def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
             out[name] = base64.b64decode(b64)
         except (ValueError, TypeError):
             return
-    walk_tree(DOCUMENT_TREE if tree is None else tree, _figure_node)
+    # The nodes the body renders (render_nodes, as generate_report_body walks
+    # them): the study's tree, with its repeated copies — a figure repeated per
+    # genomic analysis has a file per copy.
+    walk_tree(render_nodes(data, tree), _figure_node)
     return out
 
 
 def _abstract_genes(dtxsid: str) -> bool:
     from document_model.view_config import study_document_facts
     return study_document_facts(dtxsid)["abstract_genes"]
+
+
+def _methods_key_order(dtxsid: str, view: str | None) -> list[str]:
+    """The Materials and Methods subsection keys in the order the study's tree
+    places them."""
+    from document_model.document_tree import DOCUMENT_TREE, walk_tree
+    from document_model.view_config import DEFAULT_VIEW, build_view_tree
+    keys: list[str] = []
+    walk_tree(build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE,
+              lambda n: keys.append(n.methods_key) if n.methods_key else None)
+    return keys
 
 
 def load_session_data(
@@ -809,8 +823,15 @@ def load_session_data(
     # replaces the empty `sections` with the cached prose (mirrors the HTML
     # path at report_data.py).  Omitted ⇒ subsections stay "[Section pending]".
     methods_cache = _load_json(latest_session_cache(session_dir, "_cache_methods_*.json"))
+    if isinstance(methods_cache, dict) and isinstance(methods_cache.get("context"), dict):
+        # The test article's abbreviation is the study's as recorded now
+        # (identity.json), not as it was when the cache was written.
+        methods_cache["context"]["abbreviation"] = data.get("abbreviation", "")
     if isinstance(methods_cache, dict) and methods_cache.get("sections"):
-        data["methods"] = {"sections": methods_cache["sections"]}
+        from narrative.methods_design import refresh_data_built
+        data["methods"] = {"sections": refresh_data_built(
+            methods_cache["sections"], methods_cache.get("context"),
+            _methods_key_order(dtxsid, view))}
 
     # ── Table 1: Final Sample Counts (the sample-counts-table tree node) ──
     # Built from the cached MethodsContext; when that context lacks
@@ -976,20 +997,43 @@ def load_session_data(
     # endpoints come from `data["bmd_summary"]`, the Background sentence from
     # background.json, and the genomics cache we ALREADY loaded above (so it is
     # not re-read from disk, and there is no second session-path assumption).
-    # The Methods abstract sentence is assembled by overlay_abstract itself; we
-    # don't pass an explicit methods_context here (the M&M prose is overlaid
-    # onto data["methods"] above and rendered directly by the M&M nodes).
+    # The Methods paragraph is built from the methods cache's context (the
+    # study facts it was extracted from), as on the web path; without it the
+    # abstract's Methods stayed pending in every session render.
     from rendering.report_data_overlays import overlay_abstract
     from rendering.render_common import derive_study_sexes
     # Dose unit and groups from the study (the Methods context), so the abstract
     # neither assumes mg/kg nor skips the lower limit of extrapolation.
-    _mctx = (methods_cache.get("context") if isinstance(methods_cache, dict) else None) or {}
+    from document_model.document_tree import order_tissues
+    from document_model.view_config import study_document_facts
+    _mctx = dict((methods_cache.get("context") if isinstance(methods_cache, dict) else None) or {})
+    # The tissues it names ("the liver and kidney were assayed …"): the
+    # integrated dataset's gene-expression experiments, in the definition's
+    # tissue order (the 2023 books' liver first, the 2026 books alphabetical) —
+    # the file fingerprints the context is extracted from record no organ.
+    _tissues = [e.get("organ") for e in order_tissues(
+        [{"organ": (x.get("experimentDescription") or {}).get("organ")}
+         for x in (_integ or {}).get("doseResponseExperiments") or []
+         if ((x.get("experimentDescription") or {}).get("dataType") or "").lower()
+         == "gene_expression" and (x.get("experimentDescription") or {}).get("organ")],
+        study_document_facts(definition_of or dtxsid)["tissue_order"])]
+    if _tissues:
+        _mctx["ge_organs"] = list(dict.fromkeys(str(t).strip().lower() for t in _tissues))
+    # The BMR the apical BMDs were fit at (the BMD summary's rows), which the
+    # abstract names beside the transcriptomic analyses' when they differ.
+    _apical_bmrs = {(str(b.get("type")), float(b.get("factor")))
+                    for e in (data.get("bmd_summary") or {}).get("endpoints") or []
+                    for b in [e.get("bmr") if isinstance(e, dict) else None]
+                    if isinstance(b, dict) and b.get("type") and b.get("factor") is not None}
+    if len(_apical_bmrs) == 1:
+        _mctx["apical_bmr"] = next(iter(_apical_bmrs))
     overlay_abstract(
         data,
         abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
         genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
         dose_unit=_mctx.get("dose_unit") or "mg/kg",
         dose_groups=_mctx.get("dose_groups") or [],
+        methods_context=_mctx or None,
         # Sexes come from the .bm2 metadata (single source of truth): a sex-less
         # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
         sexes=derive_study_sexes(_integ),
@@ -1086,6 +1130,20 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     efdr = load_efdr(dtxsid)
     attach_genomics_appendix(data, render_tree, efdr, phrasing,
                              session_method(dtxsid).efdr_generation() if efdr else None)
+    # The organ-weight appendix: the organs the study weighed, described in the
+    # definition's words (rendering.organ_descriptions).
+    from document_model.view_config import study_document_facts
+    from rendering.organ_descriptions import attach_organ_descriptions, study_weighed_organs
+    _facts = study_document_facts(dtxsid)
+    attach_organ_descriptions(data, study_weighed_organs(dtxsid), _facts["organ_descriptions"],
+                              _facts["organ_description_order"])
+    # The gene set figures' sections (a definition places them): each genomic
+    # analysis' semantic map and gene-overlap clusters, from the Process
+    # step's charts (rendering.genomic_figures).
+    from pipeline.session_store import SESSIONS_DIR as _sessions_root
+    from rendering.genomic_figures import attach_genomic_figures
+    attach_genomic_figures(data, render_tree, phrasing, _load_json(latest_session_cache(
+        _sessions_root / dtxsid, "_cache_charts_*.json")))
 
     # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
     # Derive {node.id -> GuardLevel} from the ownership state overlaid onto

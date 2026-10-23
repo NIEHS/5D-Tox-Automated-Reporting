@@ -359,9 +359,9 @@ class TestReviseWithReason:
 
     def test_revise_without_reason_is_refused(self, approved_llm_section):
         # C2 D3: reopening an approved section needs a reason; without one
-        # nothing changes and nothing is recorded.
+        # nothing changes and nothing is recorded (the safeguards).
+        from safeguards.guarded import release_section_step
         from workflow.errors import StepError
-        from workflow.steps import release_section_step
         from workflow.store import DiskPoolStore
         dtxsid, d = approved_llm_section
 

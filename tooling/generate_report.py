@@ -183,10 +183,7 @@ def import_files(dtxsid: str, paths: list[Path], store) -> None:
     files to a pool that has already progressed invalidates its downstream
     artifacts, exactly as an upload through the API does."""
     from pipeline.pool_state import invalidate_pool_artifacts, pool_has_progressed
-    from workflow.engine import require_legal
-    from workflow.phases import Action
 
-    require_legal(dtxsid, Action.ADD_FILES, store)
     files_dir = store.session_dir(dtxsid) / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
     progressed = pool_has_progressed(dtxsid)
@@ -243,54 +240,36 @@ def confirm_metadata(dtxsid: str, corrections_path: Path | dict | None, store) -
     _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
 
 
-def apply_design(dtxsid: str, design_path: Path | dict, store) -> None:
+def apply_design(dtxsid: str, design_path: Path | dict, store, *, guarded: bool = False) -> None:
     """Record study-design facts the data does not carry (route, vehicle,
     strain, …): kept in the session's study_design.json, which every later
-    integration re-applies, and put on every experiment now.  Values must be
-    from the controlled vocabulary; nothing is written otherwise.  A JSON file
-    or the object itself."""
-    from bmdx_pipe import VOCABULARIES
-    from common.clock import now_iso
-    from pipeline.study_design import DESIGN_FILE, design_field_errors
-    from workflow.steps import reapply_study_design
+    integration re-applies, and put on every experiment now.  A JSON file or
+    the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless the study has a dataset and every field and value is the
+    controlled vocabulary's (safeguards.inputs); a notebook writes as given."""
+    from workflow.steps import record_study_design
 
     fields = _stated(design_path)
-    errors = design_field_errors(fields, VOCABULARIES)
-    if errors:
-        raise SystemExit("--design: " + "; ".join(errors))
-    from workflow.engine import require_legal
-    from workflow.phases import Action
-    require_legal(dtxsid, Action.STATE_DATASET_FACTS, store)   # C1: on a usable dataset
-    if not store.artifact_exists(dtxsid, "integrated.json"):
-        raise SystemExit("--design needs an integrated session")
-    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
-    count = reapply_study_design(dtxsid, store)
+    if guarded:
+        from safeguards.guarded import record_study_design
+    count = record_study_design(dtxsid, fields, store)
     _log(f"  study design recorded on {count} experiment(s): {fields}")
 
 
-def apply_experiment_metadata(dtxsid: str, path: Path | dict) -> None:
+def apply_experiment_metadata(dtxsid: str, path: Path | dict, *, guarded: bool = False) -> None:
     """Record stated experiment metadata ({experiment name: {organ, sex, …}})
     the data does not carry — e.g. the tissue of a project whose experiment is
     named "EDHP mg_kg".  Laid over each named experiment's description and kept
     as the approval (metadata_approved.json), which every later integration
     re-applies — the same record the browser's approval writes.  A JSON file
-    or the object itself."""
-    from bmdx_pipe import VOCABULARIES
-    from pipeline.integrated_io import load_integrated
+    or the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless every experiment is the dataset's and every value the
+    vocabulary's (safeguards.inputs)."""
     from pipeline.metadata_approval import approve_experiment_metadata
 
     given = _stated(path)
-    if not isinstance(given, dict) or not all(isinstance(v, dict) for v in given.values()):
-        raise SystemExit("--experiment-metadata: expected {experiment name: {field: value}}")
-    names = {e.get("name") for e in (load_integrated(dtxsid) or {}).get("doseResponseExperiments") or []}
-    errors = [f"unknown experiment {n!r}" for n in given if n not in names]
-    for n, fields in given.items():
-        for k, v in fields.items():
-            allowed = VOCABULARIES.get(k)
-            if allowed and v not in allowed:
-                errors.append(f"{n}: {k}={v!r} is not in the vocabulary")
-    if errors:
-        raise SystemExit("--experiment-metadata: " + "; ".join(errors))
+    if guarded:
+        from safeguards.guarded import approve_experiment_metadata
     result = approve_experiment_metadata(dtxsid, given, merge=True)
     _log(f"  experiment metadata recorded on {result['updated']} experiment(s): {given}")
 
@@ -365,22 +344,12 @@ def document_definition(dtxsid: str, mode: str | None) -> None:
 
 def method_profile(dtxsid: str, name: str | None) -> None:
     """Pin `name` when given (a re-pin is logged and recomputes), then say which
-    method the study runs under and anything it cannot do as stated.  A study
-    whose method no person chose needs `name` (C1 D1): it is never chosen for
-    them, and Process refuses without it."""
+    method the study runs under and anything it cannot do as stated.  (That a
+    person must have chosen it before Process is the safeguards': main.)"""
     from pipeline.integrated_io import load_integrated
-    from pipeline.method_profile import (TRACK, chosen_by_person, ensure_pin, pin_mode,
-                                         pin_profile, read_pin, recorded_mismatches,
-                                         session_method, suggest_profile)
+    from pipeline.method_profile import (TRACK, ensure_pin, pin_mode, pin_profile,
+                                         recorded_mismatches, session_method)
 
-    if not name and not chosen_by_person(read_pin(dtxsid)):
-        suggestion = suggest_profile(dtxsid)
-        raise SystemExit(
-            f"--method-profile is needed: no one has chosen the analysis method for "
-            f"{dtxsid} yet{' (its current one was set by default)' if read_pin(dtxsid) else ''}, "
-            f"and it is never chosen for you. Suggested: --method-profile "
-            f"{suggestion['name']} ({suggestion['why']}), or 'newest' to track the newest "
-            f"profile.")
     pin = pin_profile(dtxsid, name, by="user") if name else ensure_pin(dtxsid)
     method = session_method(dtxsid)
     how = ("tracks the newest" if pin_mode(pin) == TRACK else "fixed")
@@ -392,6 +361,23 @@ def method_profile(dtxsid: str, name: str | None) -> None:
         _log(f"  WARNING: {mismatch['message']}")
 
 
+def _require_method_choice(dtxsid: str) -> None:
+    """The command line's form of the safeguard "Process only under a method a
+    person chose" (C1 D1): without --method-profile, a study whose method no
+    person chose stops here, with the profile it suggests."""
+    from pipeline.method_profile import chosen_by_person, read_pin, suggest_profile
+
+    if chosen_by_person(read_pin(dtxsid)):
+        return
+    suggestion = suggest_profile(dtxsid)
+    raise SystemExit(
+        f"--method-profile is needed: no one has chosen the analysis method for "
+        f"{dtxsid} yet{' (its current one was set by default)' if read_pin(dtxsid) else ''}, "
+        f"and it is never chosen for you. Suggested: --method-profile "
+        f"{suggestion['name']} ({suggestion['why']}), or 'newest' to track the newest "
+        f"profile.")
+
+
 def animal_report(dtxsid: str, store) -> None:
     from workflow.steps import generate_animal_report_step
 
@@ -400,12 +386,14 @@ def animal_report(dtxsid: str, store) -> None:
          f"(core {ar.get('core_count')} / biosampling {ar.get('biosampling_count')})")
 
 
-def process(dtxsid: str, params: dict, store) -> dict:
-    """Process, then materialize the result sections; returns the payload."""
-    return asyncio.run(process_async(dtxsid, params, store))
+def process(dtxsid: str, params: dict, store, *, policy=None) -> dict:
+    """Process, then materialize the result sections; returns the payload.
+    ``policy``: the section write policy (safeguards.sections.ownership_policy
+    from the command line; none from the notebook)."""
+    return asyncio.run(process_async(dtxsid, params, store, policy=policy))
 
 
-async def process_async(dtxsid: str, params: dict, store) -> dict:
+async def process_async(dtxsid: str, params: dict, store, *, policy=None) -> dict:
     """`process` for a caller already inside an event loop (a notebook cell
     awaits it: asyncio.run cannot start a loop there)."""
     from workflow.steps import materialize_result_sections, process_step
@@ -421,17 +409,18 @@ async def process_async(dtxsid: str, params: dict, store) -> dict:
             fb = ", ".join(f"{k}={ctx.get(k)}" for k in ctx["design_fallback"])
             _log(f"  NOTE: not recorded in the data, standard design used: {fb} "
                  "(record the real values with --design)")
-    mat = materialize_result_sections(dtxsid, store)
+    mat = materialize_result_sections(dtxsid, store, policy=policy)
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
     return payload
 
 
-def summary(dtxsid: str, store) -> None:
+def summary(dtxsid: str, store, *, policy=None) -> None:
     """Write the Summary section from the session's results (deterministic; never
-    replaces a summary a person approved or wrote)."""
+    replaces a summary the LLM route or a person wrote, nor, under the
+    ownership ``policy``, one a person approved)."""
     from workflow.steps import materialize_summary
 
-    res = materialize_summary(dtxsid, store)
+    res = materialize_summary(dtxsid, store, policy=policy)
     _log(f"  {res['paragraphs']} paragraph(s)" if res["written"]
          else "  kept the existing summary.json (approved or not generated here)"
          if (store.session_dir(dtxsid) / "summary.json").exists()
@@ -439,14 +428,17 @@ def summary(dtxsid: str, store) -> None:
 
 
 def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = False,
-               reason: str | None = None) -> None:
+               reason: str | None = None, policy=None, guarded: bool = False) -> None:
     """Generate + save the Background section (LLM over ATSDR/IRIS/PubChem data),
-    UNAPPROVED, through the section write gate (C2 §4.10): the operator asked,
-    so it is a person's act. A Background a person approved or edited is never
-    replaced: the refusal is printed and nothing is saved, unless --force with
-    a --reason (the prior text is then archived)."""
+    UNAPPROVED, through the section write gate: the operator asked, so it is a
+    person's act. Under the ownership ``policy`` (the command line's) a
+    Background a person approved or edited is never replaced: the refusal is
+    printed and nothing is saved, unless --force with a --reason (the prior text
+    is then archived).  ``guarded`` (the command line): refused when ATSDR or
+    IRIS could not be reached, or the text cites nothing (safeguards.sources);
+    a notebook may draft one without them."""
     from workflow.section_writes import read_prior, is_locked
-    if is_locked(read_prior(dtxsid, "background", store)) and not force:
+    if policy is not None and is_locked(read_prior(dtxsid, "background", store)) and not force:
         # Refuse before the LLM runs: its answer could not be saved.
         _log("  REFUSED: 'background' is approved or protected; generating it again would "
              "replace its text. Release it first, with a reason (or pass --force --reason).")
@@ -466,26 +458,24 @@ def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = 
             _log(f"    resolved PubChem CID {identity.get('pubchem_cid')}")
         except Exception as e:  # noqa: BLE001 — best-effort, like the UI
             _log(f"    WARNING: could not resolve {dtxsid} ({e}); PubChem data will be missing")
+    from workflow.errors import StepError
     bg_data = gather_all(ChemicalIdentity.from_dict(identity), lambda m: _log(f"    {m}"))
-    # The authoritative hazard sources: without them the Background can neither
-    # state the chemical's toxicology nor say what is missing from it.
-    blocked = [src for src in ("ATSDR", "IRIS") if src in bg_data.unreachable_sources]
-    if blocked:
-        _log(f"  WARNING: {', '.join(blocked)} could not be reached — background not "
-             "generated (run where these sources are reachable, e.g. the NIEHS network)")
+    try:
+        if guarded:
+            from safeguards.sources import require_sources
+            require_sources(dtxsid, bg_data)
+        result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
+        if guarded:
+            from safeguards.sources import require_references
+            require_references(dtxsid, result)
+    except StepError as e:
+        _log(f"  REFUSED ({e.code}): {e.message}")
         return
-    result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
     paragraphs = result.get("paragraphs") or []
     if not paragraphs:
         _log("  WARNING: background generation returned no paragraphs — not saved")
         return
-    if not result.get("references"):
-        # Prose with no sources behind it (every gatherer source unreachable or
-        # empty) is not a Background — its [n] citations would point nowhere.
-        _log("  WARNING: background has no references (sources unreachable?) — not saved")
-        return
     from workflow.section_writes import write_section
-    from workflow.errors import StepError
     try:
         out = write_section(dtxsid, "background", {
             "paragraphs": paragraphs,
@@ -495,7 +485,8 @@ def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = 
             "model_used": result.get("model_used", model),
             "approved": False,
         }, store, act="background", actor="person", author="model", force=force,
-            reason=reason, extra_event={"model": result.get("model_used", model)})
+            reason=reason, extra_event={"model": result.get("model_used", model)},
+            policy=policy)
     except StepError as e:
         _log(f"  REFUSED ({getattr(e, 'code', e.status_code)}): {e.message} — nothing saved")
         return
@@ -689,8 +680,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from common.dtxsid import validate_dtxsid
     from rendering.render_common import PendingContentError
-    from workflow.engine import WorkflowEngine
+    from safeguards.acts import require
+    from safeguards.publish import require_publishable
+    from safeguards.sections import ownership_policy
     from workflow.errors import StepError
+    from workflow.phases import Action
     from workflow.store import DiskPoolStore
 
     dtxsid = validate_dtxsid(args.dtxsid)
@@ -718,15 +712,20 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if not args.render_only:
+            # The command line is guarded like the browser (safeguards): each
+            # act is checked before it runs; the bypasses are named flags.
             if files:
                 with _Timer(f"import {len(files)} file(s)"):
+                    require(dtxsid, Action.ADD_FILES, store)
                     import_files(dtxsid, files, store)
             if not store.has_files(dtxsid):
                 raise SystemExit(f"sessions/{dtxsid}/files/ is empty — pass --files")
 
             with _Timer("validate"):
+                require(dtxsid, Action.VALIDATE, store)
                 validate(dtxsid, store)
             with _Timer("confirm metadata"):
+                require(dtxsid, Action.CONFIRM_CLASSIFICATION, store)
                 confirm_metadata(dtxsid, metadata, store)
             if args.stop_after == "validate":
                 return 0
@@ -734,19 +733,23 @@ def main(argv: list[str] | None = None) -> int:
             identity = _resolve_identity(dtxsid, args, store)
             if args.reintegrate or not store.artifact_exists(dtxsid, "integrated.json"):
                 with _Timer("integrate (Java)"):
+                    require(dtxsid, Action.INTEGRATE, store)
                     integrate(dtxsid, identity, store)
             else:
                 store.write_json(dtxsid, "identity.json", identity)
                 _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
             if design:
                 with _Timer("study design"):
-                    apply_design(dtxsid, design, store)
+                    apply_design(dtxsid, design, store, guarded=True)
             if args.experiment_metadata:
                 with _Timer("experiment metadata"):
-                    apply_experiment_metadata(dtxsid, args.experiment_metadata)
+                    apply_experiment_metadata(dtxsid, args.experiment_metadata, guarded=True)
+            if not args.method_profile:
+                _require_method_choice(dtxsid)
             method_profile(dtxsid, args.method_profile)
             document_definition(dtxsid, args.document_definition)
             with _Timer("animal report"):
+                require(dtxsid, Action.APPROVE, store)
                 animal_report(dtxsid, store)
             if args.stop_after == "integrate":
                 return 0
@@ -764,30 +767,31 @@ def main(argv: list[str] | None = None) -> int:
                                                  "go_min_bmd") if getattr(args, k) is not None},
             }
             with _Timer("process (stats + BMDS + genomics + narratives; minutes when cold)"):
-                process(dtxsid, params, store)
+                require(dtxsid, Action.PROCESS, store, method=True)
+                process(dtxsid, params, store, policy=ownership_policy)
             if args.background:
                 with _Timer("background (LLM)"):
                     background(dtxsid, identity, args.model, store, force=args.force,
-                               reason=args.reason)
+                               reason=args.reason, policy=ownership_policy, guarded=True)
             with _Timer("summary"):
-                summary(dtxsid, store)
+                summary(dtxsid, store, policy=ownership_policy)
             if args.stop_after == "process":
                 return 0
 
         _log(f"phase: {_phase(dtxsid, store)}")
-        readiness = WorkflowEngine(dtxsid, store).publish_readiness()
+        # The publish gate; --draft is its named override (logged).
+        readiness = require_publishable(dtxsid, store, draft=args.draft)
         if not readiness.get("can_publish", True):
             keys = ", ".join(b["section_key"] for b in readiness.get("blocking", []))
-            msg = f"publish gate closed — re-accept the regenerated sections: {keys}"
-            if not args.draft:
-                raise SystemExit(msg + " (or pass --draft)")
-            _log(f"  WARNING: {msg} (rendering anyway: --draft)")
+            _log(f"  WARNING: publish gate closed — re-accept the regenerated sections: "
+                 f"{keys} (rendering anyway: --draft)")
 
         with _Timer(f"render {', '.join(surfaces)}"):
             render(dtxsid, surfaces, out_dir, args.view, args.strict)
     except StepError as e:
-        from workflow.refusals import explain
-        raise SystemExit(f"step failed ({e.status_code}): {e.message}\n"
+        from safeguards.refusals import explain
+        hint = " (or pass --draft)" if getattr(e, "code", None) == "publish_blocked" else ""
+        raise SystemExit(f"step failed ({e.status_code}): {e.message}{hint}\n"
                          f"  {explain(e)['error']['say']}")
     except PendingContentError as e:
         raise SystemExit(f"--strict: report still has pending sections: {e.markers}")

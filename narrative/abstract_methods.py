@@ -28,7 +28,7 @@ the shim to assemble the Abstract block.
 from __future__ import annotations
 
 from narrative.methods_models import MethodsContext
-from narrative.narrative_helpers import _format_dose_list, _format_organ_list
+from narrative.narrative_helpers import _format_dose_list, _format_organ_list, _join_oxford
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,28 @@ from narrative.narrative_helpers import _format_dose_list, _format_organ_list
 # already in MethodsContext, so we can generate it from a template without an
 # LLM call.  This keeps the abstract methods faithful to the data and fast.
 
+
+
+_FACTOR_WORDS = {1.0: "one", 2.0: "two", 0.5: "one half of"}
+# An apical domain as the BMR sentence names its endpoints.
+_DOMAIN_WORDS = {"Body Weight": "body weight", "Organ Weight": "organ weight",
+                 "Clinical Chemistry": "clinical chemistry", "Hematology": "hematology",
+                 "Hormones": "hormone", "Tissue Concentration": "tissue concentration"}
+
+
+def _bmr_words(bmr_type, factor) -> str | None:
+    """A BMR as the books word it: ("Standard Deviation", 1.0) → "one standard
+    deviation"; a relative deviation as a percentage change, ("Relative
+    Deviation", 0.25) → "a 25% relative deviation".  None when unknown."""
+    if not bmr_type or factor is None:
+        return None
+    kind = str(bmr_type).strip().lower().replace("std. dev.", "standard deviation")
+    if kind in ("sd", "standard deviation", "std"):
+        word = _FACTOR_WORDS.get(float(factor), f"{float(factor):g}")
+        return f"{word} standard deviation"
+    if kind in ("rel_dev", "relative deviation"):
+        return f"a {float(factor) * 100:g}% relative deviation"
+    return f"{float(factor):g} {kind}"
 
 
 def build_abstract_methods(ctx: MethodsContext) -> str:
@@ -68,8 +90,9 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     expression → skip the transcriptomics clauses).
     """
     # --- Test article display name ---
-    # Use abbreviation if present, else full name
-    ta_name = ctx.chemical_name or "the test article"
+    # The abbreviation when the study records one (the abstract's Background
+    # introduced it), else the full name.
+    ta_name = ctx.abbreviation or ctx.chemical_name or "the test article"
 
     # --- Sexes ("adult male and female") ---
     sexes = [s.lower() for s in ctx.sexes] if ctx.sexes else ["male", "female"]
@@ -128,15 +151,49 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
         bmd_clause += f" and transcriptional changes in the {organs_str}"
     bmd_clause += "."
 
-    # --- BMR description ---
-    # Default to NIEHS protocol: "one standard deviation"
-    bmr_desc = "one standard deviation"
-    if ctx.bmr_factor is not None and ctx.bmr_type:
-        # e.g., bmr_factor=1.0, bmr_type="Std. Dev." → "one standard deviation"
-        factor_words = {1.0: "one", 2.0: "two", 0.5: "one half of"}
-        word = factor_words.get(ctx.bmr_factor, str(ctx.bmr_factor))
-        type_clean = ctx.bmr_type.lower().replace("std. dev.", "standard deviation").strip()
-        bmr_desc = f"{word} {type_clean}" if word else type_clean
+    # --- BMR sentence ---
+    # Each BMR as it was used: the apical BMDs' (``ctx.apical_bmr``, from the
+    # BMD summary) and the transcriptomic analyses' (the .bm2's, bmr_type /
+    # bmr_factor).  One sentence for all endpoints when they agree (NIEHS-02 …
+    # 10: "A benchmark response of one standard deviation was used to model
+    # all endpoints."); else each named (NIEHS-12, 13: "… 1 standard deviation
+    # from the mean was used to model all apical endpoints, whereas a benchmark
+    # response set to a 25% change in the median response was used to model
+    # the gene expression data.").
+    genomic = (_bmr_words(ctx.bmr_type, ctx.bmr_factor)
+               if ctx.has_gene_expression and ctx.ge_organs else None)
+    # The apical projects' own BMRs, by domain (ctx.apical_bmrs): when they
+    # differ, each BMR names what it modeled ("A benchmark response of one
+    # standard deviation was used to model the body weight, … endpoints, and a
+    # benchmark response of a 25% relative deviation was used to model the
+    # clinical chemistry endpoints and the gene expression data.").
+    by_domain: dict[str, list[str]] = {}
+    for platform, bmr in (ctx.apical_bmrs or {}).items():
+        words = _bmr_words(*bmr) if isinstance(bmr, (list, tuple)) and len(bmr) == 2 else None
+        if words:
+            by_domain.setdefault(words, []).append(_DOMAIN_WORDS.get(platform, platform.lower()))
+    if len(by_domain) == 1:
+        apical = next(iter(by_domain))
+    else:
+        apical = _bmr_words(*(ctx.apical_bmr or (None, None))) or (
+            None if genomic else _bmr_words(ctx.bmr_type, ctx.bmr_factor))
+    if len(by_domain) > 1:
+        groups = {w: [f"the {_join_oxford(sorted(d))} endpoints"] for w, d in by_domain.items()}
+        if genomic:
+            groups.setdefault(genomic, []).append("the gene expression data")
+        bmr_sentence = " " + ", and ".join(
+            f"{'A' if i == 0 else 'a'} benchmark response of {w} was used to model "
+            f"{' and '.join(what)}" for i, (w, what) in enumerate(groups.items())) + "."
+    elif apical and genomic and apical != genomic:
+        bmr_sentence = (f" A benchmark response of {apical} was used to model all apical "
+                        f"endpoints, whereas a benchmark response of {genomic} was used to "
+                        f"model the gene expression data.")
+    elif apical or genomic:
+        bmr_sentence = f" A benchmark response of {apical or genomic} was used to model all endpoints."
+    else:
+        # Never the protocol's usual BMR assumed: say it is missing.
+        bmr_sentence = (" [Placeholder: the benchmark response used to model the "
+                        "endpoints is not in the study data]")
 
     # --- Assemble the paragraph ---
     paragraph = (
@@ -156,8 +213,7 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
         f"{'exposure' if inhaled else 'dose was administered'}, animals were euthanized, standard "
         f"toxicological measures were assessed{assay_clause}."
         f"{bmd_clause}"
-        f" A benchmark response of {bmr_desc} was used to model all "
-        f"endpoints."
+        f"{bmr_sentence}"
     )
 
     return paragraph

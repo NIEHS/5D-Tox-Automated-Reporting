@@ -38,6 +38,7 @@ from __future__ import annotations
 # Imports
 # ---------------------------------------------------------------------------
 
+import re
 from dataclasses import fields
 from pathlib import Path
 
@@ -99,13 +100,14 @@ _COMPUTED_OR_SPECIAL = frozenset(
      "appendix_letter", "appendix_scope", "table_label", "figure_label",
      "sec_label",
      # ADR-0029: set when a `repeat` section is expanded per study.
-     "scope_species", "scope_organ"}
+     "scope_species", "scope_organ", "scope_analysis"}
 )
 
 # ADR-0029: what a section may repeat over (document_tree.study_tree).
-_REPEATS = ("deposit_species", "study_species", "genomic_organs")
+_REPEATS = ("deposit_species", "study_species", "genomic_organs", "genomic_analyses")
 # What generated prose may cite a node as (DocNode.cited_as).
-CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table")
+CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table",
+            "genomic-figures-appendix")
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file
@@ -464,10 +466,16 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
         if repeat not in _REPEATS:
             raise ValueError(f"template node {node_id!r}: repeat must be one of "
                              f"{list(_REPEATS)}, got {repeat!r}")
-        if role_for(node_type) not in ("sec", "table-wrap"):
-            raise ValueError(f"template node {node_id!r}: only a section or a table may repeat")
+        if role_for(node_type) not in ("sec", "table-wrap", "fig"):
+            raise ValueError(f"template node {node_id!r}: only a section, a table or a "
+                             f"figure may repeat")
     if entry.get("first_copy") not in (None, True, False):
         raise ValueError(f"template node {node_id!r}: first_copy is true or false")
+    if entry.get("drop_when_uncollected") not in (None, True, False):
+        raise ValueError(f"template node {node_id!r}: drop_when_uncollected is true or false")
+    if entry.get("drop_when_uncollected") and not entry.get("requires_platform"):
+        raise ValueError(f"template node {node_id!r}: drop_when_uncollected needs "
+                         f"requires_platform (the data the section is about)")
     if entry.get("caption_suffix") is not None and node_type != "genomics-section":
         raise ValueError(f"template node {node_id!r}: caption_suffix is only valid on a "
                          f"genomics-section")
@@ -906,6 +914,97 @@ def load_phrasing(name: str) -> dict:
     except PhrasingError as e:
         raise ValueError(f"template {name!r}: {e}") from None
     return block
+
+
+_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def load_foreword(name: str) -> list:
+    """The Foreword the definition states (``foreword:``, ADR-0029): a list of
+    paragraphs, each a string whose ``[text](url)`` links become inline
+    ext-link units (render_common's inline model).  [] when the definition
+    states none, except a session's snapshot pinned before the block existed,
+    which takes the shared template's."""
+    from rendering.render_common import make_ext_link
+    from document_model.definition_pin import PINNED
+    raw = _load_raw(name)
+    paras = raw.get("foreword") if isinstance(raw, dict) else None
+    if paras is None:
+        if name.startswith(PINNED):
+            # A snapshot pinned before definitions stated the Foreword rendered
+            # the shared template's.
+            from document_model.document_tree import ACTIVE_TEMPLATE
+            if (TEMPLATES_DIR / f"{ACTIVE_TEMPLATE}.yaml").exists():
+                return load_foreword(ACTIVE_TEMPLATE)
+        return []
+    if not isinstance(paras, list) or not all(isinstance(p, str) and p.strip() for p in paras):
+        raise ValueError(f"template {name!r}: foreword is a list of paragraphs, got {paras!r}")
+    out = []
+    for text in paras:
+        runs, pos = [], 0
+        for m in _LINK.finditer(text):
+            if m.start() > pos:
+                runs.append(text[pos:m.start()])
+            runs.append(make_ext_link(m.group(1), m.group(2)))
+            pos = m.end()
+        if pos < len(text):
+            runs.append(text[pos:])
+        out.append(runs)
+    return out
+
+
+def load_organ_descriptions(name: str) -> dict:
+    """The definition's ``organ_descriptions`` ({organ: its description, the
+    books' text}) for the appendix "Organ Weight Descriptions"
+    (rendering.organ_descriptions); {} when it states none."""
+    raw = _load_raw(name)
+    texts = raw.get("organ_descriptions") if isinstance(raw, dict) else None
+    if texts is None:
+        return {}
+    if not isinstance(texts, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) and v.strip() for k, v in texts.items()):
+        raise ValueError(f"template {name!r}: organ_descriptions is {{organ: description}}, "
+                         f"got {texts!r}")
+    return texts
+
+
+def load_organ_description_order(name: str) -> list[str]:
+    """The order the appendix describes organs in (``organ_description_order``);
+    the organs it does not name follow alphabetically.  [] = alphabetical."""
+    raw = _load_raw(name)
+    order = raw.get("organ_description_order") if isinstance(raw, dict) else None
+    if order is None:
+        return []
+    if not isinstance(order, list) or not all(isinstance(o, str) for o in order):
+        raise ValueError(f"template {name!r}: organ_description_order is a list of organs, "
+                         f"got {order!r}")
+    return order
+
+
+_DOSE_TERM_KEYS = frozenset({"dose", "internal_dose"})
+
+
+def load_dose_terms(name: str) -> dict:
+    """The words the definition's headings name the dose by, per route
+    (``dose_terms:``, ADR-0029): ``{route: {dose, internal_dose}}`` — "Dose" /
+    "Internal Dose" for gavage, "Exposure Concentration" / "Internal
+    Concentration" for inhalation.  {} when the definition states none."""
+    from pipeline.study_design import ROUTES
+    raw = _load_raw(name)
+    terms = raw.get("dose_terms") if isinstance(raw, dict) else None
+    if terms is None:
+        return {}
+    if not isinstance(terms, dict):
+        raise ValueError(f"template {name!r}: dose_terms is a mapping of routes, got {terms!r}")
+    for route, words in terms.items():
+        if route not in ROUTES:
+            raise ValueError(f"template {name!r}: dose_terms route {route!r} is not one of "
+                             f"{list(ROUTES)}")
+        if (not isinstance(words, dict) or set(words) != _DOSE_TERM_KEYS
+                or not all(isinstance(w, str) and w for w in words.values())):
+            raise ValueError(f"template {name!r}: dose_terms.{route} states "
+                             f"{sorted(_DOSE_TERM_KEYS)}, got {words!r}")
+    return terms
 
 
 def load_abstract_genes(name: str) -> bool:

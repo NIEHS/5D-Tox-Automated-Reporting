@@ -113,13 +113,14 @@ class TestPreview:
 
 @pytest.mark.integration
 def test_upload_into_a_study_runs_the_add_files_guard(sessions_dir, mock_bmdx_pipe, monkeypatch):
-    """C1: an upload with ?dtxsid= calls the phase guard for ADD_FILES (legal in
-    every phase today; C5's run lock refuses there), and a refusal is a 409."""
+    """C1: an upload with ?dtxsid= calls the safeguards' phase guard for
+    ADD_FILES (legal in every phase today; C5's run lock refuses there), and a
+    refusal is a 409 with its explanation."""
     import io
     from fastapi.testclient import TestClient
     from web_routes.background_server import app
-    import workflow.engine as engine
-    from workflow.errors import PhaseRefusal
+    import safeguards.acts as acts
+    from safeguards.refusals import PhaseRefusal
 
     seen = []
 
@@ -127,11 +128,12 @@ def test_upload_into_a_study_runs_the_add_files_guard(sessions_dir, mock_bmdx_pi
         seen.append((dtxsid, action.value))
         raise PhaseRefusal(dtxsid, action.value, "EMPTY", ["ADD_FILES"])
 
-    monkeypatch.setattr(engine, "require_legal", refuse)
+    monkeypatch.setattr(acts, "require_legal", refuse)
     client = TestClient(app)
     for route, name in (("/api/upload-csv", "a.csv"), ("/api/upload-bm2", "a.bm2")):
         resp = client.post(f"{route}?dtxsid=DTXSID_UP",
                            files=[("files", (name, io.BytesIO(b"x"), "text/plain"))])
         assert resp.status_code == 409, route
+        assert resp.json()["code"] == "phase_not_allowed" and resp.json()["say"]
     assert seen == [("DTXSID_UP", "ADD_FILES"), ("DTXSID_UP", "ADD_FILES")]
     assert not (sessions_dir / "DTXSID_UP" / "files").exists()

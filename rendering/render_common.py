@@ -549,8 +549,28 @@ def figure_payload(node: DocNode, data: dict) -> dict | None:
             "mimetype": _IMAGE_MIMETYPES.get(path.suffix.lower(), "application/octet-stream"),
             "caption": None,
         }
-    payload = data.get(node.data_key) if node.data_key else None
+    payload = scoped_value(node, data.get(node.data_key)) if node.data_key else None
     return payload or None
+
+
+_SVG_SIZE = re.compile(r'^(<svg\b[^>]*?)\swidth="[^"]*"\sheight="[^"]*"')
+
+
+def inline_svg(svg: str, alt: str = "") -> str:
+    """A figure's SVG (a data figure payload's ``svg``: a chart whose markers
+    carry their hover text as <title>s) for inline use on an HTML surface:
+    scaled to its container by its viewBox, and labelled for assistive
+    technology.  Inline, the browser shows each marker's title on hover — an
+    <img> would not."""
+    out = _SVG_SIZE.sub(r'\1 width="100%"', svg.strip(), count=1)
+    if alt:
+        out = out.replace("<svg ", f'<svg role="img" aria-label="{_esc_attr(alt)}" ', 1)
+    return out
+
+
+def _esc_attr(text: str) -> str:
+    return (str(text).replace("&", "&amp;").replace('"', "&quot;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
 
 
 def authored_table_matrix(node: DocNode) -> dict | None:
@@ -1376,13 +1396,16 @@ def matrix_head_rows(built: dict) -> list[list]:
 def scoped_value(node: DocNode, value):
     """A value a repeated node takes its own of: ``{"by_organ": {organ: …}}``
     gives a tissue's copy (``scope_organ``) its tissue's, ``{"by_species":
-    {study: …}}`` a study's copy its study's ("" for a single study's).  Any
-    other value as given."""
+    {study: …}}`` a study's copy its study's ("" for a single study's),
+    ``{"by_analysis": {key: …}}`` a genomic analysis' copy (``scope_analysis``,
+    document_tree.analysis_key) its analysis'.  Any other value as given."""
     if isinstance(value, dict):
         if "by_organ" in value:
             return value["by_organ"].get(node.scope_organ or "")
         if "by_species" in value:
             return value["by_species"].get(node.scope_species or "")
+        if "by_analysis" in value:
+            return value["by_analysis"].get(node.scope_analysis or "")
     return value
 
 
@@ -2212,14 +2235,15 @@ def supplied_files(node: DocNode, data: dict) -> list[SuppliedFile]:
 def supplied_files_pending(node: DocNode, data: dict) -> str | None:
     """The visible note a derived list shows instead of entries: no deposit is
     known for the study; its local supplemental folder (a deposit not yet
-    made, pipeline.deposit.load_deposit) holds no file of this kind; or the
-    recorded deposit holds none."""
+    made, pipeline.deposit.load_deposit) holds no file of this kind, which the
+    deposit made at publication supplies; or the recorded deposit holds none."""
     if node.binding != "derived" or supplied_files(node, data):
         return None
     deposit = data.get("deposit")
     if not deposit:
         return "[Supplemental files pending: no data deposit has been recorded for this study.]"
     if deposit.get("local"):
-        return ("[Supplemental files pending: listed from the deposit when the publishing "
-                "package is created.]")
+        # Gathered locally, none of this kind yet: the deposit made at
+        # publication supplies them (the user's wording, 2026-10-20).
+        return "To be assigned at publication."
     return "No files of this kind were deposited for this study."

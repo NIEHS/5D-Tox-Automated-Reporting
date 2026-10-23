@@ -78,15 +78,47 @@ def _sessions_root() -> Path:
     return common.paths.SESSIONS_DIR
 
 
-# The session-relation predicates live in the core (workflow.studies, R7 of the
-# M1 spec); these names stay importable from here.
-from workflow.studies import (  # noqa: E402
-    clone_record,
-    companion_of,
-    has_generated_report,
-    holds_report as _holds_report,
-    members as _members,
-)
+def _holds_report(dtxsid: str) -> bool:
+    """Whether the session's own data was integrated and processed
+    (integrated.json plus a processed-sections cache)."""
+    sess = _sessions_root() / dtxsid
+    return (sess / "integrated.json").is_file() and any(sess.glob("_cache_sections_*.json"))
+
+
+def _members(dtxsid: str) -> dict[str, str]:
+    """{study key: member session} of a report over several studies
+    (studies.json, rendering.report_compose); {} for a single study."""
+    data = _load_json(_sessions_root() / dtxsid / "studies.json")
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def clone_record(dtxsid: str) -> dict | None:
+    """The companion record (published_clone.json: report, twin, bundle …)
+    when the session is a published book's content; else None."""
+    from rendering.published_clone import CLONE_FILE
+    data = _load_json(_sessions_root() / dtxsid / CLONE_FILE)
+    return data if isinstance(data, dict) else None
+
+
+def companion_of(dtxsid: str) -> str | None:
+    """The companion session of a generated report — the published book's
+    content (tooling.published_clone) — when one was built for it."""
+    from tooling.published_clone import companion_id
+    cid = companion_id(dtxsid)
+    clone = clone_record(cid)
+    return cid if clone and clone.get("twin") == dtxsid else None
+
+
+def has_generated_report(dtxsid: str) -> bool:
+    """Whether the session holds a generated report: it was integrated and
+    processed, or it is a report over several studies each of which was, or it
+    is a published book's content (a companion, served beside its twin).  An
+    empty, abandoned or test-made session directory is not a report, so it is
+    neither shelved nor served."""
+    if _holds_report(dtxsid) or clone_record(dtxsid):
+        return True
+    members = _members(dtxsid)
+    return bool(members) and all(_holds_report(m) for m in members.values())
 
 
 def generated_reports() -> list[str]:

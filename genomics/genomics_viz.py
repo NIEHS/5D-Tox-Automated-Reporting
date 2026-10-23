@@ -135,6 +135,40 @@ _SVG_ID_ATTR = _re.compile(
 _SVG_URL_REF = _re.compile(r'(url\(#)([A-Za-z_][\w\-:.]*)(\))')
 
 
+_SVG_TRACE = _re.compile(r'(?=<g class="trace scatter)')
+_SVG_POINT = _re.compile(r'<path class="point"([^>]*?)/>')
+
+
+def _hover_titles(svg: str, fig) -> str:
+    """Give each plotted marker of a Plotly static SVG its hover text as an SVG
+    <title> (the browser shows it on hover), so the figure an HTML surface
+    shows inline names each gene set as the interactive chart did.  Plotly
+    writes one ``trace scatter`` group per trace and one ``point`` path per
+    point, in the figure's data order; a trace with no hover text (the map's
+    reference terms) is left as is."""
+    import html as _html
+    parts = _SVG_TRACE.split(svg)
+    if len(parts) - 1 != len(fig.data):
+        return svg                       # not the layout this relies on
+    out = [parts[0]]
+    for trace, part in zip(fig.data, parts[1:]):
+        texts = list(trace.text) if getattr(trace, "text", None) is not None and \
+            not isinstance(trace.text, str) else []
+        if not texts or getattr(trace, "hoverinfo", None) == "skip":
+            out.append(part)
+            continue
+        it = iter(texts)
+
+        def _title(m, it=it):
+            text = next(it, None)
+            if text is None:
+                return m.group(0)
+            label = _html.escape(str(text).replace("<br>", "\n"))
+            return f'<path class="point"{m.group(1)}><title>{label}</title></path>'
+        out.append(_SVG_POINT.sub(_title, part))
+    return "".join(out)
+
+
 def _namespace_svg_ids(svg: str, prefix: str) -> str:
     """
     Rewrite every ID reference in a Plotly SVG so it carries a unique
@@ -801,6 +835,8 @@ def build_cluster_figure(
     unique_gene_clusters = set(p["gene_cluster"] for p in all_points)
     n_gene_clusters = len(unique_gene_clusters) if all_points else 1
     chart_height = max(180, n_gene_clusters * 29 + 72)
+    # Tall enough for the legend's column too (one row per semantic cluster).
+    chart_height = max(chart_height, len(by_umap_cluster) * 24 + 120)
 
     # Build custom y-axis tick labels showing the original cluster ID
     # at each ranked position.  Outlier (-1) is labeled "Outlier".
@@ -827,7 +863,7 @@ def build_cluster_figure(
         width=style.get("width", 1000),
         height=style.get("height") or chart_height,
         margin=dict(l=mg.get("l", 80), r=mg.get("r", 30),
-                    t=mg.get("t", 90), b=mg.get("b", 60)),
+                    t=mg.get("t", 30), b=mg.get("b", 60)),
         paper_bgcolor=style.get("paper_bgcolor", "#ffffff"),
         plot_bgcolor=style.get("plot_bgcolor", "#fafafa"),
         xaxis=dict(title=xtitle, type=xtype,
@@ -838,24 +874,17 @@ def build_cluster_figure(
             tickvals=tick_vals, ticktext=tick_text,
         ),
         hovermode="closest",
+        # A column at the right, titled: the horizontal legend wrapped into
+        # rows over the plot, under its centered title.
         legend=dict(
+            title=dict(text="<b>GO Term<br>Semantic Cluster</b>", font=dict(size=13)),
             font=dict(size=leg.get("font_size", 12)),
-            orientation="h",
-            x=0.5, y=1.02,
-            xanchor="center", yanchor="bottom",
-            itemwidth=45,
+            orientation="v",
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
+            itemsizing="constant",
+            tracegroupgap=0,
         ),
-    )
-
-    # Legend header as a centered annotation — Plotly's legend.title
-    # doesn't center properly with horizontal orientation.
-    fig_cluster.add_annotation(
-        text="<b>GO Term Semantic Cluster</b>",
-        xref="paper", yref="paper",
-        x=0.5, y=1.08,
-        xanchor="center", yanchor="bottom",
-        showarrow=False,
-        font=dict(size=13),
     )
     return fig_cluster
 
@@ -1067,7 +1096,7 @@ def render_chart_images(
         # IDs are namespaced so multiple charts coexist in one DOM without
         # Plotly's auto-generated clip-path IDs colliding across <svg>s.
         png_bytes = fig.to_image(format="png", scale=2)
-        svg_raw = fig.to_image(format="svg").decode("utf-8")
+        svg_raw = _hover_titles(fig.to_image(format="svg").decode("utf-8"), fig)
         prefix = _SVG_PREFIX.get(ct.name, ct.name)
         svg = _namespace_svg_ids(svg_raw, f"{prefix}-{svg_ns_suffix}")
 
@@ -1083,6 +1112,31 @@ def render_chart_images(
         result[f"{ct.name}_caption"] = caption
 
     result["types"] = type_names
+    # What the figures show of the gene sets, for the text that presents them
+    # (rendering.genomic_figures): how many there were, how many the semantic
+    # map holds (the rest it cannot place), how many have a BMD to plot, and
+    # the gene-overlap clusters they fall in.
+    import math
+    with_bmd = [gs for gs in gene_sets
+                if gs.get("bmd") is not None and math.isfinite(float(gs["bmd"]))]
+    # Each gene set's two clusters — its semantic cluster on the map (None:
+    # its GO term is not on the map; -1: on the map, in no cluster) and its
+    # gene-overlap cluster — for the appendix that lists them
+    # (rendering.genomic_figures).
+    result["members"] = [
+        {"go_id": gs.get("go_id"), "go_term": gs.get("go_term"),
+         "bmd": float(gs["bmd"]) if gs in with_bmd else None,
+         "semantic": (_UMAP_LOOKUP[gs["go_id"]].get("cluster", -1)
+                      if gs.get("go_id") in _UMAP_LOOKUP else None),
+         "overlap": (clusters or {}).get(gs.get("go_id"), -1)}
+        for gs in gene_sets]
+    result["counts"] = {
+        "gene_sets": len(gene_sets),
+        "on_map": sum(1 for gs in gene_sets if gs.get("go_id") in _UMAP_LOOKUP),
+        "with_bmd": len(with_bmd),
+        "overlap_clusters": len({(clusters or {}).get(gs.get("go_id"), -1) for gs in with_bmd}
+                                - {-1}),
+    }
 
     # --- Cluster biology summary via Enrichr (cluster chart only) ---
     # Shares the `clusters` assignment built above so the chart and the summary
@@ -1235,6 +1289,9 @@ def render_chart_images_for_sections(
             result["label"] = f"{organ_title} ({sex_title})"
             result["organ"] = organ
             result["sex"] = sex
+            # The statistic the gene sets' BMDs are (the x axis of the cluster
+            # chart), for the figure's caption.
+            result["bmd_stat"] = bmd_stat
             out.append(result)
         except Exception as e:
             logger.warning("Chart rendering failed for %s: %s", key, e)

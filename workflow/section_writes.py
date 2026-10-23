@@ -1,42 +1,42 @@
 """
 workflow.section_writes — the one gate every write to a section file goes
-through (C2: "owned content is never overwritten by a machine").
+through, and the section history it keeps.
 
-A section a person owns (they approved it, it holds the PROTECTED fact, a
-person's text came back from outside the application: workflow.ownership.is_owned)
-is never replaced by a machine. Every write to a section file, a person's or a
-machine's, calls ``write_section``, which:
+Every write to a section file, a person's or a machine's, calls
+``write_section``, which:
 
   1. refuses a key that is not a section of this report (the catalog of the
      session's document tree, workflow.section_catalog);
   2. reads the prior file;
   3. does nothing when the content is unchanged (no write, no event: a Process
      that changed nothing leaves every section file untouched);
-  4. holds a machine's write over owned content (or, for an apical result
-     section, knocks the approval down with a record: C2 D2/A1), and records it;
-  5. refuses a person's write over content that is locked (approved, edited by a
-     person, ingested) unless forced; a released section, which keeps PROTECTED,
-     is replaced by a person's explicit act (that is what releasing it is for);
-  6. requires a reason for a forced write;
+  4–6. asks its write ``policy`` what to do over content a person owns — hold
+     a machine's text, knock an apical section's approval down for re-review,
+     refuse a person's unforced write, require a reason for a forced one. The
+     policy is the C2 safeguard ("owned content is never overwritten by a
+     machine": safeguards.sections.ownership_policy); without one every write
+     is made, the prior text archived;
   7. otherwise archives the prior text and writes, and records one version event.
 
-Every event is one line of the section's ``history/<key>/index.jsonl`` (format 2,
-C2 spec §5): what (section, version), how (cause, act), by whom (actor, user),
-written by (author), why (reason, review) and whether the text changed
-(changed, content_hash). The report changelog (C11) is derived from these lines.
+Rules 1–3 and 7 hold for every caller (the notebook included): nothing written
+here is ever lost. Every event is one line of the section's
+``history/<key>/index.jsonl`` (format 2, C2 spec §5): what (section, version),
+how (cause, act), by whom (actor, user), written by (author), why (reason,
+review) and whether the text changed (changed, content_hash).
 
 The state changes on sections (accept, release, restore, discard) are the steps
 in workflow.steps; they call the helpers here. ``section_history`` and
-``read_version`` serve the history routes.
+``read_version`` serve the history reads.
 
-A refusal is a ``SectionRefusal`` (a StepError carrying a code from
-workflow.refusals), with a message a toxicologist can act on.
+A core refusal here is a ``SectionRefusal`` (a StepError carrying a code that
+safeguards.refusals explains).
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 
 from pipeline.session_store import _VERSION_EVENT_KEY
 from workflow.errors import StepError
@@ -54,7 +54,7 @@ _AUTHORS = frozenset({"generated", "model", "person", "ingested", "client"})
 
 class SectionRefusal(StepError):
     """A section act the gate or a section step refuses. ``code`` is a code of
-    workflow.refusals.REFUSALS; ``details`` (key, act, version …) fill its
+    safeguards.refusals.REFUSALS; ``details`` (key, act, version …) fill its
     plain-words text and are shown beside the message."""
 
     def __init__(self, code: str, message: str, status_code: int, **details):
@@ -64,23 +64,11 @@ class SectionRefusal(StepError):
 
 
 # ---------------------------------------------------------------------------
-# Refusals (messages verbatim from the C2 contract)
+# Core refusals (messages verbatim from the C2 contract)
 # ---------------------------------------------------------------------------
-
-def owned(key: str, act: str) -> SectionRefusal:
-    return SectionRefusal(
-        "section_owned",
-        f"'{key}' is approved or protected; {act} would replace its text. "
-        "Release it first, with a reason.", 409, key=key, act=act)
-
 
 def not_found(key: str, verb: str) -> SectionRefusal:
     return SectionRefusal("section_not_found", f"No '{key}' section to {verb}", 404,
-                          key=key, act=verb)
-
-
-def reason_required(key: str, verb: str) -> SectionRefusal:
-    return SectionRefusal("reason_required", f"A reason is required to {verb} '{key}'", 400,
                           key=key, act=verb)
 
 
@@ -115,14 +103,6 @@ def already_accepted(section: dict | None, status: str | None) -> bool:
     read model does not offer accepting."""
     return isinstance(section, dict) and bool(section.get("approved")) and not any(
         section.get(k) for k in ("stale", "review", "wording_review")) and status == "blessed"
-
-
-def require_reason(reason, key: str, verb: str) -> str:
-    """The reason, stripped; a SectionRefusal when it is empty (C2 D3)."""
-    text = reason.strip() if isinstance(reason, str) else ""
-    if not text:
-        raise reason_required(key, verb)
-    return text
 
 
 # ---------------------------------------------------------------------------
@@ -261,20 +241,46 @@ REVIEW = "review"      # apical result sections (C2 D2/A1): the printed content
 #                        and mark it for re-review with a record.
 
 
+@dataclass
+class WriteRequest:
+    """A write to a section, as the gate sees it once it is known to change the
+    text: what a write policy decides on (``policy`` of write_section)."""
+
+    dtxsid: str
+    key: str
+    prior: dict | None
+    content: dict
+    store: PoolStore
+    act: str
+    actor: str
+    author: str | None
+    force: bool
+    reason: str | None
+    on_owned: str
+    review: dict | None
+    extra_event: dict | None
+    outcome: dict
+
+
 def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act: str,
                   actor: str, author: str | None, force: bool = False,
                   reason: str | None = None, cause: str = "generate", status: str = "draft",
                   extra_event: dict | None = None, on_owned: str = HOLD,
-                  review: dict | None = None) -> dict:
+                  review: dict | None = None, policy=None) -> dict:
     """Write ``content`` as section ``key``, by the rules of the module
     docstring. ``actor`` is ``"person"`` (an act a person asked for) or
     ``"system"`` (Process, invalidation); ``author`` who wrote the text.
 
+    ``policy`` decides what happens to content a person owns (rules 4–6):
+    called with a WriteRequest once the write would change the text, it
+    returns None (write), or the outcome it chose (``hold``, ``knock_down``),
+    or raises a refusal. With no policy every write is made — the prior text is
+    archived first, so nothing is lost (the notebook's unguarded core);
+    safeguards.sections.ownership_policy is the C2 policy the front ends use.
+
     Returns ``{key, outcome, version, prior_version, archived, event}`` where
     outcome is ``written`` | ``unchanged`` | ``held`` | ``needs_review``.
-    Raises SectionRefusal ``section_key_invalid``, ``section_owned`` (a person's
-    write over locked content without force) or ``reason_required`` (a forced
-    write over owned content without a reason).
+    Raises SectionRefusal ``section_key_invalid``, and what the policy raises.
 
     ``content`` is the new file as the caller wants it (its state keys
     included); it is not mutated."""
@@ -289,27 +295,14 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
         return {**outcome, "outcome": "unchanged", "version": prior_version}
 
     data = dict(content)
-    owned_now = prior is not None and is_owned(prior)
-    forced = owned_now and force
-    if owned_now and not force:
-        if actor == "system" and on_owned == REVIEW:
-            return _knock_down(dtxsid, key, prior, data, store, act=act, author=author,
-                               review=review or {}, extra_event=extra_event, outcome=outcome)
-        if actor == "system":
-            # Rule 4: hold. The machine's text is not kept (C7 keeps a draft beside).
-            line = event(key=key, cause="hold", status=_status_now(dtxsid, key, prior, store),
-                         act=act, actor=actor, author=author, prior_version=prior_version,
-                         changed=False, chash=content_hash(prior), applied=False,
-                         extra={**(extra_event or {}), "held_hash": new_hash})
-            record(dtxsid, key, prior_version, line, store)
-            return {**outcome, "outcome": "held", "version": prior_version, "event": line}
-        # Rule 5. A released section (only PROTECTED stands: C2 D1) is replaced
-        # by a person's explicit act — that is what releasing it was for (D6:
-        # "release first"); Process still never replaces it.
-        if is_locked(prior):
-            raise owned(key, act)
-    if forced:
-        reason = require_reason(reason, key, act)       # rule 6
+    if policy is not None:
+        request = WriteRequest(dtxsid, key, prior, data, store, act, actor, author, force,
+                               reason, on_owned, review, extra_event, outcome)
+        decided = policy(request)
+        if decided is not None:
+            return decided
+        reason = request.reason
+    forced = prior is not None and is_owned(prior) and force
 
     # A review marker (D2/A1) stands until a person re-accepts: a later machine
     # write over the knocked-down section keeps it.
@@ -325,6 +318,26 @@ def write_section(dtxsid: str, key: str, content: dict, store: PoolStore, *, act
     store.save_section(dtxsid, key, data, archive=True)
     return {**outcome, "outcome": "written", "version": data.get("version"),
             "archived": line.get("archived"), "event": line}
+
+
+def hold(req: WriteRequest) -> dict:
+    """Rule 4: keep the owned text; record that a machine had a new one it did
+    not apply (the machine's text is not kept)."""
+    prior, prior_version = req.prior, req.prior.get("version")
+    line = event(key=req.key, cause="hold",
+                 status=_status_now(req.dtxsid, req.key, prior, req.store),
+                 act=req.act, actor=req.actor, author=req.author, prior_version=prior_version,
+                 changed=False, chash=content_hash(prior), applied=False,
+                 extra={**(req.extra_event or {}), "held_hash": content_hash(req.content)})
+    record(req.dtxsid, req.key, prior_version, line, req.store)
+    return {**req.outcome, "outcome": "held", "version": prior_version, "event": line}
+
+
+def knock_down(req: WriteRequest) -> dict:
+    """C2 D2/A1 for a write request (see _knock_down)."""
+    return _knock_down(req.dtxsid, req.key, req.prior, req.content, req.store, act=req.act,
+                       author=req.author, review=req.review or {},
+                       extra_event=req.extra_event, outcome=req.outcome)
 
 
 def _knock_down(dtxsid: str, key: str, prior: dict, data: dict, store: PoolStore, *, act: str,
@@ -501,6 +514,7 @@ __all__ = [
     "SectionRefusal", "write_section", "discard", "section_history", "read_version",
     "validate_section_key", "section_key_patterns", "author_of", "version_status", "is_locked",
     "already_accepted",
-    "event", "record", "require_reason", "HOLD", "REVIEW", "STATE_KEYS", "section_content",
+    "event", "record", "hold", "knock_down", "WriteRequest", "HOLD", "REVIEW", "STATE_KEYS",
+    "section_content",
     "archive_genomics_overrides",
 ]

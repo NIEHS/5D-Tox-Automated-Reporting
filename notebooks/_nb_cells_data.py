@@ -94,6 +94,7 @@ Read this once. The step explanations below refer back to it.
 | Layer | Where | What it is |
 |---|---|---|
 | Front ends | `web_routes/*` (the browser), `tooling/generate_report.py` (the command line), this notebook | Parse input, call a step, show the result. No workflow logic. |
+| Safeguards | `safeguards/*` (ADR-0031) | The idiot-proofing, between the browser or the command line and the core: an act refused outside its phase, Process refused until a person chose the method, a person's text never replaced by a machine, a reason to force or reopen, stated facts checked against the vocabularies, no Background without its sources, the publish gate; each refusal explained in plain words (`safeguards.refusals`). Entry point: `safeguards.guarded`, with the core steps' names. **This notebook calls the core directly, unguarded.** |
 | Workflow core | `workflow/steps.py`, `workflow/engine.py`, `workflow/phases.py`, `workflow/store.py` | One function per step. Takes plain Python, returns plain Python, raises `workflow.errors.StepError` (with an HTTP-style status code the routes pass on). All session I/O goes through an injected `PoolStore` (`DiskPoolStore` here). |
 | Pipeline | `pipeline/*`, `tables/*`, `genomics/*`, `narrative/*`, `rendering/*` | The work: fingerprint caching, processing layers, tables, narratives and the four render surfaces. HTTP-free. |
 | Document | `document_model/*`, `templates/`, `profiles/` | The report's declarations: the document tree and its definitions (an era plus a study's alterations, ADR-0029), the wording of the prose written from data (`phrasing:`), the session's definition pin; the analysis method profiles (ADR-0027). Neither `pipeline` nor `document_model` imports the web layer. |
@@ -121,25 +122,22 @@ applies these rules in order:
 1. no files in `files/` → `EMPTY`
 2. no `validation_report.json` → `UPLOADED`
 3. the validation report has an error-severity issue → `VALIDATION_ERRORS`
-4. no `integrated.json`, or one built from another validation → `VALIDATED`
+4. no `integrated.json`, or one built from another validation
+   (`workflow.integration_basis`: out of date) → `VALIDATED`
 5. no `animal_report.json` → `INTEGRATED`
 6. otherwise → `APPROVED`
 
-"Built from another validation" is read from `integration_basis.json`, which
-integration writes: a hash of the validation report by file name
-(`workflow.integration_basis`). A stale section does not move the phase;
-staleness is a section matter (the publish gate, §14).
+A stale section does not move the phase: staleness is a section's matter
+(its currency and the publish gate, §14).
 
-Each phase allows a declared set of acts (`workflow.phases.LEGAL_ACTIONS`):
-`ADD_FILES`, `REMOVE_FILE`, `RESET`, `VALIDATE`, `RESOLVE`,
-`CONFIRM_CLASSIFICATION`, `INTEGRATE`, `STATE_DATASET_FACTS`, `APPROVE`,
-`PROCESS`. `EMPTY` allows only adding files; `INTEGRATED` and `APPROVED` allow
-all ten. **Every step enforces it**: it derives the phase first and refuses an
-act its phase does not allow (`workflow.engine.require_legal`, a `StepError`
-409 `phase_not_allowed` that names the phase and the next step) before it
-reads or writes anything. The notebook, the command line and the browser meet
-the same refusal. Sections and rendering have no phase of their own; their
-state is their files.
+The legal actions for each phase are the workflow's declared table of acts
+(`workflow.phases.LEGAL_ACTIONS`: `ADD_FILES`, `REMOVE_FILE`, `RESET`,
+`VALIDATE`, `RESOLVE`, `CONFIRM_CLASSIFICATION`, `INTEGRATE`,
+`STATE_DATASET_FACTS`, `APPROVE`, `PROCESS`), with the act that moves each
+phase forward (`NEXT_STEP`). Here they are shown, not enforced: the browser and
+the command line refuse an act outside them (`safeguards.acts.require`).
+Process, sections and rendering have no phase of their own; their state is
+their files.
 
 ### Caches are keyed by their inputs
 
@@ -207,7 +205,7 @@ listed in `docs/writing-rules-inventory.md`.
 | 5 | Validate | `workflow.steps.validate_step` | `ExportBm2` | – | `_fingerprints.json`, `validation_report.json` |
 | 6 | Resolve | `workflow.steps.resolve_step` | – | – | `precedence.json` |
 | 7 | Confirm | `workflow.steps.confirm_metadata_step` | – | – | file headers, `_fingerprints.json` |
-| 8 | Integrate | `workflow.steps.integrate_step` | `IntegrateProject`, `ExportCategories`, `ExportGenomics`, `JsonToBm2` | ✓ | `integrated.json`, `integrated.bm2`, `_category_lookup.json`, `genomics.sidecar.json`, `identity.json`, `integration_basis.json` |
+| 8 | Integrate | `workflow.steps.integrate_step` | `IntegrateProject`, `ExportCategories`, `ExportGenomics`, `JsonToBm2` | ✓ | `integrated.json`, `integrated.bm2`, `_category_lookup.json`, `genomics.sidecar.json`, `identity.json`, `method_profile.json` |
 | 9 | State facts | `generate_report.apply_*`, `generate_report.record_abbreviation`, `pipeline.deposit.record_deposit`, `genomics.efdr.record_efdr` | `JsonToBm2`, `ExportCategories`, `ExportBm2` (eFDR) | – | `study_design.json`, `metadata_approved.json`, `front_matter.json`, `identity.json`, `deposit.json`, `efdr.json` |
 | 10 | Method profile, document definition | `pipeline.method_profile.pin_profile`, `document_model.definition_pin` | – | – | `method_profile.json`, `document_definition.json` + `.yaml` |
 | 11 | Animal report | `workflow.steps.generate_animal_report_step` | – | – | `animal_report.json` |
@@ -314,10 +312,8 @@ With your own data (`OWN_DATA`: files in `UPLOADS`), set these yourself:
 name and CASRN can be looked up), and whichever facts you know. Each one left
 `None` is not invented: the name and CASRN are resolved from a real DTXSID;
 the dose unit is read from the data; the design is the standard one and the
-report says so. The method profile is never chosen for you: with
-`METHOD_PROFILE = None` step 10 stops and names the profile it suggests (set
-it, or `"newest"` to track the newest). There is no published book to compare
-with, and no deposit unless you name one.
+report says so; the method profile is the newest. There is no published book
+to compare with, and no deposit unless you name one.
 
 The rest steer the notebook itself:
 
@@ -371,8 +367,7 @@ if OWN_DATA:
     DOSE_UNIT = None                # None: the unit the data records, else mg/kg
     DESIGN = None                   # {"strain": …, "articleRoute": …, …}; None: the standard
                                     # design (SD rats, gavage, corn oil, 5 days), logged as such
-    METHOD_PROFILE = None           # choose one: a profile name, or "newest" to track the
-                                    # newest; None stops at step 10 with a suggestion
+    METHOD_PROFILE = None           # None: the newest profile, tracked
     FRONT_MATTER = {}               # {"authors": […], "strain_designation": …}
     EXPERIMENT_METADATA = None
     DEPOSIT = None                  # a folder of the files deposited with the report, if any
@@ -738,13 +733,8 @@ the raw input files.
 **How it's implemented.** `generate_report.integrate` →
 `workflow.steps.integrate_step(dtxsid, identity, store)`:
 
-1. Refuses outside `VALIDATED`, `INTEGRATED` and `APPROVED` (`phase_not_allowed`;
-   integrating again is legal, and withdraws the data approval, step 11).
-   Loads the fingerprints, the coverage matrix and `precedence.json`, and
-   refuses (`validation_out_of_date`, 409) when the validation no longer
-   matches the files the server holds: a coverage-matrix file id is not among
-   the fingerprints (a cold re-scan mints new ids), or the files differ. It
-   refuses; it never repairs. Validate again, then integrate.
+1. Loads the fingerprints, the coverage matrix and `precedence.json`; refuses
+   (`StepError` 400) if validation hasn't run.
 2. Writes `identity.json` (`{dtxsid, name, casrn}`), which names the test
    article for metadata inference, Methods and the title.
 3. Reads `metadata_approved.json`, the experiment metadata a person approved
@@ -789,14 +779,10 @@ the raw input files.
      any study workbook in the pool.
    - deletes every `_cache_*.json`, `session.duckdb` and `session_parquet/`:
      the data under them changed.
-   - moves an existing `animal_report.json` (the data approval, step 11) to
-     `history/_data_approval/`: it approved the dataset just replaced. The
-     summary says `approval_withdrawn`. A failed merge leaves it in place.
-   - writes `integration_basis.json`, what this dataset was built from (§0).
-   - `_pin_and_check_method`: pins nothing. When a person has pinned a method
-     profile (step 10), adds a `method_mismatch` warning to the validation
-     report for every analysis setting the `.bm2` records differently from it;
-     with none pinned there is nothing to compare against.
+   - `_pin_and_check_method`: pins the newest method profile if the study has
+     none (`pipeline.method_profile.ensure_pin`), and adds a `method_mismatch`
+     warning to the validation report for every analysis setting the `.bm2`
+     records differently from the profile.
 
 Integrating again wipes every Process cache, so this cell skips when the
 session is already integrated, as the command line does without
@@ -805,8 +791,7 @@ session is already integrated, as the command line does without
 **Reads → writes.** `files/`, `_fingerprints.json`, `validation_report.json`,
 `precedence.json`, `metadata_approved.json`, `study_design.json` →
 `integrated.json`, `integrated.bm2`, `_category_lookup.json`,
-`genomics.sidecar.json`, `identity.json`, `integration_basis.json`;
-`animal_report.json` moved to `history/_data_approval/`.
+`genomics.sidecar.json`, `identity.json`, `method_profile.json`.
 
 **Phase.** `INTEGRATED`.
 
@@ -860,10 +845,9 @@ metadata from scratch each time).
 
 **How it's implemented.**
 
-- **Study design**, `generate_report.apply_design(dtxsid, DESIGN, store)`:
-  checks every field against the controlled vocabulary
-  (`pipeline.study_design.design_field_errors` over `bmdx_pipe.VOCABULARIES`),
-  writes `study_design.json` (`{fields, recorded_at}`), and calls
+- **Study design**, `generate_report.apply_design(dtxsid, DESIGN, store)` →
+  `workflow.steps.record_study_design`: writes `study_design.json`
+  (`{fields, recorded_at}`), and calls
   `workflow.steps.reapply_study_design`, which sets the fields on every
   experiment's `experimentDescription` (`apply_design_fields`), saves
   `integrated.json` and re-exports `integrated.bm2`. Without a stated design,
@@ -871,11 +855,15 @@ metadata from scratch each time).
   5 days; inhalation for a ppm study) and says so in the log
   (`pipeline.study_design`).
 - **Experiment metadata**, `generate_report.apply_experiment_metadata(dtxsid, EXPERIMENT_METADATA)`:
-  checks that each experiment exists and each value is in the vocabulary, then
   `pipeline.metadata_approval.approve_experiment_metadata(dtxsid, given, merge=True)`
   lays it over the descriptions and records it as the approval in
   `metadata_approved.json`, the same record the browser's approval writes.
   NIEHS-10's project names its experiments by organ and sex, so it states none.
+- Both are written **as given** here. The app and the command line first
+  check them (`safeguards.inputs`): the study must have a dataset, every
+  experiment must be the dataset's, and every field and value the controlled
+  vocabulary's (`pipeline.study_design.design_field_errors`,
+  `bmdx_pipe.VOCABULARIES`); a refusal writes nothing.
 - **Front matter**, `generate_report.apply_front_matter(dtxsid, FRONT_MATTER, store)`:
   merges the given keys over the saved `front_matter.json` and cleans it
   (`rendering.front_matter.clean_front_matter`), as the Configure screen saves
@@ -965,11 +953,8 @@ written resolves as "to confirm" for it.
 1. `pipeline.method_profile.pin_profile(dtxsid, name, by="user")` writes the
    **pin**, `method_profile.json`: the profile's name, a hash of its content,
    the mode (`fixed` stays on this profile; `track` follows the newest of its
-   series), who pinned it and when. Nothing pins a profile for you: with no
-   `METHOD_PROFILE` and no profile a person chose, this cell stops and names
-   the one `pipeline.method_profile.suggest_profile` proposes (the profile of
-   the series the `.bm2`'s recorded settings disagree with least, else the
-   newest), and Process refuses (`method_not_chosen`) until one is chosen.
+   series, the default for a study nobody pinned), who pinned it and when.
+   Integration already pinned the newest one (`ensure_pin`); this replaces it.
 2. `session_method(dtxsid)` → `resolve(...)` builds the settings in layers:
    the built-in defaults, then the profile, then the study's overlay (the
    `methods:` block of `templates/studies/<id>/view.yaml`), then a request's

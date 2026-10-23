@@ -44,6 +44,7 @@ def _table_list_title(node, data: dict) -> str:
     drift from the captions on the tables themselves."""
     from rendering.render_common import (
         apical_table_plan, incidence_table_plan, bmd_summary_plan, table_caption,
+        matrix_caption, sample_counts_table,
     )
     caption = None
     try:
@@ -56,12 +57,23 @@ def _table_list_title(node, data: dict) -> str:
         elif node.node_type == "bmd-summary":
             plan = bmd_summary_plan(node, data)
             caption = getattr(plan, "caption", None)
-        elif node.node_type in ("sample-counts-table", "data-table", "authored-table"):
+        elif node.node_type in ("sample-counts-table", "data-table"):
+            built = sample_counts_table(node, data)
+            caption = (matrix_caption(node, built)[0] if built
+                       else table_caption(node, node.caption or node.title))
+        elif node.node_type == "authored-table":
             caption = table_caption(node, node.caption or node.title)
     except Exception:
         caption = None
     stripped = _strip_table_prefix(caption) if caption else ""
     return stripped or node.title
+
+
+def _genomics_rows(entry: dict) -> bool:
+    """Whether a genomics entry has table rows: its own, or a sex's (an entry
+    over both sexes carries them under ``sexes[]``)."""
+    key = "gene_sets" if entry.get("type") == "gene_set" else "top_genes"
+    return bool(entry.get(key)) or any(b.get(key) for b in entry.get("sexes") or [])
 
 
 def _build_toc_entries(
@@ -113,8 +125,11 @@ def _build_toc_entries(
     from document_model.document_tree import DOCUMENT_TREE, compute_table_numbers
 
     nodes = tree if tree is not None else DOCUMENT_TREE
-    # Ensure table numbers are computed before we walk
-    compute_table_numbers(nodes)
+    # Ensure table numbers are computed before we walk — counting the genomic
+    # tables where their section stands, as the body is numbered (without them
+    # a table after the gene sets, the 2026 most-potent summary, was listed
+    # under the gene-set tables' number while its caption printed its own).
+    compute_table_numbers(nodes, data.get("genomics_sections"))
 
     toc_entries = []
     table_entries = []
@@ -155,7 +170,8 @@ def _build_toc_entries(
         # Matrix tables (the sample-counts Table 1, any data-table) — ready iff
         # the built matrix at their data_key has rows.
         if node.node_type in ("sample-counts-table", "data-table"):
-            built = data.get(dk) if dk else None
+            from rendering.render_common import scoped_value
+            built = scoped_value(node, data.get(dk)) if dk else None
             return bool(isinstance(built, dict) and built.get("rows"))
 
         # An authored table is ready iff its supplied markup resolved.
@@ -179,9 +195,9 @@ def _build_toc_entries(
             gs = data.get("genomics_sections", [])
             nk = getattr(node, "narrative_key", None)
             if nk == "gene_set_narrative":
-                return any(s.get("type") == "gene_set" and s.get("gene_sets") for s in gs)
+                return any(s.get("type") == "gene_set" and _genomics_rows(s) for s in gs)
             elif nk == "gene_narrative":
-                return any(s.get("type") == "gene" and s.get("top_genes") for s in gs)
+                return any(s.get("type") == "gene" and _genomics_rows(s) for s in gs)
             return bool(gs)
 
         # Narrative / heading-only nodes — check data_key for content
@@ -331,10 +347,7 @@ def _build_toc_entries(
         {
             "title": genomics_table_caption(entry).split(". ", 1)[-1],
             "table_number": entry["table_number"],
-            "ready": bool(
-                entry.get("gene_sets") if entry.get("type") == "gene_set"
-                else entry.get("top_genes")
-            ),
+            "ready": _genomics_rows(entry),
         }
         for entry in (data.get("genomics_sections") or [])
         if entry.get("table_number") is not None
@@ -344,6 +357,12 @@ def _build_toc_entries(
         entry["label"] = str(entry["table_number"])
         entry["scope"] = None
     table_entries.extend(genomics_tables)
+    # The list is in document order: body tables by number (the genomic ones
+    # interleave with the tree's, e.g. the 2026 most-potent summary after the
+    # gene-set tables), each appendix's after the body.  The sort is stable,
+    # so an appendix's tables keep their walk order.
+    table_entries.sort(key=lambda e: (e.get("scope") is not None, e.get("scope") or "",
+                                      e["table_number"] if e.get("scope") is None else 0))
 
     # Genomics CHARTS are data-driven figures (numbered by
     # assign_genomics_figure_numbers, continuing the body figure sequence);

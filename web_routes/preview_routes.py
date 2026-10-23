@@ -22,7 +22,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.session_store import safe_filename
-from workflow.engine import WorkflowEngine
 from workflow.store import DiskPoolStore
 from rendering.preview_surface import (
     DEFAULT_SURFACE,
@@ -106,25 +105,19 @@ async def api_preview_view(dtxsid: Dtxsid, view: str | None = None, surface: str
 
 def publish_gate_response(dtxsid: str) -> JSONResponse | None:
     """The server-side publish gate shared by every route that ships the report
-    (preview download, Overleaf bundle). Returns a 409 JSONResponse naming the
-    blocking sections when the report is not publishable, else None. Derived on
-    every call from section currency (WorkflowEngine.publish_readiness); never
-    stored."""
-    readiness = WorkflowEngine(dtxsid, DiskPoolStore()).publish_readiness()
-    if readiness.get("can_publish", True):
-        return None
-    blocking = readiness.get("blocking") or []
-    keys = ", ".join(b.get("section_key", "?") for b in blocking)
-    return JSONResponse(
-        {
-            "error": (
-                "Report is not publishable: re-accept the sections a data "
-                f"reprocess invalidated ({keys})"
-            ),
-            "blocking": blocking,
-        },
-        status_code=409,
-    )
+    (preview download, Overleaf bundle): safeguards.publish. Returns a 409
+    JSONResponse naming the blocking sections (``blocking``, beside the
+    explained refusal) when the report is not publishable, else None."""
+    from safeguards.publish import require_publishable
+    from safeguards.refusals import Refused, error_body
+
+    try:
+        require_publishable(dtxsid, DiskPoolStore())
+    except Refused as e:
+        body, status = error_body(e)
+        return JSONResponse({**body, "blocking": e.details.get("blocking", [])},
+                            status_code=status)
+    return None
 
 
 @router.get("/api/preview/{dtxsid}/download")

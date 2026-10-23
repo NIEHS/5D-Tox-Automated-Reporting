@@ -697,11 +697,12 @@
         {
           "children": [
             {
+              "data_key": "organ_weight_descriptions",
               "id": "appendix-e-body",
               "level": 3,
               "region": "back",
               "title": "",
-              "type": "freeform-block"
+              "type": "narrative"
             }
           ],
           "id": "appendix-e-descriptions",
@@ -735,6 +736,16 @@
       "type": "appendix"
     }
   ],
+  "dose_terms": {
+    "gavage": {
+      "dose": "Dose",
+      "internal_dose": "Internal Dose"
+    },
+    "inhaled": {
+      "dose": "Exposure Concentration",
+      "internal_dose": "Internal Concentration"
+    }
+  },
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "figure_entries": [
     {
@@ -761,22 +772,22 @@
           "text": "National Institute of Environmental Health Sciences (NIEHS)",
           "type": "ext-link"
         },
-        " is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+        " is one of 27 institutes and centers of the National Institutes of Health, part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures, developing the next generation of environmental health scientists, and providing critical research, knowledge, and information to citizens and policymakers to help in their efforts to prevent hazardous exposures and reduce the risk of preventable disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
       ],
       [
-        "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the ",
+        "The environmental health sciences research described in this series is conducted primarily by the ",
         {
-          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm",
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt",
           "text": "Division of Translational Toxicology (DTT)",
           "type": "ext-link"
         },
         " at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
       ],
       [
-        "NIEHS reports are available free of charge on the ",
+        "This report is available free of charge on the ",
         {
-          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm",
-          "text": "NIEHS/DTT website",
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports",
+          "text": "NIEHS website",
           "type": "ext-link"
         },
         " and cataloged in ",
@@ -1037,6 +1048,24 @@
     ]
   },
   "most_potent_gene_sets_matrix": null,
+  "organ_weight_descriptions": {
+    "paragraphs": [
+      [
+        {
+          "text": "Kidney:",
+          "type": "bold"
+        },
+        " The kidneys remove waste products and xenobiotics from the body, balance blood electrolytes, regulate blood pressure through the release of hormones, synthesize the active form of vitamin D, and control the production of erythropoiesis. In subacute studies, changes in kidney weight may reflect renal toxicity (particularly if accompanied by increases in other markers of kidney toxicity, e.g., increased Kim-1) and/or tubular hypertrophy. Decreased kidney weights in subacute studies are typically of unknown toxicological significance."
+      ],
+      [
+        {
+          "text": "Liver:",
+          "type": "bold"
+        },
+        " The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+      ]
+    ]
+  },
   "orientations": {},
   "overrides": {},
   "peer_review": {
@@ -1121,27 +1150,6 @@
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
-      "label": "B-1",
-      "ready": false,
-      "scope": "B",
-      "table_number": 1,
-      "title": "Animal Numbers and FASTQ Data File Names"
-    },
-    {
-      "label": "D-1",
-      "ready": true,
-      "scope": "D",
-      "table_number": 1,
-      "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints"
-    },
-    {
-      "label": "D-2",
-      "ready": false,
-      "scope": "D",
-      "table_number": 2,
-      "title": "BMDExpress/ToxicR Analysis Configuration"
-    },
-    {
       "label": "9",
       "ready": false,
       "scope": null,
@@ -1168,6 +1176,27 @@
       "scope": null,
       "table_number": 12,
       "title": "Top Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
+    },
+    {
+      "label": "B-1",
+      "ready": false,
+      "scope": "B",
+      "table_number": 1,
+      "title": "Animal Numbers and FASTQ Data File Names"
+    },
+    {
+      "label": "D-1",
+      "ready": true,
+      "scope": "D",
+      "table_number": 1,
+      "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints"
+    },
+    {
+      "label": "D-2",
+      "ready": false,
+      "scope": "D",
+      "table_number": 2,
+      "title": "BMDExpress/ToxicR Analysis Configuration"
     }
   ],
   "test_article": {

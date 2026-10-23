@@ -33,6 +33,7 @@ from common.paths import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL
 from narrative.interpret import build_genomics_interpretation
+from narrative.test_article import naming_rule
 from styling_export.llm_helpers import llm_generate_json_async
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ async def generate_genomics_narrative_async(
     model: str = "",
     subject: str = "",
     bmd_decimals: int | None = None,
+    abbreviation: str = "",
 ) -> dict:
     """
     LLM-generate narrative paragraphs for a single organ × sex.
@@ -73,7 +75,9 @@ async def generate_genomics_narrative_async(
     (pipeline.study_design.subject_phrase, e.g. "Sprague Dawley rats");
     empty ⇒ the prompt says "animals" rather than assuming a strain.
     `bmd_decimals` is the report's BMD precision (report_bmd_decimals), so a
-    BMD the narrative cites reads as the tables print it.
+    BMD the narrative cites reads as the tables print it.  `abbreviation` is
+    the study's recorded short form of `compound` ("" when none): the prompt
+    states it, so the model never coins its own (narrative.test_article).
 
     Returns:
         {
@@ -408,6 +412,7 @@ Return ONLY valid JSON, no markdown formatting."""
 
     # Units and precision as the report prints them (the model otherwise
     # writes "mg/kg/day" and 3-decimal BMDs next to 1-decimal tables).
+    prompt += "\n\n" + naming_rule(compound, abbreviation)
     prompt += (
         f"\n\nDoses and BMDs are in {dose_unit} exactly (do not write a per-day unit)."
         + (f" Round any BMD or BMDL you cite to {bmd_decimals} decimal place"

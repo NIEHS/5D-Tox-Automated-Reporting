@@ -1,35 +1,39 @@
 """
-workflow.refusals — every refusal the backend can give, in plain words
-(MODULES.md §4.2, the error envelope).
+safeguards.refusals — every refusal the application can give, in plain words.
 
 A step that cannot proceed raises (``StepError``, ``GuardViolation``, a pin
-error, a bad id, a damaged session file). What the person needs is not the
-exception but three things: what happened, in their terms; what to do about it;
-and where in the interface it is fixed. This module is the one place that maps
-the backend's refusals to those, so the browser, the command line and the
-notebook explain a refusal the same way:
+error, a bad id, a damaged session file, or one of the safeguards' own
+refusals below). What the person needs is not the exception but three things:
+what happened, in their terms; what to do about it; and where in the workflow
+it is cleared. This module is the one place that maps a refusal to those, so
+the browser and the command line explain it the same way:
 
     {"error": {"code": "not_validated", "status": 400,
                "message": "No fingerprints found -- run validation first",
                "say": "The study's files haven't been checked yet. …",
-               "fix": "M2", "details": {}}}
+               "fix": "files", "details": {}}}
 
-* ``code`` comes from the closed list ``REFUSALS``; a refusal the list does not
-  know is ``unexpected``, never a guess at a nearer one.
-* ``message`` is the backend's own text, verbatim (the interface shows it behind
-  a toggle). ``say`` is written here, next to the code.
-* ``fix`` names the interface module where the cause is cleared (MODULES.md §3),
-  or None when nothing in the interface clears it (tell the maintainer).
+* ``code`` comes from the closed list ``REFUSALS`` (a front end adds its own
+  codes with ``register``); a refusal the list does not know is
+  ``unexpected``, never a guess at a nearer one.
+* ``message`` is the backend's own text, verbatim. ``say`` is written here,
+  next to the code.
+* ``fix`` names the place in the workflow where the cause is cleared
+  (``PLACES``), or None when nothing a person does there clears it (tell the
+  maintainer). A front end maps a place to its own screen.
 * ``status`` is the backend's advisory status where it gives one (StepError),
   else the code's own.
 
-The refusals the backend raises today carry no code, so most are recognised by
-their message (``_MESSAGE_RULES``, quoted from the Gate 0 analyses: data §3.1,
-Process §6.1, document §9.1). An exception that carries a ``code`` attribute
-naming a listed code (the phase guard of C1, say) is taken at its word, and so
-are the ``say``, ``fix`` and ``details`` it carries when it knows its own case
-better than the list (``workflow.errors.PhaseRefusal`` says, per phase, what to
-do next).
+Core refusals carry no plain words; most are recognised by their message
+(``_MESSAGE_RULES``). An exception that carries a ``code`` attribute naming a
+listed code is taken at its word, and so are the ``say``, ``fix`` and
+``details`` it carries when it knows its own case better than the list (the
+phase guard's ``PhaseRefusal`` says, per phase, what to do next).
+
+The refusals the safeguards raise themselves are defined here too:
+``PhaseRefusal`` and ``MethodNotChosen`` (C1), ``StudyRefusal`` (R6).
+Ported from the UI team's ``workflow.refusals`` / ``workflow.errors``
+(ui-redesign), without the codes of its study-creation module.
 """
 
 from __future__ import annotations
@@ -38,111 +42,83 @@ import logging
 import re
 from dataclasses import dataclass
 
+from workflow.errors import StepError
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class Refusal:
     """One kind of refusal: its default status, what to tell a person, and
-    which interface module clears it (None: the maintainer must)."""
+    where in the workflow it is cleared (``PLACES``; None: the maintainer must)."""
 
     status: int
     say: str
     fix: str | None
 
 
+# The places in the workflow where a refusal's cause is cleared (a refusal's
+# ``fix``). A front end maps each to its own screen.
+PLACES = {
+    "study": "the study itself (which study, its identity)",
+    "files": "the study's files and the file check",
+    "dataset": "combining the files into one dataset (Integrate)",
+    "data_review": "the data review (every animal accounted for)",
+    "method_and_document": "the analysis method and the document definition the study is pinned to",
+    "process": "Process",
+    "sections": "the report's sections (accept, reopen, restore)",
+    "facts": "the facts a person states about the study (design, experiment details)",
+    "publish": "the report's readiness to publish",
+}
+
+
 # The closed list. A `say` may name a field the matching rule captures
 # ({key}, {file}); everything else is fixed text.
 REFUSALS: dict[str, Refusal] = {
-    # ── the study and its files (M1, M2) ─────────────────────────────────────
+    # ── the study and its files ──────────────────────────────────────────────
     "invalid_study_id": Refusal(400, (
         "That is not a valid study id. A study is named by its chemical's DTXSID: "
-        "“DTXSID” followed by digits, for example DTXSID50469320."), "M1"),
-    "study_id_has_suffix": Refusal(400, (
-        "A study's id is the DTXSID alone. Ids with a suffix (…_rat, …_published) are "
-        "made by the system."), None),
-    "study_exists": Refusal(409, (
-        "A study of this chemical already exists ({id}). Open it instead."), "M1"),
-    "study_not_found": Refusal(404, (
-        "There is no study {id}. It may have been deleted."), "M1"),
-    "identity_not_found": Refusal(404, (
-        "{service} has no chemical with the DTXSID {id}. A single mistyped digit gives "
-        "another chemical or none. Check the id on the CompTox dashboard."), None),
-    "identity_lookup_unreachable": Refusal(503, (
-        "The chemical lookup service ({service}) could not be reached. Nothing was "
-        "created. Try again in a minute."), None),
-    "identity_unconfirmed": Refusal(400, (
-        "Confirm the chemical before going on: tick the box that says it is the chemical "
-        "you are studying."), None),
-    "identity_changed": Refusal(409, (
-        "The lookup now gives a different chemical than the one you confirmed. Look it "
-        "up again."), None),
-    "identity_incomplete": Refusal(400, (
-        "The chemical's name is missing from what was confirmed. Its name comes from "
-        "the lookup: look the chemical up again."), None),
-    "invalid_casrn": Refusal(400, (
-        "This CASRN's check digit doesn't match; a digit is probably mistyped."), None),
-    "identity_exists": Refusal(409, (
-        "This study already has its chemical's identity. Changing it is not done here."),
-        None),
-    "format_changed": Refusal(409, (
-        "The report format this id brings changed since you looked. Review it again."),
-        None),
-    "structure_unavailable": Refusal(404, (
-        "PubChem did not return a structure picture."), None),
+        "“DTXSID” followed by digits, for example DTXSID50469320."), "study"),
     "read_only_session": Refusal(409, (
         "This is the published book's own content, made by a tool. It can't be changed "
         "or deleted here."), None),
     "report_has_no_data": Refusal(409, (
         "This is a report over several studies: it has no files or data of its own. "
-        "Its data is prepared in each of its studies; open one of them."), "M1"),
-    "member_of_report": Refusal(409, (
-        "This is the {species} study of the report {parent}. Deleting it would break "
-        "that report."), "M1"),
-    "run_in_flight": Refusal(409, (
-        "Process is running on this study (since {time}). Wait for it to finish."), "P1"),
-    "confirm_mismatch": Refusal(400, (
-        "The id you typed doesn't match this study's id. Nothing was deleted."), None),
-    "changed_since_preview": Refusal(409, (
-        "The study changed after you reviewed what would be deleted. Nothing was "
-        "deleted; review the list again."), None),
-    "list_failed": Refusal(500, (
-        "The list of studies can't be read: the folder that holds them is missing or "
-        "unreadable. Tell the maintainer."), None),
+        "Its data is prepared in each of its studies; open one of them."), "study"),
     "no_files": Refusal(404, (
-        "This study has no data files yet. Add the study's files first."), "M2"),
+        "This study has no data files yet. Add the study's files first."), "files"),
     "files_not_recognised": Refusal(400, (
         "None of this study's files has been recognised yet. Add the files and run "
-        "the file check, then try again."), "M2"),
+        "the file check, then try again."), "files"),
     "not_validated": Refusal(400, (
         "The study's files haven't been checked yet. Run the file check "
-        "(validation) first, then try again."), "M2"),
+        "(validation) first, then try again."), "files"),
     "conflict_choice_missing": Refusal(400, (
         "To settle a conflict between files, choose the file to keep for that "
-        "conflict."), "M2"),
-    # ── integration and the dataset (M3) ─────────────────────────────────────
+        "conflict."), "files"),
+    # ── integration and the dataset ──────────────────────────────────────────
     "integration_failed": Refusal(500, (
         "Combining the study's files into one dataset failed. The details say "
         "which file or value it stopped at. Check that file, then integrate again; "
-        "if the details don't point at a file, tell the maintainer."), "M3"),
+        "if the details don't point at a file, tell the maintainer."), "dataset"),
     "not_integrated": Refusal(400, (
         "The study's files haven't been combined into one dataset yet. Finish the "
-        "Integrate step first."), "M3"),
+        "Integrate step first."), "dataset"),
     "dataset_invalid": Refusal(422, (
         "The study's combined dataset doesn't have the form the report needs. "
-        "Integrate the study again; if that doesn't fix it, tell the maintainer."), "M3"),
-    # ── the data review (M6) ─────────────────────────────────────────────────
+        "Integrate the study again; if that doesn't fix it, tell the maintainer."), "dataset"),
+    # ── the data review ──────────────────────────────────────────────────────
     "animal_report_failed": Refusal(500, (
         "Accounting for every animal across the files failed. The details say "
         "where it stopped. Check the files it names, then try again; if it fails "
-        "again, tell the maintainer."), "M6"),
-    # ── Process (P1) ─────────────────────────────────────────────────────────
+        "again, tell the maintainer."), "data_review"),
+    # ── Process ──────────────────────────────────────────────────────────────
     "bmd_divergence": Refusal(500, (
         "Some apical benchmark doses computed here differ from the values recorded "
         "in the study's .bm2 files by more than the allowed margin. This is a "
         "problem in the data, not something to fix here, and running Process again "
         "will not change it: send the list of endpoints in the details to the data "
-        "team."), "P1"),
+        "team."), "process"),
     "calculation_program_failed": Refusal(500, (
         "A calculation program failed while processing (the apical BMD modelling or "
         "the genomics export). Results from earlier runs may be partly kept. Tell "
@@ -150,74 +126,74 @@ REFUSALS: dict[str, Refusal] = {
     "processing_failed": Refusal(500, (
         "Processing stopped with an error before it finished. The details say what "
         "failed. Try again once the cause is fixed; if the cause isn't clear, tell "
-        "the maintainer."), "P1"),
+        "the maintainer."), "process"),
     "content_preparation_failed": Refusal(500, (
         "Writing the report's text from the processed results failed. The details "
-        "say what failed; if the cause isn't clear, tell the maintainer."), "P1"),
+        "say what failed; if the cause isn't clear, tell the maintainer."), "process"),
     "server_setup_failed": Refusal(500, (
         "A program the server needs could not run (Java or the BMDExpress tools). "
         "This is a problem with the server's setup, not with your study, and "
         "nothing you change in the study will fix it. Tell the maintainer."), None),
-    # ── sections, approval and the guards (D1) ───────────────────────────────
+    # ── sections, approval and the guards ────────────────────────────────────
     "section_not_found": Refusal(404, (
         "There is no saved section “{key}”, so there is nothing to {act}. Methods, "
         "the apical BMD summary and the genomics interpretations are not saved as "
         "sections yet, so they can't be approved; the other sections exist only "
-        "once Process has run."), "D1"),
+        "once Process has run."), "sections"),
     "section_key_missing": Refusal(400, (
         "The request didn't say which section it is about. This is a fault in the "
         "interface, not in your study; tell the maintainer."), None),
     "release_reason_required": Refusal(409, (
         "Reopening an approved section needs a reason. Say why you are reopening "
-        "it; the reason is kept in the section's history."), "D1"),
+        "it; the reason is kept in the section's history."), "sections"),
     "stale_content": Refusal(409, (
         "This section was written before the study's data changed, so it can't be "
         "marked final or published. Have it brought up to date with the current "
-        "data, read it again, then approve it."), "D1"),
+        "data, read it again, then approve it."), "sections"),
     "guard_refused": Refusal(409, (
         "This change to a section was refused to protect content a person owns. "
-        "The details say which rule refused it."), "D1"),
+        "The details say which rule refused it."), "sections"),
     # ── owned content (C2): the section write gate and the section steps ─────
     "section_owned": Refusal(409, (
         "This section has been approved, or you chose to keep it, so it can't be "
-        "replaced automatically. To replace it, reopen it and say why."), "D1"),
+        "replaced automatically. To replace it, reopen it and say why."), "sections"),
     "section_key_invalid": Refusal(400, (
-        "There is no section by that name in this report."), "D1"),
+        "There is no section by that name in this report."), "sections"),
     "reason_required": Refusal(400, (
-        "Please say why. The reason is kept with the section's history."), "D1"),
+        "Please say why. The reason is kept with the section's history."), "sections"),
     "version_not_found": Refusal(404, (
-        "That version of the section doesn't exist."), "D1"),
+        "That version of the section doesn't exist."), "sections"),
     "version_content_missing": Refusal(409, (
         "This version is listed in the history, but its text was lost before history "
         "was kept reliably. It can't be restored."), None),
     "approve_content_retired": Refusal(409, (
         "Approving can't change the text. Accept the section as it is, or edit it in "
-        "Word or Overleaf and bring that version back."), "D4"),
+        "Word or Overleaf and bring that version back."), "sections"),
     "approve_via_accept": Refusal(400, (
-        "Saving doesn't approve. Use Accept."), "D1"),
-    # ── the pins (M5) ────────────────────────────────────────────────────────
+        "Saving doesn't approve. Use Accept."), "sections"),
+    # ── the pins ─────────────────────────────────────────────────────────────
     "method_profile_changed": Refusal(409, (
         "The analysis method this study is pinned to (its method profile) was "
         "edited after the study was pinned, and a pinned method must never change. "
         "Pin the study to a method again; tell the maintainer if a profile file was "
-        "edited by mistake."), "M5"),
+        "edited by mistake."), "method_and_document"),
     "method_profile_invalid": Refusal(422, (
         "The analysis method (method profile) named for this study is missing or "
         "not valid. Choose another method profile, and tell the maintainer about "
-        "the broken one."), "M5"),
+        "the broken one."), "method_and_document"),
     "definition_pin_changed": Refusal(409, (
         "The saved copy of the document definition this study is fixed to no "
         "longer matches its pin, and a pinned definition must never change. Pin "
         "the study's document definition again; tell the maintainer if the saved "
-        "copy was edited by hand."), "M5"),
+        "copy was edited by hand."), "method_and_document"),
     "definition_not_pinned": Refusal(409, (
         "This study's document definition is meant to stay fixed, but its saved "
-        "copy is missing. Pin the document definition again."), "M5"),
+        "copy is missing. Pin the document definition again."), "method_and_document"),
     "definition_pin_invalid": Refusal(400, (
         "A document definition can be pinned in two ways only: fixed (it stays as "
-        "it is) or track (it follows the newest definition)."), "M5"),
-    # ── the legal-action guard (C1). The exceptions (workflow.errors) carry
-    #    the say and fix of their own case; these are the fallbacks. ─────────
+        "it is) or track (it follows the newest definition)."), "method_and_document"),
+    # ── the legal-action guard (C1). The refusals below carry the say and
+    #    fix of their own case; these are the fallbacks. ─────────────────────
     "phase_not_allowed": Refusal(409, (
         "This step isn't available at the study's current stage. The details say "
         "which stage the study is at; do the step that comes before this one first."),
@@ -226,11 +202,39 @@ REFUSALS: dict[str, Refusal] = {
         "The file check is out of date: it no longer matches the study's files as the "
         "server sees them now. This happens after the server restarts, or when files "
         "change outside the app. Nothing was combined and nothing was changed. Run the "
-        "file check again, then Integrate."), "M2"),
+        "file check again, then Integrate."), "files"),
     "method_not_chosen": Refusal(409, (
         "Choose the analysis method (the method profile) this study is reported under "
         "before processing. Every statistic, benchmark dose and the Methods text depend "
-        "on it, so it is never chosen for you."), "M5"),
+        "on it, so it is never chosen for you."), "method_and_document"),
+    # ── the data policy ──────────────────────────────────────────────────────
+    "llm_egress_blocked": Refusal(503, (
+        "The language model this needs is not one the study's data may be sent to "
+        "(only the NIEHS gateway is allowed). Nothing was sent. Tell the maintainer: "
+        "the server's model settings must point at the allowed gateway."), None),
+    # ── facts a person states (safeguards.inputs) ────────────────────────────
+    "facts_invalid": Refusal(422, (
+        "Some of what was stated about {what} can't be used, so nothing was saved. "
+        "The details list each problem: a value that isn't one of the choices "
+        "offered, or an experiment the study doesn't have."), "facts"),
+    # ── the Background's sources (safeguards.sources) ────────────────────────
+    "background_sources_unreachable": Refusal(503, (
+        "The Background can't be written now: {sources} could not be reached, and "
+        "without them it can neither state the chemical's toxicology nor say what is "
+        "missing from it. Nothing was changed. Try again later, or where these sources "
+        "are reachable (the NIEHS network)."), "sections"),
+    "background_empty": Refusal(502, (
+        "The language model wrote no Background. Nothing was saved; try again."),
+        "sections"),
+    "background_no_references": Refusal(502, (
+        "The Background the language model wrote cites no sources, so its citations "
+        "would point nowhere. Nothing was saved; try again when the sources can be "
+        "reached."), "sections"),
+    # ── the publish gate (safeguards.publish) ────────────────────────────────
+    "publish_blocked": Refusal(409, (
+        "The report can't be published yet: sections were written again after the "
+        "study's data changed ({keys}). Read each one and accept it again, then "
+        "publish."), "sections"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "
@@ -243,6 +247,20 @@ REFUSALS: dict[str, Refusal] = {
         "The application hit an error it has no explanation for. Tell the "
         "maintainer, with the details below."), None),
 }
+
+
+def register(codes: dict[str, Refusal]) -> None:
+    """Add a front end's own refusal codes to ``REFUSALS`` (the new
+    interface's study acts, say), so ``explain`` takes them at their word.
+    A code already listed is never redefined, and a ``fix`` must be one of
+    ``PLACES`` (or None): ValueError otherwise, and nothing is added.
+    Registering the same definition again is a no-op."""
+    for code, refusal in codes.items():
+        if code in REFUSALS and REFUSALS[code] != refusal:
+            raise ValueError(f"refusal code {code!r} is already defined")
+        if refusal.fix is not None and refusal.fix not in PLACES:
+            raise ValueError(f"refusal code {code!r}: fix {refusal.fix!r} is not a place")
+    REFUSALS.update(codes)
 
 
 # (exception class name, message pattern, code), first match wins. Class names,
@@ -287,6 +305,8 @@ _MESSAGE_RULES: tuple[tuple[str, str, str], ...] = (
     ("InvalidDtxsid", r"", "invalid_study_id"),
     ("UnreadableSessionFile", r"", "damaged_session_file"),
     ("BMDProjectValidationError", r"", "dataset_invalid"),
+    # The LLM egress guard (styling_export/llm_endpoints.py)
+    ("LLMEgressBlocked", r"", "llm_egress_blocked"),
     # A request the route could not parse (FastAPI's own validation)
     ("RequestValidationError", r"", "bad_request"),
 )
@@ -380,3 +400,125 @@ def explain(exc: BaseException) -> dict:
         message = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
     return {"error": {"code": code, "status": status, "message": message,
                       "say": say, "fix": fix, "details": details}}
+
+
+# ---------------------------------------------------------------------------
+# C1: the refusals of the legal-action guard. Each carries its own `code`
+# (explain() takes it at its word), the plain-words `say` and the place that
+# clears it (`fix`, a PLACES key), and the `details` a screen shows.
+# ---------------------------------------------------------------------------
+
+# How a refused act is named to a person ({Act} in the say).
+_ACT_SAY = {
+    "ADD_FILES": "Adding files",
+    "REMOVE_FILE": "Removing a file",
+    "RESET": "Clearing the study's files",
+    "VALIDATE": "Checking the files",
+    "RESOLVE": "Choosing between conflicting files",
+    "CONFIRM_CLASSIFICATION": "Correcting what a file is",
+    "INTEGRATE": "Combining the files into one dataset",
+    "STATE_DATASET_FACTS": "Stating the study design or the experiment details",
+    "APPROVE": "Approving the data",
+    "PROCESS": "Processing",
+}
+
+# Per refusing state: (the message's next step, the say's second sentence, fix).
+# "VALIDATED_OUT_OF_DATE" is VALIDATED with an integration built from another
+# validation (workflow.integration_basis). INTEGRATED and APPROVED never refuse.
+_PHASE_REFUSAL = {
+    "EMPTY": (
+        "Add the study's files first.",
+        "This study has no data files yet. Add the study's files first.", "files"),
+    "UPLOADED": (
+        "Validate the files first.",
+        "The study's files have changed since they were last checked, or were never "
+        "checked. Run the file check first.", "files"),
+    "VALIDATION_ERRORS": (
+        "Fix the validation errors, then validate again.",
+        "The file check found errors. Fix what it lists (remove or replace the files it "
+        "names), then run the file check again.", "files"),
+    "VALIDATED": (
+        "Integrate first.",
+        "The study's files have been checked but not yet combined into one dataset. "
+        "Integrate the study first.", "dataset"),
+    "VALIDATED_OUT_OF_DATE": (
+        "Its integration was built from a different validation; integrate again.",
+        "The study's dataset was combined from an earlier file check that no longer "
+        "matches its files. Integrate the study again first.", "dataset"),
+}
+_NO_FILES_TO_REMOVE = "This study has no files to remove."
+
+
+class PhaseRefusal(StepError):
+    """An act outside the legal actions of the study's derived phase
+    (workflow.phases.LEGAL_ACTIONS), raised by safeguards.acts.require before
+    the step reads or writes anything."""
+
+    code = "phase_not_allowed"
+
+    def __init__(self, dtxsid: str, action: str, phase: str, legal_actions,
+                 integration: str | None = None, next_action: str | None = None):
+        self.action, self.phase = action, phase
+        self.legal_actions = sorted(legal_actions)
+        self.integration, self.next_action = integration, next_action
+        state = ("VALIDATED_OUT_OF_DATE" if phase == "VALIDATED" and integration == "out_of_date"
+                 else phase)
+        nxt, phase_say, self.fix = _PHASE_REFUSAL.get(state, ("", "", None))
+        if phase == "EMPTY" and action in ("REMOVE_FILE", "RESET"):
+            self.say = _NO_FILES_TO_REMOVE
+        else:
+            self.say = f"{_ACT_SAY.get(action, action)} isn't possible yet. {phase_say}".strip()
+        legal = ", ".join(self.legal_actions) or "nothing"
+        super().__init__(
+            f"{action} refused for {dtxsid}: the study is in phase {phase} "
+            f"(allowed now: {legal}). {nxt}".strip(), status_code=409)
+        self.details = {"action": action, "phase": phase, "legal_actions": self.legal_actions,
+                        "integration": integration, "next_action": next_action}
+
+
+class MethodNotChosen(StepError):
+    """Process refused: no person has chosen the study's method profile (C1 D1,
+    option B). A front end suggests one (pipeline.method_profile.suggest_profile);
+    a person confirms it. Never chosen for them."""
+
+    code = "method_not_chosen"
+
+    def __init__(self, dtxsid: str, pin: dict | None):
+        how = "absent" if not pin else "pinned by default"
+        self.details = {"pin": None if not pin else {
+            k: pin.get(k) for k in ("name", "pinned_by", "mode")}}
+        if pin:
+            # An older session whose profile was set automatically.
+            self.say = (
+                "Choose the analysis method (the method profile) this study is reported "
+                f"under before processing. The one it has now ({pin.get('name')}) was set "
+                "automatically, not chosen by a person, so it must be confirmed or changed. "
+                "Every statistic, benchmark dose and the Methods text depend on it, so it "
+                "is never chosen for you.")
+        super().__init__(
+            f"PROCESS refused for {dtxsid}: no method profile has been chosen "
+            f"(method_profile.json is {how}). Pin one, then process.", status_code=409)
+
+
+class Refused(StepError):
+    """A safeguard's refusal that names its own catalog ``code``; ``details``
+    fills the plain words (``{sources}``, ``{keys}`` …) and is shown beside them."""
+
+    def __init__(self, code: str, message: str, status_code: int, details: dict | None = None):
+        super().__init__(message, status_code=status_code)
+        self.code = code
+        self.details = details or {}
+
+
+class StudyRefusal(Refused):
+    """R6: a data act refused on a session whose data is not its own
+    (``read_only_session``, ``report_has_no_data``)."""
+
+
+def error_body(exc: BaseException) -> tuple[dict, int]:
+    """(JSON body, HTTP status) for a refusal: the application's usual
+    ``{"error": message}`` with the explanation beside it (``code``, ``say``,
+    ``fix``, ``details``), so a client that reads only ``error`` keeps working."""
+    e = explain(exc)["error"]
+    return ({"error": e["message"], "code": e["code"], "say": e["say"], "fix": e["fix"],
+             "details": e["details"]}, e["status"])

@@ -18,8 +18,9 @@ deliberate, signed decision, with the case table and the oracle in the same
 commit.
 
 The legal-action table (`LEGAL_ACTIONS`, with `NEXT_STEP`) is NOT a port: since
-C1 it is the workflow's own declared table of acts, and every mutating step
-enforces it (`workflow.engine.require_legal`).
+C1 it is the workflow's own declared table of acts. It is derived state, read
+here; the safeguards enforce it before a guarded act runs
+(`safeguards.acts.require_legal`); the core steps do not.
 
 Fidelity notes vs. the JS:
   * `validationReport` presence uses `is None`, not Python truthiness — JS treats
@@ -54,8 +55,8 @@ class Phase(str, enum.Enum):
 
 class Action(str, enum.Enum):
     """The workflow's acts on a study's data, as the interface names them. Every
-    mutating step names the one it performs and refuses outside its phase
-    (workflow.engine.require_legal)."""
+    guarded act names the one it performs and is refused outside its phase
+    (safeguards.acts.require_legal)."""
 
     ADD_FILES = "ADD_FILES"                    # bring files into the study (step 1)
     REMOVE_FILE = "REMOVE_FILE"                # remove one file

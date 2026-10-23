@@ -21,6 +21,7 @@ from pathlib import Path
 
 from narrative import prompt_templates
 from narrative.prompt_templates import RenderedPrompt, TemplateError
+from narrative.test_article import abbreviation_of, naming_rule
 from pipeline import prompt_store
 from styling_export.llm_helpers import llm_generate_json_async
 
@@ -57,6 +58,7 @@ def summary_inputs(session_dir: Path) -> dict:
         "genomics_sections": {k: v for k, v in genomics.items() if isinstance(v, dict)},
         "chemical_name": methods.get("chemical_name") or identity.get("name")
                          or session_dir.name,
+        "abbreviation": abbreviation_of(identity),
         "dose_groups": methods.get("dose_groups") or [],
         "dose_unit": methods.get("dose_unit") or "mg/kg",
         "bmd_stat": (stat_order or [None])[0],
@@ -76,6 +78,7 @@ def template_variables(inputs: dict) -> dict:
     return {
         "draft_paragraphs": build_report_summary(**inputs),
         "chemical_name": inputs["chemical_name"],
+        "naming": naming_rule(inputs["chemical_name"], inputs.get("abbreviation") or ""),
         "species": species_plural(design),
         "strain": design.get("strain") or "",
         "route": design.get("route") or "",

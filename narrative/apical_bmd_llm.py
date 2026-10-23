@@ -29,6 +29,7 @@ import logging
 from common.paths import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL
+from narrative.test_article import naming_rule
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ async def generate_apical_bmd_narrative_async(
     study_duration: str | None = None,
     dose_groups: list[float] | None = None,
     design: dict | None = None,
+    abbreviation: str = "",
 ) -> dict:
     """
     LLM-generate a biology-grounded analytical paragraph for the Apical
@@ -105,6 +107,8 @@ async def generate_apical_bmd_narrative_async(
         design:             Study design facts (pipeline.study_design) for the
                             species, verb and duration; None ⇒ the standard
                             design.
+        abbreviation:       The study's recorded short form of the chemical
+                            ("" when none; narrative.test_article).
 
     Returns:
         {"paragraphs": [str, ...], "model_used": str}
@@ -130,10 +134,12 @@ async def generate_apical_bmd_narrative_async(
     # states.  The summary is deterministic — if neither changed (same
     # integration + NTP stats run, same design), reuse the cached paragraph.
     import orjson
+    keyed = {"summary": apical_bmd_summary, "study": study,
+             "compound": compound_name, "dose_unit": dose_unit}
+    if abbreviation:  # (absent from the key when none: earlier caches stay valid)
+        keyed["abbreviation"] = abbreviation
     cache_key = hashlib.md5(
-        orjson.dumps({"summary": apical_bmd_summary, "study": study,
-                      "compound": compound_name, "dose_unit": dose_unit},
-                     option=orjson.OPT_SORT_KEYS)
+        orjson.dumps(keyed, option=orjson.OPT_SORT_KEYS)
     ).hexdigest()[:16]
     cache_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"_cache_apical_narrative_{cache_key}.json"
 
@@ -203,7 +209,7 @@ async def generate_apical_bmd_narrative_async(
         dose_unit=dose_unit,
         findings_block=findings_block,
         **study,
-    )
+    ) + "\n\n" + naming_rule(compound_name, abbreviation)
 
     try:
         from styling_export.llm_endpoints import (

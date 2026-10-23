@@ -215,8 +215,8 @@ to the front-end alone.
 
 ### 4.1 The data phase and its legal actions (`workflow/phases.py`, `workflow/engine.py`)
 
-`WorkflowEngine(dtxsid).state()` returns `{phase, legal_actions, artifacts,
-completeness}` (also `GET /api/workflow/{id}/state`). The phase is
+`WorkflowEngine(dtxsid).state()` returns `{phase, legal_actions, next_step,
+artifacts, completeness}` (also `GET /api/workflow/{id}/state`). The phase is
 `derive_phase(artifacts)`; the first rule that matches wins:
 
 1. no files → **EMPTY**;
@@ -227,30 +227,40 @@ completeness}` (also `GET /api/workflow/{id}/state`). The phase is
 6. otherwise → **APPROVED**.
 
 Since C1 (2026-10-15) a stale section no longer moves the phase (staleness is a
-section matter: currency and the publish gate). Rule 4's "integrated from a
+section matter: currency and the publish gate, §4.4). Rule 4's "integrated from a
 different validation" is `workflow/integration_basis.py`: integration records the
 basis it was built from in `integration_basis.json` (step 5), and the state reads
 `integration: current | out_of_date | unrecorded`.
 
-**The legal actions are enforced** (C1): every step and route calls
-`workflow.engine.require_legal`, which refuses with `PhaseRefusal`
-(`phase_not_allowed`, 409, in the §4.2 envelope) naming the phase, what is
-allowed now and the next step. The table is `workflow.phases.LEGAL_ACTIONS`:
-
-| phase | legal actions |
-|---|---|
-| EMPTY | ADD_FILES |
-| UPLOADED | ADD_FILES, REMOVE_FILE, RESET, VALIDATE |
-| VALIDATION_ERRORS | the above + RESOLVE, CONFIRM_CLASSIFICATION |
-| VALIDATED | the above + INTEGRATE |
-| INTEGRATED | everything: + STATE_DATASET_FACTS, APPROVE, PROCESS |
-| APPROVED | everything |
+| phase | legal actions | next step |
+|---|---|---|
+| EMPTY | ADD_FILES | ADD_FILES |
+| UPLOADED | ADD_FILES, REMOVE_FILE, RESET, VALIDATE | VALIDATE |
+| VALIDATION_ERRORS | the above, RESOLVE, CONFIRM_CLASSIFICATION | VALIDATE |
+| VALIDATED | the above, INTEGRATE | INTEGRATE |
+| INTEGRATED, APPROVED | all, adding STATE_DATASET_FACTS, APPROVE, PROCESS | — |
 
 Process is legal from INTEGRATED on: the data approval informs and gates nothing
-(decision Q3). On a published book's companion or a report over several studies,
-every data act is refused first (`workflow.studies.require_data_session`, M1 R6:
-`read_only_session`, `report_has_no_data`), and the read model serves
-`legal_actions: []` for them.
+(decision Q3).
+
+**Enforcement is the safeguards' (ADR-0031, 2026-10-23).** The table is derived
+state in the core (`workflow.phases.LEGAL_ACTIONS`); refusing an act is the
+`safeguards` layer's. The interface's backend (`ui_api/`, the v2 routes) calls
+`safeguards.guarded` (the core steps' names and signatures), never
+`workflow.steps` directly. It refuses:
+- an act outside this table (`phase_not_allowed`, naming the phase, what is
+  allowed now and the next step);
+- Process until a person chose the method profile;
+- every data act on a published book's companion or a report over several
+  studies (R6, `safeguards.acts.require_data_session`: `read_only_session`,
+  `report_has_no_data`; the read model serves `legal_actions: []` for them);
+- a machine's write over a person's text, and a missing reason;
+- facts outside the vocabularies, and a Background without its sources;
+- shipping past the publish gate.
+
+Every refusal is explained by `safeguards.refusals.explain`; the interface's
+§4.2 envelope is that explanation with its `fix` (a workflow place) translated
+to the module that clears it (`ui_api.refusals`).
 
 `completeness`, from the validation coverage matrix, gives each platform's
 readiness and what it is missing. For example, an apical platform needs both

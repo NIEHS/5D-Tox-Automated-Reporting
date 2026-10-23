@@ -672,18 +672,6 @@ def chosen_by_person(pin: dict | None) -> bool:
     return bool(pin) and pin.get("pinned_by") not in (None, "default")
 
 
-def require_person_pin(dtxsid: str) -> dict:
-    """The study's pin when a person chose it; else refuse (MethodNotChosen,
-    409 ``method_not_chosen``): Process never runs under a method nobody chose.
-    Writes nothing."""
-    from workflow.errors import MethodNotChosen
-
-    pin = read_pin(dtxsid)
-    if not chosen_by_person(pin):
-        raise MethodNotChosen(dtxsid, pin)
-    return pin
-
-
 def suggest_profile(dtxsid: str, *, count_mismatches=None) -> dict:
     """The profile to propose to the person choosing a study's method (ADR-0027
     §3; C1 D1 = B): ``{"name", "why"}``. A read with no side effects (no pin

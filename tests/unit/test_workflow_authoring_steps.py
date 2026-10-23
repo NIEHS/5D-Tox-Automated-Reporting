@@ -7,14 +7,16 @@ tests pin that the lifted logic matches the route behavior:
   * accept_section_step  ↔ POST /api/session/approve (persistence half)
   * release_section_step ↔ POST /api/session/unapprove
 
-Mirrors tests/unit/test_workflow_steps.py's FakeStore discipline.
+Mirrors tests/unit/test_workflow_steps.py's FakeStore discipline. The steps
+are driven as a front end drives them, through the safeguards
+(safeguards.guarded: the reasons a person's act needs, C2 ownership).
 """
 
 import pytest
 
 from tests.unit.section_store_fake import FakeSectionStore as _SharedFake
 from workflow.errors import StepError
-from workflow.steps import (
+from safeguards.guarded import (
     accept_section_step,
     discard_section_step,
     release_section_step,
@@ -320,7 +322,8 @@ def test_discard_refuses_an_approved_section_and_needs_a_reason():
 def test_i3_every_version_the_trail_names_has_retrievable_text():
     # I3, over a sequence of every act: accept, release, machine write,
     # restore, discard, and the D2 knock-down.
-    from workflow.section_writes import REVIEW, write_section
+    from workflow.section_writes import REVIEW
+    from safeguards.guarded import write_section
     store = _three_versions()
     accept_section_step("DTX", "summary", store)
     release_section_step("DTX", "summary", store, reason="r1")

@@ -68,6 +68,7 @@ class ChemicalIdentity:
     """
     # Core identifiers
     name: str = ""                  # preferred/IUPAC name
+    abbreviation: str = ""          # the study's recorded short form (identity.json); never resolved
     casrn: str = ""                 # CAS Registry Number (e.g., "95-50-1")
     dtxsid: str = ""               # EPA CompTox substance ID (e.g., "DTXSID6020430")
     pubchem_cid: int = 0           # PubChem Compound ID (e.g., 7239)
@@ -109,6 +110,7 @@ class ChemicalIdentity:
         """
         return cls(
             name=d.get("name", ""),
+            abbreviation=d.get("abbreviation", "") or "",
             casrn=d.get("casrn", ""),
             dtxsid=d.get("dtxsid", ""),
             pubchem_cid=int(d.get("pubchem_cid", 0) or 0),

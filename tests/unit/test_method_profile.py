@@ -261,31 +261,31 @@ def test_pins_written_before_modes_keep_their_meaning():
 # C1 D1 = B: a person chooses the method; the core suggests, never applies
 # ---------------------------------------------------------------------------
 
-def test_require_person_pin_refuses_none_and_default(tmp_path, monkeypatch):
+def test_require_method_chosen_refuses_none_and_default(tmp_path, monkeypatch):
     import common.paths
-    from workflow.errors import MethodNotChosen
-    from workflow.refusals import explain
+    from safeguards.acts import require_method_chosen
+    from safeguards.refusals import MethodNotChosen, explain
 
     monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path)
     (tmp_path / "DTXSIDX").mkdir()
     with pytest.raises(MethodNotChosen) as ei:
-        mp.require_person_pin("DTXSIDX")
+        require_method_chosen("DTXSIDX")
     assert not (tmp_path / "DTXSIDX" / mp.PIN_FILE).exists()     # nothing written
     body = explain(ei.value)["error"]
-    assert (body["code"], body["status"], body["fix"]) == ("method_not_chosen", 409, "M5")
+    assert (body["code"], body["status"], body["fix"]) == ("method_not_chosen", 409, "method_and_document")
     assert body["details"] == {"pin": None}
     assert "absent" in body["message"]
 
     mp.pin_profile("DTXSIDX", "newest", by="default")
     with pytest.raises(MethodNotChosen) as ei:
-        mp.require_person_pin("DTXSIDX")
+        require_method_chosen("DTXSIDX")
     body = explain(ei.value)["error"]
     assert "pinned by default" in body["message"]
     assert body["details"]["pin"]["pinned_by"] == "default"
     assert "set automatically" in body["say"]
 
     mp.pin_profile("DTXSIDX", "ntp-5day-2021", by="user")
-    assert mp.require_person_pin("DTXSIDX")["name"] == "ntp-5day-2021"
+    assert require_method_chosen("DTXSIDX")["name"] == "ntp-5day-2021"
 
 
 def test_suggest_profile_is_a_pure_read(tmp_path, monkeypatch):

@@ -103,16 +103,17 @@ async def test_process_step_tolerates_empty_params(
 async def test_process_step_is_refused_409_when_not_integrated(
     sessions_dir,
 ):
-    """A study that is not integrated is refused by the phase guard (C1,
-    phase_not_allowed) before anything is written: no pin, no definition, no
+    """A study that is not integrated is refused by the safeguards' phase
+    guard (C1, phase_not_allowed) before anything is written: no pin, no definition, no
     rescanned fingerprints."""
-    from workflow.errors import PhaseRefusal
+    from safeguards.refusals import PhaseRefusal
 
     session = sessions_dir / DTXSID
     (session / "files").mkdir(parents=True, exist_ok=True)
     (session / "files" / "bw.csv").write_text("x")
+    import safeguards.guarded as guarded
     with pytest.raises(PhaseRefusal) as exc:
-        await process_step(DTXSID, {}, DiskPoolStore())
+        await guarded.process_step(DTXSID, {}, DiskPoolStore())
     assert exc.value.status_code == 409
     assert exc.value.details["phase"] == "UPLOADED"
     for name in ("method_profile.json", "document_definition.json",

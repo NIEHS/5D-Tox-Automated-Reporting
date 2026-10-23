@@ -12,6 +12,11 @@ another definition and states only how it differs:
     book_meta: {...}                  # deep-merged over the base's
     phrasing: {...}                   # the generated prose's wording, deep-merged
                                       # likewise (document_model.phrasing)
+    foreword: [...]                   # the series' Foreword, replacing the base's
+    organ_descriptions: {organ: text} # the organ-weight appendix's texts, merged
+    organ_description_order: [...]    # the order it describes organs in
+    dose_terms: {route: {...}}        # the words headings name the dose by, per
+                                      # route (${dose_term}), deep-merged
     changes:                          # applied in order
       - set: appendix-d               # replace fields on a node (null removes one)
         title: New title
@@ -28,8 +33,9 @@ authored one.  An unknown id, a cycle or an unknown key fails loudly.
 The levels (ADR-0029): ``niehs-5day-report`` is the shared base grammar;
 ``eras/<era>`` reproduce the published report generations; a published
 study's ``studies/<DTXSID>/document`` extends its era.  A new study — one with
-no definition of its own — is written to the latest generation's
-(DEFAULT_DEFINITION, the 2026 books).
+no definition of its own — is written to the proposed standard
+(DEFAULT_DEFINITION: the 2026 books plus the sections proposed beyond them,
+eras/niehs-proposed).
 
 Import graph: document_template and this module import each other lazily
 (inside functions), so neither import-time order matters.
@@ -46,7 +52,9 @@ from common.dtxsid import validate_dtxsid
 
 PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
-                              "phrasing", "tissue_order", "abstract_genes", "changes"})
+                              "phrasing", "tissue_order", "abstract_genes", "foreword",
+                              "dose_terms", "organ_descriptions", "organ_description_order",
+                              "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -73,8 +81,8 @@ def is_extension(raw) -> bool:
 def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
     """The raw template mapping for `name` with every ``extends`` resolved: the
     base's mapping (all its sibling blocks), its ``document`` altered by
-    ``changes``, ``book_meta`` and ``phrasing`` deep-merged and ``packaging`` /
-    ``tissue_order`` overridden.  A full
+    ``changes``, ``book_meta``, ``phrasing`` and ``dose_terms`` deep-merged and
+    ``packaging`` / ``tissue_order`` / ``foreword`` overridden.  A full
     template comes back as read."""
     if name in _seen:
         raise ValueError(f"definition {name!r}: extends cycle {' -> '.join((*_seen, name))}")
@@ -97,12 +105,21 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["tissue_order"] = raw["tissue_order"]
     if "abstract_genes" in raw:
         out["abstract_genes"] = raw["abstract_genes"]
+    if "foreword" in raw:
+        out["foreword"] = raw["foreword"]
+    if "organ_description_order" in raw:
+        out["organ_description_order"] = raw["organ_description_order"]
+    if raw.get("organ_descriptions"):
+        out["organ_descriptions"] = {**(out.get("organ_descriptions") or {}),
+                                     **raw["organ_descriptions"]}
     if raw.get("object_position"):
         out["object_position"] = {**(out.get("object_position") or {}), **raw["object_position"]}
     if raw.get("book_meta"):
         out["book_meta"] = _deep_merge(out.get("book_meta") or {}, raw["book_meta"])
     if raw.get("phrasing"):
         out["phrasing"] = _deep_merge(out.get("phrasing") or {}, raw["phrasing"])
+    if raw.get("dose_terms"):
+        out["dose_terms"] = _deep_merge(out.get("dose_terms") or {}, raw["dose_terms"])
     for i, change in enumerate(raw.get("changes") or []):
         try:
             apply_change(out["document"], change)
@@ -205,9 +222,10 @@ def apply_change(document: list, change: dict) -> None:
 # A study's definition
 # ---------------------------------------------------------------------------
 
-# The definition of a study with none of its own: the latest published
-# generation (NIEHS-12, 13, April 2026).
-DEFAULT_DEFINITION = "eras/niehs-2026"
+# The definition of a study with none of its own: the proposed standard — the
+# latest published generation (NIEHS-12, 13, April 2026) plus the sections
+# proposed beyond it (the user's decision, 2026-10-21).
+DEFAULT_DEFINITION = "eras/niehs-proposed"
 
 
 def study_definition_name(dtxsid: str) -> str | None:
@@ -216,9 +234,33 @@ def study_definition_name(dtxsid: str) -> str | None:
     return name if (_templates_dir() / f"{name}.yaml").exists() else None
 
 
+def report_of_member(dtxsid: str) -> str | None:
+    """The report session whose ``studies.json`` lists this session as one of
+    its studies (rendering.report_compose: NIEHS-12/13's ``<id>_rat`` /
+    ``<id>_mouse``); None for a session no report composes."""
+    import json
+    from common.paths import SESSIONS_DIR
+    for path in sorted(SESSIONS_DIR.glob("*/studies.json")):
+        try:
+            stated = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(stated, dict) and dtxsid in stated.values():
+            return path.parent.name
+    return None
+
+
 def current_definition_name(dtxsid: str) -> str:
-    """The definition the files give a study: its own, else DEFAULT_DEFINITION."""
-    return study_definition_name(dtxsid) or DEFAULT_DEFINITION
+    """The definition the files give a study: its own; else, for a study a
+    report composes, its report's (a member's data is written for it, and
+    alone it renders as that report's part); else DEFAULT_DEFINITION."""
+    own = study_definition_name(dtxsid)
+    if own:
+        return own
+    report = report_of_member(dtxsid)
+    if report and report != dtxsid:
+        return study_definition_name(report) or DEFAULT_DEFINITION
+    return DEFAULT_DEFINITION
 
 
 def definition_name(dtxsid: str) -> str:

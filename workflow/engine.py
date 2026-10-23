@@ -74,12 +74,15 @@ class WorkflowState:
                       / debugging; a UI may ignore them)
     completeness    — per-platform readiness from the coverage matrix ({} until
                       validation has produced a coverage matrix)
+    next_step       — the act that moves the phase forward (None once
+                      integrated: everything is legal there)
     """
 
     phase: Phase
     legal_actions: frozenset[Action]
     artifacts: dict = field(default_factory=dict)
     completeness: dict = field(default_factory=dict)
+    next_step: Action | None = None
 
     def to_dict(self) -> dict:
         """JSON-serializable form for the wire (enums → their string values)."""
@@ -88,6 +91,7 @@ class WorkflowState:
             "legal_actions": sorted(a.value for a in self.legal_actions),
             "artifacts": self.artifacts,
             "completeness": self.completeness,
+            "next_step": self.next_step.value if self.next_step else None,
         }
 
 
@@ -163,27 +167,8 @@ class WorkflowEngine:
             legal_actions=LEGAL_ACTIONS.get(phase, frozenset()),
             artifacts={k: v for k, v in artifacts.items() if k != "validationReport"},
             completeness=completeness,
+            next_step=NEXT_STEP.get(phase),
         )
-
-    # -- the guard (ADR-0014: every mutating step checks legality first) ---
-
-    def require(self, action) -> WorkflowState:
-        """Derive the state and refuse `action` when the phase does not allow it
-        (PhaseRefusal, 409 ``phase_not_allowed``). Returns the state, so the
-        caller does not derive it twice. Every mutating step calls this before
-        it reads or writes anything else; C5's run lock will refuse here too."""
-        from workflow.errors import PhaseRefusal
-
-        action = Action(action)
-        st = self.state()
-        if action not in st.legal_actions:
-            nxt = NEXT_STEP.get(st.phase)
-            raise PhaseRefusal(
-                self.dtxsid, action.value, st.phase.value,
-                [a.value for a in st.legal_actions],
-                integration=st.artifacts.get("integration"),
-                next_action=nxt.value if nxt else None)
-        return st
 
     # -- derived section readiness ----------------------------------------
 
@@ -237,9 +222,3 @@ class WorkflowEngine:
             reason = regen.get("reason") if isinstance(regen, dict) else "stale"
             blocking.append({"section_key": key, "reason": reason})
         return {"can_publish": not blocking, "blocking": blocking}
-
-
-def require_legal(dtxsid: str, action, store: PoolStore | None = None) -> WorkflowState:
-    """``WorkflowEngine(dtxsid, store).require(action)``: the one guard every
-    mutating entry point calls (route, command line, notebook, script)."""
-    return WorkflowEngine(dtxsid, store).require(action)

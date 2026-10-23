@@ -123,9 +123,9 @@ def test_out_of_date_reads_validated_and_unrecorded_counts_as_current():
 
 def test_the_refusal_at_an_out_of_date_integration_says_integrate_again():
     import pytest
-    from workflow.engine import require_legal
-    from workflow.errors import PhaseRefusal
-    from workflow.refusals import explain
+    from safeguards.acts import require_legal
+    from safeguards.refusals import PhaseRefusal
+    from safeguards.refusals import explain
 
     store = Store(docs={"validation_report.json": _report(),
                         BASIS_FILE: {"basis": "0" * 16}})
@@ -137,5 +137,5 @@ def test_the_refusal_at_an_out_of_date_integration_says_integrate_again():
     assert body["say"] == (
         "Processing isn't possible yet. The study's dataset was combined from an earlier "
         "file check that no longer matches its files. Integrate the study again first.")
-    assert body["fix"] == "M3"
+    assert body["fix"] == "dataset"
     assert body["details"]["integration"] == "out_of_date"

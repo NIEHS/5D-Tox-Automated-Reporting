@@ -1,23 +1,26 @@
 """
 C1: legal actions are enforced (docs/ui-redesign/modules/c1/spec.md).
 
-Every mutating step derives the study's phase first and refuses an act its
-phase does not allow (`workflow.engine.require_legal` → `PhaseRefusal`, 409
-``phase_not_allowed``), before it reads or writes anything else. These tests
-pin the guard with an in-memory store: the refusal's fields per phase, its
-plain words through the error envelope (workflow.refusals), and, over the
-inventory of every mutating entry point (spec §2.2), that each one refuses out
-of phase and writes nothing.
+Every guarded act (safeguards.guarded) derives the study's phase first and
+refuses an act its phase does not allow (`safeguards.acts.require_legal` →
+`PhaseRefusal`, 409 ``phase_not_allowed``), before it reads or writes anything
+else. These tests pin the guard with an in-memory store: the refusal's fields
+per phase, its plain words through the error envelope (safeguards.refusals),
+and, over the inventory of every mutating entry point (spec §2.2), that each
+guarded one refuses out of phase and writes nothing — while the core step the
+notebook calls does not refuse (the workflow without the guarding).
 """
 
 from __future__ import annotations
 
 import pytest
 
-from workflow.engine import WorkflowEngine, require_legal
-from workflow.errors import PhaseRefusal, StepError
+from safeguards.acts import require_legal
+from workflow.engine import WorkflowEngine
+from safeguards.refusals import PhaseRefusal
+from workflow.errors import StepError
 from workflow.phases import LEGAL_ACTIONS, Action, Phase
-from workflow.refusals import explain
+from safeguards.refusals import explain
 
 
 class PhaseStore:
@@ -101,7 +104,7 @@ def test_require_refuses_exactly_what_the_table_refuses(phase, action):
 
 
 def test_require_returns_the_state_it_derived():
-    st = WorkflowEngine("DTX", PhaseStore("APPROVED")).require(Action.PROCESS)
+    st = require_legal("DTX", Action.PROCESS, PhaseStore("APPROVED"))
     assert st.phase is Phase.APPROVED
     assert Action.PROCESS in st.legal_actions
 
@@ -126,19 +129,19 @@ def test_the_refusal_names_the_phase_the_legal_acts_and_the_next_step():
 _SAYS = [
     ("EMPTY", "VALIDATE",
      "Checking the files isn't possible yet. This study has no data files yet. Add the "
-     "study's files first.", "M2"),
-    ("EMPTY", "RESET", "This study has no files to remove.", "M2"),
-    ("EMPTY", "REMOVE_FILE", "This study has no files to remove.", "M2"),
+     "study's files first.", "files"),
+    ("EMPTY", "RESET", "This study has no files to remove.", "files"),
+    ("EMPTY", "REMOVE_FILE", "This study has no files to remove.", "files"),
     ("UPLOADED", "INTEGRATE",
      "Combining the files into one dataset isn't possible yet. The study's files have "
      "changed since they were last checked, or were never checked. Run the file check "
-     "first.", "M2"),
+     "first.", "files"),
     ("VALIDATION_ERRORS", "PROCESS",
      "Processing isn't possible yet. The file check found errors. Fix what it lists "
-     "(remove or replace the files it names), then run the file check again.", "M2"),
+     "(remove or replace the files it names), then run the file check again.", "files"),
     ("VALIDATED", "APPROVE",
      "Approving the data isn't possible yet. The study's files have been checked but not "
-     "yet combined into one dataset. Integrate the study first.", "M3"),
+     "yet combined into one dataset. Integrate the study first.", "dataset"),
 ]
 
 
@@ -208,35 +211,35 @@ def _disk():
 _ENTRY_POINTS = [
     # (name, phase where it is refused, call(dtxsid))
     ("remove_pool_file", "EMPTY",
-     lambda d: __import__("pipeline.pool_state", fromlist=["x"]).remove_pool_file(d, "bw.csv")),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).remove_pool_file(d, "bw.csv")),
     ("validate_step", "EMPTY",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).validate_step(d, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).validate_step(d, _disk())),
     ("resolve_step", "UPLOADED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).resolve_step(d, 0, "fid", _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).resolve_step(d, 0, "fid", _disk())),
     ("confirm_metadata_step", "UPLOADED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).confirm_metadata_step(d, {}, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).confirm_metadata_step(d, {}, _disk())),
     ("integrate_step", "VALIDATION_ERRORS",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).integrate_step(d, None, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).integrate_step(d, None, _disk())),
     ("approve_experiment_metadata", "VALIDATED",
-     lambda d: __import__("pipeline.metadata_approval", fromlist=["x"])
+     lambda d: __import__("safeguards.guarded", fromlist=["x"])
      .approve_experiment_metadata(d, {"x": {"organ": "liver"}})),
-    ("apply_design", "VALIDATED",
-     lambda d: __import__("tooling.generate_report", fromlist=["x"])
-     .apply_design(d, {"species": "rat"}, _disk())),
+    ("state_dataset_facts", "VALIDATED",
+     lambda d: __import__("safeguards.guarded", fromlist=["x"])
+     .require_state_dataset_facts(d, _disk())),
     ("generate_animal_report_step", "VALIDATED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).generate_animal_report_step(d, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).generate_animal_report_step(d, _disk())),
     ("run_process", "VALIDATED",
-     lambda d: __import__("pipeline.process_integrated", fromlist=["x"]).run_process(d, {}, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).run_process(d, {}, _disk())),
     ("run_document", "VALIDATED",
-     lambda d: __import__("pipeline.process_integrated", fromlist=["x"]).run_document(d, {}, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).run_document(d, {}, _disk())),
     ("process_step", "UPLOADED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).process_step(d, {}, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).process_step(d, {}, _disk())),
     ("document_step", "UPLOADED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).document_step(d, {}, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).document_step(d, {}, _disk())),
     ("materialize_result_sections", "VALIDATED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).materialize_result_sections(d, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).materialize_result_sections(d, _disk())),
     ("materialize_summary", "VALIDATED",
-     lambda d: __import__("workflow.steps", fromlist=["x"]).materialize_summary(d, _disk())),
+     lambda d: __import__("safeguards.guarded", fromlist=["x"]).materialize_summary(d, _disk())),
 ]
 
 
@@ -277,3 +280,20 @@ def test_a_stale_section_is_no_dead_end(sessions_dir):
     st = WorkflowEngine("DTXSID_LEGAL", DiskPoolStore()).state()
     assert st.artifacts["hasStale"] is True
     assert st.phase is Phase.VALIDATED and Action.INTEGRATE in st.legal_actions
+
+
+# The core steps (what the notebook calls) do not refuse an act out of phase:
+# the guarding is the safeguards' (ADR-0031). Validating an un-checked study
+# from the core simply runs.
+def test_the_core_step_is_not_guarded(sessions_dir, monkeypatch):
+    from workflow import steps
+    d = _seed(sessions_dir, "VALIDATED")
+    called = []
+    monkeypatch.setattr(steps, "validate_pool", lambda *a, **k: called.append(a) or {
+        "issues": [], "coverage_matrix": {}, "file_count": 1}, raising=False)
+    try:
+        steps.generate_animal_report_step(d.name, _disk())
+    except PhaseRefusal:  # pragma: no cover - the failure this test exists for
+        raise AssertionError("the core step refused: the guard belongs to the safeguards")
+    except Exception:
+        pass  # anything else (no data to account for) is the step's own business

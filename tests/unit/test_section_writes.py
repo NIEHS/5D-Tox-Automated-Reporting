@@ -1,7 +1,9 @@
 """
 The section write gate, workflow.section_writes (C2 spec §3), rule by rule,
-with an in-memory store (no disk). Acceptance criteria I1 (the gate itself),
-I2, I4, I6 and the T10 key check.
+with an in-memory store (no disk), under the C2 write policy the front ends
+use (safeguards.sections.ownership_policy). Acceptance criteria I1 (the gate
+itself), I2, I4, I6 and the T10 key check. Without a policy (the notebook's
+core) every write is made, the prior archived: the last test.
 """
 
 import pytest
@@ -9,7 +11,8 @@ import pytest
 from tests.unit.section_store_fake import FakeSectionStore
 from workflow import section_writes as sw
 from workflow.ownership import content_hash
-from workflow.refusals import explain
+from safeguards.refusals import explain
+from safeguards.sections import ownership_policy
 
 ID = "DTXSID_GATE"
 
@@ -18,6 +21,7 @@ def _w(store, key="summary", content=None, **kw):
     kw.setdefault("act", "summary")
     kw.setdefault("actor", "system")
     kw.setdefault("author", "generated")
+    kw.setdefault("policy", ownership_policy)
     return sw.write_section(ID, key, content or {"paragraphs": ["new"], "source": "generated"},
                             store, **kw)
 
@@ -106,7 +110,7 @@ def test_a_person_s_write_over_owned_content_is_refused():
                                 "text. Release it first, with a reason.")
     assert store.writes == [] and store.events == {}
     body = explain(ei.value)["error"]
-    assert body["code"] == "section_owned" and body["fix"] == "D1"
+    assert body["code"] == "section_owned" and body["fix"] == "sections"
 
 
 def test_a_person_s_explicit_act_replaces_a_released_section():
@@ -171,7 +175,8 @@ def test_an_approved_apical_section_whose_numbers_changed_is_knocked_down_with_a
                            {"title": "Body Weight", "tables_json": {"rows": [2]},
                             "source": "generated", "approved": False},
                            store, act="materialize", actor="system", author="generated",
-                           on_owned=sw.REVIEW, review={"why": "numbers_changed", "flips": []})
+                           on_owned=sw.REVIEW, review={"why": "numbers_changed", "flips": []},
+                           policy=ownership_policy)
     assert out["outcome"] == "needs_review" and out["version"] == 4
     now = store.sections["bm2_body-weight"]
     assert now["approved"] is False and "approved_at" not in now
@@ -221,3 +226,16 @@ def test_history_of_a_section_that_never_existed_is_not_found():
     with pytest.raises(sw.SectionRefusal) as ei:
         sw.section_history(ID, "summary", FakeSectionStore())
     assert ei.value.code == "section_not_found"
+
+
+# --- no policy: the core the notebook drives ---------------------------------
+
+def test_without_a_policy_a_write_over_owned_content_is_made_and_the_prior_kept():
+    prior = {"paragraphs": ["a person's"], "source": "person", "approved": True, "version": 2}
+    store = FakeSectionStore({"summary": prior})
+    out = _w(store, policy=None)
+    assert out["outcome"] == "written" and out["version"] == 3
+    assert store.sections["summary"]["paragraphs"] == ["new"]
+    # Nothing is lost: the person's version is archived before the write.
+    assert any(c.get("paragraphs") == ["a person's"] for _, c in store.list_archived(ID, "summary"))
+
