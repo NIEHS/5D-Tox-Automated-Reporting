@@ -13,8 +13,9 @@ the browser and the command line explain it the same way:
                "say": "The study's files haven't been checked yet. …",
                "fix": "files", "details": {}}}
 
-* ``code`` comes from the closed list ``REFUSALS``; a refusal the list does not
-  know is ``unexpected``, never a guess at a nearer one.
+* ``code`` comes from the closed list ``REFUSALS`` (a front end adds its own
+  codes with ``register``); a refusal the list does not know is
+  ``unexpected``, never a guess at a nearer one.
 * ``message`` is the backend's own text, verbatim. ``say`` is written here,
   next to the code.
 * ``fix`` names the place in the workflow where the cause is cleared
@@ -246,6 +247,20 @@ REFUSALS: dict[str, Refusal] = {
         "The application hit an error it has no explanation for. Tell the "
         "maintainer, with the details below."), None),
 }
+
+
+def register(codes: dict[str, Refusal]) -> None:
+    """Add a front end's own refusal codes to ``REFUSALS`` (the new
+    interface's study acts, say), so ``explain`` takes them at their word.
+    A code already listed is never redefined, and a ``fix`` must be one of
+    ``PLACES`` (or None): ValueError otherwise, and nothing is added.
+    Registering the same definition again is a no-op."""
+    for code, refusal in codes.items():
+        if code in REFUSALS and REFUSALS[code] != refusal:
+            raise ValueError(f"refusal code {code!r} is already defined")
+        if refusal.fix is not None and refusal.fix not in PLACES:
+            raise ValueError(f"refusal code {code!r}: fix {refusal.fix!r} is not a place")
+    REFUSALS.update(codes)
 
 
 # (exception class name, message pattern, code), first match wins. Class names,

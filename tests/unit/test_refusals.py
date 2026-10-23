@@ -188,3 +188,22 @@ def test_a_section_refusal_names_its_code_and_details():
     assert body["code"] == "section_not_found" and body["status"] == 404
     assert body["message"] == "No 'bm2_x' section to reopen"
     assert "“bm2_x”" in body["say"] and "nothing to reopen" in body["say"]
+
+
+# --- a front end's own codes (register) ------------------------------------------
+
+def test_a_registered_code_is_explained_and_a_clash_refused(monkeypatch):
+    from safeguards import refusals as r
+    from safeguards.refusals import Refusal, Refused, explain, register
+    monkeypatch.setattr(r, "REFUSALS", dict(r.REFUSALS))
+    mine = Refusal(409, "A study of this chemical already exists ({id}).", "study")
+    register({"study_exists_x": mine})
+    register({"study_exists_x": mine})                       # the same again: fine
+    body = explain(Refused("study_exists_x", "exists", 409, {"id": "DTX1"}))["error"]
+    assert (body["code"], body["fix"], body["say"]) == (
+        "study_exists_x", "study", "A study of this chemical already exists (DTX1).")
+    with pytest.raises(ValueError, match="already defined"):
+        register({"section_owned": mine})
+    with pytest.raises(ValueError, match="not a place"):
+        register({"other_x": Refusal(400, "x", "M1")})
+    assert "other_x" not in r.REFUSALS
