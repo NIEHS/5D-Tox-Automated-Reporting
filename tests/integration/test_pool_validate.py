@@ -144,9 +144,10 @@ class TestPoolValidate:
         assert "fingerprints" in persisted
         assert "issues" in persisted
 
-    def test_no_files_returns_404(self, sessions_dir):
+    def test_no_files_returns_409(self, sessions_dir):
         """
-        Validating a session with no files/ directory returns 404.
+        Validating a session with no files/ directory is refused by the phase
+        guard (C1: EMPTY allows only adding files), 409 instead of 404.
         """
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
@@ -156,4 +157,5 @@ class TestPoolValidate:
 
         client = TestClient(app)
         resp = client.post("/api/pool/validate/DTXSID_EMPTY")
-        assert resp.status_code == 404
+        assert resp.status_code == 409
+        assert "VALIDATE refused for DTXSID_EMPTY" in resp.json()["error"]

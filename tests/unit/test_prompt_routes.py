@@ -63,7 +63,8 @@ def test_run_use_and_generate_summary(api, sessions_dir):
     runs = api.get(f"/api/prompts/summary/runs/{_DTXSID}").json()["runs"]
     assert [r["run_id"] for r in runs] == [run["run_id"]]
 
-    assert api.post(f"/api/prompts/summary/runs/{_DTXSID}/{run['run_id']}/use").json() == {"ok": True}
+    used = api.post(f"/api/prompts/summary/runs/{_DTXSID}/{run['run_id']}/use").json()
+    assert used["ok"] is True and used["version"] == 1
     saved = json.loads((sessions_dir / _DTXSID / "summary.json").read_text())
     assert saved["source"] == "model" and saved["run_id"] == run["run_id"]
     assert saved["approved"] is False and saved["paragraphs"] == run["paragraphs"]

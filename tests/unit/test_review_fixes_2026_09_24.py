@@ -38,7 +38,12 @@ def test_accept_clears_wording_review_marker(sessions_dir):
 
 
 def test_approve_route_strips_wording_review(client, sessions_dir):
-    (sessions_dir / "DTXSID_WR2").mkdir()
+    # The approve route is fenced (C2 D5): it accepts the file as it is on disk,
+    # so the marker it clears is the file's.
+    d = sessions_dir / "DTXSID_WR2"
+    d.mkdir()
+    (d / "background.json").write_text(json.dumps(
+        {"paragraphs": ["p"], "references": [], "wording_review": ["x"], "version": 1}))
     resp = client.post("/api/session/approve", json={
         "dtxsid": "DTXSID_WR2", "section_type": "background",
         "data": {"paragraphs": ["p"], "references": [], "wording_review": ["x"]},

@@ -52,8 +52,10 @@ from web_routes.dtxsid_param import Dtxsid
 router = APIRouter()
 from workflow.engine import WorkflowEngine
 from workflow.errors import StepError
+from web_routes.refusal_response import refusal_response
 from workflow.store import DiskPoolStore
-from workflow.steps import (
+# The acts a person asks for, through the safeguards (R6, the phase, C2).
+from safeguards.guarded import (
     confirm_metadata_step,
     integrate_step,
     materialize_result_sections,
@@ -69,9 +71,9 @@ logger = logging.getLogger(__name__)
 
 
 def _step_error_response(exc: StepError) -> JSONResponse:
-    """Translate an HTTP-free StepError into the JSON error response the UI
-    expects (same {'error': msg} shape + status the pre-unwrap handlers used)."""
-    return JSONResponse({"error": exc.message}, status_code=exc.status_code)
+    """A step's refusal: the {'error': msg} shape the UI expects, with its
+    explanation beside it (web_routes.refusal_response)."""
+    return refusal_response(exc)
 
 
 # ---------------------------------------------------------------------------

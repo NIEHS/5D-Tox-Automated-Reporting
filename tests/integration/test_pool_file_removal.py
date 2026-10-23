@@ -79,3 +79,50 @@ def test_reset_clears_derived_state_keeps_identity_and_views(client, sessions_di
         assert not (d / gone).exists(), gone
     assert (d / "identity.json").exists()
     assert (d / "views" / "default.yaml").exists()
+
+
+def test_remove_and_reset_are_refused_on_a_study_with_no_files(client, sessions_dir):
+    (sessions_dir / "DTXSID_NOFILES").mkdir()
+    r = client.delete("/api/pool/DTXSID_NOFILES/files/x.csv")
+    assert r.status_code == 409 and "REMOVE_FILE refused" in r.json()["error"]
+    r = client.post("/api/pool/reset/DTXSID_NOFILES")
+    assert r.status_code == 409 and "RESET refused" in r.json()["error"]
+
+
+def test_reset_deletes_the_integration_basis(client, sessions_dir):
+    d = _seed(sessions_dir)
+    (d / "integration_basis.json").write_text('{"basis": "x"}')
+    assert client.post(f"/api/pool/reset/{DTX}").status_code == 200
+    assert not (d / "integration_basis.json").exists()
+
+
+def test_a_guard_refusal_reaches_a_client_explained(sessions_dir):
+    """The refusal a guarded act raises reaches a web client in the app's
+    {"error": message} body with its explanation beside it (code, say, fix:
+    web_routes.refusal_response)."""
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+    from safeguards.guarded import validate_step
+    from web_routes.refusal_response import refusal_response
+    from workflow.errors import StepError
+    from workflow.store import DiskPoolStore
+
+    router = APIRouter()
+
+    @router.post("/t/{dtxsid}")
+    def validate(dtxsid: str):
+        try:
+            return validate_step(dtxsid, DiskPoolStore())
+        except StepError as e:
+            return refusal_response(e)
+
+    app = FastAPI()
+    app.include_router(router)
+    (sessions_dir / "DTXSID_NOFILES").mkdir()
+    r = TestClient(app).post("/t/DTXSID_NOFILES")
+    assert r.status_code == 409
+    body = r.json()
+    assert body["error"].startswith("VALIDATE refused for DTXSID_NOFILES")
+    assert (body["code"], body["fix"]) == ("phase_not_allowed", "files")
+    assert body["say"] == ("Checking the files isn't possible yet. This study has no data "
+                           "files yet. Add the study's files first.")

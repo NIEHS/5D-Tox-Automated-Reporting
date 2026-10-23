@@ -213,21 +213,34 @@ async def api_prompt_runs(section: str, dtxsid: Dtxsid):
 @router.post("/api/prompts/{section}/runs/{dtxsid}/{run_id}/use")
 @_guard
 async def api_prompt_use_run(section: str, dtxsid: Dtxsid, run_id: str):
-    """Save a run's text as the section — a new, unapproved version of it."""
-    from pipeline.session_store import save_section
+    """Save a run's text as the section — a new, unapproved version of it —
+    through the section write gate under the C2 policy (safeguards.guarded):
+    the prior text is archived and the act recorded. A section a person
+    approved is never replaced (C2 D6): 409 ``section_owned``; release it
+    first, with a reason."""
+    from safeguards.guarded import write_section
+    from web_routes.refusal_response import refusal_response
+    from workflow.errors import StepError
+    from workflow.store import DiskPoolStore
     _section(section)
     run = prompt_store.load_run(dtxsid, section, run_id)
     if run is None:
         return _err("no such run", 404)
-    save_section(dtxsid, section, {
-        "paragraphs": run.get("paragraphs") or [],
-        "source": "model",
-        "approved": False,
-        "run_id": run["run_id"],
-        "template_version": run.get("template_version"),
-        "model_used": (run.get("prompt") or {}).get("model", ""),
-    })
-    return JSONResponse({"ok": True})
+    model = (run.get("prompt") or {}).get("model", "")
+    try:
+        out = write_section(dtxsid, section, {
+            "paragraphs": run.get("paragraphs") or [],
+            "source": "model",
+            "approved": False,
+            "run_id": run["run_id"],
+            "template_version": run.get("template_version"),
+            "model_used": model,
+        }, DiskPoolStore(), act="use_run", actor="person", author="model",
+            extra_event={"run_id": run["run_id"], "model": model,
+                         "template_version": run.get("template_version")})
+    except StepError as e:
+        return refusal_response(e)
+    return JSONResponse({"ok": True, "version": out["version"]})
 
 
 @router.get("/api/prompts/{section}/studies")

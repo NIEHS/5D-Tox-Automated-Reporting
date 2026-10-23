@@ -27,7 +27,7 @@
       "output": "UPLOADED"
     },
     {
-      "name": "stale_regresses_to_uploaded_over_everything",
+      "name": "stale_section_leaves_approved_alone",
       "input": {
         "hasFiles": true,
         "hasStale": true,
@@ -38,10 +38,10 @@
         "hasIntegrated": true,
         "hasAnimalReport": true
       },
-      "output": "UPLOADED"
+      "output": "APPROVED"
     },
     {
-      "name": "stale_beats_validation_errors",
+      "name": "stale_section_leaves_validation_errors_alone",
       "input": {
         "hasFiles": true,
         "hasStale": true,
@@ -56,7 +56,7 @@
         "hasIntegrated": false,
         "hasAnimalReport": false
       },
-      "output": "UPLOADED"
+      "output": "VALIDATION_ERRORS"
     },
     {
       "name": "validation_errors",

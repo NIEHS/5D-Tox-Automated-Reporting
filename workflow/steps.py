@@ -25,6 +25,8 @@ mock patches `workflow.steps.integrate_pool` (see the route rewire + conftest).
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,42 +54,43 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @step_provenance
-def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
+def materialize_summary(dtxsid: str, store: PoolStore, *, policy=None) -> dict:
     """Write the report's Summary section (summary.json) from the session's
     results — narrative.report_summary, deterministic, the same inputs as the
     Abstract — as a provisional draft (approved=False, source="generated").
 
-    Never overwrites a Summary a person approved or wrote (or one the LLM route
-    saved): only an absent or previously generated, unapproved summary.json is
-    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``."""
-    import json
+    Through the section write gate (workflow.section_writes) as a system
+    write: unchanged text writes nothing; under the C2 ``policy``
+    (safeguards.sections.ownership_policy) text a person owns (approved,
+    released with PROTECTED, edited) is never replaced — the new text is HELD
+    and a `hold` event records that Process had a new Summary it did not apply.
+    Its own extra rule stands: it replaces only its own earlier output
+    (``source == "generated"``), never one the LLM route or a person saved.
 
+    Returns ``{ok, written: bool, paragraphs: int, held?: {why, version}}``."""
     from narrative.report_summary import build_report_summary
     from narrative.summary_llm import summary_inputs
-    from pipeline.session_store import save_section
+    from workflow import section_writes
 
-    sdir = store.session_dir(dtxsid)
-    prior_path = sdir / "summary.json"
-    if prior_path.exists():
-        try:
-            prior = json.loads(prior_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            prior = {}
-        if prior.get("approved") or prior.get("source") != "generated":
-            return {"ok": True, "written": False, "paragraphs": 0}
+    prior = section_writes.read_prior(dtxsid, "summary", store)
+    if prior is not None and prior.get("source") != "generated":
+        return {"ok": True, "written": False, "paragraphs": 0,
+                "held": {"why": "not_generated_here", "version": prior.get("version")}}
 
-    paragraphs = build_report_summary(**summary_inputs(sdir))
+    paragraphs = build_report_summary(**summary_inputs(store.session_dir(dtxsid)))
     if not paragraphs:
         return {"ok": True, "written": False, "paragraphs": 0}
-    save_section(dtxsid, "summary", {
-        "paragraphs": paragraphs,
-        "source": "generated",
-        "approved": False,
-    }, archive=False)
-    return {"ok": True, "written": True, "paragraphs": len(paragraphs)}
+    out = section_writes.write_section(
+        dtxsid, "summary", {"paragraphs": paragraphs, "source": "generated", "approved": False},
+        store, act="summary", actor="system", author="generated", policy=policy)
+    result = {"ok": True, "written": out["outcome"] == "written",
+              "paragraphs": len(paragraphs) if out["outcome"] == "written" else 0}
+    if out["outcome"] == "held":
+        result["held"] = {"why": "owned", "version": out["version"]}
+    return result
 
 
-def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
+def materialize_result_sections(dtxsid: str, store: PoolStore, *, policy=None) -> dict:
     """Write the apical result sections from the Process cache to disk as section
     files, so the document surface shows them and the deliverable renders complete.
 
@@ -95,29 +98,42 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     `{platform, title, tables_json, narrative, first_col_header, caption, footnotes}`)
     but never writes the `bm2_<slug>.json` FILES the render + readiness paths read.
     This closes that gap: for each cached apical section, write `bm2_<slug>.json`
-    (`slug = bm2_slug(title)`) carrying the SAME fields plus `approved=False` — a
-    provisional, generated draft. The narrative is already a paragraph list (kept as
-    `narrative`, which report_data reads directly); no transform needed beyond the
-    key + approval stamp.
+    (`slug = bm2_slug(title)`) carrying the SAME fields — a provisional, generated
+    draft (`approved=False`).
 
-    Idempotent: re-materializing overwrites with archive=False (a regenerate, not a
-    new blessed version). Genomics is deterministic and is NOT materialized here (it
-    is read-only, not an authorable/approvable section — ADR-0018). Returns
-    `{ok, materialized: [section_key, ...]}`.
+    Every file goes through the section write gate (workflow.section_writes) as
+    a system write, under the C2 ``policy`` (safeguards.sections.ownership_policy;
+    without it every changed file is written, the prior archived):
+      * content unchanged → nothing written (an approval stands; I5);
+      * changed, not owned → the prior archived, the new written, a
+        `generate/draft` event;
+      * changed, owned (approved, or released with PROTECTED) → knocked down with
+        a record (C2 D2/A1): the deliverable renders apical content from the
+        Process cache, so what prints has already changed; the owned version is
+        archived, the approval withdrawn (FINAL with it, PROTECTED stands), a
+        `review {why, since_version, flips}` marker set, a `reprocess/
+        needs-re-bless` event recorded. Re-accepting clears it. `wording_review`
+        keeps its meaning (the data-derived words that flipped under approved
+        wording; Phase 3b).
+
+    Genomics is deterministic and is NOT materialized here (ADR-0018). Returns
+    `{ok, materialized, unchanged, needs_review: [{key, why, prior_version,
+    version, flips}], held}`; `materialized` = the files written.
     """
-    import json
-
     from pipeline.session_db import _latest_cache
-    from pipeline.session_store import bm2_slug, save_section
+    from pipeline.session_store import bm2_slug
+    from workflow import section_writes
     from workflow.reprocess import cat_signature_flips
 
     sdir = store.session_dir(dtxsid)
     cache = _latest_cache(sdir, "sections")
     sections = cache.get("sections") if isinstance(cache, dict) else None
+    result: dict = {"ok": True, "materialized": [], "unchanged": [], "needs_review": [],
+                    "held": []}
     if not sections:
-        return {"ok": True, "materialized": []}
+        return result
 
-    materialized: list[str] = []
+    from common import provenance
     for sec in sections:
         title = sec.get("title") or sec.get("platform") or ""
         slug = bm2_slug(title)
@@ -126,23 +142,13 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         section_key = f"bm2_{slug}"
         cat_signature = sec.get("cat_signature") or {}
 
-        # Read the PRIOR section file (if any) BEFORE overwriting it — this is the
-        # only point where the old and new categorical signatures coexist, so it is
-        # where Phase 3b flip detection must run (invalidate ran at upload and kept
-        # no new binding; the reprocess that produced `sec` deleted the old cache).
-        # Capture whether the human had APPROVED the prior wording and its signature.
-        prior_path = sdir / f"{section_key}.json"
-        was_approved = False
-        old_signature: dict = {}
-        if prior_path.exists():
-            try:
-                prior = json.loads(prior_path.read_text(encoding="utf-8"))
-                was_approved = bool(prior.get("approved"))
-                old_signature = prior.get("cat_signature") or {}
-            except (json.JSONDecodeError, OSError, ValueError):
-                pass
+        # The prior file, read BEFORE the gate replaces it: the only point where
+        # the old and new categorical signatures coexist (Phase 3b flip detection).
+        prior = section_writes.read_prior(dtxsid, section_key, store)
+        flips = (cat_signature_flips(prior.get("cat_signature") or {}, cat_signature)
+                 if prior is not None else [])
 
-        # Carry the render-relevant fields verbatim; stamp provisional (unapproved).
+        # Carry the render-relevant fields verbatim; provisional (unapproved).
         data = {
             "platform": sec.get("platform"),
             "title": title,
@@ -155,28 +161,31 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
             "approved": False,
             "source": "generated",
         }
+        out = section_writes.write_section(
+            dtxsid, section_key, data, store, act="materialize", actor="system",
+            author="generated", on_owned=section_writes.REVIEW,
+            review={"why": "wording_changed" if flips else "numbers_changed", "flips": flips},
+            policy=policy)
 
-        # Wording-review inform-signal (Phase 3b): only when the human had APPROVED
-        # the prior wording AND a data-derived WORD flipped under it. Not a block —
-        # programmatic content asserts no LLM judgement; it flags that the author's
-        # committed wording may now contradict the refreshed data. Fail-soft: no
-        # prior / never approved / no flip → no marker → byte-identical to before.
-        if was_approved:
-            flips = cat_signature_flips(old_signature, cat_signature)
-            if flips:
-                data["wording_review"] = flips
-
-        # archive=False: a regenerate/materialize is not a new blessed version.
-        save_section(dtxsid, section_key, data, archive=False)
-        materialized.append(section_key)
-        from common import provenance
+        if out["outcome"] == "written":
+            result["materialized"].append(section_key)
+        elif out["outcome"] == "unchanged":
+            result["unchanged"].append(section_key)
+        elif out["outcome"] == "needs_review":
+            result["materialized"].append(section_key)
+            result["needs_review"].append({
+                "key": section_key, "why": out["review"]["why"],
+                "prior_version": out["prior_version"], "version": out["version"],
+                "flips": out["review"]["flips"]})
+        else:
+            result["held"].append(section_key)
         provenance.record(
             "materialized", dtxsid=dtxsid, section_key=section_key,
-            platform=sec.get("platform"), was_approved=was_approved,
-            wording_review=bool(data.get("wording_review")),
+            platform=sec.get("platform"), outcome=out["outcome"],
+            wording_review=bool(flips and out["outcome"] == "needs_review"),
         )
 
-    return {"ok": True, "materialized": materialized}
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +198,10 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the ValidationReport as a plain dict (also persisted to
     validation_report.json). Raises StepError(404) if the session has no files.
+
+    Never deletes the dataset or the data approval (C1 D4): a validation that
+    finds errors leaves them inert (the phase refuses their use), and one that
+    no longer matches the integration's basis reads "integrate again".
     """
     files_dir = store.session_dir(dtxsid) / "files"
     if not files_dir.exists():
@@ -240,6 +253,7 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
             "dtxsid, issue_index, and chosen_file_id are required", status_code=400
         )
 
+
     precedence = store.read_json(dtxsid, "precedence.json")
     if not isinstance(precedence, list):
         precedence = []
@@ -263,6 +277,7 @@ def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dic
 
     `confirmed` maps file_id -> {platform, data_type}. Returns
     {ok, updated} where `updated` counts files whose headers were rewritten.
+    A correction made after integration takes effect at the next integration.
     """
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
@@ -346,6 +361,45 @@ def _write_metadata_headers(file_path, platform: str, data_type: str) -> None:
 # integrate
 # ---------------------------------------------------------------------------
 
+# What integrate_pool writes over in the session folder: the dataset and the
+# two sidecars read beside it.
+_DATASET_FILES = ("integrated.json", "_category_lookup.json", "genomics.sidecar.json")
+
+
+def _keep_dataset_files(session_dir: Path) -> dict:
+    """Copy the dataset files an integration will overwrite into a scratch
+    folder inside the session; ``{"dir", "had": {name: bool}}``."""
+    import tempfile
+    session_dir = Path(session_dir)
+    if not session_dir.is_dir():                 # nothing on disk to overwrite
+        return {"dir": None, "had": {}}
+    keep = Path(tempfile.mkdtemp(prefix=".integrating-", dir=session_dir))
+    had = {}
+    for name in _DATASET_FILES:
+        src = session_dir / name
+        had[name] = src.is_file()
+        if had[name]:
+            shutil.copy2(src, keep / name)
+    return {"dir": keep, "had": had}
+
+
+def _restore_dataset_files(session_dir: Path, kept: dict) -> None:
+    """Put back what ``_keep_dataset_files`` kept; remove what was not there."""
+    session_dir = Path(session_dir)
+    for name, had in kept["had"].items():
+        if had:
+            os.replace(kept["dir"] / name, session_dir / name)
+        else:
+            (session_dir / name).unlink(missing_ok=True)
+
+
+def _check_dataset(dtxsid: str, integrated: dict) -> None:
+    """The schema every read of the dataset applies, applied before anything
+    is recorded on it (BMDProjectValidationError when it fails)."""
+    from pipeline.bmd_project_schema import load_and_validate
+    load_and_validate(integrated, source=f"DTXSID={dtxsid} (integration)")
+
+
 @step_provenance
 def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict:
     """Merge the pool into a unified BMDProject and cache it.
@@ -355,7 +409,14 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     summary payload (not the full integrated JSON — it can exceed response caps).
     Raises StepError(404) with no files, StepError(400) if validation hasn't run,
     StepError(500) if integration itself fails.
+
+    Refused when the validation it would pair with the fingerprints no longer
+    matches them (ValidationOutOfDate, the restart trap: a core rule, it would
+    combine the wrong files); out of phase is the safeguards' refusal. A successful merge withdraws
+    the data approval (archived under history/_data_approval/) and records the
+    basis it was built from; it pins no method profile.
     """
+
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
     if not files_dir.exists():
@@ -375,6 +436,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     coverage_matrix = report.get("coverage_matrix", {}) if isinstance(report, dict) else {}
     if not coverage_matrix:
         raise StepError("No coverage matrix found -- run validation first", status_code=400)
+    _check_validation_matches(dtxsid, fps, report)
 
     # Load user precedence decisions (may be empty if no conflicts resolved)
     precedence = store.read_json(dtxsid, "precedence.json")
@@ -410,6 +472,11 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     approval = store.read_json(dtxsid, "metadata_approved.json")
     approved_metadata = approval.get("metadata") if isinstance(approval, dict) else None
 
+    # integrate_pool writes the new dataset (and its two sidecars) over the old
+    # ones in place. Keep the old ones until the new dataset has passed the
+    # schema: a failure puts them back, so the study is left as it was, never
+    # with a dataset no read accepts behind an "integrated, current" phase.
+    kept = _keep_dataset_files(session_dir)
     try:
         integrated = integrate_pool(
             dtxsid,
@@ -421,12 +488,26 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             llm_generate_json=_llm_generate_json,
             approved_metadata=approved_metadata or None,
         )
+        _check_dataset(dtxsid, integrated)
     except Exception as e:
+        _restore_dataset_files(session_dir, kept)
         logger.exception("Pool integration failed for %s", dtxsid)
         raise StepError(f"Integration failed: {e}", status_code=500)
+    finally:
+        if kept["dir"] is not None:
+            shutil.rmtree(kept["dir"], ignore_errors=True)
+
+    # The dataset changed, so the data approval made on the old one no longer
+    # holds (C1 D5: archived, never deleted). A failed merge leaves it alone.
+    approval_withdrawn = _withdraw_data_approval(dtxsid, store)
 
     # Cache in memory for the process-integrated endpoint
     store.set_integrated(dtxsid, integrated)
+
+    # What this dataset was built from (workflow.integration_basis): a later
+    # validation that no longer matches it reads as "integrate again".
+    from workflow.integration_basis import record_basis
+    record_basis(dtxsid, store)
 
     # Study-design facts a person stated (generate_report --design): integration
     # re-infers every experiment's metadata, and the stated design must win.
@@ -449,7 +530,6 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # so re-integration makes it stale too. Remove it (rebuilt on next process)
     # so a re-integrated-but-not-yet-reprocessed session can't be queried against
     # old data.
-    import shutil
     (session_dir / "session.duckdb").unlink(missing_ok=True)
     shutil.rmtree(session_dir / "session_parquet", ignore_errors=True)
     # NB: genomics.sidecar.json is NOT wiped here — integrate_pool (above) just
@@ -458,8 +538,9 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # re-extracts from the new sidecar on next process. (invalidate_pool_artifacts
     # DOES delete the sidecar, because that path tears down integrated.json too.)
 
-    # The study's analysis method (ADR-0027): pin the newest profile when the
-    # study has none, and check what the .bm2 analyses record against it.
+    # The study's analysis method (ADR-0027): check what the .bm2 analyses
+    # record against the profile a person pinned. Integration pins nothing
+    # (C1 D1: a person chooses the method; Process refuses until they have).
     method_summary = _pin_and_check_method(dtxsid, integrated, store)
 
     # Build the lightweight summary (see the route docstring for why).
@@ -481,6 +562,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         "bmd_result_count": len(integrated.get("bMDResult", [])),
         "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
         "method": method_summary,
+        "approval_withdrawn": approval_withdrawn,
         "experiments": [
             {
                 "name": exp.get("name", ""),
@@ -518,15 +600,17 @@ def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
 
 
 def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> dict:
-    """Pin a method profile if the study has none, and report every recorded
-    analysis setting that disagrees with it as a `method_mismatch` warning in
-    the validation report (ADR-0027 §5).  Returns {profile, pinned_by,
-    deviations, mismatches}."""
-    from pipeline.method_profile import ensure_pin, pin_mode, recorded_mismatches, session_method
+    """Report every recorded analysis setting that disagrees with the study's
+    pinned method profile as a `method_mismatch` warning in the validation
+    report (ADR-0027 §5).  Pins nothing (C1): with no profile pinned there is
+    nothing to compare against, so the stale warnings are removed and the
+    summary is empty.  Returns {profile, pinned_by, mode, deviations,
+    mismatches}.  (The name is kept for its callers.)"""
+    from pipeline.method_profile import pin_mode, read_pin, recorded_mismatches, session_method
 
-    pin = ensure_pin(dtxsid)
-    method = session_method(dtxsid)
-    mismatches = recorded_mismatches(integrated, method)
+    pin = read_pin(dtxsid)
+    method = session_method(dtxsid) if pin else None
+    mismatches = recorded_mismatches(integrated, method) if pin else []
     report = store.read_json(dtxsid, "validation_report.json")
     if isinstance(report, dict):
         issues = [i for i in report.get("issues", []) if i.get("issue_type") != "method_mismatch"]
@@ -536,8 +620,63 @@ def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> di
                    for m in mismatches]
         report["issues"] = issues
         store.write_json(dtxsid, "validation_report.json", report)
+    if not pin:
+        return {"profile": None, "pinned_by": None, "mode": None, "deviations": [],
+                "mismatches": []}
     return {"profile": pin["name"], "pinned_by": pin["pinned_by"], "mode": pin_mode(pin),
             "deviations": list(method.deviations), "mismatches": [m["message"] for m in mismatches]}
+
+
+def _fp_field(fp, key: str):
+    """A fingerprint field, whether a FileFingerprint or a plain dict."""
+    return fp.get(key) if isinstance(fp, dict) else getattr(fp, key, None)
+
+
+def _check_validation_matches(dtxsid: str, fps: dict, report: dict) -> None:
+    """Refuse (ValidationOutOfDate) when the fingerprints integration would use
+    no longer match the validation report it pairs them with: a file id in the
+    coverage matrix is not among them (a cold re-scan minted new ids), or the
+    files they name differ from the report's. Refuses; never repairs.
+    Classification corrections are not compared (C1 spec §3.2; C3)."""
+    from workflow.errors import ValidationOutOfDate
+
+    cov_ids: set = set()
+    for tiers in (report.get("coverage_matrix") or {}).values():
+        for v in (tiers or {}).values():
+            if isinstance(v, list):
+                cov_ids.update(i for i in v if i)
+            elif isinstance(v, str) and v:
+                cov_ids.add(v)
+    missing_ids = len(cov_ids - set(fps))
+    added: set = set()
+    missing: set = set()
+    if isinstance(report.get("fingerprints"), dict):
+        held = {n for n in (_fp_field(fp, "filename") for fp in fps.values()) if n}
+        checked = {n for n in (_fp_field(fp, "filename")
+                               for fp in report["fingerprints"].values()) if n}
+        added, missing = held - checked, checked - held
+    if missing_ids or added or missing:
+        raise ValidationOutOfDate(dtxsid, missing_ids, sorted(added), sorted(missing))
+
+
+DATA_APPROVAL_HISTORY = "history/_data_approval"
+
+
+def _withdraw_data_approval(dtxsid: str, store: PoolStore) -> bool:
+    """Move animal_report.json (the data approval) to
+    history/_data_approval/<stamp>-animal_report.json; True when there was one.
+    The approval was of the dataset integration just replaced (C1 D5)."""
+    if not store.artifact_exists(dtxsid, "animal_report.json"):
+        return False
+    from common.clock import now_iso
+
+    sdir = store.session_dir(dtxsid)
+    archive = sdir / DATA_APPROVAL_HISTORY
+    archive.mkdir(parents=True, exist_ok=True)
+    stamp = now_iso().replace(":", "")
+    (sdir / "animal_report.json").replace(archive / f"{stamp}-animal_report.json")
+    logger.info("Data approval of %s withdrawn by re-integration (archived)", dtxsid)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -550,6 +689,7 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
 
     Returns the AnimalReport as a plain dict. Raises StepError(404) with no
     files, StepError(400) if nothing fingerprinted, StepError(500) on failure.
+    (Refusing it before integration is the safeguards': C1.)
     """
     session_path = store.session_dir(dtxsid)
     files_dir = session_path / "files"
@@ -654,114 +794,197 @@ def _promote_to_final(data: dict) -> None:
 
 @step_provenance
 def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
-    """Approve (lock) an existing report section.
+    """Approve (lock) an existing report section. A state change: its text is
+    never touched (C2: accepting changes the state, never the content).
 
-    Mirrors the persistence half of POST /api/session/approve: stamp
-    `approved=True` + `approved_at`, and clear any `stale` flag (set by
-    invalidate_pool_artifacts when the pool mutated after approval — re-approval
-    clears it). Re-saved in place (archive=False) so a lock flip is not a new
-    history version, exactly as /api/session/unapprove already does for the
-    reverse flip; the approve route's own archiving happens when the CONTENT is
-    saved, not on this pure lock transition.
+    Stamps `approved=True` + `approved_at`, promotes the facts to FINAL (which
+    sets PROTECTED), and clears what a person's reading answers: `stale` (the
+    pool changed after approval), `wording_review` (data-derived words flipped
+    under approved wording) and `review` (Process changed what an approved
+    apical section prints: C2 D2/A1). Saved in place (archive=False) with one
+    `edit/blessed` event against the SAME version, so a re-accept after a
+    reprocess flips needs-re-bless → blessed without minting a version.
 
-    /api/session/approve also reports whether the approved text differs from
-    the generated original (`user_edited`); that needs the request payload, so
-    it stays in the route. This step lifts ONLY the state change.
+    Accepting a section that is already approved, carries no stale/review
+    marker, and whose version is blessed changes nothing: ``noop
+    already_accepted``, no event.
 
-    Raises StepError(400) with no dtxsid/section_key, StepError(404) if the
-    section file does not exist (nothing to approve — content is written by the
-    generation/save path first).
+    Returns ``{ok, section_key, approved: True, version, version_status,
+    noop?}``. Raises section_key_invalid (400), section_not_found (404).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "approve")
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if not isinstance(data, dict):
-        raise StepError(
-            f"No '{section_key}' section to approve", status_code=404
-        )
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": True, "version": version,
+              "version_status": "blessed"}
+    if sw.already_accepted(data, sw.version_status(dtxsid, section_key, version, store)):
+        return {**result, "noop": _noop("already_accepted")}
 
     data["approved"] = True
     data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
-    data.pop("stale", None)
-    # The Phase 3b wording-review inform-signal is answered by exactly this act:
-    # the human has read the prose against the refreshed data and re-blessed it.
-    # Clearing it here (and in the route twin) is what lets a LATER flip be a
-    # fresh signal instead of noise that never goes away.
-    data.pop("wording_review", None)
+    for marker in ("stale", "wording_review", "review"):
+        data.pop(marker, None)
     _promote_to_final(data)
-
-    # Phase 4: record this acceptance as an "edit"/"blessed" version event. This
-    # is the pure re-bless path — the content already exists on disk and only the
-    # lock flips — so it uses archive=False: save_section PRESERVES the version
-    # number and the manifest line lands against the SAME version. That is exactly
-    # what "re-accept transitions needs-re-bless → blessed WITHOUT minting a new
-    # version" needs: after a reprocess minted (say) v2 born needs-re-bless, the
-    # human re-accept appends a v2/edit/blessed line, so v2's current status flips
-    # to blessed with no duplicate version. The marker is transient (save_section
-    # pops it); stamping it on `data` keeps this step store-mediated — no direct
-    # disk I/O and no new store-method signature (the injected store just persists
-    # `data`).
-    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
-
-    # archive=False: a lock flip is not a content change worth a new history
-    # FILE (matches how unapprove flips the flag). save_section stamps `version`
-    # and appends the manifest line above.
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="edit", status="blessed", act="accept", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data))
+    # archive=False: a lock flip is not a content change worth a history FILE;
+    # save_section keeps the version and appends the event above.
     store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {
-        "ok": True,
-        "section_key": section_key,
-        "approved": True,
-        "version": data.get("version", 1),
-    }
+    return {**result, "version": data.get("version", version)}
 
 
 @step_provenance
 def release_section_step(
     dtxsid: str, section_key: str, store: PoolStore, *, reason: str = "",
 ) -> dict:
-    """REVISE (reopen) a report section for editing, preserving its content.
+    """REVISE (reopen) an approved report section, preserving its content.
 
-    This is the VOLUNTARY human down-ratchet — the "Revise" action, renamed from
-    the old bare "Unapprove". It:
-      * flips `approved=False` (unlocks the editor),
-      * runs the HUMAN_RELEASE demote on the section's facts
-        (labels.demote_for_human_release: FINAL withdrawn, PROTECTED stands — the
-        content stops claiming finality but stays guarded until re-accepted), and
-      * records the human's free-text `reason` on a Phase-4 version-trail entry
-        (cause="revise"), so WHY a person reopened a blessed section is auditable
-        alongside the system's cause="reprocess" entries.
+    The voluntary human down-ratchet: `approved=False`, FINAL withdrawn,
+    PROTECTED stands (C2 D1: a released section stays protected from machines;
+    only a person's explicit act replaces it). The reason is kept on the
+    version trail (`revise/working`) and the `revised` marker; requiring one is
+    the safeguards' (C2 D3).
 
-    The reason is provenance (the version trail + `revised` marker), NOT a fact —
-    facts are categorical. Content is preserved (archive=False for the flag flip;
-    the trail entry captures the transition). No-op-safe: absent section → ok.
-
-    Raises StepError(400) with no dtxsid/section_key.
+    Returns ``{ok, section_key, approved: False, version, version_status,
+    noop?}``; a section that is not approved changes nothing (``noop
+    not_approved``, no event). Raises section_key_invalid (400),
+    section_not_found (404).
     """
+    from workflow import section_writes as sw
+    from workflow.ownership import content_hash
+
     if not dtxsid or not section_key:
         raise StepError("dtxsid and section_key are required", status_code=400)
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    data = sw.read_prior(dtxsid, section_key, store)
+    if data is None:
+        raise sw.not_found(section_key, "reopen")
+    version = data.get("version", 1)
+    result = {"ok": True, "section_key": section_key, "approved": False, "version": version}
+    if not data.get("approved"):
+        return {**result, "version_status": sw.version_status(dtxsid, section_key, version, store),
+                "noop": _noop("not_approved")}
+    reason = (reason or "").strip() or None
 
-    data = store.read_json(dtxsid, f"{section_key}.json")
-    if isinstance(data, dict):
-        data["approved"] = False
-        _demote_for_revise(data, reason)
-        store.save_section(dtxsid, section_key, data, archive=False)
-
-    return {"ok": True, "section_key": section_key, "approved": False}
+    data["approved"] = False
+    _demote_for_revise(data, reason)
+    data[_VERSION_EVENT_KEY] = sw.event(
+        key=section_key, cause="revise", status="working", act="release", actor="person",
+        author=sw.author_of(data), prior_version=version, changed=False,
+        chash=content_hash(data), reason=reason)
+    store.save_section(dtxsid, section_key, data, archive=False)
+    return {**result, "version_status": "working"}
 
 
 def _demote_for_revise(data: dict, reason: str) -> None:
-    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place, and stamp
-    the version-trail event. Withdraws FINAL (PROTECTED stands), records the human
-    reason as provenance (`revised` marker + the trail entry's reason). A no-op on
-    a section holding no maturity fact leaves facts untouched but STILL records the
-    reopen on the trail — reopening an un-blessed draft is a real, auditable act."""
+    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place: FINAL
+    withdrawn (PROTECTED stands), the human reason kept as the `revised`
+    marker. Shared with the old /api/session/unapprove route's history."""
     from workflow.labels import demote_for_human_release
     from workflow.ownership import section_facts, store_content_facts
 
     store_content_facts(data, demote_for_human_release(section_facts(data)))
-    data["revised"] = {"reason": reason} if reason else {"reason": ""}
-    data[_VERSION_EVENT_KEY] = {
-        "cause": "revise", "status": "working", "reason": reason,
-    }
+    data["revised"] = {"reason": reason}
+
+
+# The no-op answers of the section steps (MODULES.md §4.2: a success that did
+# nothing says so). The words are the C2 contract's.
+_NOOPS = {
+    "already_accepted": "This section is already accepted and nothing has changed since.",
+    "not_approved": "This section isn't approved, so there is nothing to reopen.",
+    "already_current": "That version is already the current one.",
+}
+
+
+def _noop(code: str) -> dict:
+    return {"code": code, "say": _NOOPS[code]}
+
+
+# The state keys a restore carries over from the CURRENT file, never from the
+# version it brings back: restoring never clears currency (C2 §4.8).
+_CURRENCY_KEYS = ("stale", "regenerated", "review", "wording_review")
+
+
+@step_provenance
+def restore_section_step(dtxsid: str, section_key: str, version, store: PoolStore, *,
+                         reason: str = "", policy=None) -> dict:
+    """Bring a past version of a section back as the current one (C2 §4.8, D3).
+
+    The version is found in the archives (or is the current file); it works
+    when the current file is absent (after a discard). The current file is
+    archived first; the restored text becomes the next version, never its old
+    number. It comes back as a DRAFT a person owns: not approved, PROTECTED
+    (no machine replaces it; accepting it is a separate act). Restoring never
+    clears currency: a stale or under-review current file passes its markers on.
+    The reason is kept on the `restore` event with `from_version`; the C2
+    ``policy`` (the safeguards) requires one.
+
+    Returns ``{ok, section_key, version, from_version, approved: False,
+    version_status: "working", noop?}``; restoring the current version is
+    ``noop already_current``. Raises section_key_invalid (400),
+    version_not_found (404), version_content_missing (409), and what the
+    policy raises.
+    """
+    from workflow import section_writes as sw
+    from workflow.labels import Fact
+    from workflow.ownership import STATE_KEYS, store_content_facts
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    target = sw.read_version(dtxsid, section_key, version, store)
+    noop = {"ok": True, "section_key": section_key, "version": version, "from_version": version,
+            "approved": bool(current and current.get("approved")),
+            "version_status": sw.version_status(dtxsid, section_key, version, store),
+            "noop": _noop("already_current")}
+    if current is not None and current.get("version") == version:
+        return noop
+    reason = (reason or "").strip() or None
+
+    data = {k: v for k, v in target.items() if k not in STATE_KEYS}
+    data["approved"] = False
+    store_content_facts(data, {Fact.PROTECTED})
+    for k in _CURRENCY_KEYS:
+        if current is not None and current.get(k):
+            data[k] = current[k]
+    out = sw.write_section(
+        dtxsid, section_key, data, store, act="restore", actor="person",
+        author=sw.author_of(target), force=True, reason=reason, cause="restore",
+        status="working", extra_event={"from_version": version}, policy=policy)
+    if out["outcome"] == "unchanged":
+        return {**noop, "version": out["version"]}
+    return {"ok": True, "section_key": section_key, "version": out["version"],
+            "from_version": version, "approved": False, "version_status": "working"}
+
+
+@step_provenance
+def discard_section_step(dtxsid: str, section_key: str, store: PoolStore, *,
+                         reason: str = "") -> dict:
+    """Discard a section's current text (C2 §4.7, D4: behind the old route and
+    pool reset only; the new interface does not offer it). The file is archived,
+    then deleted, and a `discard/discarded` event recorded; the version counter
+    stays monotonic and restore still reaches the text.
+
+    Returns ``{ok, section_key, archived, version}``. Raises
+    section_key_invalid (400), section_not_found (404). That an approved
+    section is released first, and the reason, are the safeguards'.
+    """
+    from workflow import section_writes as sw
+
+    section_key = sw.validate_section_key(dtxsid, section_key)
+    current = sw.read_prior(dtxsid, section_key, store)
+    if current is None:
+        raise sw.not_found(section_key, "discard")
+    reason = (reason or "").strip() or None
+    out = sw.discard(dtxsid, section_key, store, act="discard", actor="person", reason=reason)
+    return {"ok": True, "section_key": section_key, "archived": out["archived"],
+            "version": out["version"]}

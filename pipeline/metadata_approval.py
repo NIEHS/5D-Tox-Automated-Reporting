@@ -29,7 +29,8 @@ def approve_experiment_metadata(dtxsid: str, metadata_by_name: dict, *, merge: b
     the browser's form sends the whole description.
 
     Returns {"updated": n, "bm2_exported": bool}.  Raises LookupError when the
-    session has no integrated data.
+    session has no integrated data.  (That the statements need a usable
+    dataset — INTEGRATED / APPROVED — is the safeguards': safeguards.guarded.)
     """
     integrated = load_integrated(dtxsid)
     if integrated is None:

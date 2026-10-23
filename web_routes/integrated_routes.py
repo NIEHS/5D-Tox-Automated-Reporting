@@ -28,9 +28,10 @@ from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.integrated_io import _enrich_source_experiment_counts, _load_integrated
 from pipeline.pool_globals import _session_dir
-from pipeline.process_integrated import run_process
+from safeguards.guarded import run_process
+from web_routes.refusal_response import refusal_response
 from workflow.errors import StepError
-from workflow.steps import generate_animal_report_step
+from safeguards.guarded import generate_animal_report_step
 from workflow.store import DiskPoolStore
 
 router = APIRouter()
@@ -200,7 +201,7 @@ async def api_process_integrated(dtxsid: Dtxsid, request: Request):
     try:
         result_payload = await run_process(dtxsid, params, DiskPoolStore())
     except StepError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+        return refusal_response(e)
     return JSONResponse(result_payload)
 
 
@@ -230,7 +231,7 @@ async def api_generate_animal_report(dtxsid: Dtxsid):
             None, lambda: generate_animal_report_step(dtxsid, store)
         )
     except StepError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+        return refusal_response(e)
 
     return Response(
         content=orjson.dumps(report_dict),

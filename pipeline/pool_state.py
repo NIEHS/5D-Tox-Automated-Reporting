@@ -172,7 +172,8 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     # re-integrating.
     for name in ("validation_report.json", "precedence.json",
                  "integrated.json", "_category_lookup.json",
-                 "genomics.sidecar.json", "animal_report.json"):
+                 "genomics.sidecar.json", "animal_report.json",
+                 "integration_basis.json"):
         p = d / name
         if p.exists():
             p.unlink()
@@ -266,9 +267,8 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
                 # until a human re-accepts — see accept_section_step). The
                 # marker is transient: save_section pops it, so it never
                 # persists in the section JSON.
-                section_data[_VERSION_EVENT_KEY] = {
-                    "cause": "reprocess", "status": "needs-re-bless",
-                }
+                section_data[_VERSION_EVENT_KEY] = invalidation_event(
+                    section_stem, section_data)
                 save_section(dtxsid, section_stem, section_data)
                 summary["marked_stale"].append(section_file.name)
                 logger.info("Marked %s as stale for %s", section_file.name, dtxsid)
@@ -276,6 +276,20 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
             logger.warning("Failed to mark %s as stale: %s", section_file.name, e)
 
     return summary
+
+
+def invalidation_event(section_key: str, section: dict) -> dict:
+    """The version event of a section staled by a change to the pool (format 2,
+    C2 spec §5): a state change by the system, not a content write; the text
+    is archived and kept as it was, and the reason is the currency reason."""
+    from workflow.ownership import content_hash
+    from workflow.section_writes import EVENT_FORMAT, author_of
+    return {
+        "v": EVENT_FORMAT, "section": section_key, "cause": "reprocess",
+        "status": "needs-re-bless", "act": "invalidate", "actor": "system", "user": None,
+        "author": author_of(section), "changed": False,
+        "content_hash": content_hash(section), "applied": True, "reason": "data_changed",
+    }
 
 
 # ---------------------------------------------------------------------------

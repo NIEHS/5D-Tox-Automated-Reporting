@@ -75,6 +75,22 @@ router = APIRouter()
 # POST /api/upload-bm2 — upload .bm2 files for apical endpoint analysis
 # ---------------------------------------------------------------------------
 
+def _refuse_add_files(dtxsid: str):
+    """The safeguards for bringing files into a study (R6: none into a
+    published book's companion or a report over several studies; C1: ADD_FILES
+    is legal in every phase otherwise). A JSONResponse when refused, else None."""
+    if not dtxsid:
+        return None
+    from safeguards.guarded import require_add_files
+    from web_routes.refusal_response import refusal_response
+    from workflow.errors import StepError
+    try:
+        require_add_files(dtxsid)
+    except StepError as e:
+        return refusal_response(e)
+    return None
+
+
 @router.post("/api/upload-bm2")
 async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
     """
@@ -92,6 +108,8 @@ async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
     # files/ directory so the file survives page reloads and server
     # restarts — no need to wait for approve to persist.
     dtxsid = request.query_params.get("dtxsid", "")
+    if (refused := _refuse_add_files(dtxsid)) is not None:  # the safeguards (R6, C1)
+        return refused
     persist_dir = None
     if dtxsid:
         persist_dir = session_dir(dtxsid) / "files"
@@ -304,6 +322,8 @@ async def api_upload_csv(
 
     # Optional DTXSID for persistence and fingerprinting
     dtxsid = request.query_params.get("dtxsid", "")
+    if (refused := _refuse_add_files(dtxsid)) is not None:  # the safeguards (R6, C1)
+        return refused
 
     # Check whether the pool has already been validated/integrated — if so,
     # uploading new files will require invalidation of downstream artifacts.
@@ -434,6 +454,8 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
     # If the client provides a DTXSID, persist .bm2 files to the session's
     # files/ directory immediately so they survive page reloads.
     dtxsid = request.query_params.get("dtxsid", "")
+    if (refused := _refuse_add_files(dtxsid)) is not None:  # the safeguards (R6, C1)
+        return refused
     persist_dir = None
     if dtxsid:
         persist_dir = session_dir(dtxsid) / "files"

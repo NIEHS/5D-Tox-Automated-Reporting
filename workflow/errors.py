@@ -37,3 +37,29 @@ class GuardViolation(Exception):
     (a demote with reason) instead.
     """
 
+
+# A core refusal, raised for every caller (the notebook included): combining
+# files under a validation that no longer matches them would build a wrong
+# dataset. It carries its `code`; safeguards.refusals explains it.
+class ValidationOutOfDate(StepError):
+    """Integration refused: the validation report it would pair with the
+    fingerprints no longer matches the files the server holds (the restart
+    trap: file ids re-minted by a cold re-scan). Nothing is combined."""
+
+    code = "validation_out_of_date"
+
+    def __init__(self, dtxsid: str, missing_ids: int, added: list, missing: list):
+        self.details = {"missing_ids": missing_ids, "added": sorted(added),
+                        "missing": sorted(missing)}
+        parts = []
+        if missing_ids:
+            parts.append(f"{missing_ids} file id(s) in its coverage matrix are not among "
+                         f"the current fingerprints")
+        if added:
+            parts.append(f"files added since validation: {', '.join(sorted(added))}")
+        if missing:
+            parts.append(f"files missing since validation: {', '.join(sorted(missing))}")
+        super().__init__(
+            f"INTEGRATE refused for {dtxsid}: the validation report no longer matches the "
+            f"files the server holds ({'; '.join(parts)}). Validate again, then integrate.",
+            status_code=409)

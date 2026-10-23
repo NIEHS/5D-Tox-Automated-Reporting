@@ -30,11 +30,13 @@ from dataclasses import dataclass, field
 
 from workflow.phases import (
     LEGAL_ACTIONS,
+    NEXT_STEP,
     Action,
     Phase,
     compute_section_completeness,
     derive_phase,
 )
+from workflow.integration_basis import integration_status
 from workflow.section_catalog import catalog_for_session
 from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
@@ -72,12 +74,15 @@ class WorkflowState:
                       / debugging; a UI may ignore them)
     completeness    — per-platform readiness from the coverage matrix ({} until
                       validation has produced a coverage matrix)
+    next_step       — the act that moves the phase forward (None once
+                      integrated: everything is legal there)
     """
 
     phase: Phase
     legal_actions: frozenset[Action]
     artifacts: dict = field(default_factory=dict)
     completeness: dict = field(default_factory=dict)
+    next_step: Action | None = None
 
     def to_dict(self) -> dict:
         """JSON-serializable form for the wire (enums → their string values)."""
@@ -86,6 +91,7 @@ class WorkflowState:
             "legal_actions": sorted(a.value for a in self.legal_actions),
             "artifacts": self.artifacts,
             "completeness": self.completeness,
+            "next_step": self.next_step.value if self.next_step else None,
         }
 
 
@@ -121,6 +127,12 @@ class WorkflowEngine:
             # files with distinct lifecycles (see module docstring).
             "hasIntegrated": self.store.artifact_exists(self.dtxsid, "integrated.json"),
             "hasAnimalReport": self.store.artifact_exists(self.dtxsid, "animal_report.json"),
+            # Whether the dataset was built from the validation on disk now
+            # (workflow.integration_basis): current / out_of_date / unrecorded,
+            # None with no integrated.json. Small reads: the basis file, the
+            # report already in hand, precedence.json.
+            "integration": integration_status(self.dtxsid, self.store,
+                                              report=validation_report),
             # Presence of the query substrate (session.duckdb), built only at the
             # end of Process — the cheap "has this session been processed" signal
             # the data-prep DB-view button gates on. Read-only stat, like above.
@@ -139,7 +151,12 @@ class WorkflowEngine:
         """Re-derive the full workflow state from disk. Cheap enough to call on
         every request; phase is never cached (invariant 3)."""
         artifacts = self.gather_artifacts()
-        phase = Phase(derive_phase(artifacts))
+        # An integration built from another validation is not this one's
+        # dataset: the phase reads VALIDATED (integrate again). The raw
+        # hasIntegrated flag stays in `artifacts`; derive_phase is unchanged.
+        effective = {**artifacts, "hasIntegrated": bool(
+            artifacts["hasIntegrated"] and artifacts.get("integration") != "out_of_date")}
+        phase = Phase(derive_phase(effective))
 
         report = artifacts["validationReport"]
         coverage = report.get("coverage_matrix", {}) if isinstance(report, dict) else {}
@@ -150,6 +167,7 @@ class WorkflowEngine:
             legal_actions=LEGAL_ACTIONS.get(phase, frozenset()),
             artifacts={k: v for k, v in artifacts.items() if k != "validationReport"},
             completeness=completeness,
+            next_step=NEXT_STEP.get(phase),
         )
 
     # -- derived section readiness ----------------------------------------

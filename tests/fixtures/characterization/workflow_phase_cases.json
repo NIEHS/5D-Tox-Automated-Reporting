@@ -6,6 +6,7 @@
     "1_add_coverage": "A case you didn't think of. Append it to the relevant array (derive_phase / section_completeness / node_complete), then regenerate: `node tests/tools/gen_phase_oracle.mjs` (or, post-cutover, the Python successor). You are widening the net, not moving it. No tension. Encouraged.",
     "2_change_a_requirement": "A rule genuinely changed (new phase, new platform, e.g. gene_expression now needs xlsx). Change it AT THE SOURCE first, as its own deliberate commit: edit web/js/pool_state.js (pre-cutover) or workflow/phases.py (post-cutover), THEN regenerate the oracle from that source. The `expected` values here update to match the new reality. The contract does not resist this — it just forces 'I am changing behavior' to be an explicit, reviewable act rather than a side effect buried in the port.",
     "3_forbidden": "Do NOT edit an `expected` value (or hand-edit the generated oracle) to make a red port turn green. That is 'I changed behavior while pretending to preserve it' — the one thing this test exists to fight. The always-on oracle-sync guard (test_oracle_matches_case_table) makes it tamper-EVIDENT: the oracle is GENERATED from the source, so a faked value shows up as a suspicious hand-edit to a generated file. If a port case is red, the port is wrong (procedure 2 if the requirement really changed), not the table.",
+    "c1_d2_hand_edit": "2026-10-15, C1 decision D2 signed by the maintainer: derive_phase's rule 2 (a stale section sends the phase to UPLOADED) was dropped in workflow/phases.py, and the two cases that exercised it were edited BY HAND here and in the oracle (renamed; expected APPROVED and VALIDATION_ERRORS). From this edit on, workflow/phases.py is the source of truth for derive_phase; the JS generator no longer reproduces this oracle.",
     "source_of_truth_inverts_at_cutover": "While pool_state.js still holds the phase logic, the oracle is generated FROM the JS (correct for the port window). Once ADR-0014 migration step 5 deletes derivePoolPhase/the completeness fns from pool_state.js, the Node generator can no longer read them — Python becomes the source of truth, and gen_phase_oracle.mjs must be replaced by a gen_phase_oracle.py that regenerates the same oracle from the port. Tracked as an ADR-0014 follow-up."
   },
 
@@ -23,16 +24,16 @@
       "expected": "UPLOADED"
     },
     {
-      "name": "stale_regresses_to_uploaded_over_everything",
-      "why": "EDGE (accreted): hasStale beats a fully-approved artifact set. Pool mutated after approval must force re-validate. Branch 2 precedes integrated/approved branches.",
+      "name": "stale_section_leaves_approved_alone",
+      "why": "C1 D2 (2026-10-15, hand edit): a stale section no longer moves the phase; staleness is a section matter (currency, the publish gate). Was UPLOADED (rule 2, dropped).",
       "input": {"hasFiles": true, "hasStale": true, "validationReport": {"issues": []}, "hasValidationErrors": false, "hasIntegrated": true, "hasAnimalReport": true},
-      "expected": "UPLOADED"
+      "expected": "APPROVED"
     },
     {
-      "name": "stale_beats_validation_errors",
-      "why": "EDGE: stale precedence over VALIDATION_ERRORS branch too.",
+      "name": "stale_section_leaves_validation_errors_alone",
+      "why": "C1 D2 (2026-10-15, hand edit): with rule 2 dropped, validation errors show through a stale section. Was UPLOADED.",
       "input": {"hasFiles": true, "hasStale": true, "validationReport": {"issues": [{"severity": "error"}]}, "hasValidationErrors": true, "hasIntegrated": false, "hasAnimalReport": false},
-      "expected": "UPLOADED"
+      "expected": "VALIDATION_ERRORS"
     },
     {
       "name": "validation_errors",

@@ -10,8 +10,8 @@ All endpoints are mounted as a FastAPI APIRouter on the /api prefix.
 
 Endpoints:
   GET  /api/session/{dtxsid}                        — Load a saved session
-  POST /api/session/approve                         — Approve (save) a section
-  POST /api/session/unapprove                       — Unapprove (delete) a section
+  POST /api/session/approve                         — Accept a section as it is (fenced, C2 D5)
+  POST /api/session/unapprove                       — Reopen a section, with a reason
   GET  /api/session/{dtxsid}/history/{section_key}  — Version history
   POST /api/session/{dtxsid}/restore                — Restore a past version
   GET  /api/session/{dtxsid}/bmd-summary            — Auto-derive BMD summary
@@ -32,13 +32,14 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from web_routes.dtxsid_param import Dtxsid
+from workflow.errors import StepError
 
 # Imported for its NAME, not for use here: tests/conftest.py's mock_bmdx_pipe
 # patches `web_routes.session_routes.bm2_cache` at this import site (the Java
 # .bm2 reader seam). Removing it breaks the whole TestClient suite.
 from bmdx_pipe import bm2_cache  # noqa: F401
 from pipeline.session_store import (
-    SESSIONS_DIR, now_iso, session_dir, bm2_slug, save_section, delete_section, _VERSION_EVENT_KEY,
+    SESSIONS_DIR, now_iso, session_dir, bm2_slug,
     NARRATIVE_OVERRIDES_FILE, read_narrative_overrides, latest_session_cache,
 )
 from common.session_files import read_json_file
@@ -62,6 +63,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 router = APIRouter()
+
+
+def _step_refusal(exc) -> JSONResponse:
+    """A step's refusal in this module's {"error": …} shape, explained
+    (web_routes.refusal_response)."""
+    from web_routes.refusal_response import refusal_response
+    return refusal_response(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -710,6 +718,17 @@ async def api_session_load(dtxsid: Dtxsid):
 # Empty `paragraphs` on the request clears the override for that organ.
 # ---------------------------------------------------------------------------
 
+def _genomics_sexes(session_dir, organ: str) -> list[str]:
+    """The sexes the Process genomics cache has for an organ (its keys are
+    "<organ>_<sex>"), sorted; [] when there is no cache."""
+    path = latest_session_cache(session_dir, "_cache_genomics_*.json")
+    cache = read_json_file(path) if path else None
+    if not isinstance(cache, dict):
+        return []
+    return sorted({k.split("_", 1)[1].lower() for k in cache
+                   if "_" in k and k.split("_", 1)[0].lower() == organ.lower()})
+
+
 @router.post("/api/session/{dtxsid}/genomics-narrative-override")
 async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
     """
@@ -751,6 +770,13 @@ async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
     # unreadable store raises (422) instead of being replaced by this one edit.
     existing = read_narrative_overrides(session_dir)
 
+    # C2 §4.12: the person's text this write replaces is archived first (to
+    # history/genomics_<organ>/), so a later override or a regenerate never
+    # loses it.
+    from workflow.section_writes import archive_genomics_overrides
+    archive_genomics_overrides(dtxsid, organ, existing, act="save", actor="person",
+                               reason=None, sexes=_genomics_sexes(session_dir, organ))
+
     if paragraphs:
         existing[kind][organ] = [str(p) for p in paragraphs]
     else:
@@ -767,201 +793,84 @@ async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
 @router.post("/api/session/approve")
 async def api_session_approve(request: Request):
     """
-    Approve a report section and persist it to disk.
+    Approve (accept) a report section as it is on disk. FENCED (C2 D5).
 
-    Input JSON:
-      {
-        "dtxsid": "DTXSID6020430",
-        "identity": {ChemicalIdentity dict},   // saved on first approve
-        "section_type": "background" | "bm2" | "methods" | "bmd_summary"
-                        | "genomics" | "summary",
-        "data": {
-          // For background: paragraphs, references, model_used, notes,
-          //                 original_paragraphs, original_references
-          // For bm2: filename, section_title, table_caption, compound_name,
-          //          dose_unit, narrative, tables_json, original_narrative
-          // For methods/summary: paragraphs, original_paragraphs
-          // For bmd_summary: endpoints
-          // For genomics: organ, sex, gene_sets, top_genes
-        }
-      }
+    Approving no longer saves text: the application is not an editor
+    (ADR-0018), and a person's text comes back from Word or Overleaf. So:
+      * the section file exists and the posted `data` is the same content →
+        accept_section_step (a state change; the text is not touched);
+      * the posted content differs → 409 ``approve_content_retired``;
+      * no section file → 404 ``section_not_found``.
+    It no longer writes identity.json or meta.json (C3 owns the identity).
 
-    Saves the section data with an approved_at timestamp.  Also saves/updates
-    identity.json and meta.json on every approve call.
-
-    For bm2 sections, the .bm2 file is copied from /tmp to
-    sessions/{dtxsid}/files/ so it survives server restarts.
-
-    The response says whether the approved text differs from the generated
-    original the client sent (`user_edited`).
+    Input JSON: {"dtxsid", "section_type", "bm2_slug"? | "organ"/"sex"?, "data"}
+    Returns {"ok", "section_type", "user_edited", "version"} (+ "noop").
     """
-    _bm2_uploads = get_bm2_uploads()
-    _csv_uploads = get_csv_uploads()
-
-    # Valid section types — DERIVED from the tree-driven section catalog (the
-    # writable types = catalog specs that declare a store file). Replaces the
-    # hand-maintained literal set so the approve allowlist tracks the template.
     from workflow.section_catalog import approvable_section_types
-    VALID_SECTION_TYPES = approvable_section_types()
+    from workflow.errors import StepError
+    from workflow.ownership import content_hash
+    from safeguards.guarded import accept_section_step
+    from workflow.store import DiskPoolStore
 
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
-    identity = body.get("identity")
     section_type = body.get("section_type", "")
-    data = body.get("data", {})
+    data = body.get("data") or {}
 
     if not dtxsid:
         return JSONResponse({"error": "dtxsid is required"}, status_code=400)
-    if section_type not in VALID_SECTION_TYPES:
+    valid = approvable_section_types()
+    if section_type not in valid:
         return JSONResponse(
-            {"error": f"section_type must be one of: {', '.join(sorted(VALID_SECTION_TYPES))}"},
+            {"error": f"section_type must be one of: {', '.join(sorted(valid))}"},
             status_code=400,
         )
+    section_key, err = _approve_section_key(body, data)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
 
-    # Ensure the session directory exists
-    d = session_dir(dtxsid)
+    validate_dtxsid(dtxsid)
+    current_path = SESSIONS_DIR / dtxsid / f"{section_key}.json"
+    current = read_json_file(current_path) if current_path.exists() else None
+    if not isinstance(current, dict):
+        return JSONResponse({"error": f"No '{section_key}' section to approve",
+                             "code": "section_not_found"}, status_code=404)
+    # The client re-sends the content it loaded (with the approval and
+    # bookkeeping fields it carries): compare content only, and only the fields
+    # the client sent, so a client that leaves out a field it never shows is not
+    # "changing" it. original_* is the client's note of the generated text.
+    sent = {k: v for k, v in data.items() if not k.startswith("original_")}
+    if content_hash(sent) != content_hash({k: current.get(k) for k in sent}):
+        return JSONResponse({
+            "error": (f"Approving no longer saves text; accept '{section_key}' as it is, or "
+                      "change it outside the application and bring the new version in"),
+            "code": "approve_content_retired"}, status_code=409)
 
-    # Save / update identity.json on every approve so it stays current
-    if identity:
-        (d / "identity.json").write_text(
-            json.dumps(identity, indent=2, default=str), encoding="utf-8",
-        )
+    try:
+        result = accept_section_step(dtxsid, section_key, DiskPoolStore())
+    except StepError as e:
+        return _step_refusal(e)
+    out = {"ok": True, "section_type": section_type, "user_edited": False,
+           "version": result.get("version", 1)}
+    if result.get("noop"):
+        out["noop"] = result["noop"]
+    return JSONResponse(out)
 
-    # Save / update meta.json with chemical name and CASRN
-    meta_path = d / "meta.json"
-    if meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    else:
-        meta = {"dtxsid": dtxsid, "created_at": now_iso()}
-    meta["updated_at"] = now_iso()
-    if identity:
-        meta["name"] = identity.get("name", "")
-        meta["casrn"] = identity.get("casrn", "")
-    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-    # Stamp the data with the approval time + flag and clear any stale flag.
-    # The 'approved' boolean is the source of truth for the editor lock state;
-    # 'approved_at' is a human-readable timestamp.  ('stale' is set by
-    # invalidate_pool_artifacts when the file pool changes after a section
-    # was already approved — re-approval clears it.)
-    data["approved"] = True
-    data["approved_at"] = now_iso()
-    data.pop("stale", None)
-    # Re-blessing answers the Phase 3b wording-review signal (twin of
-    # workflow.steps.accept_section_step): the UI re-sends the section content
-    # it loaded, which still carries the marker, so strip it here or it persists.
-    data.pop("wording_review", None)
-    # Assert the FINAL content fact (ADR-0015 facts-on-disk): approve = editorial
-    # "done" → FINAL (auto-sets PROTECTED), serialized to data["facts"] so a later
-    # reprocess can demote_for_currency. Shares the lifted step's helper so the
-    # route and workflow.steps.accept_section_step stay in lock-step.
-    from workflow.steps import _promote_to_final
-    _promote_to_final(data)
-
-    # Phase 4: this approve saves the (possibly-edited) content the human just
-    # accepted — a retained, blessed version. Stamp the transient cause marker so
-    # save_section (archive=True below) records an "edit"/"blessed" line on the
-    # section's version manifest. save_section pops it, so it never persists in
-    # the section JSON. (The pure re-bless path — accept_section_step, archive=
-    # False — records the SAME cause against the existing version instead of
-    # minting one; the two are separate entry points and never chained, so there
-    # is no double-archive.)
-    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
-
-    if section_type == "background":
-        save_section(dtxsid, "background", data)
-    elif section_type == "bm2":
-        # Section key: the body's bm2_slug — what save-section / unapprove and
-        # the UI send — else (legacy per-.bm2 cards) slugified from the original
-        # .bm2 filename. Sections written by materialize_result_sections carry
-        # no filename, so requiring one made them unapprovable.
+def _approve_section_key(body: dict, data: dict) -> tuple[str | None, str | None]:
+    """The section key an approve body names: the catalog's resolver, with the
+    two older spellings the approve body allowed (a bm2 section named by its
+    .bm2 file name; a genomics section's organ/sex inside `data`)."""
+    from workflow.section_catalog import resolve_section_key
+    section_type = body.get("section_type", "")
+    if section_type == "bm2" and not body.get("bm2_slug"):
         filename = data.get("filename", "")
-        if body.get("bm2_slug"):
-            section_key, err = _resolve_section_key(body)
-            if err:
-                return JSONResponse({"error": err}, status_code=400)
-        elif filename and bm2_slug(filename):
-            section_key = f"bm2_{bm2_slug(filename)}"
-        else:
-            return JSONResponse(
-                {"error": "bm2 sections need bm2_slug (or data.filename)"},
-                status_code=400,
-            )
-        save_section(dtxsid, section_key, data)
-
-        # Copy the .bm2 file from /tmp into the session's files/ directory
-        # so it persists across server restarts.  (Processed data is cached
-        # in LMDB via bm2_cache, so no sidecar files need copying.)
-        bm2_id = data.get("bm2_id", "")
-        upload = _bm2_uploads.get(bm2_id)
-        if filename and upload and os.path.exists(upload["temp_path"]):
-            files_dir = d / "files"
-            files_dir.mkdir(exist_ok=True)
-            src = upload["temp_path"]
-            dest = files_dir / filename
-            if not dest.exists():
-                shutil.copy2(src, dest)
-
-    elif section_type == "methods":
-        # Materials and Methods — single section, saved as methods.json
-        save_section(dtxsid, "methods", data)
-
-    elif section_type == "bmd_summary":
-        # Apical Endpoint BMD Summary — auto-derived, saved as bmd_summary.json
-        save_section(dtxsid, "bmd_summary", data)
-
-    elif section_type == "genomics":
-        # Genomics section — one file per organ × sex combination.
-        # The section_key is built from organ and sex (e.g., "genomics_liver_male").
-        organ = data.get("organ", "").lower().replace(" ", "_")
-        sex = data.get("sex", "").lower().replace(" ", "_")
-        if not organ or not sex:
-            return JSONResponse(
-                {"error": "genomics data must include organ and sex"},
-                status_code=400,
-            )
-        section_key = f"genomics_{organ}_{sex}"
-        save_section(dtxsid, section_key, data)
-
-        # Copy uploaded CSV into files/ for future reprocessing
-        csv_id = data.get("csv_id", "")
-        csv_upload = _csv_uploads.get(csv_id)
-        if csv_upload and os.path.exists(csv_upload["temp_path"]):
-            files_dir = d / "files"
-            files_dir.mkdir(exist_ok=True)
-            dest = files_dir / csv_upload["filename"]
-            if not dest.exists():
-                shutil.copy2(csv_upload["temp_path"], dest)
-
-    elif section_type == "summary":
-        # Summary section — saved as summary.json
-        save_section(dtxsid, "summary", data)
-
-    # --- Did the user edit the generated text before approving? ---
-    # The client sends the original generated text alongside the (possibly
-    # edited) approved text; the answer goes back as `user_edited`.
-    user_edited = False
-    if section_type == "bm2":
-        original_narrative = data.get("original_narrative", "")
-        edited_narrative = data.get("narrative", "")
-        if original_narrative and edited_narrative:
-            user_edited = original_narrative != edited_narrative
-    elif section_type in ("background", "methods", "summary"):
-        original_paragraphs = data.get("original_paragraphs")
-        edited_paragraphs = data.get("paragraphs")
-        if original_paragraphs and edited_paragraphs:
-            user_edited = original_paragraphs != edited_paragraphs
-
-    # Read back the saved version number so the UI can display "v1", "v2", etc.
-    # The version was stamped onto `data` by save_section() before writing.
-    version = data.get("version", 1)
-
-    return JSONResponse({
-        "ok": True,
-        "section_type": section_type,
-        "user_edited": user_edited,
-        "version": version,
-    })
+        if not (filename and bm2_slug(filename)):
+            return None, "bm2 sections need bm2_slug (or data.filename)"
+        body = {**body, "bm2_slug": bm2_slug(filename)}
+    if section_type == "genomics" and not (body.get("organ") and body.get("sex")):
+        body = {**body, "organ": data.get("organ", ""), "sex": data.get("sex", "")}
+    return resolve_section_key(body)
 
 
 # ---------------------------------------------------------------------------
@@ -1037,27 +946,32 @@ async def api_session_models(dtxsid: Dtxsid, request: Request):
 @router.post("/api/session/save-section")
 async def api_session_save_section(request: Request):
     """
-    Persist a report section to disk WITHOUT changing its approval state.
-
-    Used to auto-save freshly-generated content (e.g., when the LLM
-    finishes producing the body Background) so it survives a page reload
-    without requiring the user to click Approve.  Approval is a separate
-    concern — it locks the editor.
+    Save a section's text WITHOUT approving it (an auto-save of freshly
+    generated text), through the section write gate (C2 §4.6):
+      * the section is owned (approved, released with PROTECTED, edited) →
+        409 ``section_owned``; release it first, with a reason;
+      * `approved: true` in the body → 400 ``approve_via_accept`` (saving
+        never approves; accept does);
+      * otherwise the prior text is archived, the new one written, and a
+        version event recorded; unchanged text writes nothing.
 
     Input JSON:
       {
         "dtxsid": "DTXSID...",
         "section_type": "background" | "methods" | ...,
         "data": {...},        // the section payload (paragraphs, references, etc.)
-        "approved": false,    // optional; defaults to false for fresh saves
         "bm2_slug": "...",    // required for bm2 sections
         "organ": "...",       // required for genomics sections
         "sex": "..."          // required for genomics sections
       }
 
-    The save uses 'archive=False' so it does NOT create a new history
-    entry — only approve actions bump the version count.
+    Kept for the old interface (C2 D5); the new interface never calls it.
+    Returns {"ok": true, "version": n}.
     """
+    from workflow.errors import StepError
+    from safeguards.guarded import write_section
+    from workflow.store import DiskPoolStore
+
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
     if not dtxsid:
@@ -1066,15 +980,20 @@ async def api_session_save_section(request: Request):
     section_key, err = _resolve_section_key(body)
     if err:
         return JSONResponse({"error": err}, status_code=400)
+    if body.get("approved") or (body.get("data") or {}).get("approved"):
+        return JSONResponse({"error": "save-section cannot approve a section; use accept",
+                             "code": "approve_via_accept"}, status_code=400)
 
     data = dict(body.get("data") or {})
-    # Stamp the approval state (default False — fresh generations are
-    # unapproved until the user explicitly clicks Approve).
-    data["approved"] = bool(body.get("approved", False))
+    data["approved"] = False
     data.setdefault("saved_at", now_iso())
-
-    save_section(dtxsid, section_key, data, archive=False)
-    return JSONResponse({"ok": True})
+    author = data.get("source") if data.get("source") in ("generated", "model") else "client"
+    try:
+        out = write_section(validate_dtxsid(dtxsid), section_key, data, DiskPoolStore(),
+                            act="save", actor="person", author=author)
+    except StepError as e:
+        return _step_refusal(e)
+    return JSONResponse({"ok": True, "version": out["version"]})
 
 
 # ---------------------------------------------------------------------------
@@ -1084,28 +1003,29 @@ async def api_session_save_section(request: Request):
 @router.post("/api/session/unapprove")
 async def api_session_unapprove(request: Request):
     """
-    REVISE (reopen) a report section for editing, preserving its content.
-
-    The "Revise" action (renamed from bare "Unapprove"): unlocks the editor AND
-    runs the voluntary HUMAN_RELEASE down-ratchet — withdraws the FINAL maturity
-    claim (PROTECTED stands) and records the human's free-text `reason` on the
-    Phase-4 version trail (cause="revise"), so WHY a person reopened a blessed
-    section is auditable next to the system's cause="reprocess" entries. Content
-    is preserved; they can re-accept without regenerating.
+    REVISE (reopen) an approved section, preserving its content:
+    workflow.steps.release_section_step (C2 §4.4). FINAL is withdrawn,
+    PROTECTED stands, and the reason — now required (C2 D3) — is kept on the
+    version trail.
 
     Input JSON:
       {
         "dtxsid": "DTXSID...",
         "section_type": "background" | "bm2" | "methods" | ...,
-        "reason": "why the human is reopening"  // optional free text, recorded
+        "reason": "why the person is reopening it",   // required
         "bm2_slug": "...",  // required for bm2
         "organ": "...",     // required for genomics
         "sex": "..."        // required for genomics
       }
 
-    No-op if the section file doesn't exist.  Returns ok regardless so
-    the caller can always rely on a successful response.
+    Refusals: 404 ``section_not_found`` (no such section), 400
+    ``reason_required``. A section that is not approved answers ok with
+    ``noop not_approved``.
     """
+    from workflow.errors import StepError
+    from safeguards.guarded import release_section_step
+    from workflow.store import DiskPoolStore
+
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
     if not dtxsid:
@@ -1114,24 +1034,15 @@ async def api_session_unapprove(request: Request):
     section_key, err = _resolve_section_key(body)
     if err:
         return JSONResponse({"error": err}, status_code=400)
-
-    section_path = session_dir(dtxsid) / f"{section_key}.json"
-    if section_path.exists():
-        try:
-            data = json.loads(section_path.read_text(encoding="utf-8"))
-            data["approved"] = False
-            # Down-ratchet + record the reason via the SAME helper the lifted
-            # workflow.steps.release_section_step uses, so route and step stay in
-            # lock-step (facts-on-disk discipline). archive=False for the flag
-            # flip; the version-trail entry captures the transition.
-            from workflow.steps import _demote_for_revise
-            _demote_for_revise(data, str(body.get("reason", "")))
-            save_section(dtxsid, section_key, data, archive=False)
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to revise section %s/%s: %s",
-                           dtxsid, section_key, e)
-
-    return JSONResponse({"ok": True})
+    try:
+        result = release_section_step(validate_dtxsid(dtxsid), section_key, DiskPoolStore(),
+                                      reason=str(body.get("reason") or ""))
+    except StepError as e:
+        return _step_refusal(e)
+    out = {"ok": True, "version": result.get("version")}
+    if result.get("noop"):
+        out["noop"] = result["noop"]
+    return JSONResponse(out)
 
 
 # ---------------------------------------------------------------------------
@@ -1141,13 +1052,18 @@ async def api_session_unapprove(request: Request):
 @router.post("/api/session/discard-section")
 async def api_session_discard_section(request: Request):
     """
-    Permanently delete a section's JSON file (and abandon its history).
+    Discard a section's text: workflow.steps.discard_section_step (C2 §4.7).
+    The file is archived first, then deleted, and the discard recorded, so
+    restore can still bring it back. An approved section is released first
+    (409 ``section_owned``); the reason is required (400 ``reason_required``).
 
-    Use this for explicit user-initiated discards — e.g., a "Reset this
-    section" action.  Distinct from unapprove, which preserves content.
-
-    Input JSON: same shape as save-section.
+    Input JSON: same shape as save-section, plus "reason".
+    Kept for the old interface (C2 D4); the new interface never calls it.
     """
+    from workflow.errors import StepError
+    from safeguards.guarded import discard_section_step
+    from workflow.store import DiskPoolStore
+
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
     if not dtxsid:
@@ -1156,9 +1072,13 @@ async def api_session_discard_section(request: Request):
     section_key, err = _resolve_section_key(body)
     if err:
         return JSONResponse({"error": err}, status_code=400)
-
-    delete_section(dtxsid, section_key)
-    return JSONResponse({"ok": True})
+    try:
+        result = discard_section_step(validate_dtxsid(dtxsid), section_key, DiskPoolStore(),
+                                      reason=str(body.get("reason") or ""))
+    except StepError as e:
+        return _step_refusal(e)
+    return JSONResponse({"ok": True, "archived": result["archived"],
+                         "version": result["version"]})
 
 
 # ---------------------------------------------------------------------------
@@ -1168,89 +1088,41 @@ async def api_session_discard_section(request: Request):
 @router.get("/api/session/{dtxsid}/history/{section_key}")
 async def api_session_history(dtxsid: Dtxsid, section_key: str, version: int = 0):
     """
-    Return version history for an approved section.
-
-    Lists all past versions (from the history/ subdirectory) plus the current
-    version.  Each entry includes the version number, approved_at timestamp,
-    and whether it's the current version.
-
-    If the `version` query parameter is provided (e.g. ?version=1), returns
-    the full JSON content of that specific version instead of the list.
+    Return version history for a section, through
+    workflow.section_writes.section_history (C2): the key is validated, it
+    works after a discard, and it lists every version whose text is kept.
 
     URL pattern:
-        GET /api/session/{dtxsid}/history/{section_key}         → version list
+        GET /api/session/{dtxsid}/history/{section_key}           → version list
         GET /api/session/{dtxsid}/history/{section_key}?version=1 → full content
 
-    Response (list mode):
+    Response (list mode; unchanged shape):
     {
       "section_key": "background",
-      "current_version": 3,
+      "current_version": 3,              // null after a discard
       "versions": [
-        {"version": 1, "approved_at": "2026-03-02T19:23:59...", "is_current": false},
-        {"version": 2, "approved_at": "2026-03-02T19:45:12...", "is_current": false},
-        {"version": 3, "approved_at": "2026-03-02T20:01:33...", "is_current": true}
+        {"version": 1, "approved_at": "…", "is_current": false},
+        {"version": 3, "approved_at": "…", "is_current": true}
       ]
     }
     """
-    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
-    current_path = d / f"{section_key}.json"
-    history_dir = d / "history" / section_key
+    from workflow import section_writes as sw
+    from workflow.errors import StepError
+    from workflow.store import DiskPoolStore
 
-    # The current file must exist — otherwise there's no history to show
-    if not current_path.exists():
-        return JSONResponse(
-            {"error": f"No approved '{section_key}' section found"},
-            status_code=404,
-        )
-
-    current_data = json.loads(current_path.read_text(encoding="utf-8"))
-    current_version = current_data.get("version", 1)
-
-    # --- Collect archived versions from history/ ---
-    # Each file is named {safe_timestamp}.json where colons in the ISO
-    # timestamp have been replaced with hyphens.
-    archived_versions = []
-    if history_dir.exists():
-        for f in sorted(history_dir.glob("*.json")):
-            try:
-                v = json.loads(f.read_text(encoding="utf-8"))
-                archived_versions.append(v)
-            except (json.JSONDecodeError, OSError):
-                # Skip corrupt history files
-                continue
-
-    # --- If a specific version was requested, return its full content ---
-    if version > 0:
-        # Check archived versions first
-        for v in archived_versions:
-            if v.get("version") == version:
-                return JSONResponse(v)
-        # Check if it's the current version
-        if current_version == version:
-            return JSONResponse(current_data)
-        return JSONResponse(
-            {"error": f"Version {version} not found"}, status_code=404,
-        )
-
-    # --- List mode: return metadata for all versions ---
-    versions = []
-    for v in archived_versions:
-        versions.append({
-            "version": v.get("version", 0),
-            "approved_at": v.get("approved_at", ""),
-            "is_current": False,
-        })
-    # Add the current version as the last entry
-    versions.append({
-        "version": current_version,
-        "approved_at": current_data.get("approved_at", ""),
-        "is_current": True,
-    })
-
+    store = DiskPoolStore()
+    try:
+        if version > 0:
+            return JSONResponse(sw.read_version(dtxsid, section_key, version, store))
+        hist = sw.section_history(dtxsid, section_key, store)
+    except StepError as e:
+        return _step_refusal(e)
     return JSONResponse({
-        "section_key": section_key,
-        "current_version": current_version,
-        "versions": versions,
+        "section_key": hist["section_key"],
+        "current_version": hist["current_version"],
+        "versions": [{"version": v["version"], "approved_at": v.get("approved_at") or "",
+                      "is_current": v["current"]}
+                     for v in hist["versions"] if v["retrievable"]],
     })
 
 
@@ -1261,78 +1133,41 @@ async def api_session_history(dtxsid: Dtxsid, section_key: str, version: int = 0
 @router.post("/api/session/{dtxsid}/restore")
 async def api_session_restore(dtxsid: Dtxsid, request: Request):
     """
-    Restore a past version of a section by re-saving it as the new current.
+    Restore a past version of a section as the new current one:
+    workflow.steps.restore_section_step (C2 §4.8). The key is validated, it
+    works after a discard, the current text is archived first, and the
+    restored version comes back as a draft a person owns: not approved,
+    protected from the machine (C2 D3; accepting it is a separate act). The
+    reason is required.
 
-    This is non-destructive: restoring v1 does NOT delete v2 or v3.  Instead
-    it creates a new version (v4) whose content matches v1.  The old current
-    is archived to history/ first, as usual.
-
-    Input JSON:
-      {"section_key": "background", "version": 1}
-
-    The restored data gets a fresh approved_at timestamp and an incremented
-    version number.
+    Input JSON: {"section_key": "background", "version": 1, "reason": "…"}
+    Returns {"ok", "version", "section_key", "from_version"}; restoring the
+    current version answers ok with "message": "Already the current version".
     """
+    from workflow.errors import StepError
+    from safeguards.guarded import restore_section_step
+    from workflow.store import DiskPoolStore
+
     try:
         body = await request.json()
     except Exception:
         body = {}
     section_key = body.get("section_key", "")
     target_version = body.get("version", 0)
-
     if not section_key or not target_version:
         return JSONResponse(
             {"error": "section_key and version are required"}, status_code=400,
         )
-
-    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
-    current_path = d / f"{section_key}.json"
-    history_dir = d / "history" / section_key
-
-    if not current_path.exists():
-        return JSONResponse(
-            {"error": f"No approved '{section_key}' section found"},
-            status_code=404,
-        )
-
-    # Find the requested version in history files
-    target_data = None
-    if history_dir.exists():
-        for f in sorted(history_dir.glob("*.json")):
-            try:
-                v = json.loads(f.read_text(encoding="utf-8"))
-                if v.get("version") == target_version:
-                    target_data = v
-                    break
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    # Also check if they're restoring the current version (no-op but valid)
-    if target_data is None:
-        current_data = json.loads(current_path.read_text(encoding="utf-8"))
-        if current_data.get("version") == target_version:
-            return JSONResponse({
-                "ok": True,
-                "message": "Already the current version",
-                "version": target_version,
-            })
-        return JSONResponse(
-            {"error": f"Version {target_version} not found"}, status_code=404,
-        )
-
-    # Stamp the restored data with a fresh approval timestamp.
-    # save_section() will archive the old current and assign a new version number.
-    target_data["approved_at"] = now_iso()
-    # Remove the old version number — save_section() will compute the new one
-    target_data.pop("version", None)
-
-    save_section(dtxsid, section_key, target_data)
-
-    return JSONResponse({
-        "ok": True,
-        "version": target_data.get("version", 1),
-        "section_key": section_key,
-    })
+    try:
+        result = restore_section_step(dtxsid, section_key, target_version, DiskPoolStore(),
+                                      reason=str(body.get("reason") or ""))
+    except StepError as e:
+        return _step_refusal(e)
+    if result.get("noop"):
+        return JSONResponse({"ok": True, "message": "Already the current version",
+                             "version": target_version, "noop": result["noop"]})
+    return JSONResponse({"ok": True, "version": result["version"],
+                         "section_key": section_key, "from_version": target_version})
 
 
 # ---------------------------------------------------------------------------
@@ -1456,13 +1291,15 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     # pipeline.metadata_approval: onto integrated.json (schema-validated —
     # a malformed description → 422 globally, disk untouched), the genomics
     # sidecar reconciled, .bm2 re-exported, metadata_approved.json written.
-    from pipeline.metadata_approval import approve_experiment_metadata
+    from safeguards.guarded import approve_experiment_metadata
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(
             None, approve_experiment_metadata, dtxsid, metadata_by_name)
     except LookupError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
+    except StepError as e:  # the safeguards (R6, C1)
+        return _step_refusal(e)
     updated_count, bm2_ok = result["updated"], result["bm2_exported"]
 
     return JSONResponse({
@@ -1483,13 +1320,16 @@ async def api_pool_remove_file(dtxsid: Dtxsid, filename: str):
     Reversible on disk: files move to sessions/<dtxsid>/_removed/<timestamp>/.
     Invalidates validation/integration when the pool had progressed past upload.
     400 for an invalid name, a sidecar, or a file not in the pool."""
-    from pipeline.pool_state import PoolFileError, remove_pool_file
+    from pipeline.pool_state import PoolFileError
+    from safeguards.guarded import remove_pool_file
     if not (SESSIONS_DIR / validate_dtxsid(dtxsid)).exists():
         return JSONResponse({"error": f"No session found for {dtxsid}"}, status_code=404)
     try:
         result = remove_pool_file(dtxsid, filename)
     except PoolFileError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+    except StepError as e:  # the safeguards (R6, C1)
+        return _step_refusal(e)
     return JSONResponse({"ok": True, **result})
 
 
@@ -1521,6 +1361,9 @@ async def api_pool_reset(dtxsid: Dtxsid):
     rendered previews, converted-file originals (_originals/) and the
     per-file-removal holding area (_removed/).
 
+    Every section file is archived to history/ before it is deleted, with a
+    `discard` event (act "pool_reset"), so it can be restored (C2).
+
     Does NOT delete:
       - meta.json, identity.json (chemical identity — still valid)
       - history/ (version history of approved sections — archival)
@@ -1543,6 +1386,13 @@ async def api_pool_reset(dtxsid: Dtxsid):
             {"error": f"No session found for {dtxsid}"},
             status_code=404,
         )
+    # The safeguards (R6, C1): no reset of a companion or a report, nor of a
+    # study with no files.
+    from safeguards.guarded import require_reset
+    try:
+        require_reset(dtxsid)
+    except StepError as e:
+        return _step_refusal(e)
 
     deleted_items = []
 
@@ -1559,6 +1409,7 @@ async def api_pool_reset(dtxsid: Dtxsid):
     for artifact in ("integrated.json", "integrated.bm2",
                      "metadata_approved.json", "validation_report.json",
                      "precedence.json", "animal_report.json",
+                     "integration_basis.json",
                      "_fingerprints.json", "_category_lookup.json",
                      "genomics.sidecar.json", "session.duckdb",
                      ".session_db.fingerprint", ".prepare_content.fingerprint",
@@ -1578,11 +1429,21 @@ async def api_pool_reset(dtxsid: Dtxsid):
             shutil.rmtree(p)
             deleted_items.append(f"{sub}/")
 
-    # 3. Delete all approved section files (bm2_*, genomics_*, methods, etc.)
+    # 3. Delete the section files derived from the pool (bm2_*, genomics_*,
+    #    methods, …). Each is archived first and its discard recorded (C2
+    #    §4.15), so a reset section can be restored.
+    from workflow.section_writes import discard as _discard_section
+    from workflow.store import DiskPoolStore
+    _store = DiskPoolStore()
+
+    def _reset_section(stem: str) -> None:
+        _discard_section(dtxsid, stem, _store, act="pool_reset", actor="person",
+                         reason="pool reset")
+        deleted_items.append(f"{stem}.json")
+
     for pattern in ("bm2_*.json", "genomics_*.json"):
-        for f in d.glob(pattern):
-            f.unlink()
-            deleted_items.append(f.name)
+        for f in sorted(d.glob(pattern)):
+            _reset_section(f.stem)
 
     # Singleton report sections derived from the DATA pool. Enumerated from the
     # section catalog (rather than a hand-kept literal) but with background.json
@@ -1593,10 +1454,8 @@ async def api_pool_reset(dtxsid: Dtxsid):
     for section_file in singleton_section_files():
         if section_file == "background.json":
             continue
-        p = d / section_file
-        if p.exists():
-            p.unlink()
-            deleted_items.append(section_file)
+        if (d / section_file).exists():
+            _reset_section(section_file[:-5])
 
     # 4. Clear in-memory server state for this DTXSID.
     #    Remove bm2/csv/data upload entries whose temp_path pointed into
@@ -1644,7 +1503,8 @@ async def api_session_reset(dtxsid: Dtxsid):
 
     After this, the chemical identity form is still filled (from localStorage)
     but the server has no record of any prior work.  The user starts completely
-    from scratch.
+    from scratch.  A published book's companion and a report over several
+    studies are refused (R6, safeguards.acts).
     """
     _bm2_uploads = get_bm2_uploads()
     _csv_uploads = get_csv_uploads()
@@ -1655,6 +1515,13 @@ async def api_session_reset(dtxsid: Dtxsid):
     d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse({"ok": True, "message": "No session to reset"})
+    # R6: a published book's companion, or a report over several studies, is
+    # not deleted here.
+    from safeguards.acts import require_data_session
+    try:
+        require_data_session(dtxsid)
+    except StepError as e:
+        return _step_refusal(e)
 
     # Delete the entire session directory tree
     shutil.rmtree(d)

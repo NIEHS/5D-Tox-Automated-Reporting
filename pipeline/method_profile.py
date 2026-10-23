@@ -76,19 +76,29 @@ IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
 
 # Implementations that run only where the machine can run them: (kind, name)
 # → a function returning None when available here, else the reason it is not.
-def _bmds27_unavailable() -> str | None:
+# With probe=False it runs nothing: it answers UNCHECKED unless this process
+# has already checked (a read without side effects — the state read model —
+# must not start Wine).
+UNCHECKED = "not checked on this machine yet"
+
+
+def _bmds27_unavailable(probe: bool = True) -> str | None:
     from pipeline import bmds27
-    return bmds27.unavailable_reason()
+    if probe:
+        return bmds27.unavailable_reason()
+    known, why = bmds27.known_unavailable_reason()
+    return why if known else UNCHECKED
 
 
 _MACHINE_DEPENDENT = {("engine", "bmds_2_7_high_dose_drop"): _bmds27_unavailable}
 
 
-def unavailable_reason(kind: str, name: str) -> str | None:
-    """None when implementation `name` of `kind` runs here, else why not."""
+def unavailable_reason(kind: str, name: str, *, probe: bool = True) -> str | None:
+    """None when implementation `name` of `kind` runs here, else why not
+    (UNCHECKED when probe=False and the machine has not been checked)."""
     check = _MACHINE_DEPENDENT.get((kind, name))
     if check is not None:
-        return check()
+        return check(probe)
     return None if IMPLEMENTATIONS[kind].get(name, False) else "not implemented"
 
 
@@ -372,6 +382,9 @@ class MethodSettings:
     values: dict = field(default_factory=dict)
     sources: dict = field(default_factory=dict)
     deviations: list = field(default_factory=list)
+    # Settings whose availability here was not checked (resolve(probe=False)):
+    # their values are the profile's, not substituted.  Never set by a run.
+    unchecked: list = field(default_factory=list)
 
     def get(self, path: str):
         return self.values[path]
@@ -513,9 +526,11 @@ def _flatten(doc, schema, prefix: str, out: dict, keep_null: bool = False) -> No
 
 
 def resolve(profile_name: str, *, overlay: dict | None = None, overlay_label: str = "",
-            request: dict | None = None) -> MethodSettings:
+            request: dict | None = None, probe: bool = True) -> MethodSettings:
     """The settings of `profile_name` over the built-in defaults, then the
-    study overlay and the request (both partial)."""
+    study overlay and the request (both partial).  probe=False is for a read
+    that only reports the method: it does not run the machine checks, and
+    lists what it could not check in ``unchecked`` instead."""
     profile = load_profile(profile_name)
     settings = MethodSettings(profile=profile_name,
                               profile_hash=content_hash(profile_path(profile_name)))
@@ -530,7 +545,7 @@ def resolve(profile_name: str, *, overlay: dict | None = None, overlay_label: st
         for p, v in flat.items():
             settings.values[p] = v
             settings.sources[p] = label
-    _substitute_unimplemented(settings)
+    _substitute_unimplemented(settings, probe=probe)
     return settings
 
 
@@ -538,13 +553,17 @@ def resolve(profile_name: str, *, overlay: dict | None = None, overlay_label: st
 _IMPL_FIELDS = {"apical.bmd.engine": "engine", "apical.bmd.eligibility": "eligibility"}
 
 
-def _substitute_unimplemented(settings: MethodSettings) -> None:
+def _substitute_unimplemented(settings: MethodSettings, *, probe: bool = True) -> None:
     defaults: dict = {}
     _flatten(_builtin_defaults(), SCHEMA, "", defaults, keep_null=True)
     for p, kind in _IMPL_FIELDS.items():
         v = settings.values.get(p)
-        why = unavailable_reason(kind, v) if v is not None else None
-        if why == "not implemented":
+        why = unavailable_reason(kind, v, probe=probe) if v is not None else None
+        if why == UNCHECKED:
+            settings.unchecked.append(
+                f"{p}: {settings.sources[p]} asks for {v!r}; whether this machine can "
+                f"run it is checked when Process runs")
+        elif why == "not implemented":
             settings.deviations.append(
                 f"{p}: {settings.sources[p]} asks for {v!r}, which this tool does not "
                 f"implement; {defaults[p]!r} is used")
@@ -647,6 +666,60 @@ def ensure_pin(dtxsid: str) -> dict:
     return pin
 
 
+def chosen_by_person(pin: dict | None) -> bool:
+    """Whether a person chose this pin (C1 D1): a pin written by default, or
+    none at all, is not a choice."""
+    return bool(pin) and pin.get("pinned_by") not in (None, "default")
+
+
+def suggest_profile(dtxsid: str, *, count_mismatches=None) -> dict:
+    """The profile to propose to the person choosing a study's method (ADR-0027
+    §3; C1 D1 = B): ``{"name", "why"}``. A read with no side effects (no pin
+    written, no machine check run). The proposal is the profile of the study's
+    series whose expectations the dataset's recorded analyses (the .bm2
+    settings) contradict least; on a tie, or with no dataset, the newest. The
+    person confirms it; it is never applied for them.
+
+    `count_mismatches(settings) -> int | None` counts the dataset's
+    disagreements with resolved settings (None: no dataset, or one recording
+    no analyses). The read model passes its memoized count; by default the
+    dataset is read once here, without the in-memory cache."""
+    pin = read_pin(dtxsid) or {}
+    series = pin.get("series") or DEFAULT_SERIES
+    newest = newest_profile(series)
+    if count_mismatches is None:
+        from common.session_files import read_json_file
+        from pipeline.session_store import session_path
+        integrated = read_json_file(session_path(dtxsid) / "integrated.json")
+
+        def count_mismatches(settings):
+            if not isinstance(integrated, dict) or not integrated.get("bMDResult"):
+                return None
+            return len(recorded_mismatches(integrated, settings))
+    overlay = study_overlay(dtxsid)
+    candidates = sorted((p for p in list_profiles() if p["series"] == series),
+                        key=lambda p: p["effective"], reverse=True)       # newest first
+    counts = {p["name"]: count_mismatches(resolve(
+        p["name"], overlay=overlay, overlay_label=f"study:{dtxsid}", probe=False))
+        for p in candidates}
+    if any(c is None for c in counts.values()):
+        return {"name": newest, "why": f"the newest profile of the {series} series (the "
+                                       f"study has no recorded analyses to compare)"}
+    best = min(counts.values())
+    name = next(p["name"] for p in candidates if counts[p["name"]] == best)
+    if name != newest:
+        why = (f"it matches the analysis settings the study's .bm2 files record "
+               f"({best} difference(s); the newest, {newest}, has {counts[newest]})")
+    elif best == 0:
+        why = (f"the newest profile of the {series} series; the analysis settings the "
+               f"study's .bm2 files record agree with it")
+    else:
+        why = (f"the newest profile of the {series} series; no profile matches the "
+               f"analysis settings the study's .bm2 files record better "
+               f"({best} difference(s))")
+    return {"name": name, "why": why}
+
+
 def study_overlay(dtxsid: str) -> dict | None:
     """The `methods:` block of the study overlay (templates/studies/<dtxsid>/view.yaml)."""
     from document_model.view_config import load_study_view
@@ -658,10 +731,12 @@ def study_overlay(dtxsid: str) -> dict | None:
     return view.get("methods") or None
 
 
-def session_method(dtxsid: str | None, request: dict | None = None) -> MethodSettings:
+def session_method(dtxsid: str | None, request: dict | None = None, *,
+                   probe: bool = True) -> MethodSettings:
     """The resolved method of a study: its pinned profile (the newest when it
     has none — not written here), its study overlay, then `request`.  A pin
-    whose profile file changed since pinning fails: profiles are immutable."""
+    whose profile file changed since pinning fails: profiles are immutable.
+    probe=False: see resolve."""
     pin = read_pin(dtxsid) if dtxsid else None
     if pin:
         name = pin["name"]
@@ -674,7 +749,8 @@ def session_method(dtxsid: str | None, request: dict | None = None) -> MethodSet
     else:
         name = newest_profile()
     overlay = study_overlay(dtxsid) if dtxsid else None
-    settings = resolve(name, overlay=overlay, overlay_label=f"study:{dtxsid}", request=request)
+    settings = resolve(name, overlay=overlay, overlay_label=f"study:{dtxsid}", request=request,
+                       probe=probe)
     if not pin:
         settings.deviations.append(f"no profile pinned; the newest, {name}, is used")
     return settings
