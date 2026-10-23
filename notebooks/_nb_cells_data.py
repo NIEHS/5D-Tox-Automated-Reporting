@@ -94,6 +94,7 @@ Read this once. The step explanations below refer back to it.
 | Layer | Where | What it is |
 |---|---|---|
 | Front ends | `web_routes/*` (the browser), `tooling/generate_report.py` (the command line), this notebook | Parse input, call a step, show the result. No workflow logic. |
+| Safeguards | `safeguards/*` (ADR-0031) | The idiot-proofing, between the browser or the command line and the core: an act refused outside its phase, Process refused until a person chose the method, a person's text never replaced by a machine, a reason to force or reopen, stated facts checked against the vocabularies, no Background without its sources, the publish gate; each refusal explained in plain words (`safeguards.refusals`). Entry point: `safeguards.guarded`, with the core steps' names. **This notebook calls the core directly, unguarded.** |
 | Workflow core | `workflow/steps.py`, `workflow/engine.py`, `workflow/phases.py`, `workflow/store.py` | One function per step. Takes plain Python, returns plain Python, raises `workflow.errors.StepError` (with an HTTP-style status code the routes pass on). All session I/O goes through an injected `PoolStore` (`DiskPoolStore` here). |
 | Pipeline | `pipeline/*`, `tables/*`, `genomics/*`, `narrative/*`, `rendering/*` | The work: fingerprint caching, processing layers, tables, narratives and the four render surfaces. HTTP-free. |
 | Document | `document_model/*`, `templates/`, `profiles/` | The report's declarations: the document tree and its definitions (an era plus a study's alterations, ADR-0029), the wording of the prose written from data (`phrasing:`), the session's definition pin; the analysis method profiles (ADR-0027). Neither `pipeline` nor `document_model` imports the web layer. |
@@ -119,18 +120,24 @@ the browser), never treated as absent: a report is not built without it.
 applies these rules in order:
 
 1. no files in `files/` → `EMPTY`
-2. a section is marked stale (the pool changed after approval) → `UPLOADED`
-3. no `validation_report.json` → `UPLOADED`
-4. the validation report has an error-severity issue → `VALIDATION_ERRORS`
-5. no `integrated.json` → `VALIDATED`
-6. no `animal_report.json` → `INTEGRATED`
-7. otherwise → `APPROVED`
+2. no `validation_report.json` → `UPLOADED`
+3. the validation report has an error-severity issue → `VALIDATION_ERRORS`
+4. no `integrated.json`, or one built from another validation
+   (`workflow.integration_basis`: out of date) → `VALIDATED`
+5. no `animal_report.json` → `INTEGRATED`
+6. otherwise → `APPROVED`
 
-The legal actions for each phase (`VALIDATE`, `INTEGRATE`, `APPROVE`,
-`REPROCESS`, `RESET`, `CLEAR_FILES`) are derived from the browser's own button
-table (`phases._PHASE_BUTTON_STATE`), so the notebook and the browser agree on
-what is allowed. Process, sections and rendering come after `APPROVED` and have
-no phase of their own; their state is their files.
+A stale section does not move the phase: staleness is a section's matter
+(its currency and the publish gate, §14).
+
+The legal actions for each phase are the workflow's declared table of acts
+(`workflow.phases.LEGAL_ACTIONS`: `ADD_FILES`, `REMOVE_FILE`, `RESET`,
+`VALIDATE`, `RESOLVE`, `CONFIRM_CLASSIFICATION`, `INTEGRATE`,
+`STATE_DATASET_FACTS`, `APPROVE`, `PROCESS`), with the act that moves each
+phase forward (`NEXT_STEP`). Here they are shown, not enforced: the browser and
+the command line refuse an act outside them (`safeguards.acts.require`).
+Process, sections and rendering have no phase of their own; their state is
+their files.
 
 ### Caches are keyed by their inputs
 
@@ -838,10 +845,9 @@ metadata from scratch each time).
 
 **How it's implemented.**
 
-- **Study design**, `generate_report.apply_design(dtxsid, DESIGN, store)`:
-  checks every field against the controlled vocabulary
-  (`pipeline.study_design.design_field_errors` over `bmdx_pipe.VOCABULARIES`),
-  writes `study_design.json` (`{fields, recorded_at}`), and calls
+- **Study design**, `generate_report.apply_design(dtxsid, DESIGN, store)` →
+  `workflow.steps.record_study_design`: writes `study_design.json`
+  (`{fields, recorded_at}`), and calls
   `workflow.steps.reapply_study_design`, which sets the fields on every
   experiment's `experimentDescription` (`apply_design_fields`), saves
   `integrated.json` and re-exports `integrated.bm2`. Without a stated design,
@@ -849,11 +855,15 @@ metadata from scratch each time).
   5 days; inhalation for a ppm study) and says so in the log
   (`pipeline.study_design`).
 - **Experiment metadata**, `generate_report.apply_experiment_metadata(dtxsid, EXPERIMENT_METADATA)`:
-  checks that each experiment exists and each value is in the vocabulary, then
   `pipeline.metadata_approval.approve_experiment_metadata(dtxsid, given, merge=True)`
   lays it over the descriptions and records it as the approval in
   `metadata_approved.json`, the same record the browser's approval writes.
   NIEHS-10's project names its experiments by organ and sex, so it states none.
+- Both are written **as given** here. The app and the command line first
+  check them (`safeguards.inputs`): the study must have a dataset, every
+  experiment must be the dataset's, and every field and value the controlled
+  vocabulary's (`pipeline.study_design.design_field_errors`,
+  `bmdx_pipe.VOCABULARIES`); a refusal writes nothing.
 - **Front matter**, `generate_report.apply_front_matter(dtxsid, FRONT_MATTER, store)`:
   merges the given keys over the saved `front_matter.json` and cleans it
   (`rendering.front_matter.clean_front_matter`), as the Configure screen saves

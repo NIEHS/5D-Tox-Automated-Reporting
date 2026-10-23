@@ -211,6 +211,29 @@ REFUSALS: dict[str, Refusal] = {
         "The language model this needs is not one the study's data may be sent to "
         "(only the NIEHS gateway is allowed). Nothing was sent. Tell the maintainer: "
         "the server's model settings must point at the allowed gateway."), None),
+    # ── facts a person states (safeguards.inputs) ────────────────────────────
+    "facts_invalid": Refusal(422, (
+        "Some of what was stated about {what} can't be used, so nothing was saved. "
+        "The details list each problem: a value that isn't one of the choices "
+        "offered, or an experiment the study doesn't have."), "facts"),
+    # ── the Background's sources (safeguards.sources) ────────────────────────
+    "background_sources_unreachable": Refusal(503, (
+        "The Background can't be written now: {sources} could not be reached, and "
+        "without them it can neither state the chemical's toxicology nor say what is "
+        "missing from it. Nothing was changed. Try again later, or where these sources "
+        "are reachable (the NIEHS network)."), "sections"),
+    "background_empty": Refusal(502, (
+        "The language model wrote no Background. Nothing was saved; try again."),
+        "sections"),
+    "background_no_references": Refusal(502, (
+        "The Background the language model wrote cites no sources, so its citations "
+        "would point nowhere. Nothing was saved; try again when the sources can be "
+        "reached."), "sections"),
+    # ── the publish gate (safeguards.publish) ────────────────────────────────
+    "publish_blocked": Refusal(409, (
+        "The report can't be published yet: sections were written again after the "
+        "study's data changed ({keys}). Read each one and accept it again, then "
+        "publish."), "sections"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "
@@ -462,15 +485,19 @@ class MethodNotChosen(StepError):
             f"(method_profile.json is {how}). Pin one, then process.", status_code=409)
 
 
-class StudyRefusal(StepError):
-    """R6: a data act refused on a session whose data is not its own
-    (``read_only_session``, ``report_has_no_data``). ``details`` fills the
-    plain words."""
+class Refused(StepError):
+    """A safeguard's refusal that names its own catalog ``code``; ``details``
+    fills the plain words (``{sources}``, ``{keys}`` …) and is shown beside them."""
 
     def __init__(self, code: str, message: str, status_code: int, details: dict | None = None):
         super().__init__(message, status_code=status_code)
         self.code = code
         self.details = details or {}
+
+
+class StudyRefusal(Refused):
+    """R6: a data act refused on a session whose data is not its own
+    (``read_only_session``, ``report_has_no_data``)."""
 
 
 def error_body(exc: BaseException) -> tuple[dict, int]:

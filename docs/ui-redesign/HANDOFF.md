@@ -213,25 +213,36 @@ to the front-end alone.
 
 ### 4.1 The data phase and its legal actions (`workflow/phases.py`, `workflow/engine.py`)
 
-`WorkflowEngine(dtxsid).state()` returns `{phase, legal_actions, artifacts,
-completeness}` (also `GET /api/workflow/{id}/state`). The phase is
+`WorkflowEngine(dtxsid).state()` returns `{phase, legal_actions, next_step,
+artifacts, completeness}` (also `GET /api/workflow/{id}/state`). The phase is
 `derive_phase(artifacts)`; the first rule that matches wins:
 
 1. no files → **EMPTY**;
-2. stale sections, or never validated → **UPLOADED**;
+2. never validated → **UPLOADED**;
 3. validation errors → **VALIDATION_ERRORS**;
-4. not integrated → **VALIDATED**;
+4. not integrated, or integrated from another validation
+   (`workflow.integration_basis`) → **VALIDATED**;
 5. integrated, no `animal_report.json` → **INTEGRATED**;
 6. otherwise → **APPROVED**.
 
-| phase | legal actions |
-|---|---|
-| EMPTY | — |
-| UPLOADED | CLEAR_FILES, VALIDATE |
-| VALIDATION_ERRORS | RESET, VALIDATE |
-| VALIDATED | INTEGRATE, RESET |
-| INTEGRATED | APPROVE, REPROCESS, RESET, VALIDATE |
-| APPROVED | REPROCESS, RESET |
+A stale section does not move the phase (its currency and the publish gate do, §4.4).
+
+| phase | legal actions | next step |
+|---|---|---|
+| EMPTY | ADD_FILES | ADD_FILES |
+| UPLOADED | ADD_FILES, REMOVE_FILE, RESET, VALIDATE | VALIDATE |
+| VALIDATION_ERRORS | the above, RESOLVE, CONFIRM_CLASSIFICATION | VALIDATE |
+| VALIDATED | the above, INTEGRATE | INTEGRATE |
+| INTEGRATED, APPROVED | all, adding STATE_DATASET_FACTS, APPROVE, PROCESS | — |
+
+**Enforcement is the safeguards' (ADR-0031).** The interface calls
+`safeguards.guarded` (the core steps' names and signatures), never
+`workflow.steps` directly. It refuses an act outside this table, Process until
+a person chose the method profile, a machine's write over a person's text, a
+missing reason, facts outside the vocabularies, a Background without its
+sources, and shipping past the publish gate. Every refusal reaches the client
+as `{error, code, say, fix, details}`: `say` is the plain-words explanation and
+`fix` the place in the workflow that clears it (`safeguards.refusals.PLACES`).
 
 `completeness`, from the validation coverage matrix, gives each platform's
 readiness and what it is missing. For example, an apical platform needs both

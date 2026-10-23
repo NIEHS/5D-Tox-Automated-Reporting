@@ -46,6 +46,7 @@ imports are package-qualified (`from rendering.render_common import ...`,
 | `genomics/` | `genomics_*`, `gene_bodies`, `chart_registry`, `chart_style` |
 | `knowledge_base/` | `build_db`, `toxkb`, `citegraph`, `crawl_*`, `fulltext`, `extract`, `enrichr_*`, `enrichment_stats`, `pathway_enrich`, `go_gene_map` |
 | `styling_export/` | `docx_style_extract`, `freeform_content`, `export_sessions`, `*_provision`, `llm_endpoints`, `llm_helpers` |
+| `safeguards/` | the idiot-proofing, as a layer (ADR-0031): front ends (web routes, CLI) call `safeguards.guarded`, which checks the act (`acts`: R6, phase, method chosen; `sections`: ownership, reasons; `inputs`; `sources`; `publish`) then calls the core step; refusals explained (`refusals`). Core packages never import it; the notebook calls the core unguarded |
 | `tooling/` | dev/scratch/build scripts |
 
 `roundtrip/` and `pdf_text/` are pre-existing packages. Resolution is the

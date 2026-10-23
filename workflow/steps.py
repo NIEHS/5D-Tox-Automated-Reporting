@@ -573,6 +573,19 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     }
 
 
+def record_study_design(dtxsid: str, fields: dict, store: PoolStore) -> int:
+    """Record stated study-design facts (route, vehicle, strain, …) the data
+    does not carry, in study_design.json, which every later integration
+    re-applies, and put them on every experiment now.  Returns the experiments
+    updated.  Written as given: that the values are the vocabulary's is the
+    safeguards' (safeguards.inputs)."""
+    from common.clock import now_iso
+    from pipeline.study_design import DESIGN_FILE
+
+    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
+    return reapply_study_design(dtxsid, store)
+
+
 def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
     """Put the session's stated design (study_design.json) on every experiment of
     the integrated project and save it, keeping the .bm2 copy in step as the

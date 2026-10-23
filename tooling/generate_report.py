@@ -240,51 +240,36 @@ def confirm_metadata(dtxsid: str, corrections_path: Path | dict | None, store) -
     _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
 
 
-def apply_design(dtxsid: str, design_path: Path | dict, store) -> None:
+def apply_design(dtxsid: str, design_path: Path | dict, store, *, guarded: bool = False) -> None:
     """Record study-design facts the data does not carry (route, vehicle,
     strain, …): kept in the session's study_design.json, which every later
-    integration re-applies, and put on every experiment now.  Values must be
-    from the controlled vocabulary; nothing is written otherwise.  A JSON file
-    or the object itself."""
-    from bmdx_pipe import VOCABULARIES
-    from common.clock import now_iso
-    from pipeline.study_design import DESIGN_FILE, design_field_errors
-    from workflow.steps import reapply_study_design
+    integration re-applies, and put on every experiment now.  A JSON file or
+    the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless the study has a dataset and every field and value is the
+    controlled vocabulary's (safeguards.inputs); a notebook writes as given."""
+    from workflow.steps import record_study_design
 
     fields = _stated(design_path)
-    errors = design_field_errors(fields, VOCABULARIES)
-    if errors:
-        raise SystemExit("--design: " + "; ".join(errors))
-    if not store.artifact_exists(dtxsid, "integrated.json"):
-        raise SystemExit("--design needs an integrated session")
-    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
-    count = reapply_study_design(dtxsid, store)
+    if guarded:
+        from safeguards.guarded import record_study_design
+    count = record_study_design(dtxsid, fields, store)
     _log(f"  study design recorded on {count} experiment(s): {fields}")
 
 
-def apply_experiment_metadata(dtxsid: str, path: Path | dict) -> None:
+def apply_experiment_metadata(dtxsid: str, path: Path | dict, *, guarded: bool = False) -> None:
     """Record stated experiment metadata ({experiment name: {organ, sex, …}})
     the data does not carry — e.g. the tissue of a project whose experiment is
     named "EDHP mg_kg".  Laid over each named experiment's description and kept
     as the approval (metadata_approved.json), which every later integration
     re-applies — the same record the browser's approval writes.  A JSON file
-    or the object itself."""
-    from bmdx_pipe import VOCABULARIES
-    from pipeline.integrated_io import load_integrated
+    or the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless every experiment is the dataset's and every value the
+    vocabulary's (safeguards.inputs)."""
     from pipeline.metadata_approval import approve_experiment_metadata
 
     given = _stated(path)
-    if not isinstance(given, dict) or not all(isinstance(v, dict) for v in given.values()):
-        raise SystemExit("--experiment-metadata: expected {experiment name: {field: value}}")
-    names = {e.get("name") for e in (load_integrated(dtxsid) or {}).get("doseResponseExperiments") or []}
-    errors = [f"unknown experiment {n!r}" for n in given if n not in names]
-    for n, fields in given.items():
-        for k, v in fields.items():
-            allowed = VOCABULARIES.get(k)
-            if allowed and v not in allowed:
-                errors.append(f"{n}: {k}={v!r} is not in the vocabulary")
-    if errors:
-        raise SystemExit("--experiment-metadata: " + "; ".join(errors))
+    if guarded:
+        from safeguards.guarded import approve_experiment_metadata
     result = approve_experiment_metadata(dtxsid, given, merge=True)
     _log(f"  experiment metadata recorded on {result['updated']} experiment(s): {given}")
 
@@ -443,13 +428,15 @@ def summary(dtxsid: str, store, *, policy=None) -> None:
 
 
 def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = False,
-               reason: str | None = None, policy=None) -> None:
+               reason: str | None = None, policy=None, guarded: bool = False) -> None:
     """Generate + save the Background section (LLM over ATSDR/IRIS/PubChem data),
     UNAPPROVED, through the section write gate: the operator asked, so it is a
     person's act. Under the ownership ``policy`` (the command line's) a
     Background a person approved or edited is never replaced: the refusal is
     printed and nothing is saved, unless --force with a --reason (the prior text
-    is then archived)."""
+    is then archived).  ``guarded`` (the command line): refused when ATSDR or
+    IRIS could not be reached, or the text cites nothing (safeguards.sources);
+    a notebook may draft one without them."""
     from workflow.section_writes import read_prior, is_locked
     if policy is not None and is_locked(read_prior(dtxsid, "background", store)) and not force:
         # Refuse before the LLM runs: its answer could not be saved.
@@ -471,26 +458,24 @@ def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = 
             _log(f"    resolved PubChem CID {identity.get('pubchem_cid')}")
         except Exception as e:  # noqa: BLE001 — best-effort, like the UI
             _log(f"    WARNING: could not resolve {dtxsid} ({e}); PubChem data will be missing")
+    from workflow.errors import StepError
     bg_data = gather_all(ChemicalIdentity.from_dict(identity), lambda m: _log(f"    {m}"))
-    # The authoritative hazard sources: without them the Background can neither
-    # state the chemical's toxicology nor say what is missing from it.
-    blocked = [src for src in ("ATSDR", "IRIS") if src in bg_data.unreachable_sources]
-    if blocked:
-        _log(f"  WARNING: {', '.join(blocked)} could not be reached — background not "
-             "generated (run where these sources are reachable, e.g. the NIEHS network)")
+    try:
+        if guarded:
+            from safeguards.sources import require_sources
+            require_sources(dtxsid, bg_data)
+        result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
+        if guarded:
+            from safeguards.sources import require_references
+            require_references(dtxsid, result)
+    except StepError as e:
+        _log(f"  REFUSED ({e.code}): {e.message}")
         return
-    result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
     paragraphs = result.get("paragraphs") or []
     if not paragraphs:
         _log("  WARNING: background generation returned no paragraphs — not saved")
         return
-    if not result.get("references"):
-        # Prose with no sources behind it (every gatherer source unreachable or
-        # empty) is not a Background — its [n] citations would point nowhere.
-        _log("  WARNING: background has no references (sources unreachable?) — not saved")
-        return
     from workflow.section_writes import write_section
-    from workflow.errors import StepError
     try:
         out = write_section(dtxsid, "background", {
             "paragraphs": paragraphs,
@@ -696,8 +681,8 @@ def main(argv: list[str] | None = None) -> int:
     from common.dtxsid import validate_dtxsid
     from rendering.render_common import PendingContentError
     from safeguards.acts import require
+    from safeguards.publish import require_publishable
     from safeguards.sections import ownership_policy
-    from workflow.engine import WorkflowEngine
     from workflow.errors import StepError
     from workflow.phases import Action
     from workflow.store import DiskPoolStore
@@ -755,12 +740,10 @@ def main(argv: list[str] | None = None) -> int:
                 _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
             if design:
                 with _Timer("study design"):
-                    require(dtxsid, Action.STATE_DATASET_FACTS, store)
-                    apply_design(dtxsid, design, store)
+                    apply_design(dtxsid, design, store, guarded=True)
             if args.experiment_metadata:
                 with _Timer("experiment metadata"):
-                    require(dtxsid, Action.STATE_DATASET_FACTS, store)
-                    apply_experiment_metadata(dtxsid, args.experiment_metadata)
+                    apply_experiment_metadata(dtxsid, args.experiment_metadata, guarded=True)
             if not args.method_profile:
                 _require_method_choice(dtxsid)
             method_profile(dtxsid, args.method_profile)
@@ -789,26 +772,26 @@ def main(argv: list[str] | None = None) -> int:
             if args.background:
                 with _Timer("background (LLM)"):
                     background(dtxsid, identity, args.model, store, force=args.force,
-                               reason=args.reason, policy=ownership_policy)
+                               reason=args.reason, policy=ownership_policy, guarded=True)
             with _Timer("summary"):
                 summary(dtxsid, store, policy=ownership_policy)
             if args.stop_after == "process":
                 return 0
 
         _log(f"phase: {_phase(dtxsid, store)}")
-        readiness = WorkflowEngine(dtxsid, store).publish_readiness()
+        # The publish gate; --draft is its named override (logged).
+        readiness = require_publishable(dtxsid, store, draft=args.draft)
         if not readiness.get("can_publish", True):
             keys = ", ".join(b["section_key"] for b in readiness.get("blocking", []))
-            msg = f"publish gate closed — re-accept the regenerated sections: {keys}"
-            if not args.draft:
-                raise SystemExit(msg + " (or pass --draft)")
-            _log(f"  WARNING: {msg} (rendering anyway: --draft)")
+            _log(f"  WARNING: publish gate closed — re-accept the regenerated sections: "
+                 f"{keys} (rendering anyway: --draft)")
 
         with _Timer(f"render {', '.join(surfaces)}"):
             render(dtxsid, surfaces, out_dir, args.view, args.strict)
     except StepError as e:
         from safeguards.refusals import explain
-        raise SystemExit(f"step failed ({e.status_code}): {e.message}\n"
+        hint = " (or pass --draft)" if getattr(e, "code", None) == "publish_blocked" else ""
+        raise SystemExit(f"step failed ({e.status_code}): {e.message}{hint}\n"
                          f"  {explain(e)['error']['say']}")
     except PendingContentError as e:
         raise SystemExit(f"--strict: report still has pending sections: {e.markers}")

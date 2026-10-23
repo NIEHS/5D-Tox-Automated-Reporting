@@ -216,13 +216,16 @@ generate-then-save):
    hazard, ATSDR, IRIS, OSHA/NIOSH limits, drinking-water regulations,
    mechanism papers (Semantic Scholar), and CPDat use data, then lists what is
    missing. It records the sources it couldn't reach.
-3. **Refuses** if ATSDR or IRIS couldn't be reached: without the authoritative
-   hazard sources the section can't say what is known, or what isn't.
-4. `narrative.background_writer.generate_background`: one LLM call writes the
+3. `narrative.background_writer.generate_background`: one LLM call writes the
    paragraphs, citing the gathered sources by number; the citations are
    checked.
-5. **Refuses** to save prose with no references (its citations would point
-   nowhere). Otherwise saves `background.json` unapproved.
+4. Saves `background.json` unapproved.
+
+The app and the command line refuse more (`safeguards.sources`): no
+Background when ATSDR or IRIS couldn't be reached (without the authoritative
+hazard sources the section can't say what is known, or what isn't), and none
+saved with no references (its citations would point nowhere). Called from
+here, a Background may be drafted without them.
 
 With `BACKGROUND = False`, the reference session's Background is copied when
 it has one, as `build_published_reports` keeps it across rebuilds.
@@ -281,6 +284,10 @@ already accepted.
 - `workflow.steps.release_section_step(dtxsid, key, store, reason=…)` reopens
   one: `approved: false`, FINAL withdrawn (PROTECTED stays), and the reason
   recorded.
+- Refusing to ship while a section blocks is the safeguards'
+  (`safeguards.publish.require_publishable`): the app's download and Overleaf
+  bundle, and the command line, whose `--draft` is the one named override.
+  The renders below are a working view, and are not gated.
 
 **Reads → writes.** Section files (only when accepting or releasing).
 """)

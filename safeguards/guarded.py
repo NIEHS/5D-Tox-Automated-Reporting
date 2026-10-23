@@ -16,6 +16,7 @@ The notebook calls the core steps directly: the same workflow, unguarded.
 from __future__ import annotations
 
 from safeguards.acts import require
+from safeguards.inputs import require_valid_design, require_valid_experiment_metadata
 from safeguards.sections import ownership_policy, owned, require_reason
 from workflow import steps as _steps
 from workflow.phases import Action
@@ -63,10 +64,20 @@ def integrate_step(dtxsid: str, identity: dict | None, store) -> dict:
 
 
 def approve_experiment_metadata(dtxsid: str, metadata_by_name: dict, *, merge: bool = False):
-    """Stating the experiment details onto the dataset (STATE_DATASET_FACTS)."""
+    """Stating the experiment details onto the dataset (STATE_DATASET_FACTS):
+    experiments the dataset has, values from the vocabularies."""
     from pipeline.metadata_approval import approve_experiment_metadata as _approve
     require(dtxsid, Action.STATE_DATASET_FACTS)
+    require_valid_experiment_metadata(dtxsid, metadata_by_name)
     return _approve(dtxsid, metadata_by_name, merge=merge)
+
+
+def record_study_design(dtxsid: str, fields: dict, store) -> int:
+    """Stating the study design onto the dataset: its fields, from the
+    vocabularies."""
+    require(dtxsid, Action.STATE_DATASET_FACTS, store)
+    require_valid_design(dtxsid, fields)
+    return _steps.record_study_design(dtxsid, fields, store)
 
 
 def require_state_dataset_facts(dtxsid: str, store=None) -> None:
