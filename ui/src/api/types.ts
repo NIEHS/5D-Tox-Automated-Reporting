@@ -552,7 +552,7 @@ export interface StudiesList {
 
 /**
  * A report's member whose folder is absent (the backend's stub,
- * `workflow/studies.py` study_detail): no `stands`, no `relations`.
+ * `ui_api/studies.py` study_detail): no `stands`, no `relations`.
  */
 export interface MissingMember {
   id: string

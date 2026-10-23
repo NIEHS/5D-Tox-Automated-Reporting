@@ -1,13 +1,13 @@
 """
-workflow.study_steps — the study acts of module M1 of the new interface:
+ui_api.study_steps — the study acts of module M1 of the new interface:
 create a study, fill a missing chemical identity, and delete a study (its dry
 run and the delete itself). docs/ui-redesign/modules/m1/contract.md §2.6–2.9.
 
 HTTP-free, like workflow.steps (which re-exports these names, so callers keep
 importing them from there). They work on the session folder directly, not
 through a PoolStore: creating and deleting are acts on the folder itself.
-Refusals are ``workflow.studies.StudyRefusal`` with the M1 codes of
-workflow.refusals.
+Refusals are ``safeguards.refusals.StudyRefusal`` with the M1 codes of
+ui_api.refusals.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def _casrn_check_digit_holds(casrn: str) -> bool:
 def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
                         dtxsid_checked_by_person: bool) -> dict:
     """The identity a person confirmed, checked against the lookup it came from
-    (workflow.studies.lookup_chemical, cached for 10 minutes), as identity.json
+    (ui_api.studies.lookup_chemical, cached for 10 minutes), as identity.json
     holds it. Only a looked-up identity is accepted (Q-M1-3: no stated one).
     The only absolute requirement is the DTXSID (the maintainer, 2026-10-16,
     revised), so the CAS number never blocks:
@@ -52,7 +52,7 @@ def _confirmed_identity(dtxsid: str, identity: dict | None, confirmed: bool,
     ``identity_changed`` when the lookup now gives another name, or a CAS
     number other than the one sent."""
     from narrative.chem_resolver import CASRN_PATTERN
-    from workflow.studies import StudyRefusal, lookup_chemical
+    from ui_api.studies import StudyRefusal, lookup_chemical
 
     if not confirmed:
         raise StudyRefusal("identity_unconfirmed", "the identity was not confirmed", 400)
@@ -114,7 +114,7 @@ def _pending_identity(dtxsid: str, identity: dict | None) -> dict:
     service does not list the DTXSID for may be left pending: the person may
     judge it is not their chemical. Only the cached lookup is consulted: no
     network."""
-    from workflow.studies import StudyRefusal, cached_lookup
+    from ui_api.studies import StudyRefusal, cached_lookup
 
     if identity:
         raise StudyRefusal("bad_request", "identity_pending is set and an identity was sent; "
@@ -159,7 +159,7 @@ def create_study_step(dtxsid: str, identity: dict | None, format_seen: dict | No
     import shutil
 
     from pipeline.session_store import session_path
-    from workflow.studies import StudyRefusal, format_hash, require_study_id
+    from ui_api.studies import StudyRefusal, format_hash, require_study_id
 
     require_study_id(dtxsid)
     seen = (format_seen or {}).get("hash") if isinstance(format_seen, dict) else None
@@ -214,7 +214,7 @@ def _study_lock(dtxsid: str):
     import fcntl
     import os
 
-    from workflow.studies import StudyRefusal, session_folder
+    from ui_api.studies import StudyRefusal, session_folder
 
     folder = session_folder(dtxsid)
     gone = StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
@@ -257,7 +257,7 @@ def record_identity_step(dtxsid: str, identity: dict | None, *, confirmed: bool,
     import uuid
 
     from common.session_files import read_json_file
-    from workflow.studies import (
+    from ui_api.studies import (
         StudyRefusal, chemical_dtxsid, session_exists, session_folder, session_kind)
 
     def current_identity(folder: Path) -> dict:
@@ -381,9 +381,9 @@ def require_deletable(dtxsid: str, index=None) -> dict:
     study's folder (the delete pair of M1, the old full reset): a published
     book's content (``read_only_session``), a member of a report
     (``member_of_report``), a study with a run in flight (``run_in_flight``),
-    as ``workflow.studies.delete_verdict`` decides. Raises the refusal;
+    as ``ui_api.studies.delete_verdict`` decides. Raises the refusal;
     returns ``session_kind``'s answer when the study may go."""
-    from workflow.studies import StoreIndex, StudyRefusal, delete_verdict, session_kind
+    from ui_api.studies import StoreIndex, StudyRefusal, delete_verdict, session_kind
 
     index = index or StoreIndex()
     info = session_kind(dtxsid, index=index)
@@ -414,7 +414,7 @@ def delete_study_dry_run(dtxsid: str) -> dict:
     change after the review refuses the delete (``changed_since_preview``)."""
     import os
 
-    from workflow.studies import StudyRefusal, session_exists, session_folder
+    from ui_api.studies import StudyRefusal, session_exists, session_folder
 
     folder = session_folder(dtxsid)
     gone = StudyRefusal("study_not_found", f"no session {dtxsid}", 404, {"id": dtxsid})
@@ -449,7 +449,7 @@ def _dry_run(dtxsid: str, folder: Path) -> dict:
     import hashlib
 
     import common.paths
-    from workflow.studies import published_record, report_of
+    from ui_api.studies import published_record, report_of
 
     info = require_deletable(dtxsid)
     kind, relations = info["kind"], info["relations"]
@@ -465,7 +465,7 @@ def _dry_run(dtxsid: str, folder: Path) -> dict:
                    " they were converted from"
         deletes.append({"what": "files", "say": say})
     # The sections as the read model lists them (their titles, as D1 shows them).
-    from workflow.read_model import study_state
+    from ui_api.read_model import study_state
     on_disk = [r for r in study_state(dtxsid).get("sections", []) if r.get("has_file")]
     section_keys = {r["key"] for r in on_disk}
     approved = [_section_words(r) for r in on_disk if r.get("approved")]
@@ -568,7 +568,7 @@ def _take_away(dtxsid: str, folder: Path) -> Path:
     import uuid
 
     from pipeline.pool_globals import forget_session
-    from workflow.studies import StudyRefusal
+    from ui_api.studies import StudyRefusal
 
     doomed = folder.parent / f".deleting-{dtxsid}-{uuid.uuid4().hex[:8]}"
     try:
@@ -600,7 +600,7 @@ def delete_study_step(dtxsid: str, confirm_id: str, preview_token: str) -> dict:
     One delete at a time per study (``_study_lock``): of two requests sent by
     a double click, one deletes and the other is ``study_not_found``.
     Returns ``{"deleted", "kept", "say"}``."""
-    from workflow.studies import StudyRefusal
+    from ui_api.studies import StudyRefusal
 
     with _study_lock(dtxsid) as folder:
         preview = delete_study_dry_run(dtxsid)

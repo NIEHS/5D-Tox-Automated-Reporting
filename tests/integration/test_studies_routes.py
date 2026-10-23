@@ -41,6 +41,16 @@ def _session(root: Path, sid: str, **files) -> Path:
     return d
 
 
+def _legacy(resp, code, status):
+    """The old routes' refusal: the application's usual {"error": message}
+    with the explanation beside it (safeguards.refusals.error_body)."""
+    assert resp.status_code == status, resp.text
+    body = resp.json()
+    assert set(body) == {"error", "code", "say", "fix", "details"}
+    assert body["code"] == code and body["say"]
+    return body
+
+
 def _envelope(resp, code, status):
     assert resp.status_code == status, resp.text
     body = resp.json()
@@ -99,7 +109,7 @@ def resolver(monkeypatch):
     """The resolver replaced: DTXSID7020182 is Bisphenol A, listed under its
     DTXSID; anything else is not found. `calls` counts the lookups."""
     from narrative import chem_resolver as cr
-    from workflow import studies
+    from ui_api import studies
 
     studies._LOOKUPS.clear()
     calls = []
@@ -254,7 +264,7 @@ class TestLookup:
         import requests
 
         from narrative import chem_resolver as cr
-        from workflow import studies
+        from ui_api import studies
         studies._LOOKUPS.clear()
         monkeypatch.setattr(cr, "RATE_LIMIT", 0)
         monkeypatch.delenv("CTX_API_KEY", raising=False)
@@ -351,7 +361,7 @@ class TestCreate:
         import requests
 
         from narrative import chem_resolver as cr
-        from workflow import studies
+        from ui_api import studies
         studies._LOOKUPS.clear()
         monkeypatch.setattr(cr, "RATE_LIMIT", 0)
         monkeypatch.delenv("CTX_API_KEY", raising=False)
@@ -421,7 +431,7 @@ class TestCreate:
         assert err["details"]["existing_id"] == NEW and err["fix"] == "M1"
 
     def test_create_an_existing_study(self, store, api, resolver, monkeypatch):
-        from workflow import studies
+        from ui_api import studies
         monkeypatch.setitem(studies._LOOKUPS, "DTXSID2", (1e18, {
             "dtxsid": "DTXSID2", "dtxsid_matched": True, "service": "PubChem",
             "looked_up_at": "2026-10-15T12:00:00Z",
@@ -579,7 +589,7 @@ class TestDelete:
         The answer is study_not_found, never a 500."""
         import shutil
 
-        import workflow.read_model as rm
+        import ui_api.read_model as rm
 
         token = api.get("/api/v2/studies/DTXSID2/delete-preview").json()["preview_token"]
 
@@ -593,7 +603,7 @@ class TestDelete:
                   "study_not_found", 404)
 
     def test_a_preview_of_a_vanishing_folder_is_not_found(self, store, api, monkeypatch):
-        import workflow.read_model as rm
+        import ui_api.read_model as rm
 
         def walk(dtxsid, store_=None):
             (store / dtxsid).rename(store / f".deleting-{dtxsid}")
@@ -604,24 +614,16 @@ class TestDelete:
 
 
 # ---------------------------------------------------------------------------
-# The old full reset (F2): refuses what the delete refuses
+# The old full reset: R6 (the content branch's route)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
 class TestOldReset:
-    def test_it_refuses_a_member_and_a_companion(self, store, api):
-        err = _envelope(api.post("/api/session/reset/DTXSID1_rat"), "member_of_report", 409)
-        assert err["details"]["parent"] == "DTXSID1"
-        assert err["say"] == "This is the rat study of the report DTXSID1. Deleting it would break that report."
-        _envelope(api.post("/api/session/reset/DTXSID2_published"), "read_only_session", 409)
-        assert (store / "DTXSID1_rat").is_dir() and (store / "DTXSID2_published").is_dir()
-
-    def test_it_refuses_a_run_in_flight(self, store, api, monkeypatch):
-        from workflow import studies
-        monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
-        err = _envelope(api.post("/api/session/reset/DTXSID2"), "run_in_flight", 409)
-        assert err["details"] == {"started_at": "2026-10-15T12:00:00Z"}
-        assert (store / "DTXSID2").is_dir()
+    def test_it_refuses_a_companion(self, store, api):
+        # R6 (safeguards.acts). A member of a report is not refused on this old
+        # route: the content branch's reset refuses only what R6 does.
+        _legacy(api.post("/api/session/reset/DTXSID2_published"), "read_only_session", 409)
+        assert (store / "DTXSID2_published").is_dir()
 
     def test_it_still_resets_a_study_without_a_token(self, store, api):
         resp = api.post("/api/session/reset/DTXSID2_nb")
@@ -660,7 +662,7 @@ class TestNoDataIntoCompanionsOrReports:
             before = _snapshot(store)
             payload.seek(0)
             resp = api.post(f"{route}?dtxsid={sid}", files={field: (name, payload.getvalue())})
-            _envelope(resp, code, 409)
+            _legacy(resp, code, 409)
             assert _snapshot(store) == before
 
     def test_the_validate_route_refuses_a_companion(self, store, api):

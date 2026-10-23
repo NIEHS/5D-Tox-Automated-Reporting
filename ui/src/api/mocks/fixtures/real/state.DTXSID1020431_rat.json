@@ -49,12 +49,12 @@
       },
       "definition": {
         "pinned": false,
-        "name": "eras/niehs-2026",
+        "name": "studies/DTXSID1020431/document",
         "hash": null,
         "mode": null,
         "pinned_by": null,
         "pinned_at": null,
-        "source": "era",
+        "source": "study",
         "snapshot": false,
         "drift": null
       }

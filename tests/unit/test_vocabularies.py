@@ -1,11 +1,11 @@
 """
-Unit tests for workflow.vocabularies — what a form field is bound to
+Unit tests for ui_api.vocabularies — what a form field is bound to
 (MODULES.md §4.5, GET /api/v2/vocabularies).
 """
 
 import re
 
-from workflow.vocabularies import id_patterns, vocabularies, vocabularies_payload
+from ui_api.vocabularies import id_patterns, vocabularies, vocabularies_payload
 
 
 def test_the_vocabularies_are_bmdx_pipes_with_strain_by_species():
@@ -27,7 +27,7 @@ def test_only_the_dependency_the_vocabulary_declares_is_served():
 
 
 def test_every_vocabulary_has_a_label_from_the_bmdexpress_header_names():
-    from workflow.vocabularies import LABELS
+    from ui_api.vocabularies import LABELS
     served = vocabularies()["vocabularies"]
     assert set(LABELS) == set(served)          # a new vocabulary needs its name added
     assert served["articleRoute"]["label"] == "Article Route"

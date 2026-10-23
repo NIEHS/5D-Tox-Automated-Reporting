@@ -117,7 +117,7 @@ describe('the study frame', () => {
   })
 
   it('offers nothing, and says why, at a stage it does not know', async () => {
-    // as the backend would serve it: workflow.studies.stands words an unknown phase "At the stage …"
+    // as the backend would serve it: ui_api.studies.stands words an unknown phase "At the stage …"
     const archived = { ...STATE_INTEGRATED, phase: 'ARCHIVED', stands: { phase: 'ARCHIVED', say: 'At the stage ARCHIVED', next: null } }
     server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(archived)))
     await openHeader(STATE_INTEGRATED.id)
@@ -158,7 +158,7 @@ describe('the study frame', () => {
     const report: ExistingStudyState = {
       ...STATE_REPORT,
       members: (STATE_REPORT.members ?? []).map((m) => (m.key === 'mouse' ? { ...m, processed: false, phase: 'INTEGRATED' } : m)),
-      // as workflow.studies.stands serves it while a study is not processed
+      // as ui_api.studies.stands serves it while a study is not processed
       stands: { phase: null, say: 'A report over 2 studies; its studies are being prepared', next: { say: 'Finish the member studies', fix: 'M1' } },
     }
     server.use(http.get('/api/v2/studies/:id/state', () => HttpResponse.json(report)))

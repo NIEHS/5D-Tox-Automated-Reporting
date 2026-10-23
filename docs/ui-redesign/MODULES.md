@@ -248,9 +248,15 @@ wrapped):
            "say": "…plain words for a toxicologist…", "fix": "M2", "details": {}}}
 ```
 
-- `code` comes from a closed list kept in one backend module.
+- `code` comes from a closed list kept in one backend module: since 2026-10-23
+  the safeguards' catalog (`safeguards.refusals`, ADR-0031), which the browser and
+  the command line share. The interface's own study codes (M1) are registered into
+  it from `ui_api.refusals`.
 - `say` is the plain-words text, written once in the backend next to the code, so
-  the CLI and the notebook can use it too.
+  the CLI can use it too.
+- `fix` is the module that clears the cause. The catalog names a workflow place
+  (`safeguards.refusals.PLACES`); `ui_api.refusals.explain` translates it to the
+  module (`PLACE_MODULE`), so every v2 envelope and the read model carry module ids.
 - The front-end's `<Refusal>` renders `say`, a link to `fix`, and `message` and
   `details` behind a toggle.
 - A "success that did nothing" (releasing a missing section; a summary not

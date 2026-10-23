@@ -1,5 +1,5 @@
 """
-Unit tests for workflow.read_model — one study's derived state (MODULES.md §4.1).
+Unit tests for ui_api.read_model — one study's derived state (MODULES.md §4.1).
 
 The phase, sections and publish readiness are driven through a fake PoolStore;
 the pins, the identity, the version manifest and the member studies are files
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from workflow.read_model import (
+from ui_api.read_model import (
     PUBLISH_CHECKS,
     PUBLISH_CHECKS_COMPLETE,
     ReadOnlyDiskPoolStore,

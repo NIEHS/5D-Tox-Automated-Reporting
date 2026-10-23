@@ -1,5 +1,5 @@
 """
-workflow.vocabularies — the controlled vocabularies and identifier formats a
+ui_api.vocabularies — the controlled vocabularies and identifier formats a
 front-end binds its fields to (MODULES.md §4.5, ``GET /api/v2/vocabularies``).
 
 A field that takes a study fact (species, strain, route, …) offers the

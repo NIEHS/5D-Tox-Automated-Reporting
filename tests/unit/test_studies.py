@@ -1,5 +1,5 @@
 """
-Unit tests for workflow.studies — the studies on disk, their kinds, relations,
+Unit tests for ui_api.studies — the studies on disk, their kinds, relations,
 where they stand, their report format, the lookup, and the R6 guard (module M1).
 
 Sessions are small folders in a scratch SESSIONS_DIR (the `sessions_dir`
@@ -12,15 +12,15 @@ from pathlib import Path
 
 import pytest
 
-from workflow import studies
-from workflow.refusals import explain
-from workflow.studies import (
+from ui_api import studies
+from safeguards.acts import require_data_session  # R6: the safeguards' guard
+from ui_api.refusals import explain
+from ui_api.studies import (
     StudyRefusal,
     chemical_dtxsid,
     creation_check,
     format_summary,
     list_studies,
-    require_data_session,
     session_kind,
     stands,
     study_row,
@@ -119,7 +119,7 @@ def test_the_chemical_of_a_session_is_its_id_prefix():
 
 
 def test_the_read_model_uses_the_same_derivation(store):
-    from workflow.read_model import study_state
+    from ui_api.read_model import study_state
     state = study_state("DTXSID1_rat")
     assert state["kind"] == "member" and state["chemical_dtxsid"] == "DTXSID1"
     assert state["relations"] == session_kind("DTXSID1_rat")["relations"]
@@ -169,8 +169,9 @@ def test_a_companion_and_a_report_have_no_phase():
 
 def test_a_new_chemical_gets_the_format_for_new_studies(sessions_dir):
     fmt = format_summary("DTXSID7020182", "study", prospective=True)
-    assert fmt["source"] == "default" and fmt["era"] == "eras/niehs-2026"
-    assert fmt["title"].startswith("NIEHS Report, as published in 2026")
+    from document_model.document_definition import DEFAULT_DEFINITION
+    assert fmt["source"] == "default" and fmt["era"] == DEFAULT_DEFINITION
+    assert fmt["title"].endswith("the format for new studies")
     assert "No published report is on file" in fmt["say"]
 
 
@@ -483,7 +484,8 @@ def test_the_data_guard_on_disk(store):
 
 
 def test_the_data_steps_refuse_a_companion(store):
-    from workflow.steps import generate_animal_report_step, integrate_step, validate_step
+    # The interface acts through the safeguards (the core steps are unguarded).
+    from safeguards.guarded import generate_animal_report_step, integrate_step, validate_step
     from workflow.store import DiskPoolStore
     for step in (validate_step, generate_animal_report_step):
         with pytest.raises(StudyRefusal):

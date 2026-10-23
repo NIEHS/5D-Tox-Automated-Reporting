@@ -8,9 +8,10 @@ interface (C2: "owned content is never overwritten by a machine").
   GET  /api/v2/studies/{id}/sections/{key}/history
   GET  /api/v2/studies/{id}/sections/{key}/history/{version}
 
-Thin drivers over workflow.steps (accept_section_step, release_section_step,
-restore_section_step) and workflow.section_writes (section_history,
-read_version). Every failure answers with the MODULES.md §4.2 envelope (the
+Thin drivers over the guarded section acts (safeguards.guarded:
+accept_section_step, release_section_step, restore_section_step — the reasons
+and the ownership rules of C2 are enforced there) and the history reads of
+workflow.section_writes (section_history, read_version). Every failure answers with the MODULES.md §4.2 envelope (the
 ``V2Route`` of web_routes.v2_routes); a success that did nothing carries
 ``noop {code, say}``. After a mutating call the interface re-reads the study's
 state (GET /api/v2/studies/{id}/state).
@@ -66,7 +67,7 @@ def _reply(result: dict, fields: tuple[str, ...]) -> JSONResponse:
 @router.post("/studies/{dtxsid}/sections/{key}/accept")
 def api_v2_section_accept(dtxsid: Dtxsid, key: str):
     """Accept (approve) the section as it is. Its text is never changed."""
-    from workflow.steps import accept_section_step
+    from safeguards.guarded import accept_section_step
     result = accept_section_step(dtxsid, key, _store(dtxsid, key, "approve"))
     return _reply(result, ("section_key", "approved", "version", "version_status"))
 
@@ -75,7 +76,7 @@ def api_v2_section_accept(dtxsid: Dtxsid, key: str):
 def api_v2_section_release(dtxsid: Dtxsid, key: str, body: ReleaseBody | None = None):
     """Reopen an approved section, with a reason (kept in its history). It
     stays protected: Process still never replaces it."""
-    from workflow.steps import release_section_step
+    from safeguards.guarded import release_section_step
     reason = (body.reason if body else None) or ""
     result = release_section_step(dtxsid, key, _store(dtxsid, key, "reopen"), reason=reason)
     return _reply(result, ("section_key", "approved", "version", "version_status"))
@@ -85,7 +86,7 @@ def api_v2_section_release(dtxsid: Dtxsid, key: str, body: ReleaseBody | None = 
 def api_v2_section_restore(dtxsid: Dtxsid, key: str, body: RestoreBody | None = None):
     """Bring a past version back as the current one: a new version, not
     approved, kept from the machine (accepting it is a separate act)."""
-    from workflow.steps import restore_section_step
+    from safeguards.guarded import restore_section_step
     body = body or RestoreBody()
     result = restore_section_step(dtxsid, key, body.version, _store(dtxsid, key, "restore"),
                                   reason=body.reason or "")
@@ -98,7 +99,7 @@ def api_v2_section_history(dtxsid: Dtxsid, key: str):
     """The section's versions and its version events (the changelog's lines),
     also after a discard."""
     from workflow import section_writes as sw
-    from workflow.read_model import ReadOnlyDiskPoolStore
+    from ui_api.read_model import ReadOnlyDiskPoolStore
     _store(dtxsid, key, "show")
     return JSONResponse(sw.section_history(dtxsid, key, ReadOnlyDiskPoolStore()))
 
@@ -108,7 +109,7 @@ def api_v2_section_version(dtxsid: Dtxsid, key: str, version: str):
     """One version's section JSON (the current file, or its archive). A
     version that is not a whole number is a version that does not exist."""
     from workflow import section_writes as sw
-    from workflow.read_model import ReadOnlyDiskPoolStore
+    from ui_api.read_model import ReadOnlyDiskPoolStore
     _store(dtxsid, key, "show")
     number = int(version) if version.isdigit() else version
     return JSONResponse(sw.read_version(dtxsid, key, number, ReadOnlyDiskPoolStore()))

@@ -4,7 +4,7 @@ import rawProcessRefused from './real/refusal.phase_not_allowed.process.DTXSID10
 
 /** Refusals in the §4.2 envelope, mocked. */
 
-/** The backend's own refusals (C1's PhaseRefusal through workflow.refusals.explain), saved from the merged backend. */
+/** The backend's own refusals (C1's PhaseRefusal, explained by safeguards.refusals with fix as a module: ui_api.refusals.explain), saved from the merged backend. */
 export const REFUSAL_PHASE_NOT_ALLOWED = (rawIntegrateRefused as { body: ErrorEnvelope }).body
 export const REFUSAL_PROCESS_NOT_ALLOWED = (rawProcessRefused as { body: ErrorEnvelope }).body
 

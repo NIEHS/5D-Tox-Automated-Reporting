@@ -1,5 +1,5 @@
 """
-Unit tests for the study acts of workflow.steps (module M1): create a study,
+Unit tests for the study acts of ui_api.study_steps (module M1): create a study,
 fill a missing identity, the delete's dry run, and the delete.
 
 Sessions are folders in a scratch SESSIONS_DIR; OUTPUT_DIR points at a scratch
@@ -11,14 +11,14 @@ from pathlib import Path
 
 import pytest
 
-from workflow import studies
-from workflow.steps import (
+from ui_api import studies
+from ui_api.study_steps import (
     create_study_step,
     delete_study_dry_run,
     delete_study_step,
     record_identity_step,
 )
-from workflow.studies import StudyRefusal
+from ui_api.studies import StudyRefusal
 
 NEW = "DTXSID7020182"
 DEFAULT_HASH = None   # filled by the fixture: the hash the id's format has now
@@ -83,7 +83,7 @@ def test_create_writes_identity_and_meta_only(sessions_dir, lookup):
     assert meta["dtxsid"] == NEW and meta["created_at"] == meta["updated_at"]
     assert not [p for p in sessions_dir.iterdir() if p.name.startswith(".")]   # no staging left
 
-    from workflow.read_model import study_state
+    from ui_api.read_model import study_state
     state = study_state(NEW)
     assert state["phase"] == "EMPTY" and state["stands"]["next"]["fix"] == "M2"
     assert studies.study_row(NEW)["identity"]["source"]["kind"] == "lookup"
@@ -206,7 +206,7 @@ def test_create_without_a_casrn_when_the_lookup_has_none(sessions_dir, lookup, s
 
 
 def test_a_missing_name_says_to_look_up_again(sessions_dir, lookup):
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
     with pytest.raises(StudyRefusal) as e:
         create_study_step(NEW, _identity(name=""), _seen(), confirmed=True)
     assert e.value.code == "identity_incomplete"
@@ -305,7 +305,7 @@ def test_a_pending_create_keeps_the_other_refusals(sessions_dir, lookup, no_cach
 
 def test_a_chemical_just_found_is_confirmed_not_left_pending(sessions_dir, no_cached_lookup,
                                                              monkeypatch):
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
     monkeypatch.setattr(studies.time, "monotonic", lambda: 1000.0)
     studies._LOOKUPS[NEW] = (990.0, {**json.loads(json.dumps(LOOKUP))})
     with pytest.raises(StudyRefusal) as e:
@@ -375,7 +375,7 @@ def test_no_identity_note_for_a_companion_a_report_or_an_id_with_no_chemical(ses
 
 
 def test_the_casrn_check_digit():
-    from workflow.steps import _casrn_check_digit_holds
+    from ui_api.study_steps import _casrn_check_digit_holds
     for good in ("80-05-7", "41997-13-1", "106-46-7", "3380-34-5", "7732-18-5"):
         assert _casrn_check_digit_holds(good), good
     assert not _casrn_check_digit_holds("41997-13-2")
@@ -461,7 +461,7 @@ def test_simultaneous_identity_fills_give_one_success(sessions_dir, monkeypatch)
 def test_record_identity_on_a_study_deleted_meanwhile(sessions_dir, lookup, monkeypatch):
     """The study is deleted (renamed away) between the checks and the write:
     study_not_found, and nothing is written where it was."""
-    from workflow import study_steps
+    from ui_api import study_steps
 
     d = _folder(sessions_dir, f"{NEW}_nb", meta__json={"dtxsid": NEW})
     real = study_steps._confirmed_identity
@@ -519,7 +519,8 @@ def test_the_dry_run_lists_what_goes_and_what_stays(study):
     files = c["deletes"][0]["say"]
     assert "2 data files" in files and "1 original" in files
     assert c["approvals_lost"] == ["Body Weight"]
-    assert [k["what"] for k in c["keeps"]] == ["output"]
+    # The study's own definition (templates/studies/DTXSID5032498/) is kept too.
+    assert [k["what"] for k in c["keeps"]] == ["output", "study_definition"]
     assert "output/DTXSID5032498/ (1 file)" in c["keeps"][0]["say"]
     assert c["cost"]["say"].endswith("will be freed.")
     assert out["type_to_confirm"] == "DTXSID5032498"
@@ -611,7 +612,7 @@ def _deleted_while_walking(monkeypatch, folder: Path, *, raise_after: bool):
     """The dry run's section read replaced: the folder is renamed away (another
     request deleted it) in the middle of the walk; then the walk fails as the
     real one did (FileNotFoundError) or carries on over nothing."""
-    import workflow.read_model as rm
+    import ui_api.read_model as rm
 
     def walk(dtxsid, store=None):
         folder.rename(folder.parent / f".deleting-{dtxsid}-other")
@@ -632,7 +633,7 @@ def test_a_dry_run_of_a_folder_deleted_meanwhile_is_not_found(study, monkeypatch
 
 def test_a_dry_run_failing_on_a_folder_still_there_is_not_hidden(study, monkeypatch):
     """Only a vanished folder becomes study_not_found; any other failure stays."""
-    import workflow.read_model as rm
+    import ui_api.read_model as rm
 
     def broken(dtxsid, store=None):
         raise FileNotFoundError("something else")
@@ -669,7 +670,7 @@ def test_the_second_of_two_deletes_is_not_found(study, monkeypatch):
 
 def test_a_delete_whose_folder_vanishes_at_the_rename_is_not_found(study, monkeypatch):
     """A route that takes no lock removed the folder after the checks."""
-    from workflow import study_steps
+    from ui_api import study_steps
 
     token = delete_study_dry_run("DTXSID5032498")["preview_token"]
     real = study_steps.delete_study_dry_run
@@ -691,7 +692,7 @@ def test_a_delete_whose_folder_vanishes_at_the_rename_is_not_found(study, monkey
 # ---------------------------------------------------------------------------
 
 def test_reset_refuses_what_the_delete_refuses(sessions_dir, monkeypatch):
-    from workflow.steps import reset_session_step
+    from ui_api.study_steps import reset_session_step
 
     _folder(sessions_dir, "DTXSID1", studies__json={"rat": "DTXSID1_rat"})
     _folder(sessions_dir, "DTXSID1_rat", meta__json={})
@@ -708,7 +709,7 @@ def test_reset_refuses_what_the_delete_refuses(sessions_dir, monkeypatch):
 
 
 def test_reset_refuses_a_run_in_flight(sessions_dir, monkeypatch):
-    from workflow.steps import reset_session_step
+    from ui_api.study_steps import reset_session_step
 
     _folder(sessions_dir, "DTXSID2", meta__json={})
     monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
@@ -721,7 +722,7 @@ def test_reset_refuses_a_run_in_flight(sessions_dir, monkeypatch):
 
 def test_reset_removes_a_study_and_forgets_it(sessions_dir):
     from pipeline.pool_globals import get_integrated_pool
-    from workflow.steps import reset_session_step
+    from ui_api.study_steps import reset_session_step
 
     d = _folder(sessions_dir, "DTXSID2_nb", meta__json={})
     get_integrated_pool()["DTXSID2_nb"] = {}

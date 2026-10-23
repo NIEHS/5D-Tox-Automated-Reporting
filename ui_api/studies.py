@@ -1,5 +1,5 @@
 """
-workflow.studies — the studies on disk, what each one is, and where it stands
+ui_api.studies — the studies on disk, what each one is, and where it stands
 (module M1 of the new interface; docs/ui-redesign/modules/m1/contract.md).
 
 A study is a folder under SESSIONS_DIR. Beside the studies a person creates,
@@ -7,11 +7,12 @@ the system makes sessions of its own: a published book's content (a
 companion, ``<id>_published``), the studies of a report over several studies
 (``<id>_rat``, ``<id>_mouse``), and working copies made by tools. This module
 is the one place that says which is which and how they relate, so the list,
-a study's page, the read model (workflow.read_model) and the Bookshelf agree:
+a study's page and the read model (ui_api.read_model) agree:
 
-  * the session-relation predicates (moved here from the Bookshelf page and
-    the prompt workshop): ``clone_record``, ``companion_of``, ``members``,
-    ``has_generated_report``, ``report_of``, ``published_date``;
+  * the session-relation predicates, read strictly (a damaged file is
+    reported, never read as absent): ``clone_record``, ``companion_of``,
+    ``members``, ``has_generated_report``, ``report_of``, ``published_date``.
+    The Bookshelf and the prompt workshop keep their own (the core's);
   * ``session_kind``: study / report / member / companion / other, with its
     relations, derived from what is on disk;
   * ``stands``: the phase in plain words and the next step, with the module
@@ -20,14 +21,15 @@ a study's page, the read model (workflow.read_model) and the Bookshelf agree:
     person's words;
   * ``study_row`` / ``list_studies`` / ``study_summary`` / ``creation_check``:
     what the M1 endpoints serve;
-  * ``lookup_chemical``: the chemical a DTXSID names (PubChem; CTX when set up);
-  * ``require_data_session``: the guard that keeps files and data steps out of
-    a companion and a report (R6).
+  * ``lookup_chemical``: the chemical a DTXSID names (PubChem; CTX when set up).
+
+The guard that keeps files and data steps out of a companion and a report
+(R6) is the safeguards' (safeguards.acts.require_data_session).
 
 Everything is derived on every call and nothing is stored (CONTEXT.md
 invariant 3). **Reading has no side effects**: no session folder is created,
 no fingerprint scanned, nothing pinned (the read-only store of the read model).
-The acts (create, fill the identity, delete) are in workflow.steps.
+The acts (create, fill the identity, delete) are in ui_api.study_steps.
 """
 
 from __future__ import annotations
@@ -42,7 +44,11 @@ from pathlib import Path
 
 import common.paths
 from common.paths import REPO_ROOT
-from workflow.errors import StepError
+# A study act or read is refused with a catalog code (StudyRefusal; the M1
+# codes are ui_api.refusals', registered on import). ``details`` is what the
+# interface may show and what the plain words name (``{id}``, ``{parent}`` …).
+from safeguards.refusals import StudyRefusal  # noqa: F401
+import ui_api.refusals  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +62,6 @@ _CHEMICAL_PREFIX_RE = re.compile(r"^DTXSID\d+")
 # date and NBK number).
 BOOKSHELF = REPO_ROOT / "assets" / "cebs" / "_bookshelf"
 
-
-class StudyRefusal(StepError):
-    """A study act or read refused with one of the M1 codes of
-    workflow.refusals.REFUSALS. ``details`` is what the interface may show
-    (and what the plain words name: ``{id}``, ``{parent}``, ``{service}`` …)."""
-
-    def __init__(self, code: str, message: str, status_code: int, details: dict | None = None):
-        super().__init__(message, status_code=status_code)
-        self.code = code
-        self.details = details or {}
 
 
 def _root() -> Path:
@@ -102,8 +98,7 @@ def chemical_dtxsid(dtxsid: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# The session-relation predicates (R7: moved from web_routes.bookshelf_routes
-# and narrative.prompt_workshop, which keep their names importable)
+# The session-relation predicates (R7), read strictly
 # ---------------------------------------------------------------------------
 
 def holds_report(dtxsid: str) -> bool:
@@ -382,40 +377,6 @@ def stands(kind: str, phase: str | None, processed: bool, *,
 
 
 # ---------------------------------------------------------------------------
-# The guard of R6: no files and no data steps in a companion or a report
-# ---------------------------------------------------------------------------
-
-def require_data_session(dtxsid: str, store=None) -> None:
-    """Refuse a data act (bringing in files, validating, integrating, the data
-    approval, Process) on a session whose data is not its own: a published
-    book's content (``read_only_session``: made by a tool from the book) or a
-    report over several studies (``report_has_no_data``: its data is prepared
-    in its studies). Reads through ``store`` when given (the step's own
-    PoolStore), else the session folder, which it never creates. Cheap: two
-    small files. A session that does not exist yet passes."""
-    from rendering.published_clone import CLONE_FILE
-    from rendering.report_compose import STUDIES_FILE
-
-    if store is not None:
-        clone = store.read_json(dtxsid, CLONE_FILE)
-        listed = store.read_json(dtxsid, STUDIES_FILE)
-    else:
-        session = session_folder(dtxsid)
-        clone = (session / CLONE_FILE).is_file() or None
-        listed = _read_json(session / STUDIES_FILE) if (session / STUDIES_FILE).is_file() else None
-    if clone is not None:
-        raise StudyRefusal("read_only_session",
-                           f"{dtxsid} is a published book's companion ({CLONE_FILE}); "
-                           "no data act is done on it", 409, {"id": dtxsid})
-    if listed is not None:
-        ids = [str(v) for v in listed.values()] if isinstance(listed, dict) else []
-        raise StudyRefusal("report_has_no_data",
-                           f"{dtxsid} is a report over several studies ({STUDIES_FILE}: "
-                           f"{', '.join(ids)}); its data is prepared in those studies", 409,
-                           {"id": dtxsid, "members": ids})
-
-
-# ---------------------------------------------------------------------------
 # The report format: which definition a session renders from, in words
 # ---------------------------------------------------------------------------
 
@@ -680,8 +641,8 @@ def _bookshelf(dtxsid: str, kind: str, relations: dict) -> dict:
 
 
 def _refusal_say(code: str, **fields) -> str:
-    from workflow.refusals import REFUSALS, _Fields
-    return REFUSALS[code].say.format_map(_Fields(fields))
+    from ui_api.refusals import say
+    return say(code, **fields)
 
 
 def delete_verdict(dtxsid: str, kind: str, relations: dict,
@@ -708,7 +669,7 @@ def _phase_and_publish(dtxsid: str, kind: str, relations: dict) -> tuple[dict, b
     """(stands, processed, phase) from the derived workflow state, read through
     the read-only store."""
     from workflow.engine import WorkflowEngine, _is_processed
-    from workflow.read_model import ReadOnlyDiskPoolStore, publish_readiness_state
+    from ui_api.read_model import ReadOnlyDiskPoolStore, publish_readiness_state
 
     store = ReadOnlyDiskPoolStore()
     session = store.session_dir(dtxsid)
@@ -726,7 +687,7 @@ def _phase_and_publish(dtxsid: str, kind: str, relations: dict) -> tuple[dict, b
 
 
 def _note_for(exc: Exception) -> dict:
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
     err = explain(exc)["error"]
     return {"level": "error", "code": err["code"], "say": err["say"]}
 

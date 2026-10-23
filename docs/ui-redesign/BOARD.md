@@ -33,13 +33,39 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
 - **Open:** the `.bm2` read cache (LMDB, 1 GB map) cannot hold a 251 MB project
   (`MDB_MAP_FULL` on an empty cache), so that project is re-read at every check.
 
+## Core track: the safeguards (2026-10-23)
+
+- **C1, C2 and R6 now live in the content branch's `safeguards/` layer** (ADR-0031),
+  merged here with content winning everywhere (`git diff
+  package-layout-workflow-engine ui-redesign` outside the interface's paths shows
+  only the additions below). The core steps no longer guard themselves. The
+  interface acts through `safeguards.guarded`; the v2 section routes do.
+- **The interface's backend is `ui_api/`** (moved from `workflow/`: `read_model`,
+  `studies`, `study_steps`, `vocabularies`). It is a front end: it may import
+  `safeguards`, and nothing below it imports it (`tests/unit/test_ui_api_layering.py`).
+- **Refusals:** `ui_api.refusals` registers the M1 codes into the shared catalog and
+  translates `fix` (a workflow place) into the module (`PLACE_MODULE`). The §4.2
+  envelope and the TypeScript are unchanged.
+- **Kind-2 additions to core files, still open for the maintainer's ruling:**
+  - `document_definition`: `ERA_TITLES` (now with `eras/niehs-proposed`, words not
+    signed), `ALTERATION_WORDS`, `era_title`, `definition_outline`;
+  - `chem_resolver`: the lookup additions;
+  - `pool_globals`: `_csv_uploads`, `forget_session`;
+  - `background_server`: the v2, studies and app routers.
+- **Lost in the merge (content wins):**
+  - The old full reset (`/api/session/reset`) refuses only R6. It no longer
+    refuses a member of a report (the delete does). Raise it on the content
+    branch if wanted.
+  - The bookshelf and prompt-workshop relation predicates are the content's
+    again; `ui_api.studies` keeps its own strict readers.
+
 ## Modules
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
 |---|---|---|---|---|---|
 | Kit + skeleton | **merged** into `ui-redesign` (ddab30c, 2026-10-15) | | Gate 0 (MODULES §4–5) | orchestrator-verified; no maintainer demo yet | |
-| C1 legal actions enforced | **merged** into `ui-redesign` (623f003, wave 1) | – | 2026-10-15 (D1 = B) | orchestrator-verified (full suite: only the known docx failure; guard 11/11); maintainer demo pending | |
-| C2 owned content protected | **merged** (623f003, wave 1); its section tests now seed INTEGRATED studies (C1 refuses Process before integration) | – | 2026-10-15 | orchestrator-verified; maintainer demo pending | |
+| C1 legal actions enforced | **merged** into `ui-redesign` (623f003, wave 1); **enforced by `safeguards` since 2026-10-23** | – | 2026-10-15 (D1 = B) | orchestrator-verified (full suite: only the known docx failure; guard 11/11); maintainer demo pending | |
+| C2 owned content protected | **merged** (623f003, wave 1); **policy in `safeguards.sections` since 2026-10-23**; its section tests now seed INTEGRATED studies (C1 refuses Process before integration) | – | 2026-10-15 | orchestrator-verified; maintainer demo pending | |
 | C3 saves merge and check | spec ready (`modules/c3/`), **awaiting the maintainer** (D1–D9) | – | | | |
 | C4 side-effect-free reads | spec ready (`modules/c4/`), **awaiting the maintainer** (D1–D7) | | | | C1 merged ✓ |
 | C5 Process guarded, observable | not started | | | | Q11, Q12 |

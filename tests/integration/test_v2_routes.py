@@ -136,7 +136,7 @@ class TestErrorEnvelope:
         (RuntimeError("boom"), "unexpected", 500),
     ])
     def test_each_mapped_exception(self, sessions_dir, api, monkeypatch, exc, code, status):
-        import workflow.read_model as read_model
+        import ui_api.read_model as read_model
 
         def raise_it(dtxsid, store=None):
             raise exc
@@ -147,7 +147,7 @@ class TestErrorEnvelope:
     def test_pin_errors(self, sessions_dir, api, monkeypatch):
         from document_model.definition_pin import DefinitionPinError
         from pipeline.method_profile import MethodProfileError
-        import workflow.read_model as read_model
+        import ui_api.read_model as read_model
 
         for exc, code in ((MethodProfileError("DTXSID1: method profile 'x' changed since it "
                                               "was pinned (hash a → b)"), "method_profile_changed"),

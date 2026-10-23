@@ -1,5 +1,5 @@
 """
-workflow.read_model — one study's derived state, in one read (MODULES.md §4.1).
+ui_api.read_model — one study's derived state, in one read (MODULES.md §4.1).
 
 The new interface learns everything about a study's workflow from this one read
 model (``GET /api/v2/studies/{id}/state``; the command line and the notebook can
@@ -8,7 +8,7 @@ call ``study_state`` directly). It composes what the core already derives:
   * what kind of session it is (a study, a report over several studies, a
     member of one, a published book's companion), the chemical it is about and
     its relations, and where it stands with the next step (``stands``): the
-    derivations of workflow.studies, the same the studies list serves;
+    derivations of ui_api.studies, the same the studies list serves;
   * the phase and its legal actions (``WorkflowEngine.state``);
   * the identity (``identity.json``; the abbreviation is the short name);
   * the two pins: the method profile (``pipeline.method_profile``: the pin, the
@@ -148,7 +148,7 @@ def method_pin_state(dtxsid: str, session: Path) -> dict:
     as ``error`` (the §4.2 envelope's body), and its deviations and mismatches
     are absent."""
     from pipeline import method_profile as mp
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
 
     try:
         pin = mp.read_pin(dtxsid)
@@ -221,7 +221,7 @@ def definition_pin_state(dtxsid: str, session: Path) -> dict:
     (or none), and how the files have drifted from a FIXED pin."""
     from document_model import definition_pin as dp
     from document_model.document_definition import current_definition_name
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
 
     try:
         pin = dp.read_pin(dtxsid)
@@ -254,7 +254,7 @@ def _rendering_catalog(dtxsid: str) -> tuple[list, list | None, dict | None]:
     definition, pinned or current), in its document order. When that tree
     cannot be built, the workflow's own catalog (catalog_for_session) and the
     reason, so the sections still list and the reason is shown."""
-    from workflow.refusals import explain
+    from ui_api.refusals import explain
     from workflow.section_catalog import catalog_for_session, catalog_for_tree
 
     try:
@@ -538,14 +538,14 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
 
 
 # ---------------------------------------------------------------------------
-# What kind of session this is (one derivation, workflow.studies)
+# What kind of session this is (one derivation, ui_api.studies)
 # ---------------------------------------------------------------------------
 
 def session_kind(dtxsid: str, sessions_root: Path) -> dict:
     """What the session is and the sessions it belongs with: the derivation of
-    ``workflow.studies.session_kind`` (the M1 contract §3), kept importable here.
+    ``ui_api.studies.session_kind`` (the M1 contract §3), kept importable here.
     ``{"kind", "chemical_dtxsid", "chemical_dtxsid_from", "relations"}``."""
-    from workflow.studies import session_kind as derive
+    from ui_api.studies import session_kind as derive
     return derive(dtxsid, sessions_root)
 
 
@@ -563,7 +563,7 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     """
     from common.dtxsid import validate_dtxsid
     from workflow.engine import WorkflowEngine, _is_processed
-    from workflow.studies import stands
+    from ui_api.studies import stands
 
     validate_dtxsid(dtxsid)
     store = store if store is not None else ReadOnlyDiskPoolStore()
@@ -592,7 +592,7 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     }
     if state["kind"] in ("companion", "report"):
         # Every workflow action is a data act, and R6 refuses them all on a
-        # session whose data is not its own (workflow.studies.require_data_session):
+        # session whose data is not its own (safeguards.acts.require_data_session):
         # the read model offers nothing the step would refuse.
         state["legal_actions"] = []
     members = members_state(dtxsid, store)

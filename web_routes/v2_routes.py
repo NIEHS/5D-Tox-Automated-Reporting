@@ -1,13 +1,14 @@
 """
 web_routes/v2_routes.py — the new interface's shared routes (MODULES.md §4).
 
-  GET /api/v2/studies/{id}/state   one study's derived state (workflow.read_model)
+  GET /api/v2/studies/{id}/state   one study's derived state (ui_api.read_model)
   GET /api/v2/vocabularies         the controlled vocabularies and id patterns
-                                   (workflow.vocabularies)
+                                   (ui_api.vocabularies)
 
 Every route here, and every route a module adds under /api/v2/ through
 ``V2Route``, answers a failure with the error envelope of MODULES.md §4.2
-(workflow.refusals): ``{"error": {code, status, message, say, fix, details}}``.
+(ui_api.refusals: the safeguards' explanation, ``fix`` naming the module that
+clears it): ``{"error": {code, status, message, say, fix, details}}``.
 The routes are thin: parse, call the core, serialize. The routes of the old
 front-ends keep their own error shapes.
 
@@ -24,7 +25,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
-from workflow.refusals import explain
+from ui_api.refusals import explain
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +61,12 @@ router = APIRouter(prefix="/api/v2", route_class=V2Route, tags=["v2"])
 
 @router.get("/studies/{dtxsid}/state")
 def api_v2_study_state(dtxsid: str):
-    """One study's derived state (workflow.read_model.study_state): phase,
+    """One study's derived state (ui_api.read_model.study_state): phase,
     legal actions, identity, pins, sections, publish readiness, member studies.
     Free of side effects; a study that does not exist answers
     ``{"id": …, "exists": false}``. A malformed id is a 400 envelope
     (``invalid_study_id``)."""
-    from workflow.read_model import study_state
+    from ui_api.read_model import study_state
     return JSONResponse(study_state(dtxsid))
 
 
@@ -73,5 +74,5 @@ def api_v2_study_state(dtxsid: str):
 def api_v2_vocabularies():
     """The controlled vocabularies (bmdx_pipe.VOCABULARIES, ADR-0019) with the
     dependent ones as mappings, and the identifier patterns a field checks."""
-    from workflow.vocabularies import vocabularies_payload
+    from ui_api.vocabularies import vocabularies_payload
     return JSONResponse(vocabularies_payload())

@@ -302,9 +302,16 @@ ERA_TITLES: dict[str, dict[str, str]] = {
         "phrase": "the NIEHS Report as published in March 2023",
     },
     "eras/niehs-2026": {
-        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13): the format for new studies",
+        "title": "NIEHS Report, as published in 2026 (NIEHS-12, 13)",
         "short": "NIEHS Report, 2026",
         "phrase": "the NIEHS Report as published in 2026",
+    },
+    # The default since 2026-10-21 (DEFAULT_DEFINITION). Words not yet signed.
+    "eras/niehs-proposed": {
+        "title": ("Proposed NIEHS Report standard: the 2026 format with the gene set "
+                  "semantic map and clusters; the format for new studies"),
+        "short": "Proposed NIEHS standard",
+        "phrase": "the proposed NIEHS Report standard",
     },
 }
 
