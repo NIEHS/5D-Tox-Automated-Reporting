@@ -67,6 +67,7 @@ PLACES = {
     "method_and_document": "the analysis method and the document definition the study is pinned to",
     "process": "Process",
     "sections": "the report's sections (accept, reopen, restore)",
+    "handoff": "editing the report in Word or Overleaf and bringing the edits back (ADR-0018)",
     "facts": "the facts a person states about the study (design, experiment details)",
     "publish": "the report's readiness to publish",
 }
@@ -168,7 +169,7 @@ REFUSALS: dict[str, Refusal] = {
         "was kept reliably. It can't be restored."), None),
     "approve_content_retired": Refusal(409, (
         "Approving can't change the text. Accept the section as it is, or edit it in "
-        "Word or Overleaf and bring that version back."), "sections"),
+        "Word or Overleaf and bring that version back."), "handoff"),
     "approve_via_accept": Refusal(400, (
         "Saving doesn't approve. Use Accept."), "sections"),
     # ── the pins ─────────────────────────────────────────────────────────────
