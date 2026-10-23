@@ -45,7 +45,8 @@ def test_every_refusal_reaches_the_interface_with_a_module_or_none():
 
 @pytest.mark.parametrize("code,module", [("not_validated", "M2"), ("section_owned", "D1"),
                                          ("method_not_chosen", "M5"), ("study_exists", "M1"),
-                                         ("run_in_flight", "P1"), ("facts_invalid", "M4")])
+                                         ("run_in_flight", "P1"), ("facts_invalid", "M4"),
+                                         ("approve_content_retired", "D4")])
 def test_a_place_becomes_its_module(code, module):
     from safeguards.refusals import Refused
     from ui_api.refusals import explain

@@ -80,6 +80,7 @@ PLACE_MODULE: dict[str, str] = {
     "process": "P1",
     "sections": "D1",
     "publish": "D1",
+    "handoff": "D4",
 }
 
 
