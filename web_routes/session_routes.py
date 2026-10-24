@@ -1503,8 +1503,9 @@ async def api_session_reset(dtxsid: Dtxsid):
 
     After this, the chemical identity form is still filled (from localStorage)
     but the server has no record of any prior work.  The user starts completely
-    from scratch.  A published book's companion and a report over several
-    studies are refused (R6, safeguards.acts).
+    from scratch.  A published book's companion and a study a report composes
+    are refused (safeguards.acts.require_deletable); a report session may go,
+    its studies stay.
     """
     _bm2_uploads = get_bm2_uploads()
     _csv_uploads = get_csv_uploads()
@@ -1515,11 +1516,10 @@ async def api_session_reset(dtxsid: Dtxsid):
     d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse({"ok": True, "message": "No session to reset"})
-    # R6: a published book's companion, or a report over several studies, is
-    # not deleted here.
-    from safeguards.acts import require_data_session
+    # Not a companion, not a study a report composes (safeguards.acts).
+    from safeguards.acts import require_deletable
     try:
-        require_data_session(dtxsid)
+        require_deletable(dtxsid)
     except StepError as e:
         return _step_refusal(e)
 

@@ -12,7 +12,10 @@ a step reads or writes anything, and refuses in a person's terms:
     (``phase_not_allowed``: adding files before anything, integrating before
     the file check passed, approving or processing before integrating …);
   * C1: Process before a person has chosen the study's analysis method
-    (``method_not_chosen``: never chosen for them).
+    (``method_not_chosen``: never chosen for them);
+  * deleting a session a person may not delete: a published book's companion
+    (``read_only_session``) or one of the studies a report composes
+    (``member_of_report``). A report session itself may go; its studies stay.
 
 The workflow core (workflow.steps, pipeline.process_integrated) does not call
 this: the notebook drives the core directly, unguarded. Front ends go through
@@ -53,6 +56,35 @@ def require_data_session(dtxsid: str, store=None) -> None:
                            f"{dtxsid} is a report over several studies ({STUDIES_FILE}: "
                            f"{', '.join(ids)}); its data is prepared in those studies", 409,
                            {"id": dtxsid, "members": ids})
+
+
+def require_deletable(dtxsid: str) -> None:
+    """Refuse removing a session's folder when it is a published book's
+    companion (``read_only_session``: a tool rebuilds it from the book) or one
+    of the studies a report over several studies composes
+    (``member_of_report``: deleting it would break that report). A report
+    session may be deleted (its member studies stay), and so may any other
+    session. Reads two small files and the reports' ``studies.json``; writes
+    nothing. Every route or step that removes a session's folder calls this."""
+    import common.paths
+    from common.session_files import read_json_file
+    from document_model.document_definition import report_of_member
+    from rendering.published_clone import CLONE_FILE
+    from rendering.report_compose import STUDIES_FILE
+
+    session = common.paths.SESSIONS_DIR / dtxsid
+    if (session / CLONE_FILE).is_file():
+        raise StudyRefusal("read_only_session",
+                           f"{dtxsid} is a published book's companion ({CLONE_FILE}); "
+                           "it is not deleted here", 409, {"id": dtxsid})
+    parent = report_of_member(dtxsid)
+    if parent and parent != dtxsid:
+        listed = read_json_file(common.paths.SESSIONS_DIR / parent / STUDIES_FILE) or {}
+        key = next((str(k) for k, v in listed.items() if v == dtxsid), "")
+        raise StudyRefusal("member_of_report",
+                           f"{dtxsid} is the {key or 'member'} study of the report {parent} "
+                           f"({STUDIES_FILE}); deleting it would break that report", 409,
+                           {"parent": parent, "key": key, "species": key or "member"})
 
 
 def require_legal(dtxsid: str, act, store=None):
