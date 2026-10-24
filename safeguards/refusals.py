@@ -83,6 +83,9 @@ REFUSALS: dict[str, Refusal] = {
     "read_only_session": Refusal(409, (
         "This is the published book's own content, made by a tool. It can't be changed "
         "or deleted here."), None),
+    "member_of_report": Refusal(409, (
+        "This is the {species} study of the report {parent}. Deleting it would break "
+        "that report."), "study"),
     "report_has_no_data": Refusal(409, (
         "This is a report over several studies: it has no files or data of its own. "
         "Its data is prepared in each of its studies; open one of them."), "study"),
