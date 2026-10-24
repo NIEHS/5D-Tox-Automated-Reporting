@@ -645,19 +645,18 @@ def _refusal_say(code: str, **fields) -> str:
     return say(code, **fields)
 
 
-def delete_verdict(dtxsid: str, kind: str, relations: dict,
-                   index: StoreIndex | None = None) -> dict:
-    """Whether the session may be deleted here, and if not, why: a companion
-    is the book's (a tool rebuilds it), a member belongs to its report, and a
-    study with a run in flight is busy. ``{allowed, code, say, details}``."""
-    if kind == "companion":
-        return {"allowed": False, "code": "read_only_session", "say": _refusal_say("read_only_session"),
-                "details": {}}
-    if kind == "member":
-        parent, key = member_key(dtxsid, index) or (relations.get("parent"), "")
-        details = {"parent": parent, "key": key, "species": key or "member"}
-        return {"allowed": False, "code": "member_of_report",
-                "say": _refusal_say("member_of_report", **details), "details": details}
+def delete_verdict(dtxsid: str) -> dict:
+    """Whether the session may be deleted here, and if not, why: the
+    safeguards' rule for removing a session's folder (a companion is the
+    book's, a member belongs to its report: safeguards.acts.require_deletable),
+    and a study with a run in flight is busy. ``{allowed, code, say, details}``."""
+    from safeguards.acts import require_deletable
+
+    try:
+        require_deletable(dtxsid)
+    except StudyRefusal as e:
+        return {"allowed": False, "code": e.code, "say": _refusal_say(e.code, **e.details),
+                "details": dict(e.details)}
     since = running_since(dtxsid)
     if since:
         return {"allowed": False, "code": "run_in_flight",
@@ -729,7 +728,7 @@ def study_row(dtxsid: str, index: StoreIndex | None = None) -> dict:
     clone = guarded(lambda: clone_record(dtxsid), None) if kind == "companion" else None
     published = guarded(lambda: _published_of(dtxsid, kind, clone), None)
     fmt = guarded(lambda: format_summary(dtxsid, kind, relations, published), None)
-    verdict = delete_verdict(dtxsid, kind, relations, index)
+    verdict = delete_verdict(dtxsid)
     notes.extend(_identity_notes(identity, kind, kind_info["chemical_dtxsid"]))
     if kind == "other":
         chem = kind_info["chemical_dtxsid"]

@@ -53,9 +53,11 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
   - `pool_globals`: `_csv_uploads`, `forget_session`;
   - `background_server`: the v2, studies and app routers.
 - **Lost in the merge (content wins):**
-  - The old full reset (`/api/session/reset`) refuses only R6. It no longer
-    refuses a member of a report (the delete does). Raise it on the content
-    branch if wanted.
+  - (Fixed 2026-10-24, content b2916e4.) The old full reset briefly refused only
+    R6. Deleting a session now has one rule for every route,
+    `safeguards.acts.require_deletable`: never a companion, never a member of a
+    report; a report session may go. `ui_api.studies.delete_verdict` uses it and
+    adds the run in flight. `reset_session_step` is gone (nothing called it).
   - The bookshelf and prompt-workshop relation predicates are the content's
     again; `ui_api.studies` keeps its own strict readers.
 

@@ -688,53 +688,6 @@ def test_a_delete_whose_folder_vanishes_at_the_rename_is_not_found(study, monkey
 
 
 # ---------------------------------------------------------------------------
-# The old full reset (F2): the same rule as the delete
-# ---------------------------------------------------------------------------
-
-def test_reset_refuses_what_the_delete_refuses(sessions_dir, monkeypatch):
-    from ui_api.study_steps import reset_session_step
-
-    _folder(sessions_dir, "DTXSID1", studies__json={"rat": "DTXSID1_rat"})
-    _folder(sessions_dir, "DTXSID1_rat", meta__json={})
-    _folder(sessions_dir, "DTXSID1_published", published_clone__json={"twin": "DTXSID1"})
-    for sid, code in (("DTXSID1_rat", "member_of_report"),
-                      ("DTXSID1_published", "read_only_session")):
-        with pytest.raises(StudyRefusal) as e:
-            reset_session_step(sid)
-        assert e.value.code == code and e.value.status_code == 409
-        assert (sessions_dir / sid).is_dir()
-        with pytest.raises(StudyRefusal) as d:
-            delete_study_dry_run(sid)
-        assert d.value.code == code
-
-
-def test_reset_refuses_a_run_in_flight(sessions_dir, monkeypatch):
-    from ui_api.study_steps import reset_session_step
-
-    _folder(sessions_dir, "DTXSID2", meta__json={})
-    monkeypatch.setattr(studies, "running_since", lambda sid: "2026-10-15T12:00:00Z")
-    with pytest.raises(StudyRefusal) as e:
-        reset_session_step("DTXSID2")
-    assert e.value.code == "run_in_flight"
-    assert e.value.details == {"started_at": "2026-10-15T12:00:00Z"}
-    assert (sessions_dir / "DTXSID2").is_dir()
-
-
-def test_reset_removes_a_study_and_forgets_it(sessions_dir):
-    from pipeline.pool_globals import get_integrated_pool
-    from ui_api.study_steps import reset_session_step
-
-    d = _folder(sessions_dir, "DTXSID2_nb", meta__json={})
-    get_integrated_pool()["DTXSID2_nb"] = {}
-    assert reset_session_step("DTXSID2_nb") == {"deleted": "DTXSID2_nb"}
-    assert not d.exists() and "DTXSID2_nb" not in get_integrated_pool()
-    assert not [p for p in sessions_dir.iterdir() if p.name.startswith(".deleting")]
-    with pytest.raises(StudyRefusal) as e:
-        reset_session_step("DTXSID2_nb")
-    assert e.value.code == "study_not_found"
-
-
-# ---------------------------------------------------------------------------
 # The dialog's words (F5)
 # ---------------------------------------------------------------------------
 

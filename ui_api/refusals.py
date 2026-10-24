@@ -47,9 +47,6 @@ STUDY_REFUSALS: dict[str, Refusal] = {
     "identity_unconfirmed": Refusal(400, (
         "Confirm the chemical before going on: tick the box that says it is the chemical "
         "you are studying."), None),
-    "member_of_report": Refusal(409, (
-        "This is the {species} study of the report {parent}. Deleting it would break "
-        "that report."), "study"),
     "run_in_flight": Refusal(409, (
         "Process is running on this study (since {time}). Wait for it to finish."),
         "process"),

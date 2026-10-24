@@ -378,16 +378,17 @@ def _pin_words(folder: Path) -> str:
 
 def require_deletable(dtxsid: str, index=None) -> dict:
     """The one rule of what may not be deleted, for every act that removes a
-    study's folder (the delete pair of M1, the old full reset): a published
+    study's folder (the delete pair of M1): a published
     book's content (``read_only_session``), a member of a report
     (``member_of_report``), a study with a run in flight (``run_in_flight``),
-    as ``ui_api.studies.delete_verdict`` decides. Raises the refusal;
-    returns ``session_kind``'s answer when the study may go."""
+    as ``ui_api.studies.delete_verdict`` decides (the safeguards' rule, and the
+    run in flight). Raises the refusal; returns ``session_kind``'s answer when
+    the study may go."""
     from ui_api.studies import StoreIndex, StudyRefusal, delete_verdict, session_kind
 
     index = index or StoreIndex()
     info = session_kind(dtxsid, index=index)
-    verdict = delete_verdict(dtxsid, info["kind"], info["relations"], index)
+    verdict = delete_verdict(dtxsid)
     if not verdict["allowed"]:
         raise StudyRefusal(verdict["code"], f"{dtxsid}: delete refused ({info['kind']})", 409,
                            verdict["details"])
@@ -616,19 +617,3 @@ def delete_study_step(dtxsid: str, confirm_id: str, preview_token: str) -> dict:
     logger.info("Deleted study %s (folder removed)", dtxsid)
     return {"deleted": dtxsid, "kept": preview["confirm"]["keeps"],
             "say": f"{dtxsid} was deleted."}
-
-
-@step_provenance
-def reset_session_step(dtxsid: str) -> dict:
-    """The old full reset (``POST /api/session/reset/{id}``): remove a
-    session's whole folder, with no dry run and no typed id, but never what
-    the M1 delete refuses (``require_deletable``: a published book's content,
-    a member of a report, a study with a run in flight). An empty folder is
-    removed too, as the route always did. Refuses ``study_not_found`` when
-    the folder is absent or was deleted meanwhile. Returns ``{"deleted"}``."""
-    with _study_lock(dtxsid) as folder:
-        require_deletable(dtxsid)
-        doomed = _take_away(dtxsid, folder)
-    _remove(dtxsid, doomed)
-    logger.info("Full session reset for %s: folder removed", dtxsid)
-    return {"deleted": dtxsid}

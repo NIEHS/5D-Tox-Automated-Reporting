@@ -614,16 +614,18 @@ class TestDelete:
 
 
 # ---------------------------------------------------------------------------
-# The old full reset: R6 (the content branch's route)
+# The old full reset: the delete's rule (safeguards.acts.require_deletable)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
 class TestOldReset:
-    def test_it_refuses_a_companion(self, store, api):
-        # R6 (safeguards.acts). A member of a report is not refused on this old
-        # route: the content branch's reset refuses only what R6 does.
+    def test_it_refuses_a_member_and_a_companion(self, store, api):
+        # The same rule as the delete (safeguards.acts.require_deletable).
+        body = _legacy(api.post("/api/session/reset/DTXSID1_rat"), "member_of_report", 409)
+        assert body["details"]["parent"] == "DTXSID1"
+        assert body["say"] == "This is the rat study of the report DTXSID1. Deleting it would break that report."
         _legacy(api.post("/api/session/reset/DTXSID2_published"), "read_only_session", 409)
-        assert (store / "DTXSID2_published").is_dir()
+        assert (store / "DTXSID1_rat").is_dir() and (store / "DTXSID2_published").is_dir()
 
     def test_it_still_resets_a_study_without_a_token(self, store, api):
         resp = api.post("/api/session/reset/DTXSID2_nb")

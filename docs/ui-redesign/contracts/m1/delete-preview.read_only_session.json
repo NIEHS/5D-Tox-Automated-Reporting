@@ -11,7 +11,9 @@
       "message": "DTXSID50469320_published: delete refused (companion)",
       "say": "This is the published book's own content, made by a tool. It can't be changed or deleted here.",
       "fix": null,
-      "details": {}
+      "details": {
+        "id": "DTXSID50469320_published"
+      }
     }
   }
 }
