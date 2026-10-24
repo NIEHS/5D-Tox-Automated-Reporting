@@ -41,16 +41,16 @@ This document explains, from the bottom up:
                 │  sources · publish · refusals · guarded    │         │ core
                 └───────────────┬────────────────────────────┘         │ directly,
                                 │ then calls the core step              │ unguarded
-                ┌───────────────▼───────────────────────────────────────▼───┐
-  the core      │  workflow/  (steps, engine, phases, store, section_writes, │
-                │             ownership, labels, guard, currency, reprocess,│
-                │             section_catalog, section_readiness,           │
-                │             integration_basis, errors)                    │
-                │  pipeline/  (process_integrated, method_profile,          │
-                │             pool_state, session_store, metadata_approval…)│
-                │  document_model/, rendering/, tables/, narrative/, …      │
-                │  bmdx_pipe (sibling package) + Java (BMDExpress-3)        │
-                └────────────────────────────────────────────────────────────┘
+                ┌───────────────▼───────────────────────────────────────▼─────┐
+  the core      │  workflow/  (steps, engine, phases, store, section_writes,  │
+                │             ownership, labels, guard, currency, reprocess,  │
+                │             section_catalog, section_readiness,             │
+                │             integration_basis, errors)                      │
+                │  pipeline/  (process_integrated, method_profile,            │
+                │             pool_state, session_store, metadata_approval…)  │
+                │  document_model/, rendering/, tables/, narrative/, …        │
+                │  bmdx_pipe (sibling package) + Java (BMDExpress-3)          │
+                └─────────────────────────────────────────────────────────────┘
                                 │
                          sessions/<DTXSID>/   (the state IS the files)
 ```

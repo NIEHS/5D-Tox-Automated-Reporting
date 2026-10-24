@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The workflow, the safeguards, and how the new interface uses them</title>
+<style>
+:root{--fg:#1f2328;--muted:#59636e;--bg:#fff;--side:#f6f8fa;--line:#d1d9e0;--accent:#0b57d0;--code:#eff2f5}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.6 -apple-system,"Segoe UI",Roboto,"Liberation Sans",Helvetica,Arial,sans-serif;color:var(--fg);background:var(--bg)}
+nav{position:fixed;top:0;left:0;bottom:0;width:300px;overflow-y:auto;background:var(--side);border-right:1px solid var(--line);padding:20px 16px;font-size:13px}
+nav .doc{font-weight:600;font-size:14px;margin-bottom:12px;line-height:1.35}
+nav ul{list-style:none;margin:0;padding:0}
+nav li{margin:2px 0}
+nav li ul{padding-left:14px;margin:2px 0 8px}
+nav a{color:var(--fg);text-decoration:none;display:block;padding:2px 6px;border-radius:4px}
+nav a:hover{background:#e7ecf0}
+nav a.active{background:#dbe7fb;color:var(--accent)}
+main{margin-left:300px;padding:32px 48px 80px;max-width:1240px}
+h1{font-size:28px;line-height:1.25;margin:0 0 16px}
+h2{font-size:22px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 8px}
+h1,h2,h3{scroll-margin-top:16px}
+p,li{max-width:900px}
+a{color:var(--accent)}
+code{font:12.5px/1.4 "Liberation Mono",Menlo,Consolas,monospace;background:var(--code);padding:1px 4px;border-radius:4px}
+pre{background:#f6f8fa;border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;line-height:1.18;font-size:12.5px}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.18;font-family:"DejaVu Sans Mono","Liberation Mono",Menlo,Consolas,monospace}
+hr{border:0;border-top:1px solid var(--line);margin:32px 0}
+.tbl{overflow-x:auto;margin:12px 0 18px}
+table{border-collapse:collapse;font-size:13.5px;min-width:60%}
+th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{background:#f0f3f6;font-weight:600}
+tbody tr:nth-child(even){background:#fafbfc}
+td code{white-space:nowrap}
+blockquote{margin:12px 0;padding:4px 14px;border-left:4px solid var(--line);color:var(--muted)}
+.top{position:fixed;right:20px;bottom:20px;background:var(--accent);color:#fff;border-radius:20px;padding:6px 12px;font-size:13px;text-decoration:none;opacity:.85}
+@media (max-width:1000px){nav{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line)}main{margin-left:0;padding:20px}}
+@media print{nav,.top{display:none}main{margin:0;padding:0;max-width:none}h2{break-after:avoid}table,pre{break-inside:avoid}}
+</style></head>
+<body>
+<nav aria-label="Contents"><div class="doc">The workflow, the safeguards, and how the new interface uses them</div><ul><li><a href="#part-0-the-picture-in-one-page">Part 0 — The picture in one page</a></li><li><a href="#part-1-the-workflow-core">Part 1 — The workflow core</a><ul><li><a href="#11-a-study-is-a-folder">1.1 A study is a folder</a></li><li><a href="#12-the-store">1.2 The store</a></li><li><a href="#13-the-steps-in-order">1.3 The steps, in order</a></li><li><a href="#14-the-derived-state-phase-legal-acts-next-step">1.4 The derived state: phase, legal acts, next step</a></li><li><a href="#15-the-pins-the-method-and-the-document-are-fixed-per-study">1.5 The pins: the method and the document are fixed per study</a></li><li><a href="#16-sections-catalog-kinds-and-readiness">1.6 Sections: catalog, kinds and readiness</a></li><li><a href="#17-the-section-write-gate-and-the-history">1.7 The section write gate and the history</a></li><li><a href="#18-what-a-data-change-does-to-the-sections-and-the-publish-readiness">1.8 What a data change does to the sections, and the publish readiness</a></li><li><a href="#19-the-cores-own-refusals-invariants">1.9 The core&#x27;s own refusals (invariants)</a></li></ul></li><li><a href="#part-2-the-safeguards-safeguards-adr-0031">Part 2 — The safeguards (safeguards/, ADR-0031)</a><ul><li><a href="#21-why-a-separate-layer">2.1 Why a separate layer</a></li><li><a href="#22-the-refusal-catalog-safeguardsrefusalspy">2.2 The refusal catalog (safeguards/refusals.py)</a></li><li><a href="#23-safeguardsactspy-whether-an-act-may-run-now">2.3 safeguards/acts.py — whether an act may run now</a></li><li><a href="#24-safeguardssectionspy-c2-owned-content-is-never-overwritten-by-a-machine">2.4 safeguards/sections.py — C2: owned content is never overwritten by a machine</a></li><li><a href="#25-safeguardsinputspy-what-a-person-states">2.5 safeguards/inputs.py — what a person states</a></li><li><a href="#26-safeguardssourcespy-no-background-without-its-sources">2.6 safeguards/sources.py — no Background without its sources</a></li><li><a href="#27-safeguardspublishpy-the-publish-gate">2.7 safeguards/publish.py — the publish gate</a></li><li><a href="#28-safeguardsguardedpy-the-front-ends-entry-point">2.8 safeguards/guarded.py — the front ends&#x27; entry point</a></li><li><a href="#29-what-the-core-does-without-the-safeguards-the-notebooks-view">2.9 What the core does without the safeguards (the notebook&#x27;s view)</a></li></ul></li><li><a href="#part-3-the-shared-web-routes">Part 3 — The shared web routes</a></li><li><a href="#part-4-the-command-line-toolinggenerate-reportpy">Part 4 — The command line (tooling/generate_report.py)</a></li><li><a href="#part-5-the-notebook">Part 5 — The notebook</a></li><li><a href="#part-6-the-new-interface">Part 6 — The new interface</a><ul><li><a href="#61-its-parts">6.1 Its parts</a></li><li><a href="#62-ui-apirefusals-the-safeguards-explanations-in-the-interfaces-terms">6.2 ui_api.refusals — the safeguards&#x27; explanations in the interface&#x27;s terms</a></li><li><a href="#63-the-read-model-get-apiv2studiesidstate">6.3 The read model: GET /api/v2/studies/{id}/state</a></li><li><a href="#64-the-studies-modules-backend-m1">6.4 The Studies module&#x27;s backend (M1)</a></li><li><a href="#65-the-section-routes-c2">6.5 The section routes (C2)</a></li><li><a href="#66-get-apiv2vocabularies">6.6 GET /api/v2/vocabularies</a></li><li><a href="#67-the-typescript-how-the-screens-use-all-this">6.7 The TypeScript: how the screens use all this</a></li><li><a href="#68-end-to-end-the-studies-module-built">6.8 End to end: the Studies module (built)</a></li><li><a href="#69-worked-examples-one-refusal-all-the-way-through">6.9 Worked examples: one refusal, all the way through</a></li><li><a href="#610-what-is-built-and-what-is-not-yet">6.10 What is built, and what is not yet</a></li></ul></li><li><a href="#part-7-the-tests-that-pin-all-this">Part 7 — The tests that pin all this</a></li><li><a href="#appendix-where-to-look">Appendix — Where to look</a></li></ul></nav>
+<main><h1 id="the-workflow-the-safeguards-and-how-the-new-interface-uses-them">The workflow, the safeguards, and how the new interface uses them</h1>
+<p><em>Written 2026-10-24 from the code on <code>ui-redesign</code> (after merging
+<code>package-layout-workflow-engine</code> at b2916e4). Every name below is a real module,
+function, file or code; where something is not built yet, it says so.</em></p>
+<p>This document explains, from the bottom up:</p>
+<ol>
+<li><strong>the workflow core</strong>: what a study is on disk, every step, and the state the
+workflow derives (phase, legal acts, pins, sections, publish readiness);</li>
+<li><strong>the safeguards</strong> (<code>safeguards/</code>, ADR-0031): the separate layer that refuses
+what a person should not do, and explains every refusal in plain words;</li>
+<li><strong>the front ends</strong> that sit on top: the shared web routes, the command line,
+the Jupyter notebook;</li>
+<li><strong>the new interface</strong>: its backend (<code>ui_api/</code>, the <code>/api/v2</code> routes) and its
+React/antd front end (<code>ui/</code>), and how each screen reads the derived state and
+shows the safeguards' refusals.</li>
+</ol>
+<hr />
+<h2 id="part-0-the-picture-in-one-page">Part 0 — The picture in one page</h2>
+<pre><code>                ┌──────────────────────────────────────────────────────────┐
+  people        │  new interface (ui/, React + antd, served at /app)       │
+                │    reads GET /api/v2/studies/{id}/state, never computes  │
+                └───────────────┬──────────────────────────────────────────┘
+                                │ HTTP (fetch), §4.2 error envelope
+                ┌───────────────▼──────────────────────────────────────────┐
+  front ends    │  web_routes/                                             │
+                │    v2_routes, v2_section_routes, studies_routes  (new UI)│
+                │    pool_routes, upload_routes, session_routes,           │
+                │    integrated_routes, llm_routes, preview_routes, …      │
+                │  ui_api/  (the new interface's server side)              │
+                │  tooling/generate_report.py  (the command line)          │
+                │  notebooks/  (the workflow, one step per cell)  ─────┐   │
+                └───────────────┬──────────────────────────────────────┼───┘
+                                │ calls safeguards.guarded / acts / …  │
+                ┌───────────────▼────────────────────────────┐         │
+  idiot-proofing│  safeguards/  acts · sections · inputs ·   │         │ calls the
+                │  sources · publish · refusals · guarded    │         │ core
+                └───────────────┬────────────────────────────┘         │ directly,
+                                │ then calls the core step              │ unguarded
+                ┌───────────────▼───────────────────────────────────────▼─────┐
+  the core      │  workflow/  (steps, engine, phases, store, section_writes,  │
+                │             ownership, labels, guard, currency, reprocess,  │
+                │             section_catalog, section_readiness,             │
+                │             integration_basis, errors)                      │
+                │  pipeline/  (process_integrated, method_profile,            │
+                │             pool_state, session_store, metadata_approval…)  │
+                │  document_model/, rendering/, tables/, narrative/, …        │
+                │  bmdx_pipe (sibling package) + Java (BMDExpress-3)          │
+                └─────────────────────────────────────────────────────────────┘
+                                │
+                         sessions/&lt;DTXSID&gt;/   (the state IS the files)
+</code></pre>
+<p>Three rules hold the picture together:</p>
+<ul>
+<li><strong>The state is derived, never stored.</strong> The phase, the legal acts, a
+section's readiness, the publish readiness: every one is recomputed from the
+files in <code>sessions/&lt;id&gt;/</code> on every call (CONTEXT.md invariant 3). No front
+end stores or sets any of them.</li>
+<li><strong>The core holds the invariants; the safeguards hold the idiot-proofing.</strong>
+What must be true for <em>every</em> caller (nothing written is ever lost, a merge
+either completes or leaves the study as it was, unpublished data never leave
+for a public model) is in the core. What keeps a <em>person</em> from going wrong
+(doing a step out of order, letting a machine overwrite their approved text,
+stating a value outside the vocabulary, shipping a stale report) is in
+<code>safeguards/</code>.</li>
+<li><strong>The import direction is one-way.</strong> No core package imports <code>safeguards</code>;
+<code>safeguards</code> imports no front end; nothing below the new interface imports
+<code>ui_api</code>. Tests enforce all three (<code>tests/unit/test_safeguards_layering.py</code>,
+<code>tests/unit/test_ui_api_layering.py</code>).</li>
+</ul>
+<p>The <strong>notebook</strong> (<code>notebooks/workflow_walkthrough.ipynb</code>) is the one front end
+that calls the core directly: it is &quot;the workflow and its code without the
+idiot-proofing&quot; (the maintainer, 2026-10-14). The <strong>browser</strong> and the
+<strong>command line</strong> go through the safeguards.</p>
+<hr />
+<h2 id="part-1-the-workflow-core">Part 1 — The workflow core</h2>
+<h3 id="11-a-study-is-a-folder">1.1 A study is a folder</h3>
+<p>Everything about a study lives in <code>sessions/&lt;DTXSID&gt;/</code> (<code>common.paths.SESSIONS_DIR</code>,
+overridable with the <code>SESSIONS_DIR</code> environment variable). There is no database
+of sessions and no in-memory state that matters: restart the server and
+everything is still there. The files, grouped by what produces them:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Written by</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>files/</code></td>
+<td>uploads, <code>generate_report.import_files</code></td>
+<td>the input data files (.bm2, .txt, .csv, .xlsx and their <code>.sidecar.json</code>)</td>
+</tr>
+<tr>
+<td><code>_fingerprints.json</code></td>
+<td><code>store.ensure_fingerprints</code></td>
+<td>one fingerprint per file: platform, data type, file type, hashes, a per-scan <code>file_id</code></td>
+</tr>
+<tr>
+<td><code>validation_report.json</code></td>
+<td><code>validate_step</code></td>
+<td>the file check: <code>issues</code> (each with a <code>severity</code>), the <code>coverage_matrix</code>, <code>is_complete</code>, the fingerprints it checked</td>
+</tr>
+<tr>
+<td><code>precedence.json</code></td>
+<td><code>resolve_step</code></td>
+<td>a person's choices between conflicting files</td>
+</tr>
+<tr>
+<td><code>integrated.json</code> (+ <code>integrated.bm2</code>, <code>_category_lookup.json</code>, <code>genomics.sidecar.json</code>)</td>
+<td><code>integrate_step</code></td>
+<td><strong>the dataset</strong>: the merged BMDProject, the single source of truth for every report</td>
+</tr>
+<tr>
+<td><code>integration_basis.json</code></td>
+<td><code>integrate_step</code></td>
+<td>the hash of the validation the dataset was built from</td>
+</tr>
+<tr>
+<td><code>identity.json</code></td>
+<td>create, integrate, <code>record_abbreviation</code></td>
+<td>the chemical: name, CASRN, DTXSID, abbreviation, where it came from</td>
+</tr>
+<tr>
+<td><code>study_design.json</code></td>
+<td><code>record_study_design</code></td>
+<td>design facts a person stated (route, vehicle, strain…)</td>
+</tr>
+<tr>
+<td><code>metadata_approved.json</code></td>
+<td><code>approve_experiment_metadata</code></td>
+<td>experiment details a person stated (organ, sex…)</td>
+</tr>
+<tr>
+<td><code>animal_report.json</code></td>
+<td><code>generate_animal_report_step</code></td>
+<td><strong>the data approval</strong>: every animal accounted for</td>
+</tr>
+<tr>
+<td><code>method_profile.json</code></td>
+<td><code>pin_profile</code>, <code>track_newest</code>, <code>ensure_pin</code></td>
+<td>the analysis method pin (ADR-0027)</td>
+</tr>
+<tr>
+<td><code>document_definition.json</code> (+ <code>.yaml</code> snapshot)</td>
+<td><code>definition_pin.pin_definition</code></td>
+<td>the document definition pin (ADR-0029)</td>
+</tr>
+<tr>
+<td><code>_cache_&lt;unit&gt;_&lt;hash&gt;.json</code></td>
+<td>Process</td>
+<td>each Process unit's output, keyed by a hash of its inputs</td>
+</tr>
+<tr>
+<td><code>bm2_&lt;slug&gt;.json</code>, <code>genomics_*.json</code>, <code>background.json</code>, <code>summary.json</code>, …</td>
+<td>Process, LLM routes, a person</td>
+<td><strong>the sections</strong></td>
+</tr>
+<tr>
+<td><code>history/&lt;section&gt;/v0007-&lt;ts&gt;.json</code>, <code>history/&lt;section&gt;/index.jsonl</code></td>
+<td><code>save_section</code></td>
+<td>every earlier version of a section, and one line per act on it</td>
+</tr>
+<tr>
+<td><code>history/_data_approval/</code></td>
+<td><code>integrate_step</code></td>
+<td>data approvals withdrawn by a re-integration</td>
+</tr>
+<tr>
+<td><code>session.duckdb</code>, <code>session_parquet/</code></td>
+<td>end of Process</td>
+<td>the query substrate (ADR-0016)</td>
+</tr>
+<tr>
+<td><code>published_clone.json</code></td>
+<td><code>tooling/published_clone</code></td>
+<td>marks a <strong>companion</strong>: a published book's own content</td>
+</tr>
+<tr>
+<td><code>studies.json</code></td>
+<td><code>--studies</code></td>
+<td>marks a <strong>report over several studies</strong> (NIEHS-12/13): <code>{key: member session}</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Session ids are validated everywhere (<code>common.dtxsid.validate_dtxsid</code>): a bad id
+never reaches the filesystem (it is what stops <code>/api/session/reset/%2e%2e</code> from
+deleting <code>sessions/</code>).</p>
+<h3 id="12-the-store">1.2 The store</h3>
+<p>Every step reads and writes through an injected <code>PoolStore</code>
+(<code>workflow/store.py</code>, ADR-0014): <code>session_dir</code>, <code>read_json</code>/<code>write_json</code>,
+<code>has_files</code>, <code>artifact_exists</code>, <code>get_fingerprints</code>/<code>ensure_fingerprints</code>,
+<code>set_integrated</code>, <code>read_section_dicts</code>/<code>read_section_states</code>,
+<code>has_stale_sections</code>, <code>save_section</code>, <code>archive_section</code>, <code>delete_section</code>.
+<code>DiskPoolStore</code> is the real one. Tests pass fakes; the new interface's reads
+pass <code>ui_api.read_model.ReadOnlyDiskPoolStore</code>, which refuses every write (see
+Part 6).</p>
+<h3 id="13-the-steps-in-order">1.3 The steps, in order</h3>
+<p>The workflow is thirteen steps (the notebook's numbering). Each core step is a
+plain Python function: no HTTP, plain arguments, a plain dict back, a
+<code>workflow.errors.StepError(message, status_code)</code> on failure.</p>
+<p><strong>Data preparation</strong></p>
+<ol>
+<li><strong>Create the study.</strong> A folder with <code>identity.json</code> and <code>meta.json</code>.
+(In the new interface: <code>ui_api.study_steps.create_study_step</code>, Part 6.)</li>
+<li><strong>Bring in files.</strong> Uploads land in <code>files/</code>. If the study had already been
+validated, integrated or approved, the upload calls
+<code>pipeline.pool_state.invalidate_pool_artifacts</code> (see 1.8): the validation,
+the dataset, the data approval and the caches go, so the phase falls back.
+Removing one file (<code>pool_state.remove_pool_file</code>) moves it to
+<code>_removed/&lt;timestamp&gt;/</code> (reversible) and invalidates the same way.</li>
+<li><strong>Validate</strong> — <code>workflow.steps.validate_step</code>. Re-fingerprints every file
+(a full re-scan), runs <code>bmdx_pipe.validate_pool</code> (cross-file checks,
+coverage per platform), adds the value-level provenance check
+(<code>pipeline.value_validation</code>: a derived CSV must equal its source workbook),
+writes <code>validation_report.json</code>. It never deletes the dataset or the data
+approval: a validation that finds errors leaves them inert (the phase says
+so), and one that no longer matches the dataset reads &quot;integrate again&quot;.
+Core refusal: no <code>files/</code> → <code>StepError(404)</code>.</li>
+<li><strong>Resolve conflicts</strong> — <code>resolve_step</code> appends <code>{issue_index, chosen_file_id, resolved_at}</code> to <code>precedence.json</code>.</li>
+<li><strong>Confirm classification</strong> — <code>confirm_metadata_step</code>: a person's
+<code>{file_id: {platform, data_type}}</code> corrections go onto the fingerprints and,
+for .txt/.csv, into the files' <code># Platform</code> / <code># Data Type</code> headers.</li>
+<li><strong>Integrate</strong> — <code>integrate_step</code>, the heart of data preparation:
+<ul>
+<li>refuses without fingerprints or a coverage matrix (<code>StepError(400)</code>,
+&quot;run validation first&quot;);</li>
+<li><strong><code>_check_validation_matches</code></strong>: refuses with <code>ValidationOutOfDate</code> (409)
+when the fingerprints it would merge no longer match the validation it
+pairs them with — a file id in the coverage matrix that a cold re-scan
+re-minted, or files added/removed since. This is a <em>core</em> refusal: going
+ahead would combine the wrong files;</li>
+<li>writes <code>identity.json</code> if the caller passed one; reads the test article
+and any <code>metadata_approved.json</code> (the stated details win over inference);</li>
+<li><strong>atomic merge</strong>: <code>_keep_dataset_files</code> copies the current dataset files
+aside, <code>bmdx_pipe.integrate_pool</code> merges (Java <code>IntegrateProject</code>; an LLM
+may infer experiment metadata through the gateway), <code>_check_dataset</code> runs
+the BMDProject schema over the result; on <em>any</em> failure
+<code>_restore_dataset_files</code> puts the old dataset back and the step raises
+<code>StepError(500, &quot;Integration failed: …&quot;)</code>. A study is never left &quot;integrated&quot;
+over a dataset no read accepts;</li>
+<li>withdraws the data approval (<code>_withdraw_data_approval</code>: <code>animal_report.json</code>
+moves to <code>history/_data_approval/</code>, never deleted);</li>
+<li>records the basis (<code>workflow.integration_basis.record_basis</code>);</li>
+<li>re-applies the stated study design (<code>reapply_study_design</code>) and stamps
+measurement units onto the sidecars;</li>
+<li>deletes every Process cache and the query substrate (their inputs changed);</li>
+<li>compares the dataset's recorded analysis settings with the pinned method
+profile and writes each disagreement into the validation report as a
+<code>method_mismatch</code> warning. <strong>It pins nothing</strong>: the method is a person's
+choice (C1 D1).</li>
+</ul>
+</li>
+<li><strong>State the facts the data don't carry.</strong>
+<ul>
+<li>Study design: <code>workflow.steps.record_study_design(dtxsid, fields, store)</code>
+writes <code>study_design.json</code> and puts the fields on every experiment
+(<code>apply_design_fields</code>), saving <code>integrated.json</code> and re-exporting
+<code>integrated.bm2</code>. Without a stated design, the report uses the sanctioned
+standard design and says so in the log (<code>pipeline.study_design</code>).</li>
+<li>Experiment details: <code>pipeline.metadata_approval.approve_experiment_metadata</code>
+lays <code>{experiment: {organ, sex, …}}</code> over the descriptions, reconciles the
+genomics sidecar, re-exports the .bm2 and records <code>metadata_approved.json</code>
+(which every later integration re-applies).</li>
+<li>Front matter, abbreviation, the data deposit, the eFDR: command-line helpers.</li>
+</ul>
+</li>
+<li><strong>Data approval</strong> — <code>generate_animal_report_step</code> builds the per-animal
+traceability report (<code>bmdx_pipe.build_animal_report</code>) and writes
+<code>animal_report.json</code>. Its existence is what the phase calls APPROVED. It
+informs; it gates nothing (decision Q3): Process is legal from INTEGRATED on.</li>
+</ol>
+<p><strong>The report</strong></p>
+<ol start="9">
+<li><strong>Process</strong> — <code>pipeline.process_integrated.run_process</code> (also as
+<code>workflow.steps.process_step</code>, and in two halves <code>run_data</code> +
+<code>run_document</code>/<code>document_step</code>, ADR-0021):
+<ul>
+<li><code>_build_process_context</code> calls <code>method_profile.ensure_pin</code> (a study with
+no pin gets one written <code>pinned_by: &quot;default&quot;</code>, tracking the newest
+profile; a TRACK pin moves to a newer profile) and the definition pin's
+<code>ensure_pin</code>;</li>
+<li><strong>concern [1], <code>run_data</code></strong>: NTP statistics, the BMDS/ToxicR modelling,
+genomics extraction, charts, the BMD summary. Each unit writes
+<code>_cache_&lt;unit&gt;_&lt;hash&gt;.json</code>, the hash covering every input of that unit,
+so an unchanged unit is not recomputed;</li>
+<li><strong>the BMD hard-stop</strong> (<code>_BMD_HARD_STOP = True</code>): where both the .bm2 and the
+ToxicR recompute give a numeric BMD and they differ beyond 25%, the run
+halts with <code>BmdDivergenceError</code> naming each endpoint and both values;</li>
+<li><strong>concern [2], <code>prepare_content_if_changed</code></strong>: the prose (genomics
+narratives, apical BMD narrative, unified narratives, Materials &amp; Methods),
+skipped when its inputs are unchanged;</li>
+<li>the payload, then the query substrate (<code>session.duckdb</code>).
+Every LLM call goes through <code>styling_export.llm_endpoints</code>, whose <strong>egress
+guard</strong> raises <code>LLMEgressBlocked</code> for any endpoint but the NIEHS gateway: a
+core invariant (study data never go to a public model).</li>
+</ul>
+</li>
+<li><strong>Materialize the sections</strong> — <code>workflow.steps.materialize_result_sections</code>
+writes one <code>bm2_&lt;slug&gt;.json</code> per apical platform from the sections cache;
+<code>materialize_summary</code> writes <code>summary.json</code> (deterministic,
+<code>narrative.report_summary</code>). Both write through the section write gate
+(1.7), taking a <code>policy</code> argument (Part 2).</li>
+<li><strong>Background</strong> (LLM): <code>narrative.data_gatherer.gather_all</code> (PubChem, CTX,
+ATSDR, IRIS, OSHA/NIOSH, drinking water, mechanism papers, CPDat) then
+<code>narrative.background_writer.generate_background</code>, saved through the gate.</li>
+<li><strong>Review the sections</strong>: accept, release, restore, discard (1.7).</li>
+<li><strong>Render</strong>: <code>rendering.preview_surface.render_preview</code> (html, docx, jats,
+bookshelf) or the LaTeX/PDF path, from <code>integrated.json</code> + the sections + the
+document tree.</li>
+</ol>
+<h3 id="14-the-derived-state-phase-legal-acts-next-step">1.4 The derived state: phase, legal acts, next step</h3>
+<p><code>workflow.engine.WorkflowEngine(dtxsid, store).state()</code> gathers presence flags
+(<code>gather_artifacts</code>: <code>hasFiles</code>, <code>hasStale</code>, the validation report and
+<code>hasValidationErrors</code>, <code>hasIntegrated</code>, <code>hasAnimalReport</code>, <code>integration</code>,
+<code>hasQuerySubstrate</code>, <code>hasKnowledgeBase</code>) and returns a <code>WorkflowState</code>:
+<code>phase</code>, <code>legal_actions</code>, <code>artifacts</code>, <code>completeness</code>, <code>next_step</code>.</p>
+<p><strong>The phase</strong> (<code>workflow.phases.derive_phase</code>, first rule wins):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Condition</th>
+<th>Phase</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>no files in <code>files/</code></td>
+<td><code>EMPTY</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>no <code>validation_report.json</code></td>
+<td><code>UPLOADED</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>the validation report has an error-severity issue</td>
+<td><code>VALIDATION_ERRORS</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>no <code>integrated.json</code>, <strong>or</strong> one whose basis is out of date</td>
+<td><code>VALIDATED</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>no <code>animal_report.json</code></td>
+<td><code>INTEGRATED</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>otherwise</td>
+<td><code>APPROVED</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>A stale section does <strong>not</strong> move the phase (C1 D2): staleness is a section's
+matter (its currency and the publish gate).</p>
+<p><strong>The integration basis</strong> (<code>workflow/integration_basis.py</code>): file ids are not
+stable (a cold re-scan mints new ones), so &quot;is the dataset still the one this
+validation describes?&quot; is asked <em>by file name</em>: a SHA over each file's
+fingerprint minus its volatile fields (<code>file_id</code>, the timestamps), the coverage
+matrix with ids mapped to names, and <code>precedence.json</code> with ids mapped to
+names. <code>integration_status</code> answers <code>current</code>, <code>out_of_date</code> (the phase reads
+VALIDATED), <code>unrecorded</code> (a pre-C1 session: counted as current) or None (no
+dataset). The engine passes the effective <code>hasIntegrated</code> to <code>derive_phase</code>;
+the raw flag stays in <code>artifacts</code>.</p>
+<p><strong>The legal acts</strong> (<code>workflow.phases.LEGAL_ACTIONS</code>, the workflow's own declared
+table, C1):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Legal acts</th>
+<th><code>NEXT_STEP</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EMPTY</td>
+<td>ADD_FILES</td>
+<td>ADD_FILES</td>
+</tr>
+<tr>
+<td>UPLOADED</td>
+<td>ADD_FILES, REMOVE_FILE, RESET, VALIDATE</td>
+<td>VALIDATE</td>
+</tr>
+<tr>
+<td>VALIDATION_ERRORS</td>
+<td>the above + RESOLVE, CONFIRM_CLASSIFICATION</td>
+<td>VALIDATE</td>
+</tr>
+<tr>
+<td>VALIDATED</td>
+<td>the above + INTEGRATE</td>
+<td>INTEGRATE</td>
+</tr>
+<tr>
+<td>INTEGRATED</td>
+<td>all ten</td>
+<td>—</td>
+</tr>
+<tr>
+<td>APPROVED</td>
+<td>all ten</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p>The ten acts (<code>workflow.phases.Action</code>): ADD_FILES, REMOVE_FILE, RESET,
+VALIDATE, RESOLVE, CONFIRM_CLASSIFICATION, INTEGRATE, STATE_DATASET_FACTS,
+APPROVE, PROCESS. Why each entry is where it is: ADD_FILES is always legal;
+VALIDATE stays legal after validation (the cure for an out-of-date
+integration is &quot;validate again&quot;); RESOLVE/CONFIRM follow a validation and stay
+changeable after integration; INTEGRATE at INTEGRATED/APPROVED is
+re-integration (it withdraws the data approval); STATE_DATASET_FACTS writes
+onto the dataset, so it needs one; PROCESS is not gated on the data approval.</p>
+<p><strong>In the core this table is derived state only.</strong> No core step checks it. The
+safeguards enforce it (Part 2).</p>
+<p><code>completeness</code> (<code>compute_section_completeness</code>) turns the coverage matrix into
+per-platform readiness (&quot;an apical platform needs both study data and a .bm2&quot;).</p>
+<h3 id="15-the-pins-the-method-and-the-document-are-fixed-per-study">1.5 The pins: the method and the document are fixed per study</h3>
+<p><strong>The method profile</strong> (<code>pipeline/method_profile.py</code>, ADR-0027). A profile
+(<code>profiles/ntp-5day-*.yaml</code>) declares how the numbers are made: tests, alphas,
+BMD acceptance, BMR, GO ranking, internal-dose rules. A study is pinned to one
+in <code>method_profile.json</code>: <code>{name, hash, series, mode, pinned_at, pinned_by}</code>.</p>
+<ul>
+<li><code>mode</code>: <code>fixed</code> (<code>pin_profile</code>) or <code>track</code> (<code>track_newest</code>: follows the
+newest profile of its series).</li>
+<li><code>pinned_by</code>: who chose it. <code>ensure_pin</code> writes <code>pinned_by: &quot;default&quot;</code> when a
+study had none.</li>
+<li><code>chosen_by_person(pin)</code>: true only for a pin a person made (not <code>default</code>,
+not absent). This is the fact the safeguards' Process check reads.</li>
+<li><code>suggest_profile(dtxsid)</code>: the profile to <em>propose</em>: the one of the study's
+series whose expectations the dataset's recorded analyses contradict least;
+<code>{name, why}</code>; a read, never applied.</li>
+<li>A pinned profile whose file changed since pinning raises
+<code>MethodProfileError(&quot;… changed since it was pinned&quot;)</code>; an implementation that
+cannot run here (BMDS 2.7 under Wine, ADR-0030) is substituted and recorded
+as a deviation.</li>
+</ul>
+<p><strong>The document definition</strong> (<code>document_model/definition_pin.py</code>, ADR-0029):
+<code>fixed</code> (the composed definition is snapshotted and rendered from, whatever
+the templates say later) or <code>track</code>. <code>drift()</code> says how the files have moved
+away from a fixed pin; a missing or edited snapshot raises
+<code>DefinitionPinError</code>.</p>
+<h3 id="16-sections-catalog-kinds-and-readiness">1.6 Sections: catalog, kinds and readiness</h3>
+<p>The report's sections are <strong>derived from the document tree</strong>
+(<code>workflow.section_catalog.catalog_for_tree</code> / <code>catalog_for_session</code>): each
+<code>SectionSpec</code> has a <code>key</code>, a <code>kind</code> (<code>llm</code>, <code>programmatic</code>, <code>authored</code>),
+whether it is <code>approvable</code>, its <code>instance_of</code> family (<code>bm2</code>, <code>genomics</code>), its
+region. <code>validate_section_key</code> refuses a key that is not a section of <em>this</em>
+report (<code>section_key_invalid</code>).</p>
+<p><strong>Readiness</strong> (<code>workflow.section_readiness.derive_section_readiness</code>, from
+<code>KIND_UNLOCK</code>): methods waits for <code>processed</code>; summary waits for the
+<code>background</code> and at least one <code>results</code> section to be approved; genomics waits
+for the <code>knowledge_base</code>; the others are always enabled. Recomputed every
+call: <code>{key: {enabled, blocked_by, approved}}</code>.</p>
+<h3 id="17-the-section-write-gate-and-the-history">1.7 The section write gate and the history</h3>
+<p><strong>Every</strong> write to a section file, a person's or a machine's, goes through
+<code>workflow.section_writes.write_section(dtxsid, key, content, store, *, act, actor, author, force, reason, cause, status, extra_event, on_owned, review, policy)</code>:</p>
+<ol>
+<li>the key must be a section of this report (<code>section_key_invalid</code>);</li>
+<li>the prior file is read;</li>
+<li><strong>unchanged content writes nothing</strong>: the content hash
+(<code>workflow.ownership.content_hash</code>, the dict without its STATE_KEYS:
+approved, approved_at, facts, stale, regenerated, wording_review, review,
+revised, version, saved_at) equals the prior's → outcome <code>unchanged</code>, no
+event. A Process that changed nothing leaves every section file untouched;
+4–6. <strong>the policy</strong> decides what happens over content a person owns. It is
+called with a <code>WriteRequest</code> and returns None (write), an outcome (<code>hold</code>,
+<code>knock_down</code>), or raises. <strong>With no policy, every write is made</strong>;</li>
+<li>otherwise the prior file is archived, the new one written with the next
+version number, and one event recorded.</li>
+</ol>
+<p>Rules 1–3 and 7 are core: whoever calls, nothing written is ever lost. Rules
+4–6 are the safeguards' policy (Part 2).</p>
+<p><strong>The history</strong> (<code>pipeline.session_store.save_section</code>): the prior version goes
+to <code>history/&lt;key&gt;/v&lt;NNNN&gt;-&lt;ts&gt;.json</code> under a name no other archive can take;
+version numbers are monotonic (one above every version the section ever had,
+so they never repeat after a discard); each act appends one line (format 2) to
+<code>history/&lt;key&gt;/index.jsonl</code>: section, version, <code>cause</code> (generate, edit,
+revise, reprocess, restore, discard, hold), <code>status</code> (draft, working, blessed,
+needs-re-bless, discarded), <code>act</code>, <code>actor</code> (person/system), <code>author</code> (who wrote
+the text: generated, model, person, ingested, client), <code>reason</code>, <code>review</code>,
+<code>changed</code>, <code>content_hash</code>, <code>forced</code>, <code>from_version</code>. <code>section_history</code> and
+<code>read_version</code> serve them; <code>current_version_status</code> gives the current
+version's status.</p>
+<p><strong>Facts, the ladder and the guard</strong> (ADR-0015). A section carries content facts
+(<code>workflow.labels.Fact</code>): the maturity ladder FIRST_DRAFT → WORKING_DRAFT →
+FINAL, and the orthogonal PROTECTED. FINAL implies PROTECTED. Facts only move
+down with a recorded reason (<code>DemoteReason.HUMAN_RELEASE</code>,
+<code>CURRENCY_FORCED</code>). <code>workflow.guard.GuardLevel</code> (OPEN, GUARDED, PUBLISHED) is
+the max over the facts.</p>
+<p><strong>Ownership</strong> — <code>workflow.ownership.is_owned(section)</code>, the one predicate: a
+machine may not replace this text when a person approved it, a person edited
+it (<code>user_edited</code>), its text came back from outside (<code>source: &quot;ingested&quot;</code>), or
+it holds FINAL or PROTECTED. <code>workflow.section_writes.is_locked</code>: the stronger
+condition under which even a person's <em>unforced</em> write is refused (approved,
+edited, or ingested; a released section is owned but not locked).</p>
+<p><strong>The state changes on a section</strong> (core steps, <code>workflow/steps.py</code>):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What it does</th>
+<th>Its own answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>accept_section_step</code></td>
+<td><code>approved=True</code>, <code>approved_at</code>, FINAL (+PROTECTED); clears <code>stale</code>, <code>wording_review</code>, <code>review</code>; saved in place (<code>archive=False</code>) with one <code>edit/blessed</code> event against the <strong>same</strong> version. The text never changes.</td>
+<td><code>noop already_accepted</code> when nothing would change; <code>section_not_found</code>, <code>section_key_invalid</code></td>
+</tr>
+<tr>
+<td><code>release_section_step</code></td>
+<td><code>approved=False</code>, FINAL withdrawn, <strong>PROTECTED stays</strong> (a released section is still kept from machines); the reason on the event and in <code>revised</code>.</td>
+<td><code>noop not_approved</code></td>
+</tr>
+<tr>
+<td><code>restore_section_step</code></td>
+<td>brings a past version back as the <strong>next</strong> version: not approved, PROTECTED; the current file is archived first; currency markers (stale, review…) carry over from the current file. Takes a <code>policy</code>.</td>
+<td><code>noop already_current</code>; <code>version_not_found</code>, <code>version_content_missing</code></td>
+</tr>
+<tr>
+<td><code>discard_section_step</code></td>
+<td>archives, deletes the file, records <code>discard/discarded</code>; restore still reaches it.</td>
+<td><code>section_not_found</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>In the core the reason is optional on all of them. Requiring it is the
+safeguards'.</p>
+<h3 id="18-what-a-data-change-does-to-the-sections-and-the-publish-readiness">1.8 What a data change does to the sections, and the publish readiness</h3>
+<p><code>pipeline.pool_state.invalidate_pool_artifacts</code> (called when files change after
+progress) deletes the validation, the dataset and its sidecars, the data
+approval, the basis, every cache except the content-hash-keyed BMDS caches, the
+query substrate and its skip-guard fingerprints. Then, per section
+(<code>iter_section_files</code>), it asks <code>workflow.reprocess.should_stale_on_reprocess</code>:</p>
+<ul>
+<li><strong>programmatic</strong> sections (<code>bm2_*</code>) are not staled: their numbers refresh;</li>
+<li><strong>LLM</strong> sections that depend on the data (genomics, methods, summary,
+bmd_summary; not the Background, which is about the chemical) are marked
+<code>stale: true</code>, <code>regenerated: {reason: &quot;data_changed&quot;}</code>, FINAL withdrawn
+(<code>demote_for_currency</code>, PROTECTED stays), and saved through <code>save_section</code>
+with a <code>reprocess/needs-re-bless</code> event (the blessed version is archived).</li>
+</ul>
+<p>When Process later materializes an <strong>apical</strong> section a person approved and
+its printed content changed, the gate knocks the approval down (C2 D2/A1,
+<code>section_writes.knock_down</code>): the new content becomes the next version, the
+approval goes, a <code>review: {why, since_version, flips}</code> marker is set
+(<code>wording_changed</code> when a categorical data-derived word flipped,
+<code>numbers_changed</code> otherwise), and a <code>reprocess/needs-re-bless</code> event is
+recorded. Accepting it again clears it.</p>
+<p><strong>Publish readiness</strong> (<code>WorkflowEngine.publish_readiness</code>) is derived the same
+way: <code>workflow.reprocess.blocking_llm_sections</code> lists every LLM section still
+carrying <code>stale</code>; <code>{can_publish, blocking: [{section_key, reason}]}</code>.
+Re-accepting a section clears its <code>stale</code>, and it stops blocking.</p>
+<h3 id="19-the-cores-own-refusals-invariants">1.9 The core's own refusals (invariants)</h3>
+<p>These refuse for every caller, the notebook included:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Where</th>
+<th>Why it is core</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ValidationOutOfDate</code> (<code>validation_out_of_date</code>)</td>
+<td><code>integrate_step</code></td>
+<td>going ahead would merge files the validation never saw</td>
+</tr>
+<tr>
+<td>integration failure + restore</td>
+<td><code>integrate_step</code></td>
+<td>a study is never left over a dataset no read accepts</td>
+</tr>
+<tr>
+<td><code>SectionRefusal(&quot;section_key_invalid&quot;)</code></td>
+<td><code>write_section</code> and every section step</td>
+<td>a key outside this report's catalog would write an arbitrary file</td>
+</tr>
+<tr>
+<td><code>InvalidDtxsid</code></td>
+<td>everywhere an id becomes a path</td>
+<td>path safety</td>
+</tr>
+<tr>
+<td><code>LLMEgressBlocked</code></td>
+<td><code>styling_export.llm_endpoints</code></td>
+<td>unpublished study data never go to a public model</td>
+</tr>
+<tr>
+<td><code>BmdDivergenceError</code></td>
+<td>Process</td>
+<td>shipping either of two disagreeing BMDs would assert an unvalidated number</td>
+</tr>
+<tr>
+<td><code>MethodProfileError</code>, <code>DefinitionPinError</code></td>
+<td>the pins</td>
+<td>a pin that changed under a study must never be used silently</td>
+</tr>
+<tr>
+<td><code>UnreadableSessionFile</code></td>
+<td><code>common.session_files</code></td>
+<td>a damaged file is reported, never read as absent</td>
+</tr>
+<tr>
+<td><code>BMDProjectValidationError</code></td>
+<td>every dataset read</td>
+<td>the dataset barrier (ADR-0001)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="part-2-the-safeguards-safeguards-adr-0031">Part 2 — The safeguards (<code>safeguards/</code>, ADR-0031)</h2>
+<h3 id="21-why-a-separate-layer">2.1 Why a separate layer</h3>
+<p>The interface's most important purpose is idiot-proofing (the maintainer,
+2026-10-14). Before 2026-10-23 that idiot-proofing had no home: some rules
+lived in one front end only, some were woven into the core steps, some had no
+handler and surfaced as a 500. The decision (2026-10-23): a <strong>separate layer</strong>
+that front ends go through; it checks the act, explains a refusal in a
+person's words, then calls the core step. The core keeps the invariants; the
+notebook calls the core unguarded.</p>
+<p>The package:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Module</th>
+<th>What it guards</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>safeguards/refusals.py</code></td>
+<td>the catalog of every refusal: code, status, plain words, where it is fixed; <code>explain</code>, <code>error_body</code>, <code>register</code>; the refusal classes</td>
+</tr>
+<tr>
+<td><code>safeguards/acts.py</code></td>
+<td>whether an act may run now: R6 (session kind), C1 (the phase), the person's method choice, deleting a session</td>
+</tr>
+<tr>
+<td><code>safeguards/sections.py</code></td>
+<td>C2: the ownership write policy; reasons</td>
+</tr>
+<tr>
+<td><code>safeguards/inputs.py</code></td>
+<td>facts a person states: vocabularies, the dataset's experiments</td>
+</tr>
+<tr>
+<td><code>safeguards/sources.py</code></td>
+<td>no Background without its sources</td>
+</tr>
+<tr>
+<td><code>safeguards/publish.py</code></td>
+<td>the publish gate</td>
+</tr>
+<tr>
+<td><code>safeguards/guarded.py</code></td>
+<td><strong>the one entry point for front ends</strong>: the core steps' names and signatures, each with its checks first</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="22-the-refusal-catalog-safeguardsrefusalspy">2.2 The refusal catalog (<code>safeguards/refusals.py</code>)</h3>
+<p><strong>The envelope.</strong> <code>explain(exc)</code> turns any exception into:</p>
+<pre><code class="language-json">{&quot;error&quot;: {&quot;code&quot;: &quot;phase_not_allowed&quot;, &quot;status&quot;: 409,
+           &quot;message&quot;: &quot;INTEGRATE refused for DTXSID…: the study is in phase VALIDATION_ERRORS (allowed now: …). Fix the validation errors, then validate again.&quot;,
+           &quot;say&quot;: &quot;Combining the files into one dataset isn't possible yet. The file check found errors. Fix what it lists (remove or replace the files it names), then run the file check again.&quot;,
+           &quot;fix&quot;: &quot;files&quot;,
+           &quot;details&quot;: {&quot;action&quot;: &quot;INTEGRATE&quot;, &quot;phase&quot;: &quot;VALIDATION_ERRORS&quot;, &quot;legal_actions&quot;: [...], &quot;integration&quot;: null, &quot;next_action&quot;: &quot;VALIDATE&quot;}}}
+</code></pre>
+<ul>
+<li>
+<p><code>code</code> — from the closed list <code>REFUSALS</code>. A refusal the list does not know is
+<code>unexpected</code>, never a guess at a nearer one.</p>
+</li>
+<li>
+<p><code>status</code> — the refusal's own HTTP status when it is a workflow refusal
+(<code>StepError</code> or one that names its code), else the code's default. An
+upstream HTTP client's <code>status_code</code> is never taken as this request's.</p>
+</li>
+<li>
+<p><code>message</code> — the backend's own text, verbatim (for the technical details).</p>
+</li>
+<li>
+<p><code>say</code> — the plain words, written once, next to the code. Placeholders
+(<code>{key}</code>, <code>{act}</code>, <code>{sources}</code>, <code>{keys}</code>, <code>{parent}</code>, <code>{species}</code>, <code>{what}</code>…)
+are filled from the refusal's <code>details</code> and from what a message rule
+captured; a missing one gets a neutral default (<code>_FIELD_DEFAULTS</code>), never a
+KeyError.</p>
+</li>
+<li>
+<p><code>fix</code> — <strong>the place in the workflow where the cause is cleared</strong>, one of
+<code>PLACES</code>, or None when nothing a person does clears it (&quot;tell the
+maintainer&quot;):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>study</code></td>
+<td>the study itself (which study, its identity)</td>
+</tr>
+<tr>
+<td><code>files</code></td>
+<td>the study's files and the file check</td>
+</tr>
+<tr>
+<td><code>dataset</code></td>
+<td>combining the files into one dataset</td>
+</tr>
+<tr>
+<td><code>data_review</code></td>
+<td>the data review (every animal accounted for)</td>
+</tr>
+<tr>
+<td><code>method_and_document</code></td>
+<td>the analysis method and the document definition</td>
+</tr>
+<tr>
+<td><code>process</code></td>
+<td>Process</td>
+</tr>
+<tr>
+<td><code>sections</code></td>
+<td>the report's sections (accept, reopen, restore)</td>
+</tr>
+<tr>
+<td><code>handoff</code></td>
+<td>editing in Word or Overleaf and bringing the edits back</td>
+</tr>
+<tr>
+<td><code>facts</code></td>
+<td>the facts a person states (design, experiment details)</td>
+</tr>
+<tr>
+<td><code>publish</code></td>
+<td>the report's readiness to publish</td>
+</tr>
+</tbody>
+</table></div>
+<p>A front end maps a place to its own screen (Part 6 shows the new interface's
+map).</p>
+</li>
+<li>
+<p><code>details</code> — what a screen may show beside the words: the refusal's own
+<code>details</code> when it names its code, the damaged file's name, a request's field
+errors, the phase and the legal acts.</p>
+</li>
+</ul>
+<p><strong>How an exception becomes a code</strong> (<code>classify</code>):</p>
+<ol>
+<li>an exception that carries a <code>code</code> attribute naming a listed code is taken
+at its word (and its own <code>say</code>/<code>fix</code>, when it knows its case better: the
+phase guard words each phase differently);</li>
+<li>otherwise the first matching <code>_MESSAGE_RULES</code> entry: (exception class name
+anywhere in its MRO, a regex over the message, the code). For example
+<code>StepError</code> + <code>^No fingerprints found</code> → <code>not_validated</code>;
+<code>StepError</code> + <code>^Integration failed:</code> → <code>integration_failed</code> (unless the
+message shows a Java/BMDExpress setup failure → <code>server_setup_failed</code>);
+<code>GuardViolation</code> + <code>currency BLOCK</code> → <code>stale_content</code>;
+<code>MethodProfileError</code> + <code>changed since it was pinned</code> → <code>method_profile_changed</code>;
+<code>LLMEgressBlocked</code> → <code>llm_egress_blocked</code>; <code>InvalidDtxsid</code> →
+<code>invalid_study_id</code>; <code>UnreadableSessionFile</code> → <code>damaged_session_file</code>;
+FastAPI's <code>RequestValidationError</code> → <code>bad_request</code>;</li>
+<li>otherwise <code>unexpected</code>.</li>
+</ol>
+<p><strong>The refusal classes the safeguards raise themselves:</strong></p>
+<ul>
+<li><code>PhaseRefusal(dtxsid, action, phase, legal_actions, integration, next_action)</code>
+— code <code>phase_not_allowed</code>, 409. Its <code>say</code> is &quot;&lt;the act, in words&gt; isn't
+possible yet.&quot; + the phase's own sentence (<code>_PHASE_REFUSAL</code>: EMPTY, UPLOADED,
+VALIDATION_ERRORS, VALIDATED, and VALIDATED-out-of-date, which says &quot;integrate
+again&quot;); its <code>fix</code> is the phase's place (<code>files</code> or <code>dataset</code>). Removing a
+file or resetting in EMPTY says &quot;This study has no files to remove.&quot;</li>
+<li><code>MethodNotChosen(dtxsid, pin)</code> — <code>method_not_chosen</code>, 409; when a pin exists
+but was set by default it names it and says it &quot;must be confirmed or changed&quot;.</li>
+<li><code>Refused(code, message, status_code, details)</code> — any catalog code.</li>
+<li><code>StudyRefusal</code> — a <code>Refused</code> for R6 and the study acts.</li>
+<li>Core classes it explains: <code>StepError</code>, <code>ValidationOutOfDate</code>,
+<code>SectionRefusal</code>, <code>GuardViolation</code>, the pin errors, <code>LLMEgressBlocked</code>,
+<code>InvalidDtxsid</code>, <code>UnreadableSessionFile</code>, <code>BMDProjectValidationError</code>.</li>
+</ul>
+<p><strong><code>error_body(exc)</code></strong> — the shape the application's existing routes answer:
+<code>{&quot;error&quot;: message, &quot;code&quot;, &quot;say&quot;, &quot;fix&quot;, &quot;details&quot;}</code> with the status. It is
+additive: a client that read only <code>error</code> keeps working.</p>
+<p><strong><code>register(codes)</code></strong> — a front end adds its own codes (the new interface's
+study acts, Part 6). An existing code is never redefined (ValueError); a <code>fix</code>
+must be a place or None; registering the same definition again is a no-op.</p>
+<p><strong>The whole catalog</strong> (as served on 2026-10-24; &quot;module&quot; is the new
+interface's translation, Part 6):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Status</th>
+<th>Place</th>
+<th>Module</th>
+<th>Plain words</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>invalid_study_id</code></td>
+<td>400</td>
+<td>study</td>
+<td>M1</td>
+<td>That is not a valid study id. A study is named by its chemical's DTXSID: &quot;DTXSID&quot; followed by digits, for example DTXSID50469320.</td>
+</tr>
+<tr>
+<td><code>read_only_session</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>This is the published book's own content, made by a tool. It can't be changed or deleted here.</td>
+</tr>
+<tr>
+<td><code>member_of_report</code></td>
+<td>409</td>
+<td>study</td>
+<td>M1</td>
+<td>This is the {species} study of the report {parent}. Deleting it would break that report.</td>
+</tr>
+<tr>
+<td><code>report_has_no_data</code></td>
+<td>409</td>
+<td>study</td>
+<td>M1</td>
+<td>This is a report over several studies: it has no files or data of its own. Its data is prepared in each of its studies; open one of them.</td>
+</tr>
+<tr>
+<td><code>no_files</code></td>
+<td>404</td>
+<td>files</td>
+<td>M2</td>
+<td>This study has no data files yet. Add the study's files first.</td>
+</tr>
+<tr>
+<td><code>files_not_recognised</code></td>
+<td>400</td>
+<td>files</td>
+<td>M2</td>
+<td>None of this study's files has been recognised yet. Add the files and run the file check, then try again.</td>
+</tr>
+<tr>
+<td><code>not_validated</code></td>
+<td>400</td>
+<td>files</td>
+<td>M2</td>
+<td>The study's files haven't been checked yet. Run the file check (validation) first, then try again.</td>
+</tr>
+<tr>
+<td><code>conflict_choice_missing</code></td>
+<td>400</td>
+<td>files</td>
+<td>M2</td>
+<td>To settle a conflict between files, choose the file to keep for that conflict.</td>
+</tr>
+<tr>
+<td><code>integration_failed</code></td>
+<td>500</td>
+<td>dataset</td>
+<td>M3</td>
+<td>Combining the study's files into one dataset failed. The details say which file or value it stopped at. …</td>
+</tr>
+<tr>
+<td><code>not_integrated</code></td>
+<td>400</td>
+<td>dataset</td>
+<td>M3</td>
+<td>The study's files haven't been combined into one dataset yet. Finish the Integrate step first.</td>
+</tr>
+<tr>
+<td><code>dataset_invalid</code></td>
+<td>422</td>
+<td>dataset</td>
+<td>M3</td>
+<td>The study's combined dataset doesn't have the form the report needs. Integrate the study again; …</td>
+</tr>
+<tr>
+<td><code>animal_report_failed</code></td>
+<td>500</td>
+<td>data_review</td>
+<td>M6</td>
+<td>Accounting for every animal across the files failed. …</td>
+</tr>
+<tr>
+<td><code>bmd_divergence</code></td>
+<td>500</td>
+<td>process</td>
+<td>P1</td>
+<td>Some apical benchmark doses computed here differ from the values recorded in the study's .bm2 files … send the list of endpoints in the details to the data team.</td>
+</tr>
+<tr>
+<td><code>calculation_program_failed</code></td>
+<td>500</td>
+<td>—</td>
+<td>—</td>
+<td>A calculation program failed while processing … Tell the maintainer.</td>
+</tr>
+<tr>
+<td><code>processing_failed</code></td>
+<td>500</td>
+<td>process</td>
+<td>P1</td>
+<td>Processing stopped with an error before it finished. …</td>
+</tr>
+<tr>
+<td><code>content_preparation_failed</code></td>
+<td>500</td>
+<td>process</td>
+<td>P1</td>
+<td>Writing the report's text from the processed results failed. …</td>
+</tr>
+<tr>
+<td><code>server_setup_failed</code></td>
+<td>500</td>
+<td>—</td>
+<td>—</td>
+<td>A program the server needs could not run (Java or the BMDExpress tools). … Tell the maintainer.</td>
+</tr>
+<tr>
+<td><code>section_not_found</code></td>
+<td>404</td>
+<td>sections</td>
+<td>D1</td>
+<td>There is no saved section &quot;{key}&quot;, so there is nothing to {act}. …</td>
+</tr>
+<tr>
+<td><code>section_key_missing</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>The request didn't say which section it is about. This is a fault in the interface …</td>
+</tr>
+<tr>
+<td><code>release_reason_required</code></td>
+<td>409</td>
+<td>sections</td>
+<td>D1</td>
+<td>Reopening an approved section needs a reason. …</td>
+</tr>
+<tr>
+<td><code>stale_content</code></td>
+<td>409</td>
+<td>sections</td>
+<td>D1</td>
+<td>This section was written before the study's data changed, so it can't be marked final or published. …</td>
+</tr>
+<tr>
+<td><code>guard_refused</code></td>
+<td>409</td>
+<td>sections</td>
+<td>D1</td>
+<td>This change to a section was refused to protect content a person owns. …</td>
+</tr>
+<tr>
+<td><code>section_owned</code></td>
+<td>409</td>
+<td>sections</td>
+<td>D1</td>
+<td>This section has been approved, or you chose to keep it, so it can't be replaced automatically. To replace it, reopen it and say why.</td>
+</tr>
+<tr>
+<td><code>section_key_invalid</code></td>
+<td>400</td>
+<td>sections</td>
+<td>D1</td>
+<td>There is no section by that name in this report.</td>
+</tr>
+<tr>
+<td><code>reason_required</code></td>
+<td>400</td>
+<td>sections</td>
+<td>D1</td>
+<td>Please say why. The reason is kept with the section's history.</td>
+</tr>
+<tr>
+<td><code>version_not_found</code></td>
+<td>404</td>
+<td>sections</td>
+<td>D1</td>
+<td>That version of the section doesn't exist.</td>
+</tr>
+<tr>
+<td><code>version_content_missing</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>This version is listed in the history, but its text was lost before history was kept reliably. …</td>
+</tr>
+<tr>
+<td><code>approve_content_retired</code></td>
+<td>409</td>
+<td>handoff</td>
+<td>D4</td>
+<td>Approving can't change the text. Accept the section as it is, or edit it in Word or Overleaf and bring that version back.</td>
+</tr>
+<tr>
+<td><code>approve_via_accept</code></td>
+<td>400</td>
+<td>sections</td>
+<td>D1</td>
+<td>Saving doesn't approve. Use Accept.</td>
+</tr>
+<tr>
+<td><code>method_profile_changed</code></td>
+<td>409</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>The analysis method this study is pinned to … was edited after the study was pinned …</td>
+</tr>
+<tr>
+<td><code>method_profile_invalid</code></td>
+<td>422</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>The analysis method (method profile) named for this study is missing or not valid. …</td>
+</tr>
+<tr>
+<td><code>definition_pin_changed</code></td>
+<td>409</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>The saved copy of the document definition this study is fixed to no longer matches its pin …</td>
+</tr>
+<tr>
+<td><code>definition_not_pinned</code></td>
+<td>409</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>… its saved copy is missing. Pin the document definition again.</td>
+</tr>
+<tr>
+<td><code>definition_pin_invalid</code></td>
+<td>400</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>A document definition can be pinned in two ways only: fixed … or track …</td>
+</tr>
+<tr>
+<td><code>phase_not_allowed</code></td>
+<td>409</td>
+<td>(per phase)</td>
+<td>(per phase)</td>
+<td>(per phase; the fallback: &quot;This step isn't available at the study's current stage. …&quot;)</td>
+</tr>
+<tr>
+<td><code>validation_out_of_date</code></td>
+<td>409</td>
+<td>files</td>
+<td>M2</td>
+<td>The file check is out of date: it no longer matches the study's files as the server sees them now. … Run the file check again, then Integrate.</td>
+</tr>
+<tr>
+<td><code>method_not_chosen</code></td>
+<td>409</td>
+<td>method_and_document</td>
+<td>M5</td>
+<td>Choose the analysis method (the method profile) this study is reported under before processing. … it is never chosen for you.</td>
+</tr>
+<tr>
+<td><code>llm_egress_blocked</code></td>
+<td>503</td>
+<td>—</td>
+<td>—</td>
+<td>The language model this needs is not one the study's data may be sent to (only the NIEHS gateway is allowed). Nothing was sent. …</td>
+</tr>
+<tr>
+<td><code>facts_invalid</code></td>
+<td>422</td>
+<td>facts</td>
+<td>M4</td>
+<td>Some of what was stated about {what} can't be used, so nothing was saved. The details list each problem …</td>
+</tr>
+<tr>
+<td><code>background_sources_unreachable</code></td>
+<td>503</td>
+<td>sections</td>
+<td>D1</td>
+<td>The Background can't be written now: {sources} could not be reached …</td>
+</tr>
+<tr>
+<td><code>background_empty</code></td>
+<td>502</td>
+<td>sections</td>
+<td>D1</td>
+<td>The language model wrote no Background. Nothing was saved; try again.</td>
+</tr>
+<tr>
+<td><code>background_no_references</code></td>
+<td>502</td>
+<td>sections</td>
+<td>D1</td>
+<td>The Background the language model wrote cites no sources …</td>
+</tr>
+<tr>
+<td><code>publish_blocked</code></td>
+<td>409</td>
+<td>sections</td>
+<td>D1</td>
+<td>The report can't be published yet: sections were written again after the study's data changed ({keys}). Read each one and accept it again, then publish.</td>
+</tr>
+<tr>
+<td><code>damaged_session_file</code></td>
+<td>422</td>
+<td>—</td>
+<td>—</td>
+<td>One of this study's saved files is damaged and can't be read ({file}). …</td>
+</tr>
+<tr>
+<td><code>bad_request</code></td>
+<td>422</td>
+<td>—</td>
+<td>—</td>
+<td>The request was malformed. This is a fault in the interface …</td>
+</tr>
+<tr>
+<td><code>unexpected</code></td>
+<td>500</td>
+<td>—</td>
+<td>—</td>
+<td>The application hit an error it has no explanation for. …</td>
+</tr>
+<tr>
+<td><em>(registered by <code>ui_api.refusals</code>)</em></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>invalid_casrn</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>This CASRN's check digit doesn't match; a digit is probably mistyped.</td>
+</tr>
+<tr>
+<td><code>study_exists</code></td>
+<td>409</td>
+<td>study</td>
+<td>M1</td>
+<td>A study of this chemical already exists ({id}). Open it instead.</td>
+</tr>
+<tr>
+<td><code>study_not_found</code></td>
+<td>404</td>
+<td>study</td>
+<td>M1</td>
+<td>There is no study {id}. It may have been deleted.</td>
+</tr>
+<tr>
+<td><code>study_id_has_suffix</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>A study's id is the DTXSID alone. …</td>
+</tr>
+<tr>
+<td><code>identity_changed</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>The lookup now gives a different chemical than the one you confirmed. …</td>
+</tr>
+<tr>
+<td><code>identity_exists</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>This study already has its chemical's identity. …</td>
+</tr>
+<tr>
+<td><code>identity_incomplete</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>The chemical's name is missing from what was confirmed. …</td>
+</tr>
+<tr>
+<td><code>identity_lookup_unreachable</code></td>
+<td>503</td>
+<td>—</td>
+<td>—</td>
+<td>The chemical lookup service ({service}) could not be reached. …</td>
+</tr>
+<tr>
+<td><code>identity_not_found</code></td>
+<td>404</td>
+<td>—</td>
+<td>—</td>
+<td>{service} has no chemical with the DTXSID {id}. …</td>
+</tr>
+<tr>
+<td><code>identity_unconfirmed</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>Confirm the chemical before going on …</td>
+</tr>
+<tr>
+<td><code>run_in_flight</code></td>
+<td>409</td>
+<td>process</td>
+<td>P1</td>
+<td>Process is running on this study (since {time}). Wait for it to finish.</td>
+</tr>
+<tr>
+<td><code>confirm_mismatch</code></td>
+<td>400</td>
+<td>—</td>
+<td>—</td>
+<td>The id you typed doesn't match this study's id. Nothing was deleted.</td>
+</tr>
+<tr>
+<td><code>changed_since_preview</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>The study changed after you reviewed what would be deleted. …</td>
+</tr>
+<tr>
+<td><code>format_changed</code></td>
+<td>409</td>
+<td>—</td>
+<td>—</td>
+<td>The report format this id brings changed since you looked. …</td>
+</tr>
+<tr>
+<td><code>list_failed</code></td>
+<td>500</td>
+<td>—</td>
+<td>—</td>
+<td>The list of studies can't be read …</td>
+</tr>
+<tr>
+<td><code>structure_unavailable</code></td>
+<td>404</td>
+<td>—</td>
+<td>—</td>
+<td>PubChem did not return a structure picture.</td>
+</tr>
+</tbody>
+</table></div>
+<p>(Long texts are shortened with &quot;…&quot;; the full words are in the code.)</p>
+<h3 id="23-safeguardsactspy-whether-an-act-may-run-now">2.3 <code>safeguards/acts.py</code> — whether an act may run now</h3>
+<ul>
+<li><strong><code>require_data_session(dtxsid, store=None)</code></strong> — <strong>R6</strong>: no data act on a
+session whose data is not its own. A companion (<code>published_clone.json</code>) →
+<code>read_only_session</code>; a report over several studies (<code>studies.json</code>) →
+<code>report_has_no_data</code> (details: the members). A session that does not exist
+yet passes (the act's own checks apply). Reads two small files; never creates
+the folder.</li>
+<li><strong><code>require_legal(dtxsid, act, store=None)</code></strong> — <strong>C1</strong>: derives
+<code>WorkflowEngine.state()</code> and raises <code>PhaseRefusal</code> when <code>act</code> is not in its
+<code>legal_actions</code>, naming the phase, what is allowed and <code>NEXT_STEP</code>. Returns
+the state.</li>
+<li><strong><code>require_method_chosen(dtxsid)</code></strong> — <strong>C1 D1</strong>: <code>MethodNotChosen</code> unless
+<code>chosen_by_person(read_pin(dtxsid))</code>. Writes nothing.</li>
+<li><strong><code>require(dtxsid, act, store=None, *, method=False)</code></strong> — all of them, in
+order: R6 (every act in <code>Action</code> is a data act), the phase, then, with
+<code>method=True</code>, the method choice. Only <em>running Process</em> passes <code>method=True</code>
+(the statistics, the BMDs and the text depend on the method); materializing
+sections from an existing Process cache does not.</li>
+<li><strong><code>require_deletable(dtxsid)</code></strong> — removing a session's folder: never a
+companion (<code>read_only_session</code>), never one of the studies a report composes
+(<code>member_of_report</code>, found through <code>document_definition.report_of_member</code>,
+with the study's key from the report's <code>studies.json</code>). A report session may
+be deleted: its studies stay.</li>
+</ul>
+<h3 id="24-safeguardssectionspy-c2-owned-content-is-never-overwritten-by-a-machine">2.4 <code>safeguards/sections.py</code> — C2: owned content is never overwritten by a machine</h3>
+<p><code>ownership_policy(req: WriteRequest)</code> is the write policy the front ends pass to
+the section write gate. Called only when a write would change the text:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Prior section</th>
+<th>Who writes</th>
+<th>Forced?</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>absent, or not owned</td>
+<td>anyone</td>
+<td>—</td>
+<td>written (prior archived)</td>
+</tr>
+<tr>
+<td>owned</td>
+<td>anyone</td>
+<td>yes</td>
+<td>the reason is required (<code>reason_required</code> if empty); then written, the event marked <code>forced</code></td>
+</tr>
+<tr>
+<td>owned</td>
+<td><strong>system</strong> (Process)</td>
+<td>no</td>
+<td>apical section with <code>on_owned=REVIEW</code>: <strong>knocked down</strong> (written, approval withdrawn, <code>review</code> marker, <code>needs-re-bless</code>); any other: <strong>held</strong> (not applied; a <code>hold</code> event with the held text's hash)</td>
+</tr>
+<tr>
+<td>owned <strong>and locked</strong> (approved, edited, ingested)</td>
+<td>person</td>
+<td>no</td>
+<td>refused: <code>section_owned</code> (&quot;reopen it and say why&quot;)</td>
+</tr>
+<tr>
+<td>owned, not locked (released, PROTECTED stands)</td>
+<td>person</td>
+<td>no</td>
+<td>written: a person's explicit act is what releasing it was for</td>
+</tr>
+</tbody>
+</table></div>
+<p>Plus the acts' own preconditions: <code>require_reason(reason, key, verb)</code> (empty
+→ <code>reason_required</code>), <code>owned(key, act)</code>, <code>reason_required(key, verb)</code>.</p>
+<h3 id="25-safeguardsinputspy-what-a-person-states">2.5 <code>safeguards/inputs.py</code> — what a person states</h3>
+<ul>
+<li><code>require_valid_design(dtxsid, fields)</code> — every field must be a design field
+and every value in its controlled vocabulary
+(<code>pipeline.study_design.design_field_errors</code> over <code>bmdx_pipe.VOCABULARIES</code>).</li>
+<li><code>require_valid_experiment_metadata(dtxsid, given)</code> —
+<code>experiment_metadata_errors</code>: the shape <code>{experiment: {field: value}}</code>;
+every experiment must be one the dataset has; every <em>new</em> value must be in
+its vocabulary. A value the experiment already carries is not a new
+statement (the dataset's own inferred values pass through). Strain's
+vocabulary is per species, so a strain is checked against every species'
+strains.</li>
+<li>A refusal is <code>facts_invalid</code> (422) listing <strong>every</strong> problem at once, and
+nothing is written.</li>
+</ul>
+<h3 id="26-safeguardssourcespy-no-background-without-its-sources">2.6 <code>safeguards/sources.py</code> — no Background without its sources</h3>
+<ul>
+<li><code>require_sources(dtxsid, bg_data)</code> — before the model runs: ATSDR and IRIS
+must have been reached (<code>bg_data.unreachable_sources</code>), else
+<code>background_sources_unreachable</code> (503, details: which).</li>
+<li><code>require_references(dtxsid, result)</code> — after: paragraphs
+(<code>background_empty</code>) and references (<code>background_no_references</code>): prose with
+no references has nothing behind its <code>[n]</code> citations.</li>
+</ul>
+<h3 id="27-safeguardspublishpy-the-publish-gate">2.7 <code>safeguards/publish.py</code> — the publish gate</h3>
+<p><code>require_publishable(dtxsid, store=None, *, draft=False)</code> — the publish
+readiness (1.8); when it is closed, <code>publish_blocked</code> (409, details: the keys
+and the blocking list), unless <code>draft=True</code>, the named override, which logs a
+warning and returns the readiness.</p>
+<h3 id="28-safeguardsguardedpy-the-front-ends-entry-point">2.8 <code>safeguards/guarded.py</code> — the front ends' entry point</h3>
+<p>Same names and signatures as the core, each with its checks first:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Guarded function</th>
+<th>Checks</th>
+<th>Then calls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>require_add_files(dtxsid)</code></td>
+<td>R6, ADD_FILES</td>
+<td>— (the upload routes write the files)</td>
+</tr>
+<tr>
+<td><code>require_reset(dtxsid)</code></td>
+<td>R6, RESET</td>
+<td>— (the pool-reset route)</td>
+</tr>
+<tr>
+<td><code>remove_pool_file(dtxsid, filename)</code></td>
+<td>R6, REMOVE_FILE</td>
+<td><code>pipeline.pool_state.remove_pool_file</code></td>
+</tr>
+<tr>
+<td><code>validate_step</code></td>
+<td>R6, VALIDATE</td>
+<td><code>workflow.steps.validate_step</code></td>
+</tr>
+<tr>
+<td><code>resolve_step</code></td>
+<td>R6, RESOLVE</td>
+<td><code>workflow.steps.resolve_step</code></td>
+</tr>
+<tr>
+<td><code>confirm_metadata_step</code></td>
+<td>R6, CONFIRM_CLASSIFICATION</td>
+<td><code>workflow.steps.confirm_metadata_step</code></td>
+</tr>
+<tr>
+<td><code>integrate_step</code></td>
+<td>R6, INTEGRATE</td>
+<td><code>workflow.steps.integrate_step</code></td>
+</tr>
+<tr>
+<td><code>approve_experiment_metadata</code></td>
+<td>R6, STATE_DATASET_FACTS, <code>require_valid_experiment_metadata</code></td>
+<td><code>pipeline.metadata_approval.approve_experiment_metadata</code></td>
+</tr>
+<tr>
+<td><code>record_study_design</code></td>
+<td>R6, STATE_DATASET_FACTS, <code>require_valid_design</code></td>
+<td><code>workflow.steps.record_study_design</code></td>
+</tr>
+<tr>
+<td><code>require_state_dataset_facts</code></td>
+<td>R6, STATE_DATASET_FACTS</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>generate_animal_report_step</code></td>
+<td>R6, APPROVE</td>
+<td><code>workflow.steps.generate_animal_report_step</code></td>
+</tr>
+<tr>
+<td><code>run_process</code>, <code>run_document</code>, <code>process_step</code>, <code>document_step</code></td>
+<td>R6, PROCESS, <strong>method chosen</strong></td>
+<td>the core's Process</td>
+</tr>
+<tr>
+<td><code>materialize_result_sections</code>, <code>materialize_summary</code></td>
+<td>R6, PROCESS</td>
+<td>the core step with <code>policy=ownership_policy</code></td>
+</tr>
+<tr>
+<td><code>write_section(…, **kw)</code></td>
+<td>—</td>
+<td><code>workflow.section_writes.write_section(…, policy=ownership_policy)</code></td>
+</tr>
+<tr>
+<td><code>accept_section_step</code></td>
+<td>—</td>
+<td>the core step</td>
+</tr>
+<tr>
+<td><code>release_section_step</code></td>
+<td>a reason when the section is approved</td>
+<td>the core step</td>
+</tr>
+<tr>
+<td><code>restore_section_step</code></td>
+<td>a reason unless restoring the current version</td>
+<td>the core step with <code>policy=ownership_policy</code></td>
+</tr>
+<tr>
+<td><code>discard_section_step</code></td>
+<td>the section exists; not locked (<code>section_owned</code>); a reason</td>
+<td>the core step</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="29-what-the-core-does-without-the-safeguards-the-notebooks-view">2.9 What the core does without the safeguards (the notebook's view)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Through the safeguards</th>
+<th>Core alone (notebook)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Integrate while the validation found errors</td>
+<td><code>phase_not_allowed</code></td>
+<td>merges (the dataset is then inert: the phase still reads VALIDATION_ERRORS)</td>
+</tr>
+<tr>
+<td>Process before integration</td>
+<td><code>phase_not_allowed</code></td>
+<td>Process fails on the missing dataset</td>
+</tr>
+<tr>
+<td>Process with a method set by default</td>
+<td><code>method_not_chosen</code></td>
+<td>runs under the default pin</td>
+</tr>
+<tr>
+<td>Process materializes over an approved apical section</td>
+<td>knocked down for re-review</td>
+<td>overwritten, the prior archived</td>
+</tr>
+<tr>
+<td>Summary over a person's Summary</td>
+<td>held</td>
+<td>written, the prior archived (its own rule still keeps it off a Summary it did not generate)</td>
+</tr>
+<tr>
+<td>Reopen / restore / discard without a reason</td>
+<td><code>reason_required</code></td>
+<td>done, no reason recorded</td>
+</tr>
+<tr>
+<td>Design value outside the vocabulary</td>
+<td><code>facts_invalid</code></td>
+<td>written as given</td>
+</tr>
+<tr>
+<td>Background with ATSDR/IRIS unreachable</td>
+<td><code>background_sources_unreachable</code></td>
+<td>drafted without them</td>
+</tr>
+<tr>
+<td>Render with stale LLM sections</td>
+<td><code>publish_blocked</code> (CLI: <code>--draft</code> overrides)</td>
+<td>rendered</td>
+</tr>
+<tr>
+<td>Any data act on a companion or a multi-study report</td>
+<td><code>read_only_session</code> / <code>report_has_no_data</code></td>
+<td>done</td>
+</tr>
+</tbody>
+</table></div>
+<p>What is the same for both: every write archived, the atomic merge,
+<code>ValidationOutOfDate</code>, the egress guard, the BMD hard-stop, the pins' integrity.</p>
+<hr />
+<h2 id="part-3-the-shared-web-routes">Part 3 — The shared web routes</h2>
+<p>The FastAPI app (<code>web_routes/background_server.py</code>) serves the old front-end's
+routes (behind the wall, not described here), the Bookshelf, and the new
+interface's <code>/api/v2</code> routes. Every data route acts through the safeguards:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Safeguard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/upload-bm2</code>, <code>/api/upload-csv</code>, <code>/api/upload-zip</code> (with <code>?dtxsid=</code>)</td>
+<td><code>require_add_files</code> (R6, ADD_FILES), then <code>invalidate_pool_artifacts</code> when the study had progressed</td>
+</tr>
+<tr>
+<td><code>POST /api/pool/validate/{id}</code></td>
+<td><code>guarded.validate_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/pool/resolve</code></td>
+<td><code>guarded.resolve_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/pool/confirm-metadata/{id}</code></td>
+<td><code>guarded.confirm_metadata_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/pool/integrate/{id}</code></td>
+<td><code>guarded.integrate_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/pool/materialize-sections/{id}</code></td>
+<td><code>guarded.materialize_result_sections</code></td>
+</tr>
+<tr>
+<td><code>DELETE /api/pool/{id}/files/{filename}</code></td>
+<td><code>guarded.remove_pool_file</code></td>
+</tr>
+<tr>
+<td><code>POST /api/pool/reset/{id}</code></td>
+<td><code>guarded.require_reset</code></td>
+</tr>
+<tr>
+<td><code>POST /api/session/reset/{id}</code> (delete the whole folder)</td>
+<td><code>acts.require_deletable</code></td>
+</tr>
+<tr>
+<td><code>POST /api/experiment-metadata/{id}</code></td>
+<td><code>guarded.approve_experiment_metadata</code> (vocabularies included)</td>
+</tr>
+<tr>
+<td><code>POST /api/generate-animal-report/{id}</code></td>
+<td><code>guarded.generate_animal_report_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/process-integrated/{id}</code></td>
+<td><code>guarded.run_process</code> (method chosen)</td>
+</tr>
+<tr>
+<td><code>POST /api/generate</code> (Background, SSE)</td>
+<td><code>sources.require_sources</code> before the model, <code>require_references</code> after; a refusal is an <code>error</code> event carrying <code>error_body</code></td>
+</tr>
+<tr>
+<td><code>POST /api/generate-genomics-narrative</code> with <code>force</code></td>
+<td><code>sections.require_reason</code></td>
+</tr>
+<tr>
+<td>regenerate a genomics organ over a person's text</td>
+<td><code>sections.require_reason</code></td>
+</tr>
+<tr>
+<td><code>POST /api/session/save-section</code>, <code>/api/session/approve</code>, <code>/api/session/unapprove</code>, <code>/api/session/discard-section</code>, <code>/api/session/{id}/restore</code></td>
+<td><code>guarded.write_section</code>, <code>accept_section_step</code>, <code>release_section_step</code>, <code>discard_section_step</code>, <code>restore_section_step</code></td>
+</tr>
+<tr>
+<td><code>POST /api/prompts/{section}/runs/{id}/{run_id}/use</code> (a prompt-workshop run becomes the section)</td>
+<td><code>guarded.write_section</code></td>
+</tr>
+<tr>
+<td><code>GET /api/preview/{id}/download</code>, <code>POST /api/export-overleaf-bundle</code> (with a <code>dtxsid</code>)</td>
+<td><code>publish.require_publishable</code> (409 with <code>blocking</code>)</td>
+</tr>
+<tr>
+<td><code>GET /api/workflow/{id}/state</code>, <code>/section-readiness</code>, <code>/publish-readiness</code></td>
+<td>reads: the derived state, nothing refused</td>
+</tr>
+</tbody>
+</table></div>
+<p>A refusal a route does not catch is caught by the app's exception handler
+(<code>refusal_handler</code> for <code>StepError</code>, <code>GuardViolation</code>, <code>MethodProfileError</code>,
+<code>DefinitionPinError</code>, <code>LLMEgressBlocked</code>) and answered with
+<code>web_routes.refusal_response.refusal_response(exc)</code> = <code>error_body(exc)</code> with its
+status. Never a bare 500 for a refusal.</p>
+<hr />
+<h2 id="part-4-the-command-line-toolinggenerate-reportpy">Part 4 — The command line (<code>tooling/generate_report.py</code>)</h2>
+<p>The reference driver of the whole workflow. <strong>Guarded</strong>, like the browser: in
+<code>main()</code>, before each step, <code>safeguards.acts.require(dtxsid, Action.X, store)</code>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>import files</td>
+<td>ADD_FILES</td>
+</tr>
+<tr>
+<td>validate</td>
+<td>VALIDATE</td>
+</tr>
+<tr>
+<td>confirm metadata</td>
+<td>CONFIRM_CLASSIFICATION</td>
+</tr>
+<tr>
+<td>integrate</td>
+<td>INTEGRATE</td>
+</tr>
+<tr>
+<td><code>--design</code></td>
+<td><code>apply_design(…, guarded=True)</code> → <code>guarded.record_study_design</code></td>
+</tr>
+<tr>
+<td><code>--experiment-metadata</code></td>
+<td><code>apply_experiment_metadata(…, guarded=True)</code> → <code>guarded.approve_experiment_metadata</code></td>
+</tr>
+<tr>
+<td>method</td>
+<td>without <code>--method-profile</code>: <code>_require_method_choice</code> (refuses unless a person chose the pin, and prints the suggested profile)</td>
+</tr>
+<tr>
+<td>animal report</td>
+<td>APPROVE</td>
+</tr>
+<tr>
+<td>process</td>
+<td>PROCESS with <code>method=True</code>; <code>process(…, policy=ownership_policy)</code></td>
+</tr>
+<tr>
+<td><code>--background</code></td>
+<td><code>background(…, policy=ownership_policy, guarded=True)</code>: an owned Background is refused before the model runs; the sources are required</td>
+</tr>
+<tr>
+<td>summary</td>
+<td><code>summary(…, policy=ownership_policy)</code></td>
+</tr>
+<tr>
+<td>render</td>
+<td><code>publish.require_publishable(…, draft=args.draft)</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>The named, logged overrides</strong>:</p>
+<ul>
+<li><code>--method-profile NAME</code> (or <code>newest</code>) — the person's method choice;</li>
+<li><code>--force --reason TEXT</code> — replace a Background a person owns (archived first,
+the reason in its history);</li>
+<li><code>--draft</code> — render past the publish gate (logged as a warning).</li>
+</ul>
+<p>A refusal ends the run as <code>SystemExit(&quot;step failed (&lt;status&gt;): &lt;message&gt;\n &lt;plain words&gt;&quot;)</code>, with &quot;(or pass --draft)&quot; for <code>publish_blocked</code>.</p>
+<p>The same helpers (<code>gr.validate</code>, <code>gr.integrate</code>, <code>gr.apply_design</code>, …) are what
+the notebook calls, <strong>without</strong> <code>guarded=True</code> or a policy.</p>
+<hr />
+<h2 id="part-5-the-notebook">Part 5 — The notebook</h2>
+<p><code>notebooks/workflow_walkthrough.ipynb</code> (built from <code>_nb_cells_data.py</code> and
+<code>_nb_cells_report.py</code>): the workflow one step per cell, each preceded by its
+purpose, its implementation, what it reads and writes, how it fails. It calls
+<code>tooling.generate_report</code> helpers and <code>workflow.steps</code> directly. Its §0 lists the
+safeguards as a layer and says it bypasses them; the cells for the study
+design, the experiment metadata, the Background and the publish gate each say
+what the app and the command line refuse that the notebook does not. After
+every cell that changes the session it prints the derived phase and legal
+acts: shown, not enforced.</p>
+<hr />
+<h2 id="part-6-the-new-interface">Part 6 — The new interface</h2>
+<h3 id="61-its-parts">6.1 Its parts</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The front end</td>
+<td><code>ui/</code> (React 19, antd 6, TanStack Query, react-router), built to <code>ui/dist</code>, served at <code>/app</code> by <code>web_routes/app_mount.py</code></td>
+<td>the screens</td>
+</tr>
+<tr>
+<td>Its server side</td>
+<td><code>ui_api/</code></td>
+<td>the read model, the studies, the study acts, the vocabularies, the refusals in the interface's terms</td>
+</tr>
+<tr>
+<td>Its routes</td>
+<td><code>web_routes/v2_routes.py</code>, <code>v2_section_routes.py</code>, <code>studies_routes.py</code> under <code>/api/v2</code></td>
+<td>thin: parse, call <code>ui_api</code> or <code>safeguards.guarded</code>, serialize</td>
+</tr>
+<tr>
+<td>The contracts</td>
+<td><code>docs/ui-redesign/MODULES.md</code> §4, <code>modules/*/contract.md</code>, <code>contracts/</code> (captured real answers)</td>
+<td>what the routes serve</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>ui_api</code> is a front end like <code>web_routes</code>: it may import <code>safeguards</code>; nothing
+below it may import it.</p>
+<p><strong>Every <code>/api/v2</code> route</strong> uses the route class <code>V2Route</code>
+(<code>web_routes/v2_routes.py</code>): any exception the handler raises (including
+FastAPI's own path and body validation) is answered by <code>envelope_response</code>
+with the <strong>§4.2 envelope</strong> <code>{&quot;error&quot;: {code, status, message, say, fix, details}}</code> from <code>ui_api.refusals.explain</code>. Unexpected ones are logged.</p>
+<h3 id="62-ui-apirefusals-the-safeguards-explanations-in-the-interfaces-terms">6.2 <code>ui_api.refusals</code> — the safeguards' explanations in the interface's terms</h3>
+<ul>
+<li>
+<p><code>STUDY_REFUSALS</code>: the codes of the Studies module's own acts (Part 2's last
+rows), each with a place; <code>register(STUDY_REFUSALS)</code> runs at import, so
+<code>explain</code> takes them at their word.</p>
+</li>
+<li>
+<p><code>PLACE_MODULE</code>: the module that clears each place:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Module</th>
+<th>The module's screen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>study</td>
+<td>M1</td>
+<td>Studies</td>
+</tr>
+<tr>
+<td>files</td>
+<td>M2</td>
+<td>Study files</td>
+</tr>
+<tr>
+<td>dataset</td>
+<td>M3</td>
+<td>Combined data</td>
+</tr>
+<tr>
+<td>facts</td>
+<td>M4</td>
+<td>Study facts</td>
+</tr>
+<tr>
+<td>method_and_document</td>
+<td>M5</td>
+<td>Method and report definition</td>
+</tr>
+<tr>
+<td>data_review</td>
+<td>M6</td>
+<td>Data review</td>
+</tr>
+<tr>
+<td>process</td>
+<td>P1</td>
+<td>Process</td>
+</tr>
+<tr>
+<td>sections</td>
+<td>D1</td>
+<td>Review the report</td>
+</tr>
+<tr>
+<td>publish</td>
+<td>D1</td>
+<td>Review the report</td>
+</tr>
+<tr>
+<td>handoff</td>
+<td>D4</td>
+<td>Word and Overleaf</td>
+</tr>
+</tbody>
+</table></div>
+</li>
+<li>
+<p><code>explain(exc)</code> = <code>safeguards.refusals.explain(exc)</code> with <code>fix</code> translated to
+the module. <strong>The read model, the studies list and every v2 envelope use it</strong>,
+so the TypeScript always receives a module id (<code>M1</code>…<code>D6</code>) or null, never a
+place. A test checks every catalog code reaches the interface that way
+(<code>tests/unit/test_ui_api_layering.py</code>).</p>
+</li>
+<li>
+<p><code>say(code, **fields)</code> — a code's plain words before it is raised (a delete
+the screen will not offer).</p>
+</li>
+</ul>
+<h3 id="63-the-read-model-get-apiv2studiesidstate">6.3 The read model: <code>GET /api/v2/studies/{id}/state</code></h3>
+<p><code>ui_api.read_model.study_state(dtxsid)</code> is <strong>the only source of a study's
+workflow state for the interface</strong>. It composes what the core derives, and
+<strong>has no side effects</strong>: <code>ReadOnlyDiskPoolStore</code> refuses every write (no folder
+created, no fingerprint re-scanned, no file id minted), the pins are read and
+never ensured, the method is resolved with <code>probe=False</code> (no Wine check). A
+malformed id is a 400 <code>invalid_study_id</code> envelope; an unknown one answers
+<code>{&quot;id&quot;: …, &quot;exists&quot;: false}</code>.</p>
+<p>Its fields:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>From</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code>, <code>chemical_dtxsid</code>, <code>chemical_dtxsid_from</code>, <code>relations</code></td>
+<td><code>ui_api.studies.session_kind</code></td>
+<td>study / report / member / companion / other; parent, members, companion, twin, other sessions of the chemical</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td><code>WorkflowEngine.state()</code></td>
+<td>the derived phase</td>
+</tr>
+<tr>
+<td><code>legal_actions</code></td>
+<td>the same</td>
+<td>the acts legal now. <strong><code>[]</code> on a companion or a report</strong> (R6 refuses them all, so the interface offers none)</td>
+</tr>
+<tr>
+<td><code>identity</code></td>
+<td><code>identity.json</code></td>
+<td>name, CASRN, DTXSID, <code>short_name</code> (the abbreviation); null fields are &quot;not stated&quot;</td>
+</tr>
+<tr>
+<td><code>pins.method</code></td>
+<td><code>method_pin_state</code></td>
+<td><code>pinned</code>, <code>name</code>, <code>hash</code>, <code>series</code>, <code>mode</code>, <code>pinned_by</code> (a person / default), <code>pinned_at</code>, <code>deviations</code>, <code>unchecked</code>, live <code>mismatches</code> with the dataset's recorded analyses; <strong><code>suggestion: {name, why}</code> until a person has chosen</strong>; <code>error</code> (an envelope body) if the profile no longer resolves</td>
+</tr>
+<tr>
+<td><code>pins.definition</code></td>
+<td><code>definition_pin_state</code></td>
+<td>which definition renders (<code>name</code>, <code>source</code>: session/study/era/template), the pin, <code>snapshot</code>, <code>drift</code>, <code>error</code></td>
+</tr>
+<tr>
+<td><code>processed</code></td>
+<td>the NTP cache exists</td>
+<td>whether Process has run</td>
+</tr>
+<tr>
+<td><code>sections[]</code></td>
+<td><code>sections_state</code></td>
+<td>one row per section, in the rendering tree's order (instance families expanded from disk, genomics also from interpretation caches): <code>key</code>, <code>title</code>, <code>kind</code>, <code>approvable</code>, <code>instance_of</code>, <code>region</code>, <code>has_file</code>, <code>enabled</code>, <code>blocked_by</code>, <code>approved</code>, <code>facts</code>, <code>user_edited</code>, <code>stale</code>, <code>regenerated</code> (+ <code>say</code>), <code>wording_review</code>, <code>source</code>, <code>model</code>, <code>version</code>, <code>version_status</code>, <code>maturity</code>, <code>review</code> (+ <code>say</code>), <code>machine_may_write</code>, and <strong><code>accept: {allowed, code, say}</code></strong></td>
+</tr>
+<tr>
+<td><code>readiness.publish</code></td>
+<td><code>publish_readiness_state</code></td>
+<td><code>ready</code>, <strong><code>complete: false</code></strong> (until C6), <code>checks</code> (what was looked at), <code>items</code> (one <code>block</code> per stale LLM section, with <code>say</code> and <code>fix: &quot;D1&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>members[]</code></td>
+<td><code>members_state</code></td>
+<td>for a report: each study's key, id, existence, phase, processed, own publish readiness</td>
+</tr>
+<tr>
+<td><code>stands</code></td>
+<td><code>ui_api.studies.stands</code></td>
+<td><code>{phase, say, next: {say, fix}}</code>: where it stands in plain words and the next step with its module</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>The accept verdict</strong> (<code>_accept_verdict</code>), in order: not approvable
+(<code>not_approvable</code>: supplied text, cache-only LLM text, or programmatic text
+shown with its tables) → not enabled (<code>blocked</code>: &quot;can be approved only once the
+study has been processed / the Background is approved / …&quot;) → no saved file
+(<code>not_saved_as_section</code> for Methods and the BMD summary, <code>no_saved_text</code>
+otherwise) → already accepted with nothing changed (<code>already_accepted</code>) →
+allowed. The interface offers Accept only when <code>allowed</code>, and shows <code>say</code>
+otherwise.</p>
+<p><strong><code>stands</code></strong> (one derivation, shared with the studies list): a companion has no
+phase and no next step; a report waits for its studies (&quot;Finish the member
+studies&quot;, M1) then &quot;Review the report's sections&quot; (D1); a study's next step is
+by phase (EMPTY/UPLOADED/VALIDATION_ERRORS → M2, VALIDATED → M3,
+INTEGRATED/APPROVED → &quot;Process the data&quot;, P1); once processed, &quot;Review the
+report's sections&quot; (D1). &quot;Publish the report&quot; (D3) is offered only when the
+publish readiness is served <strong>complete and ready</strong>, which it never is before
+C6: the interface never says &quot;ready to publish&quot; on a partial check.</p>
+<h3 id="64-the-studies-modules-backend-m1">6.4 The Studies module's backend (M1)</h3>
+<p><code>ui_api.studies</code> (reads) and <code>ui_api.study_steps</code> (acts), behind
+<code>web_routes/studies_routes.py</code>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Function</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v2/studies</code></td>
+<td><code>list_studies</code></td>
+<td>every session, grouped by chemical (newest change first; primary session, members, companion, others); each row a <code>study_row</code></td>
+</tr>
+<tr>
+<td><code>GET /api/v2/studies/{id}</code></td>
+<td><code>study_summary</code></td>
+<td>one row plus its detail (banner, format, relations)</td>
+</tr>
+<tr>
+<td><code>GET /api/v2/studies/{dtxsid}/creation-check</code></td>
+<td><code>creation_check</code></td>
+<td>is the id free, which sessions of the chemical exist, which report format it would be written in (<code>format.hash</code>)</td>
+</tr>
+<tr>
+<td><code>GET /api/v2/chemicals/{dtxsid}</code></td>
+<td><code>lookup_chemical</code></td>
+<td>PubChem (CTX when configured); cached 10 minutes so the confirm and the create agree</td>
+</tr>
+<tr>
+<td><code>GET /api/v2/chemicals/{dtxsid}/structure.png</code></td>
+<td><code>chemical_structure</code></td>
+<td>the picture</td>
+</tr>
+<tr>
+<td><code>POST /api/v2/studies</code></td>
+<td><code>create_study_step</code></td>
+<td>create</td>
+</tr>
+<tr>
+<td><code>PUT /api/v2/studies/{id}/identity</code></td>
+<td><code>record_identity_step</code></td>
+<td>fill a missing identity</td>
+</tr>
+<tr>
+<td><code>GET /api/v2/studies/{id}/delete-preview</code></td>
+<td><code>delete_study_dry_run</code></td>
+<td>what a delete deletes, keeps, loses; the token</td>
+</tr>
+<tr>
+<td><code>POST /api/v2/studies/{id}/delete</code></td>
+<td><code>delete_study_step</code></td>
+<td>delete for good</td>
+</tr>
+</tbody>
+</table></div>
+<p>A <strong>study row</strong> (<code>study_row</code>) carries <code>kind</code>, <code>relations</code>, <code>identity</code>, <code>stands</code>,
+<code>processed</code>, <code>last_changed</code>, <code>format</code>, <code>published</code>, <code>bookshelf</code>, and
+<strong><code>actions.delete: {allowed, code, say}</code></strong>, plus <code>notes</code>: a part that cannot be
+read (a damaged file) is named in <code>notes</code> and the row still lists. One damaged
+session never hides the others.</p>
+<p><strong>The delete verdict</strong> (<code>delete_verdict</code>) asks <strong><code>safeguards.acts.require_deletable</code></strong>
+(never a companion, never a member of a report) and adds the interface's own
+<code>run_in_flight</code> (<code>running_since</code>, which answers None until C5 serves a run
+lock). The same verdict feeds the row (so the button is disabled with the
+reason), the dry run and the delete.</p>
+<p><strong>Creating a study</strong> (<code>create_study_step</code>), in order:</p>
+<ol>
+<li>the id is a bare DTXSID (<code>study_id_has_suffix</code>);</li>
+<li>the format the person saw is still the one the id gives (<code>format_seen.hash</code>
+vs <code>format_hash</code>, else <code>format_changed</code>);</li>
+<li>the identity: either <strong>confirmed</strong> (<code>_confirmed_identity</code>: the person ticked
+the confirmation (<code>identity_unconfirmed</code>), only a <em>looked-up</em> identity is
+accepted, the name is present (<code>identity_incomplete</code>), a typed CASRN passes
+its pattern and check digit (<code>invalid_casrn</code>), the lookup still gives the same
+chemical (<code>identity_changed</code>), and, if the service does not list this DTXSID
+for the compound, the person said they checked it) — or explicitly
+<strong>pending</strong> (<code>_pending_identity</code>: the DTXSID alone; refused if a lookup in
+the last 10 minutes <em>did</em> find the chemical: confirm it instead);</li>
+<li><strong>atomic creation</strong>: <code>identity.json</code> and <code>meta.json</code> written in a hidden
+<code>.creating-…</code> folder, then renamed into place. A rename fails on a non-empty
+folder, so of two people creating the same study exactly one succeeds; the
+other gets <code>study_exists</code>. No files, no pins: the phase after is EMPTY.</li>
+</ol>
+<p><strong>Filling an identity later</strong> (<code>record_identity_step</code>): refuses a missing study,
+a companion or a report, and an identity already named (<code>identity_exists</code>);
+the check and the write are one act under a per-study lock (<code>_study_lock</code>), so
+of two people saving at once one wins and the other is refused.</p>
+<p><strong>Deleting</strong> (<code>delete_study_dry_run</code> then <code>delete_study_step</code>):</p>
+<ul>
+<li>the dry run reads only; it lists by plain category what goes (files, sections,
+dataset, statements, identity, pins, views, runs, log), what stays (the
+deliverables in <code>output/&lt;id&gt;/</code>, the study's own definition, a report's member
+studies), the approvals lost and the disk freed; <code>strength: &quot;irreversible&quot;</code>;
+<code>type_to_confirm</code> = the id; <code>preview_token</code> = a SHA over every path, size and
+modification time;</li>
+<li>the delete runs under the study lock: re-runs the dry run (so every refusal
+holds), checks the typed id (<code>confirm_mismatch</code>; case-sensitive, outer
+spaces ignored) and the token (<code>changed_since_preview</code>: anything changed after
+the review refuses), renames the folder out of the store in one step
+(<code>.deleting-…</code>), forgets what the server holds in memory for it
+(<code>pipeline.pool_globals.forget_session</code>), then removes it. A study that
+vanishes mid-read is <code>study_not_found</code>, never a server error.</li>
+</ul>
+<h3 id="65-the-section-routes-c2">6.5 The section routes (C2)</h3>
+<p><code>web_routes/v2_section_routes.py</code>, all through <strong><code>safeguards.guarded</code></strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Calls</th>
+<th>Safeguard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/v2/studies/{id}/sections/{key}/accept</code></td>
+<td><code>guarded.accept_section_step</code></td>
+<td>— (the text never changes)</td>
+</tr>
+<tr>
+<td><code>POST …/{key}/release</code> <code>{reason}</code></td>
+<td><code>guarded.release_section_step</code></td>
+<td>a reason when approved</td>
+</tr>
+<tr>
+<td><code>POST …/{key}/restore</code> <code>{version, reason}</code></td>
+<td><code>guarded.restore_section_step</code></td>
+<td>a reason; the ownership policy</td>
+</tr>
+<tr>
+<td><code>GET …/{key}/history</code></td>
+<td><code>section_writes.section_history</code> (read-only store)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>GET …/{key}/history/{version}</code></td>
+<td><code>section_writes.read_version</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each answers the fields the screen needs, plus <code>noop: {code, say}</code> for a
+success that did nothing (<code>already_accepted</code>, <code>not_approved</code>,
+<code>already_current</code>). A study that does not exist answers <code>section_not_found</code>
+and nothing is created. Discard is not offered here (C2 D4).</p>
+<h3 id="66-get-apiv2vocabularies">6.6 <code>GET /api/v2/vocabularies</code></h3>
+<p><code>ui_api.vocabularies.vocabularies_payload</code>: every controlled vocabulary of
+<code>bmdx_pipe.VOCABULARIES</code> as one self-describing entry (<code>{label, values}</code>, or
+<code>{label, depends_on, by}</code> for strain by species), labelled with the names
+BMDExpress gives these fields in a data file's header; plus the identifier
+patterns a field checks as it is typed (study id, session id, DTXSID, CASRN,
+DOI). The browser keeps no copy of either.</p>
+<h3 id="67-the-typescript-how-the-screens-use-all-this">6.7 The TypeScript: how the screens use all this</h3>
+<p><strong>The client</strong> (<code>ui/src/api/client.ts</code>, <code>errors.ts</code>). Every call resolves with
+the typed body or rejects with an <code>ApiError</code> carrying the §4.2 body: a non-2xx
+answer is parsed into the envelope; a body that is not one becomes
+<code>unexpected</code>; a server that cannot be reached becomes <code>unreachable</code> with its
+own plain words; a broken run stream has its own. Screens render the error
+with <code>&lt;Refusal&gt;</code>, never by reading <code>message</code>. <code>noopOf(body)</code> reads a &quot;success
+that did nothing&quot;.</p>
+<p><strong><code>useStudyState(id)</code></strong> (<code>kit/useStudyState.ts</code>) — the only reader of a study's
+workflow state: a TanStack query on <code>GET …/state</code>. A screen learns the phase,
+the legal acts, the sections, the readiness and the next step <strong>from here
+only, and never computes, guesses or stores any of them</strong>.
+<code>useStudyMutation(id, fn)</code> re-reads the study's state after <strong>every</strong> mutating
+call, whether it succeeded or was refused (a refusal may follow a change made
+elsewhere). While a run is in flight (once C5 serves <code>run</code>) it polls every 3 s.</p>
+<p><strong><code>&lt;Refusal error|noop studyId&gt;</code></strong> (<code>kit/Refusal.tsx</code>) — the refusal explainer:
+an antd error Alert with the backend's <strong><code>say</code></strong> first; a link <strong>&quot;Go to
+&lt;module&gt; to fix this&quot;</strong> built from <code>fix</code> (<code>kit/modules.ts</code>: module id → title →
+route <code>/studies/{id}/{slug}</code>); the code, status, verbatim message and details
+behind &quot;Show the technical details&quot;. A noop renders as an info Alert &quot;Nothing
+was changed&quot;. It never shows a bare technical message first.</p>
+<p><strong>The modules map</strong> (<code>kit/modules.ts</code>): M1 Studies (<code>/studies</code>), M2 Study files
+(<code>files</code>), M3 Combined data (<code>dataset</code>), M4 Study facts (<code>facts</code>), M5 Method and
+report definition (<code>pins</code>), M6 Data review (<code>data-review</code>), P1 Process
+(<code>process</code>), P2 What a change affects (<code>impact</code>), D1 Review the report
+(<code>review</code>), D2 Written sections (<code>writing</code>), D3 Preview and downloads
+(<code>preview</code>), D4 Word and Overleaf (<code>handoff</code>), D5 Report setup (<code>setup</code>), D6
+Bookshelf (<code>bookshelf</code>). This is how every <code>fix</code> becomes a link.</p>
+<p><strong>The study frame</strong> (<code>shell/StudyFrame.tsx</code>, <code>StudyHeader.tsx</code>,
+<code>StudyOverview.tsx</code>, <code>nextStep.ts</code>):</p>
+<ul>
+<li>the header shows the name, the id, the kind (a companion: &quot;read-only:
+nothing here is processed or approved&quot;, with its twin; a member: &quot;part of a
+report&quot;, with the report; a report: its studies and each one's stage), the
+stage in plain words (<code>stands.say</code>), and <strong>the next step</strong> from
+<code>stands.next</code> as a button to its module; a report names its studies not yet
+processed;</li>
+<li>a missing fact (chemical name, CASRN, short name) is a <strong><code>&lt;Pending&gt;</code></strong> mark
+&quot;[name pending]&quot; whose popover says why and links to the module that fills
+it: never silence, never a guess;</li>
+<li><strong>the Steps card</strong> lists all ten acts in the workflow's order
+(<code>kit/words.ts</code> <code>ACTION_ORDER</code>, <code>ACTION_WORDS</code>: plain label, module,
+destructive). An act in <code>legal_actions</code> is a link to its module; the first
+legal act of the next step's module is the primary button, tagged &quot;Next&quot;;
+<strong>every other act is visibly disabled with the reason</strong> (&quot;Not available now:
+the study is at &quot;Files checked&quot;.&quot;). A phase this page does not know offers
+nothing. A report and a companion get no Steps card (a report's files are its
+studies'; a companion is read-only);</li>
+<li><strong>&quot;What stops the report being published&quot;</strong> (<code>kit/PublishReadiness.tsx</code>)
+lists the readiness items (Blocks / Check, each with its module link); while
+<code>complete</code> is not true, an empty list reads &quot;Nothing found by the checks
+below&quot;, followed by a warning naming what was checked and what was not
+(approval of every section, &quot;[… pending]&quot; details, member studies, pins):
+<strong>never &quot;ready to publish&quot; on a partial check</strong>;</li>
+<li><strong>the Method and report definition card</strong> shows the pin as the backend
+reports it: &quot;not chosen&quot; in gold, or the name with &quot;fixed&quot; / &quot;follows the
+newest&quot;, and <strong>&quot;chosen by default, not by a person&quot;</strong> when <code>pinned_by</code> says
+so (that study's Process would be refused with <code>method_not_chosen</code>);
+deviations and unchecked items; the live mismatches as a warning; the
+definition's source and drift. Never a silent default.</li>
+</ul>
+<p><strong>Section marks</strong> (<code>kit/SectionStatus.tsx</code>, <code>sectionMark.ts</code>): one tag per
+section from what the backend serves (stale, regenerated, version status,
+approved, facts, <code>machine_may_write</code>, the <code>accept</code> verdict); the worst news
+wins the mark (stale &gt; regenerated &gt; needs re-approval &gt; final &gt; approved &gt;
+owned &gt; not approvable &gt; waiting &gt; cannot approve yet &gt; draft), the rest is in
+its tooltip; changed data-derived words are counted and their codes shown as
+details. Whether a section can be approved is never worked out in the
+browser: it is <code>accept.allowed</code>.</p>
+<p><strong>Fields</strong> (<code>kit/VocabField.tsx</code>, <code>IdField.tsx</code>, <code>checkId.ts</code>):</p>
+<ul>
+<li>a vocabulary field offers only the served values: no free text; a dependent
+field (strain) is closed until its parent is chosen; a value that no longer
+fits is flagged, never silently cleared; it never starts with a value the
+person did not choose; if the vocabularies cannot be loaded, nothing can be
+chosen. This mirrors on the screen what <code>safeguards.inputs</code> enforces on the
+server: the screen prevents, the server refuses;</li>
+<li>an id field checks as it is typed with the backend's pattern, explains why a
+value is wrong (a suffixed study id, a DOI pasted as a link, a CAS check
+digit), upper-cases a DTXSID visibly, offers &quot;Use DTXSID…?&quot; for a pasted
+CompTox address (never fills it without the click), and is never reported
+good when its rule could not load.</li>
+</ul>
+<p><strong>Confirm-or-undo</strong> (<code>kit/ConfirmAct.tsx</code>): for an act that changes or
+destroys something, the consequences come from the <strong>backend's dry run</strong>,
+fetched when the person clicks: reversible (done, then Undo), costly (a dialog
+listing what goes, what stays, the approvals lost, the cost), irreversible (the
+same, and the person types the study id). An unknown strength is treated as
+irreversible; if the dry run cannot be had, the act is not offered. A
+<code>preview_token</code> is passed to the act; <code>changed_since_preview</code> re-reads the dry
+run and says why. <code>disabled</code> + <code>disabledReason</code> show why an act is not
+available.</p>
+<p><strong>Provenance</strong> (<code>kit/Provenance.tsx</code>): every fact a screen shows says where it
+comes from: Stated, From the files, Inferred, Standard design (assumed), In
+conflict, with a link to state or settle it; an unknown origin is shown in red
+as unchecked.</p>
+<h3 id="68-end-to-end-the-studies-module-built">6.8 End to end: the Studies module (built)</h3>
+<p><strong>S1, the studies list</strong> (<code>modules/m1/StudiesList.tsx</code>): one row per chemical
+from <code>GET /api/v2/studies</code>, its sessions as child rows; each value (kind,
+stands, next step, format, Bookshelf) is the backend's; a missing name or CASRN
+is a Pending mark linking to the study; &quot;Create a study&quot; appears only where
+the backend says <code>can_create</code>. There is no delete in the list.</p>
+<p><strong>S2, a new study</strong> (<code>modules/m1/NewStudy.tsx</code>):</p>
+<ol>
+<li>the DTXSID is typed into an <code>IdField</code> (study id); <code>creation-check</code> says
+whether the id is free and which format it brings; a refusal
+(<code>study_id_has_suffix</code>, <code>invalid_study_id</code>) is a <code>&lt;Refusal&gt;</code>;</li>
+<li>the chemical is looked up (<code>useChemicalLookup</code>, no automatic retry): an
+unreachable service (<code>identity_lookup_unreachable</code>) offers &quot;Try again&quot; or
+creating with the identity pending (<code>PendingCreate</code>); a DTXSID the service
+does not know (<code>identity_not_found</code>) offers the same;</li>
+<li>the person sees the chemical (<code>ChemicalCard</code>: name, CASRN, structure), the
+format, and must tick the confirmation (and, where the service does not
+list the DTXSID for the compound, say they checked it); the Create button
+stays closed until everything required is in;</li>
+<li>the create posts <code>confirmed</code>, <code>dtxsid_checked_by_person</code>, <code>format_seen</code>;
+every refusal of 6.4 comes back as a <code>&lt;Refusal&gt;</code> (<code>study_exists</code> adds an
+&quot;Open it&quot; button; <code>identity_changed</code> clears the confirmation and re-runs the
+lookup; <code>format_changed</code> re-reads the creation check and says the format
+changed).</li>
+</ol>
+<p><strong>S3, a study's page</strong> (<code>modules/m1/StudyPage.tsx</code> + the shell's panels): the
+row and its detail, the sessions it belongs with, the workflow panels of 6.7,
+and <strong>the delete card</strong>: <code>&lt;ConfirmAct act=&quot;delete_study&quot; disabled={!actions.delete.allowed} disabledReason={actions.delete.say}&gt;</code> — so on a companion or a member the button
+is disabled with the safeguards' own words (&quot;This is the rat study of the
+report DTXSID1020431. Deleting it would break that report.&quot;); otherwise the
+dry run lists what goes and stays, the person types the id, and the delete
+presents the token. A study deleted while its page is open reads as &quot;deleted&quot;.</p>
+<h3 id="69-worked-examples-one-refusal-all-the-way-through">6.9 Worked examples: one refusal, all the way through</h3>
+<p><strong>Process before the method is chosen.</strong> A study whose <code>method_profile.json</code>
+says <code>pinned_by: &quot;default&quot;</code>:</p>
+<ol>
+<li>its state serves <code>pins.method.pinned_by: &quot;default&quot;</code> and a <code>suggestion</code>; the
+Method card shows &quot;chosen by default, not by a person&quot;;</li>
+<li>a Process request reaches <code>safeguards.guarded.run_process</code> →
+<code>require(dtxsid, PROCESS, method=True)</code> → R6 passes, the phase allows
+PROCESS, <code>require_method_chosen</code> raises <code>MethodNotChosen</code>;</li>
+<li><code>ui_api.refusals.explain</code> → <code>{code: &quot;method_not_chosen&quot;, status: 409, say: &quot;Choose the analysis method … The one it has now (ntp-5day-2021) was set automatically, not chosen by a person, so it must be confirmed or changed. …&quot;, fix: &quot;M5&quot;, details: {pin: {name, pinned_by, mode}}}</code>;</li>
+<li>the browser's <code>ApiError</code> → <code>&lt;Refusal&gt;</code> shows the words and &quot;Go to Method and
+report definition to fix this&quot;; <code>useStudyMutation</code> re-reads the state.
+The command line prints the same words and the suggested
+<code>--method-profile</code>.</li>
+</ol>
+<p><strong>Integrating while the file check found errors.</strong> <code>guarded.integrate_step</code> →
+<code>require_legal</code> → <code>PhaseRefusal(INTEGRATE, VALIDATION_ERRORS)</code> → <code>say</code>:
+&quot;Combining the files into one dataset isn't possible yet. The file check found
+errors. Fix what it lists (remove or replace the files it names), then run the
+file check again.&quot;, place <code>files</code> → module M2.</p>
+<p><strong>Process over an approved apical section.</strong> <code>guarded.materialize_result_sections</code>
+passes <code>ownership_policy</code>; the gate sees the printed content changed under an
+approved <code>bm2_body-weight</code> → knocked down: new version, approval withdrawn,
+<code>review: {why: &quot;numbers_changed&quot;, since_version: 3}</code>, event
+<code>reprocess/needs-re-bless</code>. The state then serves that section with
+<code>approved: false</code>, <code>review.say</code> (&quot;The study's data changed the numbers this
+section prints since it was approved. Read it again, then approve it again.&quot;),
+<code>accept.allowed: true</code>; its mark reads &quot;needs re-approval&quot;.</p>
+<p><strong>Reopening an approved section without a reason.</strong> <code>POST …/sections/summary/release {}</code> → <code>guarded.release_section_step</code> →
+<code>require_reason</code> → <code>reason_required</code> (400), <code>fix: &quot;D1&quot;</code>: &quot;Please say why. The
+reason is kept with the section's history.&quot; Nothing changed.</p>
+<p><strong>Deleting a member study.</strong> Its row's <code>actions.delete</code> is <code>{allowed: false, code: &quot;member_of_report&quot;, say: &quot;This is the rat study of the report …&quot;}</code> from
+<code>require_deletable</code>; the Delete button is disabled with those words. A direct
+<code>POST …/delete</code> re-runs the dry run and is refused the same way. The old
+<code>/api/session/reset</code> route applies the same rule.</p>
+<h3 id="610-what-is-built-and-what-is-not-yet">6.10 What is built, and what is not yet</h3>
+<p>Built and merged: the kit and the shell (Gate 0), <strong>M1 Studies</strong>, the backend of
+<strong>C1</strong> (the act table, enforced by the safeguards) and <strong>C2</strong> (owned content,
+section history, the v2 section routes), the read model, the vocabularies.</p>
+<p>Not built yet (the screens are placeholders, <code>shell/ModulePlaceholder.tsx</code>
+&quot;This page is not built yet&quot;): M2 Study files, M3 Combined data, M4 Study facts,
+M5 Method and report definition, M6 Data review, P1 Process, P2 What a change
+affects, D1–D6. Their backend acts exist (the shared routes of Part 3, all
+guarded); the <code>/api/v2</code> routes for them do not. Two client functions are
+<strong>proposed and mocked only</strong>: the generic dry run <code>GET …/dry-run/{act}</code> (C8) and
+the guarded Process event stream <code>POST …/process</code> (C5). Not served yet: the run
+record and lock (C5; <code>run_in_flight</code> answers nothing until then), the
+data-approval readiness and a complete publish check (C6), currency over every
+input (C7), undo (C8). The board (<code>BOARD.md</code>) tracks each.</p>
+<hr />
+<h2 id="part-7-the-tests-that-pin-all-this">Part 7 — The tests that pin all this</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it pins</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/unit/test_safeguards_layering.py</code></td>
+<td>no core package and no notebook cell imports <code>safeguards</code>; <code>safeguards</code> imports no front end</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_ui_api_layering.py</code></td>
+<td>nothing below the interface imports <code>ui_api</code>; every place has a module; every catalog code reaches the interface with a module or null</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_workflow_legality.py</code></td>
+<td>each guarded entry point refuses outside its phase; the core step does not</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_workflow_legal_actions.py</code>, <code>test_workflow_engine.py</code>, <code>test_workflow_phase_characterization.py</code> (+ fixtures)</td>
+<td>the act table, <code>NEXT_STEP</code>, the phase derivation</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_integration_basis.py</code></td>
+<td>the basis and <code>out_of_date</code></td>
+</tr>
+<tr>
+<td><code>tests/unit/test_section_writes.py</code>, <code>test_section_history_primitive.py</code>, <code>test_workflow_steps.py</code>, <code>test_version_cause_snapshots.py</code></td>
+<td>the gate's rules, hold/knock-down, history, accept/release/restore/discard</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_refusals.py</code></td>
+<td>every code explained with words and a place; <code>register</code></td>
+</tr>
+<tr>
+<td><code>tests/unit/test_method_profile.py</code>, <code>test_generate_report_c1.py</code>, <code>test_process_step.py</code>, <code>test_document_step.py</code></td>
+<td>the method choice, CLI and steps</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_safeguards_inputs_sources_publish.py</code></td>
+<td>vocabularies, the Background's sources, the publish gate and <code>--draft</code></td>
+</tr>
+<tr>
+<td><code>tests/unit/test_c2_cli_and_genomics.py</code></td>
+<td>the CLI's Background and the genomics overrides never lose a person's text</td>
+</tr>
+<tr>
+<td><code>tests/integration/test_session_reset_deletable.py</code></td>
+<td>the delete rule on the old reset route</td>
+</tr>
+<tr>
+<td><code>tests/unit/test_read_model.py</code>, <code>test_studies.py</code>, <code>test_studies_steps.py</code>, <code>test_vocabularies.py</code>, <code>tests/integration/test_v2_routes.py</code>, <code>test_v2_section_routes.py</code>, <code>test_studies_routes.py</code></td>
+<td>the interface's backend and its envelopes</td>
+</tr>
+<tr>
+<td><code>ui/src/**/*.test.ts(x)</code> (252 tests)</td>
+<td>the kit, the shell, M1, and the mocks against the backend's real answers (<code>contracts/</code>, <code>fixtures/real/</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="appendix-where-to-look">Appendix — Where to look</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Question</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What phase is this study in, and why?</td>
+<td><code>workflow/engine.py</code> <code>state</code>, <code>workflow/phases.py</code> <code>derive_phase</code></td>
+</tr>
+<tr>
+<td>What is allowed now?</td>
+<td><code>workflow/phases.py</code> <code>LEGAL_ACTIONS</code>, <code>NEXT_STEP</code></td>
+</tr>
+<tr>
+<td>Who refuses it?</td>
+<td><code>safeguards/acts.py</code> <code>require</code></td>
+</tr>
+<tr>
+<td>What does the refusal say?</td>
+<td><code>safeguards/refusals.py</code> <code>REFUSALS</code>, <code>explain</code></td>
+</tr>
+<tr>
+<td>Which screen fixes it?</td>
+<td><code>ui_api/refusals.py</code> <code>PLACE_MODULE</code>, <code>ui/src/kit/modules.ts</code></td>
+</tr>
+<tr>
+<td>Can a machine overwrite this section?</td>
+<td><code>workflow/ownership.py</code> <code>is_owned</code>, <code>safeguards/sections.py</code> <code>ownership_policy</code></td>
+</tr>
+<tr>
+<td>What happened to this section, and why?</td>
+<td><code>history/&lt;key&gt;/index.jsonl</code>, <code>workflow/section_writes.py</code> <code>section_history</code></td>
+</tr>
+<tr>
+<td>What does the interface know about a study?</td>
+<td><code>ui_api/read_model.py</code> <code>study_state</code></td>
+</tr>
+<tr>
+<td>What may the person do on the Studies screens?</td>
+<td><code>ui_api/studies.py</code> <code>study_row</code> (<code>actions</code>), <code>ui_api/study_steps.py</code></td>
+</tr>
+</tbody>
+</table></div>
+</main>
+<a class="top" href="#">Top ↑</a>
+<script>
+const links=[...document.querySelectorAll('nav a')];const map=new Map(links.map(a=>[a.getAttribute('href').slice(1),a]));
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove('active'));const a=map.get(e.target.id);if(a){a.classList.add('active');a.scrollIntoView({block:'nearest'})}}})},{rootMargin:'0px 0px -75% 0px'});
+document.querySelectorAll('main h2[id],main h3[id]').forEach(h=>obs.observe(h));
+</script>
+</body></html>
