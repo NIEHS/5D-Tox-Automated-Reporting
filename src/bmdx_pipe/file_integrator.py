@@ -47,6 +47,7 @@ import os
 import re
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -526,6 +527,10 @@ class FileFingerprint:
     # structure checks the file against (study_structure).
     animal_doses: dict[str, float] = field(default_factory=dict)
     animal_sexes: dict[str, str] = field(default_factory=dict)
+
+    # The study workbook a txt/csv was written from (a pivot's sidecar
+    # "source", a CSV's "# Source:" line); None for an original file.
+    derived_from: str | None = None
 
     # Long-format flag — True when a txt/csv file has NTP long format
     # (one row per animal × observation, with Concentration/Animal ID/Sex
@@ -1581,6 +1586,26 @@ def fingerprint_bm2(
     return fp
 
 
+def derived_source(path: str) -> str | None:
+    """The file a derived txt/csv was written from: a CSV's first line
+    "# Source: <file>", or a pivot's sidecar "source".  None for an original."""
+    p = Path(path)
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            first = f.readline()
+    except OSError:
+        return None
+    if first.startswith("# Source:"):
+        return first.split(":", 1)[1].strip()
+    sidecar = p.with_suffix(".sidecar.json")
+    if p.suffix == ".txt" and sidecar.exists():
+        try:
+            return json.loads(sidecar.read_text()).get("source")
+        except (OSError, ValueError):
+            return None
+    return None
+
+
 def fingerprint_file(
     file_id: str,
     filename: str,
@@ -1609,7 +1634,9 @@ def fingerprint_file(
     if file_type == "xlsx":
         return fingerprint_xlsx(file_id, filename, path, ts_added)
     elif file_type in ("txt", "csv"):
-        return fingerprint_txt_csv(file_id, filename, path, file_type, ts_added)
+        fp = fingerprint_txt_csv(file_id, filename, path, file_type, ts_added)
+        fp.derived_from = derived_source(path)
+        return fp
     elif file_type == "bm2":
         return fingerprint_bm2(file_id, filename, path, ts_added, bm2_json)
     else:
@@ -1828,6 +1855,12 @@ def _check_dose_consistency(
 
             # Skip comparison if files are for different sexes
             if not _sexes_overlap(ref_fp, other_fp):
+                continue
+
+            # A workbook and the pivot written from it: the pivot holds one
+            # study day per endpoint, so it can lack a group measured on
+            # another day.  The study structure checks it instead.
+            if other_fp.derived_from == ref_fp.filename or ref_fp.derived_from == other_fp.filename:
                 continue
 
             if ref_doses != other_doses:
@@ -2242,6 +2275,12 @@ def classify_derived_by_anchor(
         anchor = anchors.get(fp.platform)
         if anchor is None:
             continue  # no anchor for this platform → filename fallback stands
+        if fp.derived_from == anchor.filename:
+            # The workbook's own pivot: tox_study by construction.  It holds one
+            # study day per endpoint, so a group measured on another day (an
+            # early sacrifice) is absent without any loss of data.
+            decisions[fid] = (fp.data_type, "derived_from_anchor")
+            continue
 
         derived_doses = {float(d) for d in (fp.dose_groups or [])}
         if not derived_doses:

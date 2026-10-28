@@ -19,6 +19,7 @@ from .file_integrator import (
     ValidationReport,
     fingerprint_file,
     validate_pool,
+    derived_source,
     lightweight_validate,
     classify_derived_by_anchor,
     detect_platform_and_type_from_bm2,

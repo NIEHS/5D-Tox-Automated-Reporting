@@ -94,3 +94,32 @@ def test_validate_pool_uses_the_structure(tmp_path):
         "animal_not_in_study"}
     assert {i["issue_type"] for i in validate_pool("D", fps).issues
             if i["severity"] == "error"} == set()
+
+
+def test_workbooks_own_pivot_stays_tox_study(tmp_path):
+    # A group that died before its samples were taken (NIEHS-05's high dose:
+    # every value NA) is absent from the pivot, which holds measured animals.
+    # That is the workbook's own projection, not lost data.
+    from bmdx_pipe.file_integrator import fingerprint_file
+    from bmdx_pipe.pool_integrator import study_workbook_to_pool_files
+
+    hdr = ["NTP Study Number", "Concentration", "Animal ID", "Sex", "Selection",
+           "Albumin", "Observation Day"]
+    rows = [["S1", d, aid, "Male", "Core Animals", v, day]
+            for d, aid, v, day in [("0", "1", "3.3", "SD4"), ("0", "2", "3.4", "SD4"),
+                                   ("4", "3", "3.1", "SD4"), ("4", "4", "3.2", "SD4"),
+                                   ("8", "5", "NA", "SD2"), ("8", "6", "NA", "SD2")]]
+    wb = _workbook(tmp_path / "S1_Individual_Animal_Clinical_Chemistry_Data.xlsx", rows, hdr)
+    out = tmp_path / "files"
+    out.mkdir()
+    fps = {"wb": fingerprint_file("wb", "S1_Individual_Animal_Clinical_Chemistry_Data.xlsx", wb, "xlsx", "t")}
+    for path in study_workbook_to_pool_files(wb, str(out), "Clinical Chemistry"):
+        name = path.rsplit("/", 1)[-1]
+        fps[name] = fingerprint_file(name, name, path, "txt", "t")
+    pivot = fps["clin_chem_truth_male.txt"]
+    assert pivot.derived_from == "S1_Individual_Animal_Clinical_Chemistry_Data.xlsx"
+    assert pivot.dose_groups == [0.0, 4.0]
+
+    report = validate_pool("DTXSID", fps, build_study_structure({wb: "Clinical Chemistry"}))
+    assert pivot.data_type == "tox_study"
+    assert not [i for i in report.issues if i["severity"] == "error"], report.issues
