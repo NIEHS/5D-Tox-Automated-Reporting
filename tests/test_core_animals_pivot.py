@@ -11,7 +11,7 @@ import json
 import openpyxl
 
 from bmdx_pipe import tox_study_csv_to_pivot_txt
-from bmdx_pipe.pool_integrator import xlsx_to_pivot_txt
+from bmdx_pipe.pool_integrator import study_workbook_to_pool_files
 
 BW = "NTP Study Number,Concentration,Animal ID,Sex,Selection,Body Weight,Observation Day,Terminal Flag\n"
 
@@ -68,6 +68,6 @@ def test_xlsx_pivot_is_core_only_too(tmp_path):
     ws.append(["S", 4, "3", "Male", "Core Animals", 11.2])
     path = tmp_path / "organ.xlsx"
     wb.save(path)
-    [out] = xlsx_to_pivot_txt(str(path), str(tmp_path), "Organ Weight", "tox_study")
+    [out] = study_workbook_to_pool_files(str(path), str(tmp_path), "Organ Weight")
     animals, rows = _pivot(out)
     assert animals == ["1", "3"] and rows["Liver"] == ["10.1", "11.2"]

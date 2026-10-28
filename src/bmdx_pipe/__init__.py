@@ -31,6 +31,9 @@ from .pool_integrator import (
     export_integrated_bm2,
     subset_bm2,
     tox_study_csv_to_pivot_txt,
+    long_rows_to_pivot,
+    study_workbook_to_pool_files,
+    WORKBOOK_STEMS,
     extract_xlsx_value_map,
     key_sheet_units,
 )

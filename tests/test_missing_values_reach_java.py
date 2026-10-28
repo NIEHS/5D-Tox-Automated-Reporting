@@ -12,7 +12,7 @@ skipping a table it can't read, so the same fault can't be silent again.
 
 import openpyxl
 
-from bmdx_pipe.pool_integrator import xlsx_to_pivot_txt
+from bmdx_pipe.pool_integrator import study_workbook_to_pool_files
 
 
 def _pivot(path) -> dict[str, list[str]]:
@@ -29,7 +29,7 @@ def test_a_missing_workbook_value_is_written_as_nan(tmp_path):
     ws.append(["S", 4, "2", "Male", 11.2, None])   # heart not weighed
     path = tmp_path / "organ.xlsx"
     wb.save(path)
-    [out] = xlsx_to_pivot_txt(str(path), str(tmp_path), "Organ Weight", "tox_study")
+    [out] = study_workbook_to_pool_files(str(path), str(tmp_path), "Organ Weight")
     rows = _pivot(out)
     assert rows["Heart"] == ["1.2", "NaN"]
     assert rows["Liver"] == ["10.1", "11.2"]

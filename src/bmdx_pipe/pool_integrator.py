@@ -234,162 +234,6 @@ def _collect_xlsx_rosters(
     return rosters
 
 
-def xlsx_to_pivot_txt(
-    path: str,
-    output_dir: str,
-    platform: str,
-    data_type: str,
-) -> list[str]:
-    """
-    Convert an NTP xlsx long-format file into tab-delimited pivot files
-    that IntegrateProject can import via ExperimentFileUtil.
-
-    NTP xlsx files are long-format: one row per animal × observation.
-    We pivot to BMDExpress format:
-        Row 1: column headers (probe_id, colname1, colname2, ...)
-        Row 2: doses (label, dose1, dose2, ...)
-        Row 3+: endpoint measurements (endpoint_name, value1, value2, ...)
-
-    One output file per sex found in the data.
-
-    Args:
-        path:       Absolute path to the xlsx file.
-        output_dir: Directory to write the pivot .txt files.
-        platform:   Apical platform name (e.g., "Body Weight") from fingerprint.
-        data_type:  Data type (e.g., "tox_study", "inferred") from fingerprint.
-
-    Returns:
-        List of paths to the generated pivot .txt files.
-    """
-    try:
-        import openpyxl
-    except ImportError:
-        logger.error("openpyxl not installed — cannot parse xlsx")
-        return []
-
-    try:
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception as e:
-        logger.warning("Could not open xlsx %s: %s", path, e)
-        return []
-
-    data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
-
-    # --- Read all rows ---
-    headers: list[str] = []
-    # {(sex, endpoint): {animal_id: value}}
-    data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]] = {}
-    animal_dose_map: dict[str, float] = {}
-    animal_sex_map: dict[str, str] = {}
-    cohorts: dict[str, dict[str, dict]] = {}   # {sex: {animal: {"selection"}}} for _keep_core_animals
-    selection_idx = None
-
-    standard_cols = {
-        "NTP Study Number", "Concentration", "Animal ID", "Sex",
-        "Selection", "Terminal Flag", "",
-    }
-
-    for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
-        if row_idx == 0:
-            headers = [str(c) if c is not None else "" for c in row]
-            selection_idx = headers.index("Selection") if "Selection" in headers else None
-            continue
-
-        if row[1] is None or row[2] is None:
-            continue
-
-        try:
-            dose = float(row[1])
-        except (ValueError, TypeError):
-            continue
-
-        animal_id = str(row[2]).strip()
-        sex = str(row[3]).strip().title() if row[3] is not None else "Unknown"
-        animal_dose_map[animal_id] = dose
-        animal_sex_map[animal_id] = sex
-        if selection_idx is not None and selection_idx < len(row) and row[selection_idx]:
-            cohorts.setdefault(sex, {})[animal_id] = {"selection": str(row[selection_idx])}
-
-        for col_idx in range(4, len(headers)):
-            col_name = headers[col_idx].strip()
-            if col_name in standard_cols or not col_name:
-                continue
-
-            val = row[col_idx] if col_idx < len(row) else None
-            if val is None:
-                continue
-
-            try:
-                fval = float(val)
-            except (ValueError, TypeError):
-                continue
-
-            key = (sex, col_name)
-            data_by_sex_endpoint.setdefault(key, {})[animal_id] = fval
-
-    wb.close()
-
-    _keep_core_animals(data_by_sex_endpoint, cohorts)
-    if not data_by_sex_endpoint:
-        return []
-
-    # --- Look up BMDExpress experiment name prefix from platform ---
-    prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, "Unknown")
-
-    # --- Group by sex and write pivot files ---
-    # Collect all endpoints and animals per sex
-    sex_data: dict[str, dict] = {}
-    for (sex, endpoint), animal_vals in data_by_sex_endpoint.items():
-        if sex not in sex_data:
-            sex_data[sex] = {"endpoints": {}, "animals": set()}
-        sex_data[sex]["endpoints"][endpoint] = animal_vals
-        sex_data[sex]["animals"].update(animal_vals.keys())
-
-    output_paths = []
-    for sex, info in sex_data.items():
-        # Sort animals by dose then ID for consistent column order
-        animals = sorted(info["animals"],
-                         key=lambda a: (animal_dose_map.get(a, 0), a))
-
-        # Build the wide-format file.
-        # Metadata headers are parsed by ExperimentDescriptionParser so that
-        # ExperimentDescription fields are set during Java import.
-        lines = []
-        # Metadata headers — provider, platform, data type
-        lines.append(f"# Provider: Apical")
-        lines.append(f"# Platform: {platform}")
-        lines.append(f"# Data Type: {data_type}")
-        # Row 1: header — probe_id + animal IDs
-        lines.append("\t".join([f"{prefix}{sex}"] + animals))
-        # Row 2: doses
-        lines.append("\t".join(["Dose"] + [
-            str(animal_dose_map.get(a, 0)) for a in animals
-        ]))
-        # Row 3+: endpoints.  A missing value is written as "NaN", as the
-        # CSV converter does: Java's ExperimentFileUtil rejects an empty cell
-        # as non-numeric (and the whole table with it), but reads NaN as a
-        # missing value BMDExpress skips during modeling.
-        for endpoint, animal_vals in info["endpoints"].items():
-            values = []
-            for a in animals:
-                v = animal_vals.get(a)
-                values.append(str(v) if v is not None else "NaN")
-            lines.append("\t".join([endpoint] + values))
-
-        # Write to file
-        safe_sex = sex.replace(" ", "_")
-        out_name = f"{prefix}{safe_sex}.txt"
-        out_path = os.path.join(output_dir, out_name)
-        with open(out_path, "w") as f:
-            f.write("\n".join(lines) + "\n")
-
-        output_paths.append(out_path)
-        logger.info("Converted long-format xlsx → wide: %s (%d endpoints, %d animals)",
-                     out_name, len(info["endpoints"]), len(animals))
-
-    return output_paths
-
-
 def key_sheet_units(path: str) -> dict[str, str]:
     """
     {endpoint column label: measurement unit} from an NTP Individual Animal
@@ -478,7 +322,7 @@ def tox_study_csv_to_pivot_txt(
     _tox_study CSV files are long-format like NTP xlsx files:
       Concentration, Animal ID, Sex, endpoint1, endpoint2, ...
 
-    The output pivot format is the same as xlsx_to_pivot_txt():
+    The output pivot format (long_rows_to_pivot):
       Row 0: # Provider/Platform/Data Type headers (for ExperimentDescriptionParser)
       Row 1: experiment_name, animal_id1, animal_id2, ...
       Row 2: Dose, dose1, dose2, ...
@@ -528,6 +372,106 @@ def tox_study_csv_to_pivot_txt(
         logger.warning("tox_study CSV too short: %s", path)
         return []
 
+    source_stem = os.path.splitext(os.path.basename(path))[0]
+
+    def out_name(sex: str, n_sexes: int) -> str:
+        # Output filename = source filename with .txt extension.  If one source
+        # file holds several sexes, the sex is appended to tell them apart.
+        if n_sexes > 1:
+            return f"{source_stem}_{sex.replace(' ', '_')}.txt"
+        return f"{source_stem}.txt"
+
+    return long_rows_to_pivot(rows[0], rows[1:], output_dir, platform, data_type,
+                              source=os.path.basename(path), out_name=out_name,
+                              units=units)
+
+
+# The derived files' name stem per platform, as the pool's filename patterns
+# (file_integrator.detect_platform_and_type) read them: "<stem>_truth_<sex>".
+WORKBOOK_STEMS = {
+    "Body Weight": "body_weight",
+    "Organ Weight": "organ_weights",
+    "Clinical Chemistry": "clin_chem",
+    "Clinical": "clinical_obs",
+    "Hematology": "hematology",
+    "Hormones": "hormones",
+    "Tissue Concentration": "tissue_conc",
+}
+
+
+def study_workbook_to_pool_files(path: str, output_dir: str, platform: str) -> list[str]:
+    """
+    The files the pool uses, derived from a study workbook — the workbook drives.
+
+    For a measured platform: one BMDExpress pivot ``<stem>_truth_<sex>.txt`` and
+    one sidecar per sex (long_rows_to_pivot), with the units the workbook's Key
+    sheet states.  For clinical observations (categorical findings, not
+    endpoints): one ``<stem>_truth_<sex>.csv`` per sex, the Data rows as they
+    are, for the incidence tables; its first line ``# Source: <workbook>`` says
+    where it came from.  A sex the workbook doesn't record (no Sex column and
+    no single sex in the title) is written as "unknown".
+
+    Returns the paths written; [] for a platform with no stem or a workbook with
+    no rows.
+    """
+    from .study_workbook import read_study_workbook
+
+    stem = WORKBOOK_STEMS.get(platform)
+    if stem is None:
+        return []
+    wb = read_study_workbook(path)
+    if not wb.rows or wb.col("Animal ID") is None:
+        return []
+    source = os.path.basename(path)
+
+    if platform == "Clinical":
+        sex_i = wb.col("Sex")
+        by_sex: dict[str, list[list[str]]] = {}
+        for r in wb.rows:
+            sex = (r[sex_i] if sex_i is not None else "").strip().lower() or "unknown"
+            by_sex.setdefault(sex, []).append(r)
+        written = []
+        for sex, rows in sorted(by_sex.items()):
+            out = os.path.join(output_dir, f"{stem}_truth_{sex}.csv")
+            with open(out, "w", newline="", encoding="utf-8") as f:
+                f.write(f"# Source: {source}\n")
+                w = csv.writer(f, lineterminator="\r\n")
+                w.writerow(wb.header)
+                w.writerows(rows)
+            written.append(out)
+        return written
+
+    def out_name(sex: str, _n_sexes: int) -> str:
+        return f"{stem}_truth_{(sex or 'unknown').lower().replace(' ', '_')}.txt"
+
+    return long_rows_to_pivot(wb.header, wb.rows, output_dir, platform, "tox_study",
+                              source=source, out_name=out_name, units=wb.units or None)
+
+
+def long_rows_to_pivot(
+    header: list[str],
+    body: list[list[str]],
+    output_dir: str,
+    platform: str,
+    data_type: str,
+    *,
+    source: str,
+    out_name,
+    units: dict[str, str] | None = None,
+) -> list[str]:
+    """
+    The NTP long-format rows (one row per animal and observation) → one
+    BMDExpress pivot .txt and one sidecar .json per sex, in ``output_dir``.
+
+    The rows come from a tox_study CSV (tox_study_csv_to_pivot_txt) or from a
+    study workbook's Data sheet (study_workbook_to_pool_files); both write the
+    same files from the same rows.  ``source`` is the file the rows came from
+    (recorded in each sidecar), ``out_name(sex, n_sexes)`` names the pivot of
+    one sex, and ``units`` ({endpoint column: unit}) is recorded in the sidecar.
+    Returns the paths of the pivots written.
+    """
+    path = source
+    rows = [header] + list(body)
     header = [c.strip() for c in rows[0]]
     header_lower = [h.lower() for h in header]
 
@@ -739,10 +683,6 @@ def tox_study_csv_to_pivot_txt(
     # Build BMDExpress experiment name prefix from platform
     prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, platform.replace(" ", ""))
 
-    # Source filename stem — used to derive output filenames.
-    # e.g., "body_weight_truth_female.csv" → "body_weight_truth_female"
-    source_stem = os.path.splitext(os.path.basename(path))[0]
-
     # Group by sex and write pivot files
     sex_data: dict[str, dict] = {}
     for (sex, endpoint), animal_vals in data_by_sex_endpoint.items():
@@ -781,20 +721,14 @@ def tox_study_csv_to_pivot_txt(
             values = [str(animal_vals.get(a, "NaN")) for a in animals]
             lines.append("\t".join([endpoint] + values))
 
-        # Output filename = source filename with .txt extension.
-        # If multiple sexes in one source file, append sex to disambiguate.
-        if len(sex_data) > 1:
-            safe_sex = sex.replace(" ", "_")
-            out_name = f"{source_stem}_{safe_sex}.txt"
-        else:
-            out_name = f"{source_stem}.txt"
-        out_path = os.path.join(output_dir, out_name)
+        pivot_name = out_name(sex, len(sex_data))
+        out_path = os.path.join(output_dir, pivot_name)
         with open(out_path, "w") as f:
             f.write("\n".join(lines) + "\n")
 
         output_paths.append(out_path)
         logger.info("Converted long-format → wide: %s (%d endpoints, %d animals)",
-                     out_name, len(info["endpoints"]), len(animals))
+                     pivot_name, len(info["endpoints"]), len(animals))
 
         # ── Write sidecar JSON ───────────────────────────────────────────
         # The sidecar captures per-animal metadata that the wide-format pivot
@@ -830,7 +764,7 @@ def tox_study_csv_to_pivot_txt(
             # received, clotted, etc.) are excluded from the pivot but need
             # to be in the sidecar for sample availability footnote generation.
             sidecar_data = {
-                "source": os.path.basename(path),
+                "source": source,
                 "platform": platform,
                 "sex": sex,
                 "animals": dict(sidecar_animals[sex]),
@@ -984,7 +918,6 @@ def integrate_pool(
     # "gene_expression".  Separate chosen files into lists for Java integration.
     bm2_paths: list[str] = []
     txt_paths: list[str] = []
-    xlsx_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
     # The gene-expression .bm2 path, captured for the genomics sidecar (extracted
     # once here at integration so process-time never re-reads the raw upload).
     ge_bm2_path: str | None = None
@@ -1091,7 +1024,12 @@ def integrate_pool(
                 # CSVs were converted during fingerprint_and_store().
                 txt_paths.append(file_path)
             elif actual_file_type == "xlsx" or chosen_tier == "xlsx":
-                xlsx_paths.append((file_path, cm_platform or platform_key, fp_data_type or "tox_study"))
+                # A study workbook's data reaches integration as the pivots
+                # validation derived from it (study_workbook_to_pool_files);
+                # the workbook itself is never merged.  Chosen here means none
+                # were derived — validation has to run again.
+                logger.warning("Platform %s has only its workbook %s and no pivot derived "
+                               "from it — validate the pool again", platform_key, filename)
             else:
                 logger.warning("Unknown tier %s for platform %s — skipping", chosen_tier, platform_key)
 
@@ -1102,17 +1040,6 @@ def integrate_pool(
                 "tier": chosen_tier or actual_file_type,
                 "file_count": len(chosen_fids),
             }
-
-    # --- Convert long-format xlsx files to wide format for Java import ---
-    # NTP xlsx files are long-format (one row per animal).  txt/csv files
-    # are already wide-format — long-format CSVs were converted during
-    # fingerprint_and_store() before validation.
-    pivot_dir = os.path.join(session_dir, "_pivots")
-    if xlsx_paths:
-        os.makedirs(pivot_dir, exist_ok=True)
-        for xlsx_path, xlsx_platform, xlsx_data_type in xlsx_paths:
-            pivot_files = xlsx_to_pivot_txt(xlsx_path, pivot_dir, xlsx_platform, xlsx_data_type)
-            txt_paths.extend(pivot_files)
 
     # --- Call Java to merge everything ---
     # If the only files are clinical observation CSVs (categorical data),
