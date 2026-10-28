@@ -466,7 +466,8 @@ class FileFingerprint:
 
       platform      — Apical platform name ("Body Weight", "Clinical Chemistry",
                         etc.) or None for gene expression / unrecognized files
-      data_type     — "tox_study", "inferred", or "gene_expression"
+      data_type     — "tox_study", "inferred", "gene_expression", or
+                      "sample_sheet" (sample_sheet: genomic sample → animal)
       endpoint_names — e.g., ["SD0", "SD5"] or ["Liver Weight Absolute", ...]
       animal_ids    — e.g., ["101", "102", ...] — for cross-tier count comparison
       n_animals_by_dose — {0.0: 10, 4.0: 8, ...} — animals per dose group
@@ -907,6 +908,13 @@ def fingerprint_xlsx(
     # provenance is corrected. Non-study xlsx keep the filename-derived data_type.
     if fp.is_study_file:
         fp.data_type = "tox_study"
+    else:
+        # The study's sample sheet (sample_sheet): which animal each genomic
+        # sample came from.  Not data of any platform.
+        from .sample_sheet import is_sample_sheet
+        if is_sample_sheet(path):
+            fp.platform, fp.data_type = None, "sample_sheet"
+            return fp
 
     fp.study_number = wb.study_number
     fp.ts_internal = wb.date

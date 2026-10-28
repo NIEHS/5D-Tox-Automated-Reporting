@@ -681,7 +681,7 @@ def attach_metadata(
 # title gives (study-wide), and each experiment's sex (its animals' sex in the
 # workbooks' roster).
 WORKBOOK_FIELDS = ("species", "strain", "articleRoute", "administrationMeans",
-                   "studyDuration", "sex")
+                   "studyDuration", "sex", "organ")
 
 
 def describe_from_structure(experiments: list[dict], structure: dict | None) -> dict[str, dict]:
@@ -690,19 +690,38 @@ def describe_from_structure(experiments: list[dict], structure: dict | None) -> 
     ``structure`` is a study_structure.StudyStructure as a dict.  The design
     (species, strain, route, duration) is the whole study's, so every
     experiment gets it, genomic ones too.  The sex is an experiment's when all
-    its animals the roster knows share one (a genomic experiment's samples are
-    not animal IDs, so it gets none here)."""
+    its animals the roster knows share one.  A genomic experiment's treatments
+    are samples: each is traced to its animal (sample_sheet.resolve_sample),
+    and the sample sheet's tissue, when all agree, is the experiment's organ."""
+    from .sample_sheet import resolve_sample
+
     if not structure:
         return {}
     design = {k: v for k, v in (structure.get("design") or {}).items() if k in WORKBOOK_FIELDS}
     animals = structure.get("animals") or {}
+    samples = structure.get("samples") or {}
+    organs = {o.lower(): o for o in VOCABULARIES["organ"]}
     out: dict[str, dict] = {}
     for exp in experiments:
         desc = dict(design)
-        sexes = {(animals.get(str(t.get("name"))) or {}).get("sex")
-                 for t in exp.get("treatments") or [] if isinstance(t, dict)} - {None}
+        sexes, tissues = set(), set()
+        for t in exp.get("treatments") or []:
+            if not isinstance(t, dict):
+                continue
+            name = str(t.get("name"))
+            if name in animals:
+                sexes.add(animals[name].get("sex"))
+                continue
+            hit = resolve_sample(name, samples, animals)
+            if hit and hit["animal_id"] in animals:
+                sexes.add(animals[hit["animal_id"]].get("sex"))
+                if hit.get("tissue"):
+                    tissues.add(hit["tissue"].lower())
+        sexes.discard(None)
         if len(sexes) == 1:
             desc["sex"] = sexes.pop().lower()
+        if len(tissues) == 1 and next(iter(tissues)) in organs:
+            desc["organ"] = organs[tissues.pop()]
         if desc:
             out[exp["name"]] = desc
     return out

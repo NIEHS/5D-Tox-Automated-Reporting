@@ -28,6 +28,7 @@ from .file_integrator import (
 # ── The study the workbooks describe ──────────────────────────────────────
 from .study_workbook import StudyWorkbook, read_study_workbook, title_facts
 from .study_structure import StudyStructure, build_study_structure, check_against_structure
+from .sample_sheet import read_sample_sheet, resolve_sample
 
 # ── Pool integration (merge files → unified BMDProject JSON) ─────────────
 from .pool_integrator import (

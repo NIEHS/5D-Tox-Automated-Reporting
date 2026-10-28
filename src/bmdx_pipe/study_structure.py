@@ -46,6 +46,9 @@ class StudyStructure:
     animals: dict[str, dict] = field(default_factory=dict)
     # {platform: {"workbook", "endpoints", "units", "days"}}
     platforms: dict[str, dict] = field(default_factory=dict)
+    # The study's sample sheet(s): {sample key: {"sample", "animal_id", "tissue"}}
+    # (sample_sheet).  Maps a genomic sample to its animal.
+    samples: dict[str, dict] = field(default_factory=dict)
     # Where the workbooks disagree: [{"kind", "message", "workbooks"}]
     conflicts: list[dict] = field(default_factory=list)
 
@@ -63,15 +66,21 @@ class StudyStructure:
         return {a for a, rec in self.animals.items() if sex is None or rec.get("sex") == sex}
 
 
-def build_study_structure(workbooks: dict[str, str]) -> StudyStructure:
+def build_study_structure(workbooks: dict[str, str],
+                          sample_sheets: list[str] | None = None) -> StudyStructure:
     """The structure the study workbooks describe.
 
     Args:
-        workbooks: {path: platform} of the pool's study workbooks.
+        workbooks:     {path: platform} of the pool's study workbooks.
+        sample_sheets: paths of the pool's sample sheets (sample_sheet), which
+                       map genomic samples to animals.
     """
+    from .sample_sheet import read_sample_sheet
     from .study_workbook import read_study_workbook
 
     st = StudyStructure()
+    for path in sample_sheets or []:
+        st.samples.update(read_sample_sheet(path))
     numbers: dict[str, list[str]] = {}
     units: dict[str, list[str]] = {}
     titles: dict[str, list[str]] = {}
@@ -173,8 +182,11 @@ def check_against_structure(fingerprints: dict, st: StudyStructure) -> list:
     pivots name body weights by day).
     Animals a file lacks are not a contradiction (biosampling animals, early
     deaths, a platform measured on part of the study): the roster check reports
-    them as information.  The workbooks themselves and the genomic data
-    (sample names, not animal IDs; see sample_sheet) are not checked here.
+    them as information.  The workbooks themselves are not checked here.
+
+    Genomic data names samples, not animals: each sample is resolved to its
+    animal (sample_sheet.resolve_sample), and must have the animal's dose and
+    sex (errors).  Samples that can't be resolved are a warning, per file.
     """
     from .file_integrator import TIER_XLSX, ValidationIssue
 
@@ -190,7 +202,10 @@ def check_against_structure(fingerprints: dict, st: StudyStructure) -> list:
 
     study_doses = list(st.dose_groups)
     for fid, fp in fingerprints.items():
-        if _get(fp, "tier") == TIER_XLSX or _get(fp, "data_type") == "gene_expression":
+        if _get(fp, "tier") == TIER_XLSX:
+            continue
+        if _get(fp, "data_type") == "gene_expression":
+            issues.extend(_check_samples(fid, fp, st))
             continue
         name = _get(fp, "filename")
         platform = _get(fp, "platform") or "unknown"
@@ -275,3 +290,49 @@ def _named_pairs(ids, doses, st: StudyStructure, key: str) -> str:
     ids = sorted(ids, key=lambda a: (len(a), a))
     shown = [f"{a} ({doses[a]:g}, not {st.animals[a][key]:g})" for a in ids[:_MAX_NAMED]]
     return ", ".join(shown) + (" …" if len(ids) > _MAX_NAMED else "")
+
+
+def _check_samples(fid, fp, st: StudyStructure) -> list:
+    """A genomic file's samples against the animals they came from."""
+    from .file_integrator import ValidationIssue
+    from .sample_sheet import resolve_sample
+
+    name = _get(fp, "filename")
+    doses = _get(fp, "animal_doses") or {}
+    sexes = _get(fp, "animal_sexes") or {}
+    file_sexes = {s for s in _get(fp, "sexes") or [] if s in ("Male", "Female")}
+    one_sex = next(iter(file_sexes)) if len(file_sexes) == 1 else None
+    unresolved, foreign, wrong_dose, wrong_sex = [], [], [], []
+    for sample, dose in doses.items():
+        hit = resolve_sample(sample, st.samples, st.animals)
+        if hit is None:
+            unresolved.append(sample)
+            continue
+        animal = st.animals.get(hit["animal_id"])
+        if animal is None:
+            foreign.append(f"{sample} (animal {hit['animal_id']})")
+            continue
+        if dose is not None and animal.get("dose") is not None and not _same_dose(dose, animal["dose"]):
+            wrong_dose.append(f"{sample} (animal {hit['animal_id']}: {dose:g}, not {animal['dose']:g})")
+        sex = sexes.get(sample) or one_sex
+        if sex and animal.get("sex") and sex != animal["sex"]:
+            wrong_sex.append(f"{sample} (animal {hit['animal_id']} is {animal['sex']})")
+
+    issues = []
+
+    def add(kind, items, what, severity="error"):
+        if items:
+            shown = ", ".join(items[:_MAX_NAMED]) + (" …" if len(items) > _MAX_NAMED else "")
+            issues.append(ValidationIssue(
+                severity=severity, platform="gene_expression", issue_type=kind,
+                message=f"{name}: {len(items)} sample(s) {what}: {shown}",
+                files_involved=[fid], details={"samples": items},
+            ))
+
+    add("sample_not_in_study", foreign, "of animals the study's workbooks do not have")
+    add("sample_dose_mismatch", wrong_dose, "at another dose than their animal")
+    add("sample_sex_mismatch", wrong_sex, "of another sex than their animal")
+    add("samples_unresolved", unresolved,
+        "not traced to an animal (no sample sheet names them, and their names "
+        "don't end in an animal number)", severity="warning")
+    return issues

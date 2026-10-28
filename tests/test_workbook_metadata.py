@@ -26,7 +26,8 @@ def test_the_workbooks_state_first_and_win():
     exps = _exps()
     described = describe_from_structure(exps, STRUCTURE)
     assert described["body_weight_truth_male"]["sex"] == "male"
-    assert "sex" not in described["Liver_X_Female"]          # samples are not animal IDs
+    # A sample traced to its animal ("Plate1-111" → 111) gives the sex.
+    assert described["Liver_X_Female"]["sex"] == "female"
     assert described["Liver_X_Female"]["species"] == "rat"   # the design is study-wide
     prov: dict = {}
     apply_described(exps, described, prov)
@@ -42,7 +43,7 @@ def test_the_workbooks_state_first_and_win():
     attach_metadata(exps, inferred)
     record_provenance(exps, before, prov, "llm")
     assert exps[0]["experimentDescription"]["sex"] == "male"
-    assert prov["Liver_X_Female"]["organ"] == "llm" and prov["Liver_X_Female"]["sex"] == "llm"
+    assert prov["Liver_X_Female"]["organ"] == "llm" and prov["Liver_X_Female"]["sex"] == "workbook"
 
 
 def test_an_approval_cannot_override_the_workbook():
