@@ -852,23 +852,14 @@ def fingerprint_xlsx(
     ts_added: str,
 ) -> FileFingerprint:
     """
-    Parse both sheets of an NTP xlsx to extract study metadata + animal/dose structure.
+    Extract study metadata + animal/dose structure from an NTP study workbook.
 
-    NTP xlsx files have two sheets:
-      1. "Key to Column Labels" — metadata describing each column's meaning.
-         Row 1 has column labels in col A and human descriptions in col B.
-         Column D sometimes has study-level metadata:
-           Row 2: study type (e.g., "TOX")
-           Row 3: study number (e.g., "C20022-01")
-           Row 4: date (e.g., "12/08/2020")
-
-      2. "Data" — individual animal measurements in long format.
-         Each row is one animal × one observation.  Columns vary by domain:
-           Col A: NTP Study Number (e.g., "C20022-01")
-           Col B: Concentration (dose as string, e.g., "0", "4", "111")
-           Col C: Animal ID (e.g., "101", "102")
-           Col D: Sex ("Male" or "Female")
-           Remaining columns: domain-specific (body weight, endpoints, etc.)
+    The workbook is read by study_workbook.read_study_workbook, which finds
+    every column by name and smooths over the published layouts (a missing Sex
+    column filled from the title, "Study Number" for "NTP Study Number").  From
+    the Key sheet: study number, date, dose unit.  From the Data sheet: doses,
+    sexes, animals per dose, selection groups (core / biosampling), the core
+    animals per dose and sex, and the endpoint columns.
 
     Args:
         file_id:   UUID from upload.
@@ -879,7 +870,7 @@ def fingerprint_xlsx(
     Returns:
         FileFingerprint with extracted study metadata, doses, animals, endpoints.
     """
-    import openpyxl
+    from .study_workbook import read_study_workbook
 
     fp = FileFingerprint(
         file_id=file_id,
@@ -893,173 +884,77 @@ def fingerprint_xlsx(
     file_size = os.path.getsize(path) if os.path.exists(path) else 0
     fp.platform, fp.data_type = detect_platform_and_type(filename, "xlsx", file_size)
 
-    try:
-        # read_only=False because NTP xlsx files sometimes lack dimension
-        # metadata, causing read-only mode to see only 1 row per sheet.
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception as e:
-        logger.warning("Could not open xlsx %s: %s", filename, e)
-        return fp
+    wb = read_study_workbook(path)
 
     # --- Detect study file by sheet structure ---
     # NTP study xlsx files always have exactly two tabs: "Key to Column Labels"
     # and "Data".  This is more reliable than filename patterns for identifying
     # the authoritative study data source.
-    has_key_sheet = any("Key to" in s for s in wb.sheetnames)
-    has_data_sheet = "Data" in wb.sheetnames
-    fp.is_study_file = has_key_sheet and has_data_sheet
+    fp.is_study_file = wb.is_study_file
 
     # --- CONTENT/PROVENANCE classification (ADR-0017), increment 1 ---
     # A study-file xlsx IS the raw study-team source of truth — `tox_study` — by
     # its OWN content (the Key+Data sheet structure above), not its filename. The
-    # line above (detect_platform_and_type by filename) mislabels NIEHS-native
-    # names like "..._Organ_Weight_Data.xlsx" as `inferred` for lack of a `_truth`
-    # token, which then spuriously fails the dose-group cross-check against the
-    # genuinely-inferred pivoted txt. Override here so the classifier reflects what
-    # the file demonstrably IS. Platform (from filename) is left as detected; only
-    # the data_type provenance is corrected. Non-study xlsx (no Key+Data sheets)
-    # keep the filename-derived data_type.
+    # filename detection above mislabels NIEHS-native names like
+    # "..._Organ_Weight_Data.xlsx" as `inferred` for lack of a `_truth` token.
+    # Platform (from filename) is left as detected; only the data_type
+    # provenance is corrected. Non-study xlsx keep the filename-derived data_type.
     if fp.is_study_file:
         fp.data_type = "tox_study"
 
-    # --- Parse "Key to Column Labels" sheet for study metadata ---
-    # Column D of this sheet sometimes has: study type (row 2), study number
-    # (row 3), and date (row 4).
-    try:
-        key_sheet = wb[wb.sheetnames[0]]
-        for row in key_sheet.iter_rows(values_only=True):
-            vals = [v for v in row if v is not None]
-            if not vals:
-                continue
-            # Column D (index 3) in key sheet has study-level metadata
-            if len(row) >= 4 and row[3] is not None:
-                val = str(row[3]).strip()
-                # Study number pattern: letter + digits + hyphen + digits
-                if re.match(r"^[A-Z]\d+-\d+$", val):
-                    fp.study_number = val
-                # Date pattern: MM/DD/YYYY
-                elif re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", val):
-                    try:
-                        dt = datetime.strptime(val, "%m/%d/%Y")
-                        fp.ts_internal = dt.isoformat()
-                    except ValueError:
-                        pass
-    except Exception as e:
-        logger.debug("Key sheet parse failed for %s: %s", filename, e)
+    fp.study_number = wb.study_number
+    fp.ts_internal = wb.date
+    fp.dose_unit = wb.dose_unit
 
-    # --- Parse "Data" sheet for animal/dose structure ---
-    # Columns: A=StudyNumber, B=Concentration, C=AnimalID, D=Sex, E+=endpoints
-    try:
-        data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
-        headers = None
-        doses_set: set[float] = set()
-        sexes_set: set[str] = set()
-        animal_ids_set: set[str] = set()
-        # Track animal IDs per dose for n_animals_by_dose
-        animals_per_dose: dict[float, set[str]] = {}
-        # Track animals per dose × selection group (e.g., "Core Animals"
-        # vs "Biosampling Animals").  Enables filtering to core animals
-        # and detecting which dose groups lost animals.
-        animals_by_dose_sel: dict[float, dict[str, set[str]]] = {}
-        selections_set: set[str] = set()
-        endpoint_names_set: set[str] = set()
-        selection_col_idx: int | None = None
-        # Core animals by dose × sex for dead-animal detection
-        core_by_dose_sex: dict[float, dict[str, set[str]]] = {}
+    doses_set: set[float] = set()
+    sexes_set: set[str] = set()
+    animal_ids_set: set[str] = set()
+    animals_per_dose: dict[float, set[str]] = {}
+    # Animals per dose × selection group ("Core Animals" vs "Biosampling
+    # Animals"): enables filtering to core animals and detecting which dose
+    # groups lost animals.
+    animals_by_dose_sel: dict[float, dict[str, set[str]]] = {}
+    selections_set: set[str] = set()
+    # Core animals by dose × sex for dead-animal detection.  "Core Animals" is
+    # the NTP designation for animals intended for terminal sacrifice (vs
+    # "Biosampling Animals").  Without a Selection column, every animal is core.
+    core_by_dose_sex: dict[float, dict[str, set[str]]] = {}
+    has_selection = wb.col("Selection") is not None
 
-        for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
-            if row_idx == 0:
-                # First row is column headers — capture endpoint column names.
-                # Standard NTP columns are StudyNumber, Concentration, AnimalID,
-                # Sex, Selection; anything after that is domain-specific.
-                headers = [str(c) if c is not None else "" for c in row]
-                # Find the Selection column index (usually col 4 / index 4,
-                # but may shift if the file has extra metadata columns).
-                for ci, h in enumerate(headers):
-                    if h.strip().lower() == "selection":
-                        selection_col_idx = ci
-                        break
-                if len(headers) > 5:
-                    endpoint_names_set.update(headers[5:])
-                elif len(headers) > 4:
-                    endpoint_names_set.update(headers[4:])
-                continue
+    for ob in wb.observations():
+        animal_ids_set.add(ob.animal_id)
+        if ob.sex:
+            sexes_set.add(ob.sex)
+        if ob.dose is None:
+            continue
+        doses_set.add(ob.dose)
+        animals_per_dose.setdefault(ob.dose, set()).add(ob.animal_id)
+        if ob.selection:
+            selections_set.add(ob.selection)
+            animals_by_dose_sel.setdefault(ob.dose, {}).setdefault(ob.selection, set()).add(ob.animal_id)
+        is_core = ob.selection == "Core Animals" or not has_selection
+        if is_core and ob.sex:
+            core_by_dose_sex.setdefault(ob.dose, {}).setdefault(ob.sex, set()).add(ob.animal_id)
 
-            # Data rows — extract dose, animal ID, sex, and selection group
-            if row[1] is not None:
-                try:
-                    dose = float(row[1])
-                    doses_set.add(dose)
-                    # Track animal IDs per dose
-                    aid = str(row[2]) if row[2] is not None else ""
-                    if aid:
-                        if dose not in animals_per_dose:
-                            animals_per_dose[dose] = set()
-                        animals_per_dose[dose].add(aid)
-                        # Track by selection group
-                        sel_label = ""
-                        if selection_col_idx is not None and len(row) > selection_col_idx:
-                            sel_label = str(row[selection_col_idx]).strip() if row[selection_col_idx] else ""
-                        if sel_label:
-                            selections_set.add(sel_label)
-                            animals_by_dose_sel.setdefault(dose, {}).setdefault(sel_label, set()).add(aid)
-                        # Track Core Animals by dose × sex for dead-animal detection.
-                        # "Core Animals" is the NTP designation for animals intended
-                        # for terminal sacrifice (vs "Biosampling Animals" sacrificed
-                        # at an interim timepoint).  If no Selection column exists,
-                        # treat all animals as core.
-                        sex_val = str(row[3]).strip().title() if row[3] else ""
-                        is_core = (sel_label == "Core Animals") or (selection_col_idx is None)
-                        if is_core and sex_val:
-                            core_by_dose_sex.setdefault(dose, {}).setdefault(sex_val, set()).add(aid)
-                except (ValueError, TypeError):
-                    pass
-            if row[2] is not None:
-                animal_ids_set.add(str(row[2]))
-            if row[3] is not None:
-                sexes_set.add(str(row[3]).strip().title())
-            # Study number from data rows (fallback if key sheet didn't have it)
-            if fp.study_number is None and row[0] is not None:
-                val = str(row[0]).strip()
-                if re.match(r"^[A-Z]\d+-\d+$", val):
-                    fp.study_number = val
-
-        fp.dose_groups = sorted(doses_set)
-        fp.sexes = sorted(sexes_set)
-        fp.animal_ids = sorted(animal_ids_set)
-        # Deduplicate animal counts — xlsx has multiple rows per animal (one per
-        # observation day), so we count *unique* animal IDs per dose.
-        fp.n_animals_by_dose = {
-            dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
-        }
-        # Selection groups and per-dose animal rosters
-        fp.selection_groups = sorted(selections_set)
-        fp.animals_by_dose_selection = {
-            dose: {sel: sorted(aids) for sel, aids in sel_map.items()}
-            for dose, sel_map in sorted(animals_by_dose_sel.items())
-        }
-        # Core animals by dose × sex — the authoritative roster for
-        # dead-animal footnotes.
-        fp.core_animals_by_dose_sex = {
-            dose: {sex: sorted(aids) for sex, aids in sex_map.items()}
-            for dose, sex_map in sorted(core_by_dose_sex.items())
-        }
-        # Endpoint names — filter out standard NTP columns
-        standard_cols = {
-            "NTP Study Number", "Concentration", "Animal ID", "Sex",
-            "Selection", "Terminal Flag", "",
-        }
-        fp.endpoint_names = sorted(
-            endpoint_names_set - standard_cols
-        )
-        # Dose unit — NTP xlsx "Key to Column Labels" always says "mg/kg"
-        if any("mg/kg" in str(row) for row in key_sheet.iter_rows(values_only=True)):
-            fp.dose_unit = "mg/kg"
-
-    except Exception as e:
-        logger.debug("Data sheet parse failed for %s: %s", filename, e)
-
-    wb.close()
+    fp.dose_groups = sorted(doses_set)
+    fp.sexes = sorted(sexes_set)
+    fp.animal_ids = sorted(animal_ids_set)
+    # Unique animals per dose (a workbook has a row per animal per observation).
+    fp.n_animals_by_dose = {
+        dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
+    }
+    fp.selection_groups = sorted(selections_set)
+    fp.animals_by_dose_selection = {
+        dose: {sel: sorted(aids) for sel, aids in sel_map.items()}
+        for dose, sel_map in sorted(animals_by_dose_sel.items())
+    }
+    # Core animals by dose × sex — the authoritative roster for dead-animal
+    # footnotes.
+    fp.core_animals_by_dose_sex = {
+        dose: {sex: sorted(aids) for sex, aids in sex_map.items()}
+        for dose, sex_map in sorted(core_by_dose_sex.items())
+    }
+    fp.endpoint_names = sorted(wb.endpoints)
     return fp
 
 

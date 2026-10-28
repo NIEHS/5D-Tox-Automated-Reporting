@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 from .experiment_metadata import attach_metadata, infer_experiment_metadata
+from .study_workbook import META_COLS, read_study_workbook
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -67,15 +68,10 @@ logger = logging.getLogger(__name__)
 _TIER_PREFERENCE = {"bm2": 1, "txt": 2, "csv": 2, "txt_csv": 2, "xlsx": 3}
 
 # Non-endpoint columns in NTP long-format files (xlsx Data tab + tox_study CSV).
-# Everything else in the header is treated as a measured endpoint. Shared by
-# tox_study_csv_to_pivot_txt (sidecar build) and extract_xlsx_value_map (the
-# value cross-check) so the two agree on what counts as an endpoint.
-_META_COLS = {
-    "ntp study number", "concentration", "animal id", "sex",
-    "selection", "observation day", "removal day", "terminal flag",
-    "phase", "day",
-    "observation", "site", "modifier", "severity",
-}
+# Everything else in the header is treated as a measured endpoint.  One set
+# (study_workbook.META_COLS) for the workbook reader and the CSV pivot, so the
+# two agree on what counts as an endpoint.
+_META_COLS = META_COLS
 
 # Java helper directory — centralized in java_bridge.py
 from .java_bridge import JAVA_HELPER_DIR, build_classpath
@@ -397,53 +393,14 @@ def xlsx_to_pivot_txt(
 def key_sheet_units(path: str) -> dict[str, str]:
     """
     {endpoint column label: measurement unit} from an NTP Individual Animal
-    workbook's "Key to Column Labels" sheet.
+    workbook's "Key to Column Labels" sheet (study_workbook.explanation_unit).
 
     The Data sheet's headers carry no units ("Albumin", "Plasma 2 Hour X
-    Concentration"); the Key sheet explains each column and states the unit in
-    one of two forms, which vary by platform and by study:
-      "Albumin in g/dL", "Heart weight in grams"           → trailing " in <unit>"
-      "Concentration of X in plasma 2 hours post-dosing (ug/ml)" → trailing "(<unit>)"
-    The unit is copied as written (display normalisation is the report's job).
-    A column whose explanation states neither form — or a multi-word phrase
-    that cannot be told from prose — is left out rather than guessed.
-    Metadata columns (_META_COLS) are skipped.
+    Concentration"); the Key sheet explains each column and states the unit.  A
+    column whose explanation states none is left out rather than guessed.
+    Metadata columns (META_COLS) are skipped.
     """
-    try:
-        import openpyxl
-        # Not read_only: CEBS workbooks declare a stale sheet dimension (A1),
-        # which read-only mode trusts and so yields no rows.
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception as e:
-        logger.warning("Could not open xlsx %s: %s", path, e)
-        return {}
-    try:
-        name = "Key to Column Labels"
-        ws = wb[name] if name in wb.sheetnames else wb[wb.sheetnames[0]]
-        units: dict[str, str] = {}
-        for row in ws.iter_rows(values_only=True):
-            if len(row) < 2 or row[0] is None or row[1] is None:
-                continue
-            label, text = str(row[0]).strip(), str(row[1]).strip()
-            if not label or label.lower() in _META_COLS or label == "Column Label":
-                continue
-            unit = _explanation_unit(text)
-            if unit:
-                units[label] = unit
-        return units
-    finally:
-        wb.close()
-
-
-def _explanation_unit(text: str) -> str | None:
-    """The unit a Key-sheet explanation states, or None (see key_sheet_units)."""
-    m = re.search(r"\(([^()]+)\)\s*$", text)
-    if m:
-        unit = m.group(1).strip()
-        # "(SD = Study day; )" and other parenthetical prose are not units.
-        return unit if re.fullmatch(r"[^\s=;,]+", unit) else None
-    m = re.search(r"\sin\s+([^\s]+)\s*$", text)
-    return m.group(1) if m else None
+    return read_study_workbook(path).units
 
 
 _BODY_WEIGHT_GAIN = "Body Weight Gain"
@@ -901,7 +858,7 @@ def extract_xlsx_value_map(path: str) -> dict[tuple[str, str, str, str], dict]:
 
     This mirrors the per-row loop of ``tox_study_csv_to_pivot_txt`` (the sidecar
     builder) so that, for faithful data, the xlsx and the CSV sidecar reduce to
-    byte-identical records.  It reads the long-format "Data" tab and returns:
+    identical records.  It reads the workbook (study_workbook) and returns:
 
         {(sex, animal_id, endpoint, day): {
             "value": str | None,   # raw stripped cell (kept incl. "NA"); None if empty
@@ -913,96 +870,24 @@ def extract_xlsx_value_map(path: str) -> dict[tuple[str, str, str, str], dict]:
     Only observations that carry a day (or a terminal flag) are emitted — the same
     ``if obs_day or terminal`` guard the sidecar uses — so both sides are symmetric.
     ``endpoint`` is the RAW stripped column header (NOT the pivot's day-tag
-    relabel), because the sidecar stores the raw header too.  Returns ``{}`` on any
-    structural problem (missing sheet, no endpoint columns).
+    relabel), because the sidecar stores the raw header too.  Returns ``{}`` when
+    the workbook has no animal or dose column, or no endpoint columns.
     """
-    import openpyxl
-
-    try:
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception:
-        logger.warning("Could not open xlsx for value extraction: %s", path)
+    wb = read_study_workbook(path)
+    if wb.col("Animal ID") is None or wb.col("Concentration") is None or not wb.endpoint_cols:
         return {}
-
-    data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
-    rows = list(data_sheet.iter_rows(values_only=True))
-    if len(rows) < 2:
-        return {}
-
-    header = [str(c).strip() if c is not None else "" for c in rows[0]]
-    header_lower = [h.lower() for h in header]
-
-    # Column lookup by header NAME with first-match-wins — prevents an endpoint
-    # like "Mean Cell Hgb Concentration" from stealing the "Concentration" (dose)
-    # column (mirrors animal_report._extract_animals_from_xlsx).
-    def _find(substr: str) -> int | None:
-        for i, h in enumerate(header_lower):
-            if substr in h:
-                return i
-        return None
-
-    animal_col = _find("animal id")
-    dose_col = _find("concentration")
-    if animal_col is None or dose_col is None:
-        return {}
-    sex_col = _find("sex")
-    selection_col = _find("selection")
-    terminal_col = _find("terminal flag")
-    # Day resolution: Observation Day → Removal Day → Phase+Day (exact-name so a
-    # "Removal Day" doesn't also match a bare "Day").
-    def _exact(name: str) -> int | None:
-        return header_lower.index(name) if name in header_lower else None
-    obs_day_col = _exact("observation day")
-    removal_day_col = _exact("removal day")
-    phase_col = _exact("phase")
-    day_col = _exact("day")
-
-    endpoint_cols = [
-        i for i, h in enumerate(header_lower)
-        if h not in _META_COLS and h
-    ]
-    if not endpoint_cols:
-        return {}
-
-    def _cell(row, idx):
-        if idx is None or idx >= len(row) or row[idx] is None:
-            return ""
-        return str(row[idx]).strip()
-
     out: dict[tuple[str, str, str, str], dict] = {}
-    for row in rows[1:]:
-        aid = _cell(row, animal_col)
-        if not aid:
+    for ob in wb.observations():
+        if ob.dose is None:
             continue
-        try:
-            dose = float(_cell(row, dose_col))
-        except (ValueError, TypeError):
+        if not (ob.day or ob.terminal):
             continue
-
-        sex = _cell(row, sex_col).title() or "Unknown"
-        selection = _cell(row, selection_col) or "Unknown"
-        terminal_raw = _cell(row, terminal_col)
-        terminal = terminal_raw.lower() in ("yes", "true", "1") if terminal_raw else False
-
-        obs_day = ""
-        if obs_day_col is not None:
-            obs_day = _cell(row, obs_day_col)
-        elif removal_day_col is not None:
-            obs_day = _cell(row, removal_day_col)
-        elif phase_col is not None and day_col is not None:
-            obs_day = f"{_cell(row, phase_col)}{_cell(row, day_col)}"
-
-        if not (obs_day or terminal):
-            continue
-
-        for col_idx in endpoint_cols:
-            endpoint = header[col_idx]
-            val = _cell(row, col_idx)
-            out[(sex, aid, endpoint, obs_day)] = {
+        for endpoint, val in ob.values.items():
+            out[(ob.sex or "Unknown", ob.animal_id, endpoint, ob.day)] = {
                 "value": val or None,
-                "terminal": terminal,
-                "selection": selection,
-                "dose": dose,
+                "terminal": ob.terminal,
+                "selection": ob.selection or "Unknown",
+                "dose": ob.dose,
             }
     return out
 

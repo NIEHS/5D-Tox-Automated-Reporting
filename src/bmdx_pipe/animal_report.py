@@ -203,15 +203,10 @@ class AnimalReport:
 
 def _extract_animals_from_xlsx(path: str) -> dict[str, dict]:
     """
-    Extract per-animal records from an NTP xlsx file.
+    Extract per-animal records from an NTP study workbook (study_workbook).
 
-    Opens the xlsx with openpyxl and reads the "Data" sheet.  Finds
-    column indices by header name (not position) to handle files that
-    have extra or missing columns (e.g., some files lack "Selection").
-
-    Returns a dict of {animal_id: {dose, sex, selection}} with deduplication
-    across observation rows (each animal appears many times — once per
-    endpoint per study day).
+    Returns a dict of {animal_id: {dose, sex, selection}}, one entry per animal
+    (each animal has a row per endpoint per study day; the first row counts).
 
     Args:
         path: Absolute path to the xlsx file on disk.
@@ -221,94 +216,17 @@ def _extract_animals_from_xlsx(path: str) -> dict[str, dict]:
         Each metadata dict has keys: dose (float|None), sex (str|None),
         selection (str|None).
     """
-    import openpyxl
+    from .study_workbook import read_study_workbook
 
     animals = {}
-
-    try:
-        # read_only=False because NTP xlsx files sometimes lack dimension
-        # metadata, causing read-only mode to see only 1 row per sheet.
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception as e:
-        logger.warning("Could not open xlsx %s: %s", path, e)
-        return animals
-
-    try:
-        # Find the "Data" sheet — it's always named "Data" in NTP files,
-        # but fall back to the last sheet if not found.
-        data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
-
-        # --- Find column indices by header name ---
-        # NTP xlsx files have these standard columns:
-        #   A: NTP Study Number, B: Concentration, C: Animal ID, D: Sex
-        #   E: Selection (sometimes missing), F+: endpoints
-        # We find them by name to handle column order variations.
-        col_indices = {}
-        header_map = {
-            "concentration": "dose",
-            "animal id": "animal_id",
-            "sex": "sex",
-            "selection": "selection",
-            "ntp study number": "study_number",
+    for ob in read_study_workbook(path).observations():
+        if ob.animal_id in animals:
+            continue
+        animals[ob.animal_id] = {
+            "dose": ob.dose,
+            "sex": ob.sex or None,
+            "selection": ob.selection or None,
         }
-
-        headers = None
-        for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
-            if row_idx == 0:
-                # First row contains column headers.
-                # Match each header against known patterns.  Only accept
-                # the FIRST column that matches each field_name to avoid
-                # endpoint columns like "Mean Cell Hgb Concentration"
-                # overwriting the actual "Concentration" (dose) column.
-                headers = [str(c).strip().lower() if c is not None else "" for c in row]
-                assigned_fields = set()  # track which field_names are already assigned
-                for col_idx, header_text in enumerate(headers):
-                    for pattern, field_name in header_map.items():
-                        if field_name in assigned_fields:
-                            continue  # already found this field — skip
-                        if pattern in header_text:
-                            col_indices[field_name] = col_idx
-                            assigned_fields.add(field_name)
-                            break
-                continue
-
-            # Data rows — extract animal record
-            aid_col = col_indices.get("animal_id")
-            if aid_col is None or aid_col >= len(row) or row[aid_col] is None:
-                continue
-
-            animal_id = str(row[aid_col]).strip()
-            if not animal_id:
-                continue
-
-            # Only record the first occurrence — all rows for the same
-            # animal have identical dose/sex/selection.
-            if animal_id in animals:
-                continue
-
-            record = {"dose": None, "sex": None, "selection": None}
-
-            dose_col = col_indices.get("dose")
-            if dose_col is not None and dose_col < len(row) and row[dose_col] is not None:
-                try:
-                    record["dose"] = float(row[dose_col])
-                except (ValueError, TypeError):
-                    pass
-
-            sex_col = col_indices.get("sex")
-            if sex_col is not None and sex_col < len(row) and row[sex_col] is not None:
-                record["sex"] = str(row[sex_col]).strip().title()
-
-            sel_col = col_indices.get("selection")
-            if sel_col is not None and sel_col < len(row) and row[sel_col] is not None:
-                record["selection"] = str(row[sel_col]).strip()
-
-            animals[animal_id] = record
-
-    except Exception as e:
-        logger.debug("Data sheet parse failed for %s: %s", path, e)
-
-    wb.close()
     return animals
 
 
@@ -449,17 +367,11 @@ def _extract_animals_from_bm2(
 # Study number extraction helper
 # ---------------------------------------------------------------------------
 
-# Pattern matches NTP study numbers like "C20022-01"
-_STUDY_NUMBER_RE = re.compile(r"^[A-Z]\d+-\d+$")
-
 
 def _extract_study_number_from_xlsx(path: str) -> str | None:
     """
-    Extract the NTP study number from an xlsx file's Key sheet or Data sheet.
-
-    Checks column D of the "Key to Column Labels" sheet first (where NTP
-    places study-level metadata), then falls back to the first data row's
-    column A (NTP Study Number column).
+    The study number an NTP study workbook gives: its Key sheet's (column D),
+    else the one its Data sheet's rows carry (study_workbook).
 
     Args:
         path: Absolute path to the xlsx file.
@@ -467,44 +379,9 @@ def _extract_study_number_from_xlsx(path: str) -> str | None:
     Returns:
         Study number string (e.g., "C20022-01") or None.
     """
-    import openpyxl
+    from .study_workbook import read_study_workbook
 
-    try:
-        wb = openpyxl.load_workbook(path, data_only=True)
-    except Exception:
-        return None
-
-    study_number = None
-
-    # Check "Key to Column Labels" sheet column D
-    try:
-        key_sheet = wb[wb.sheetnames[0]]
-        for row in key_sheet.iter_rows(values_only=True):
-            if len(row) >= 4 and row[3] is not None:
-                val = str(row[3]).strip()
-                if _STUDY_NUMBER_RE.match(val):
-                    study_number = val
-                    break
-    except Exception:
-        pass
-
-    # Fallback: check Data sheet column A
-    if study_number is None:
-        try:
-            data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
-            for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
-                if row_idx == 0:
-                    continue  # skip header
-                if row[0] is not None:
-                    val = str(row[0]).strip()
-                    if _STUDY_NUMBER_RE.match(val):
-                        study_number = val
-                        break
-        except Exception:
-            pass
-
-    wb.close()
-    return study_number
+    return read_study_workbook(path).study_number
 
 
 # ---------------------------------------------------------------------------
