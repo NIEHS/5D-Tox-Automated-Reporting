@@ -861,6 +861,7 @@ def integrate_pool(
     test_article: dict | None = None,
     llm_generate_json: Any = None,
     approved_metadata: dict[str, dict] | None = None,
+    study_structure: dict | None = None,
 ) -> dict:
     """
     Merge all pool files into a single unified BMDProject JSON.
@@ -887,6 +888,8 @@ def integrate_pool(
                            approved for an earlier integration of this pool.
                            Wins over inference for every experiment it names
                            (see _apply_approved_metadata).
+        study_structure:   The StudyStructure (as a dict) the pool's study
+                           workbooks describe; kept in _meta.study_structure.
 
     Returns:
         The merged BMDProject dict, also saved to sessions/{dtxsid}/integrated.json.
@@ -1083,6 +1086,9 @@ def integrate_pool(
         # they contain categorical findings, not numeric endpoints.  Processed
         # into incidence tables at report time by build_clinical_obs_tables().
         "clinical_obs_files": clinical_obs_files,
+        # The study the workbooks describe (study_structure): its roster,
+        # doses, design.  Empty when the pool has no study workbook.
+        "study_structure": study_structure or {},
     }
 
     # --- Enrich source_files with per-platform experiment counts ---

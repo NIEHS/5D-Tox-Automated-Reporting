@@ -520,6 +520,12 @@ class FileFingerprint:
     # column.  Structure: {dose → {"Male": [aids], "Female": [aids]}}.
     core_animals_by_dose_sex: dict[float, dict[str, list[str]]] = field(default_factory=dict)
 
+    # Each animal's dose, and its sex where the file says (a long-format
+    # file's Sex column, a .bm2 experiment named for one sex): what the study
+    # structure checks the file against (study_structure).
+    animal_doses: dict[str, float] = field(default_factory=dict)
+    animal_sexes: dict[str, str] = field(default_factory=dict)
+
     # Long-format flag — True when a txt/csv file has NTP long format
     # (one row per animal × observation, with Concentration/Animal ID/Sex
     # columns).  These need conversion to wide format before integration.
@@ -925,8 +931,10 @@ def fingerprint_xlsx(
         animal_ids_set.add(ob.animal_id)
         if ob.sex:
             sexes_set.add(ob.sex)
+            fp.animal_sexes.setdefault(ob.animal_id, ob.sex)
         if ob.dose is None:
             continue
+        fp.animal_doses.setdefault(ob.animal_id, ob.dose)
         doses_set.add(ob.dose)
         animals_per_dose.setdefault(ob.dose, set()).add(ob.animal_id)
         if ob.selection:
@@ -1077,6 +1085,7 @@ def fingerprint_txt_csv(
                 if aid:
                     animal_ids_set.add(aid)
                     dose_animal_map.setdefault(dose_val, set()).add(aid)
+                    fp.animal_doses.setdefault(aid, dose_val)
             except (ValueError, TypeError, IndexError):
                 continue
 
@@ -1085,6 +1094,7 @@ def fingerprint_txt_csv(
                 s = cells[sex_col].strip()
                 if s:
                     sexes_set.add(s.title())
+                    fp.animal_sexes.setdefault(aid, s.title())
 
         fp.dose_groups = sorted(doses_set)
         fp.animal_ids = sorted(animal_ids_set)
@@ -1121,6 +1131,7 @@ def fingerprint_txt_csv(
                 if dose_val not in dose_animal_map:
                     dose_animal_map[dose_val] = set()
                 dose_animal_map[dose_val].add(animal_ids[i])
+                fp.animal_doses.setdefault(animal_ids[i], dose_val)
         except (ValueError, TypeError):
             pass
 
@@ -1403,6 +1414,22 @@ def fingerprint_bm2(
     fp.n_animals_by_dose = {
         dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
     }
+
+    # Every experiment's animals (the counts above are the first
+    # experiment's), with the sex the experiment's name gives.
+    for exp in experiments:
+        m = _BM2_SEX_PATTERN.search(exp.get("name", ""))
+        exp_sex = m.group(1).title() if m else None
+        for t in exp.get("treatments", []):
+            name = t.get("name") or ""
+            try:
+                dose_val = float(t.get("dose"))
+            except (TypeError, ValueError):
+                continue
+            if name:
+                fp.animal_doses.setdefault(name, dose_val)
+                if exp_sex:
+                    fp.animal_sexes.setdefault(name, exp_sex)
 
     # --- Extract chip/platform info ---
     chip_info = _extract_chip_info(first_exp)
@@ -2028,6 +2055,7 @@ def _check_redundancy(
 
 def _check_roster_consistency(
     fingerprints: dict[str, FileFingerprint],
+    structure=None,
 ) -> list[ValidationIssue]:
     """
     Top-level roster validation — runs before all other checks.
@@ -2073,15 +2101,19 @@ def _check_roster_consistency(
             files_by_sex.setdefault(sex, {})[fid] = set(fp.animal_ids)
 
     # For each sex, compute the universal roster (union) and report
-    # files that have fewer animals as informational warnings.
+    # files that have fewer animals as informational warnings.  With a study
+    # structure, the roster is the study's own (the workbooks'), and a file's
+    # animals are compared with the study's animals of the file's sex.
     for sex, files in files_by_sex.items():
         if not files:
             continue
 
-        # Universal roster = union of all animal IDs for this sex
         roster: set[str] = set()
-        for aids in files.values():
-            roster |= aids
+        if structure is not None:
+            roster = structure.roster(sex if sex in structure.sexes else None)
+        if not roster:
+            for aids in files.values():
+                roster |= aids
 
         # Find the file with the most animals (typically body weight)
         largest_fid = max(files, key=lambda f: len(files[f]))
@@ -2236,6 +2268,7 @@ def classify_derived_by_anchor(
 def validate_pool(
     dtxsid: str,
     fingerprints: dict[str, FileFingerprint],
+    structure=None,
 ) -> ValidationReport:
     """
     Run full cross-validation on a session's file pool.
@@ -2254,9 +2287,15 @@ def validate_pool(
 
     Builds a coverage matrix showing the tier completeness per domain.
 
+    With a study structure (study_structure, from the pool's study
+    workbooks), the roster is the study's, and every file is checked against
+    it (check_against_structure): an animal, dose, or sex the study doesn't
+    have, or an animal under another dose or sex, is an error.
+
     Args:
         dtxsid:       The DTXSID identifier for this session.
         fingerprints: Dict of file_id → FileFingerprint for all pool files.
+        structure:    The StudyStructure the workbooks describe, or None.
 
     Returns:
         ValidationReport with issues, coverage matrix, and completeness flag.
@@ -2275,8 +2314,11 @@ def validate_pool(
     all_issues: list[ValidationIssue] = []
 
     # --- Level 0: Roster consistency (top-level, blocks everything) ---
-    roster_issues = _check_roster_consistency(fingerprints)
+    roster_issues = _check_roster_consistency(fingerprints, structure)
     all_issues.extend(roster_issues)
+    if structure is not None:
+        from .study_structure import check_against_structure
+        all_issues.extend(check_against_structure(fingerprints, structure))
 
     # --- Level 1: Unassigned files block all processing ---
     # A file is unassigned if it has no platform AND no data_type — meaning

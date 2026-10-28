@@ -25,6 +25,10 @@ from .file_integrator import (
     _BM2_PLATFORM_MAP,
 )
 
+# ── The study the workbooks describe ──────────────────────────────────────
+from .study_workbook import StudyWorkbook, read_study_workbook, title_facts
+from .study_structure import StudyStructure, build_study_structure, check_against_structure
+
 # ── Pool integration (merge files → unified BMDProject JSON) ─────────────
 from .pool_integrator import (
     integrate_pool,
