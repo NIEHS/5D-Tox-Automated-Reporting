@@ -193,7 +193,8 @@ def materialize_result_sections(dtxsid: str, store: PoolStore, *, policy=None) -
 # ---------------------------------------------------------------------------
 
 def _study_structure(fps: dict, files_dir: Path):
-    """The StudyStructure the pool's study workbooks describe, or None."""
+    """The StudyStructure the pool's study workbooks describe (with the sample
+    sheets', which trace genomic samples to animals), or None."""
     from bmdx_pipe import build_study_structure
     from bmdx_pipe.file_integrator import TIER_XLSX
 
@@ -205,7 +206,9 @@ def _study_structure(fps: dict, files_dir: Path):
         for fp in fps.values()
         if get(fp, "tier") == TIER_XLSX and get(fp, "is_study_file") and get(fp, "platform")
     }
-    return build_study_structure(workbooks) if workbooks else None
+    sample_sheets = sorted(str(files_dir / get(fp, "filename")) for fp in fps.values()
+                           if get(fp, "data_type") == "sample_sheet")
+    return build_study_structure(workbooks, sample_sheets) if workbooks else None
 
 
 @step_provenance
