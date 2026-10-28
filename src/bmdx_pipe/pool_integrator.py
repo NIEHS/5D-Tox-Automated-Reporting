@@ -50,7 +50,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .experiment_metadata import attach_metadata, infer_experiment_metadata
+from .experiment_metadata import (
+    apply_described, attach_metadata, describe_from_structure, infer_experiment_metadata,
+    record_provenance, workbook_disagreements,
+)
 from .study_workbook import META_COLS, read_study_workbook
 
 # ---------------------------------------------------------------------------
@@ -831,7 +834,8 @@ def extract_xlsx_value_map(path: str) -> dict[tuple[str, str, str, str], dict]:
 # ---------------------------------------------------------------------------
 
 
-def _apply_approved_metadata(experiments: list[dict], approved: dict[str, dict]) -> int:
+def _apply_approved_metadata(experiments: list[dict], approved: dict[str, dict],
+                             provenance: dict[str, dict] | None = None) -> int:
     """Put each approved ExperimentDescription back on its experiment.
 
     Approval is the user's sign-off on an experiment's metadata; integration
@@ -839,13 +843,32 @@ def _apply_approved_metadata(experiments: list[dict], approved: dict[str, dict])
     it — NIEHS-13's heart experiment "rat_4D_HE_No0" re-inferred as "blood".
     Runs before the genomics sidecar and the .bm2 are written, so both carry
     the approved values.  Experiments the approval does not name keep their
-    inferred metadata.  Returns how many experiments were restored."""
+    inferred metadata.  A field the study workbooks state (``provenance``
+    "workbook") keeps the workbook's value: an approval cannot contradict it
+    (safeguards.inputs refuses one that tries).  Returns how many experiments
+    were restored."""
+    provenance = provenance if provenance is not None else {}
     restored = 0
     for exp in experiments:
-        desc = approved.get(exp.get("name", ""))
-        if isinstance(desc, dict):
-            exp["experimentDescription"] = dict(desc)
-            restored += 1
+        name = exp.get("name", "")
+        desc = approved.get(name)
+        if not isinstance(desc, dict):
+            continue
+        current = exp.get("experimentDescription") or {}
+        sources = provenance.setdefault(name, {})
+        new = dict(desc)
+        for k, src in sources.items():
+            if src != "workbook":
+                continue
+            if new.get(k) not in (None, current.get(k)):
+                logger.warning("%s: approved %s %r differs from the study workbook's %r; "
+                               "the workbook's stands", name, k, new[k], current.get(k))
+            new[k] = current.get(k)
+        exp["experimentDescription"] = new
+        for k, v in new.items():
+            if v is not None and sources.get(k) != "workbook":
+                sources[k] = "approved"
+        restored += 1
     if restored:
         logger.info("Approved metadata restored on %d experiment(s)", restored)
     return restored
@@ -1186,19 +1209,31 @@ def integrate_pool(
     else:
         integrated["_category_lookup"] = {}
 
-    # --- Infer structured ExperimentDescription metadata via LLM ---
+    # --- ExperimentDescription metadata: the workbooks first (ADR-0032) ---
+    # What the study workbooks state is set first and wins; the language model
+    # infers only what is left; a person's approved metadata is laid over the
+    # rest.  Each field's source is kept in _meta.metadata_provenance.
+    all_experiments = integrated.get("doseResponseExperiments", [])
+    provenance: dict[str, dict] = {}
+    described = describe_from_structure(all_experiments, study_structure)
+    apply_described(all_experiments, described, provenance)
+
     if test_article and llm_generate_json:
-        all_experiments = integrated.get("doseResponseExperiments", [])
+        before = {e["name"]: dict(e.get("experimentDescription") or {}) for e in all_experiments}
         descriptions = infer_experiment_metadata(
             experiments=all_experiments,
             source_files=source_files,
             test_article=test_article,
             llm_generate_json=llm_generate_json,
         )
+        for line in workbook_disagreements(described, descriptions):
+            logger.warning("Metadata inference disagrees with the study workbook — %s", line)
         attach_metadata(all_experiments, descriptions)
+        record_provenance(all_experiments, before, provenance, "llm")
 
     if approved_metadata:
-        _apply_approved_metadata(integrated.get("doseResponseExperiments", []), approved_metadata)
+        _apply_approved_metadata(all_experiments, approved_metadata, provenance)
+    integrated["_meta"]["metadata_provenance"] = provenance
 
     # --- Write _category_lookup to a separate sidecar file ---
     # The category lookup can be 10+ MB of JSON.  Keeping it out of

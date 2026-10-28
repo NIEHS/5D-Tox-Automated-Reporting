@@ -671,3 +671,86 @@ def attach_metadata(
                 if ed.get(field) is None:
                     ed[field] = value
             exp["experimentDescription"] = ed
+
+
+# ---------------------------------------------------------------------------
+# What the study workbooks state (ADR-0032) — read before anything is inferred
+# ---------------------------------------------------------------------------
+
+# The experimentDescription fields the study workbooks state: the design their
+# title gives (study-wide), and each experiment's sex (its animals' sex in the
+# workbooks' roster).
+WORKBOOK_FIELDS = ("species", "strain", "articleRoute", "administrationMeans",
+                   "studyDuration", "sex")
+
+
+def describe_from_structure(experiments: list[dict], structure: dict | None) -> dict[str, dict]:
+    """{experiment name: {field: value}} the study workbooks state.
+
+    ``structure`` is a study_structure.StudyStructure as a dict.  The design
+    (species, strain, route, duration) is the whole study's, so every
+    experiment gets it, genomic ones too.  The sex is an experiment's when all
+    its animals the roster knows share one (a genomic experiment's samples are
+    not animal IDs, so it gets none here)."""
+    if not structure:
+        return {}
+    design = {k: v for k, v in (structure.get("design") or {}).items() if k in WORKBOOK_FIELDS}
+    animals = structure.get("animals") or {}
+    out: dict[str, dict] = {}
+    for exp in experiments:
+        desc = dict(design)
+        sexes = {(animals.get(str(t.get("name"))) or {}).get("sex")
+                 for t in exp.get("treatments") or [] if isinstance(t, dict)} - {None}
+        if len(sexes) == 1:
+            desc["sex"] = sexes.pop().lower()
+        if desc:
+            out[exp["name"]] = desc
+    return out
+
+
+def apply_described(experiments: list[dict], described: dict[str, dict],
+                    provenance: dict[str, dict], source: str = "workbook") -> int:
+    """Put ``described`` ({experiment: {field: value}}) on the experiments,
+    over whatever they carry, and record ``source`` as each field's provenance.
+    A value it replaces is logged.  Returns the fields set."""
+    n = 0
+    for exp in experiments:
+        fields = described.get(exp.get("name"))
+        if not fields:
+            continue
+        ed = exp.get("experimentDescription")
+        if not isinstance(ed, dict):
+            ed = exp["experimentDescription"] = {}
+        for k, v in fields.items():
+            if ed.get(k) not in (None, v):
+                logger.warning("%s: %s %r replaced by the study workbook's %r",
+                               exp.get("name"), k, ed[k], v)
+            ed[k] = v
+            provenance.setdefault(exp["name"], {})[k] = source
+            n += 1
+    return n
+
+
+def record_provenance(experiments: list[dict], before: dict[str, dict],
+                      provenance: dict[str, dict], source: str) -> None:
+    """Mark ``source`` on every field an experiment's description gained since
+    ``before`` ({name: description copy})."""
+    for exp in experiments:
+        ed = exp.get("experimentDescription") or {}
+        prior = before.get(exp.get("name")) or {}
+        for k, v in ed.items():
+            if v is not None and prior.get(k) is None and k not in provenance.get(exp["name"], {}):
+                provenance.setdefault(exp["name"], {})[k] = source
+
+
+def workbook_disagreements(described: dict[str, dict], inferred: dict[str, dict]) -> list[str]:
+    """Where the language model inferred another value than the workbooks
+    state (the workbook's value stands; this is for the log)."""
+    out = []
+    for name, fields in described.items():
+        guess = inferred.get(name) or {}
+        for k, v in fields.items():
+            g = guess.get(k)
+            if g not in (None, v):
+                out.append(f"{name}: {k} inferred {g!r}, the workbook states {v!r}")
+    return out
