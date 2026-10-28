@@ -59,3 +59,16 @@ def test_an_approval_cannot_override_the_workbook():
         "administrationMeans": "workbook", "sex": "workbook", "organ": "approved"}
     # Without a structure nothing is stated: today's behaviour.
     assert describe_from_structure(_exps(), None) == {}
+
+
+def test_a_platform_with_only_its_workbook_stops_integration(tmp_path):
+    import pytest
+    from bmdx_pipe.pool_integrator import integrate_pool
+
+    (tmp_path / "files").mkdir()
+    (tmp_path / "files" / "S1_Individual_Animal_Body_Weight_Data.xlsx").write_bytes(b"")
+    fps = {"w": {"filename": "S1_Individual_Animal_Body_Weight_Data.xlsx", "file_type": "xlsx",
+                 "data_type": "tox_study", "platform": "Body Weight"}}
+    matrix = {"Body Weight|tox_study": {"xlsx": ["w"], "txt_csv": [], "bm2": []}}
+    with pytest.raises(ValueError, match="only its workbook"):
+        integrate_pool("DTXSID", str(tmp_path), fps, matrix, [])

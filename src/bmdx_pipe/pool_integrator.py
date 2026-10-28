@@ -893,7 +893,9 @@ def integrate_pool(
       1. If the user resolved a conflict → use that chosen file.
       2. Otherwise, prefer .bm2 (has BMD results), then txt/csv, then xlsx.
       3. Collect .bm2 and .txt/.csv file paths for Java integration.
-      4. Convert .xlsx files to pivot .txt format for Java import.
+      4. Never merge a study workbook itself: its data comes as the pivots
+         validation derived from it; a platform with only its workbook
+         stops integration (ValueError).
       5. Call IntegrateProject (Java) to merge everything with native
          BMDExpress classes and Jackson NaN-safe serialization.
       6. Read back the JSON, add _meta and _category_lookup for the
@@ -1053,9 +1055,10 @@ def integrate_pool(
                 # A study workbook's data reaches integration as the pivots
                 # validation derived from it (study_workbook_to_pool_files);
                 # the workbook itself is never merged.  Chosen here means none
-                # were derived — validation has to run again.
-                logger.warning("Platform %s has only its workbook %s and no pivot derived "
-                               "from it — validate the pool again", platform_key, filename)
+                # were derived (or validation set them aside): the platform's
+                # data would be missing, so integration stops.
+                raise ValueError(f"Platform {platform_key} has only its workbook {filename} "
+                                 "and no pivot derived from it — validate the pool again")
             else:
                 logger.warning("Unknown tier %s for platform %s — skipping", chosen_tier, platform_key)
 
