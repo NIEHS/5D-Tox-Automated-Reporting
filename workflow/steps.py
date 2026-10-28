@@ -514,11 +514,6 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # After the cache is set, so the design lands on this integration, not the last.
     reapply_study_design(dtxsid, store)
 
-    # Measurement units onto the sidecars from any original study workbook in
-    # the pool (the truth CSVs they were derived from carry none).
-    from pipeline.sidecar_units import stamp_sidecar_units
-    stamp_sidecar_units(fps, session_dir)
-
     # Invalidate all per-section caches from previous integration runs —
     # the input data has changed, so all cached results are stale.
     for pattern in ("_cache_*.json", "_processed_cache_*.json"):

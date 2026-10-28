@@ -1,17 +1,21 @@
 """
-value_validation.py — value-level provenance cross-check (xlsx ↔ derived CSV).
+value_validation.py — value-level provenance cross-check (study workbook ↔ other sources).
 
-The customer supplies the animal roster as a derived tox_study CSV, overriding the
-original NTP study xlsx. Structural validation (validate_pool) checks counts and
-dose groups but never the measured VALUES. This module adds the strong guarantee:
-when the original study xlsx is present alongside the derived CSV for a platform,
-every per-animal measured value must match — otherwise the report would run on
-data that no longer traces to the source study.
+The study workbooks drive the pool (ADR-0032): validation derives each covered
+platform's pivots and sidecars from its workbook (pipeline.pool_fingerprints)
+and sets every other source of that platform aside in _originals/ — a
+tox_study CSV, or pivots derived from one.  Structural validation (validate_pool)
+checks counts and dose groups but never the measured VALUES; this module checks
+that every set-aside source agrees with the workbook value by value.  A
+divergence is a blocking error: the session was given data that does not trace
+to the study.
 
-It runs from workflow.steps.validate_step (which has the session files dir;
-validate_pool receives only fingerprints), and appends ValidationIssue dicts into
-the report. A session with no original xlsx simply gets a WARNING that its derived
+A platform with a derived tox_study CSV and no workbook gets a WARNING that its
 data is unverified — it is never blocked.
+
+It runs from workflow.steps.validate_step (which has the session directory;
+validate_pool receives only fingerprints), and appends ValidationIssue dicts
+into the report.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from pathlib import Path
 from bmdx_pipe import extract_xlsx_value_map
 from bmdx_pipe.file_integrator import ValidationIssue, TIER_XLSX
 
-from tables.table_builder_common import load_sidecar, find_sidecar_paths
+from tables.table_builder_common import load_sidecar
 
 # How many concrete example divergences to embed in an issue's details payload.
 _MAX_EXAMPLES = 5
@@ -73,7 +77,7 @@ def _sidecar_value_map(sc: dict) -> dict[tuple[str, str, str, str], dict]:
     return out
 
 
-def _compare_platform(platform, xmap, smap, files_involved) -> list[ValidationIssue]:
+def _compare_platform(platform, xmap, smap, files_involved, source=None) -> list[ValidationIssue]:
     """Compare one platform's xlsx value map against its CSV sidecar value map.
     Emits at most one issue per issue_type (capped, with examples in details)."""
     # issue_type namespace is distinct from validate_pool's STRUCTURAL checks
@@ -122,8 +126,8 @@ def _compare_platform(platform, xmap, smap, files_involved) -> list[ValidationIs
         first = hits[0]
         ex = first[0]
         msg = (
-            f"{platform}: {len(hits)} of {total} records in the derived CSV "
-            f"differ from the source NTP xlsx ({issue_type}; e.g. animal "
+            f"{platform}: {len(hits)} of {total} records in "
+            f"{source or 'the derived CSV'} differ from the study workbook ({issue_type}; e.g. animal "
             f"{ex[1]} {ex[3]} '{ex[2]}': xlsx={first[1]!r} csv={first[2]!r}). "
             f"Derived data must trace back to the source study."
         )
@@ -154,6 +158,44 @@ def study_workbooks(fps, session_dir) -> dict[str, tuple[str, str]]:
     return out
 
 
+def _other_sources_value_maps(session_dir: Path, platform: str, workbook: str) -> dict[str, dict]:
+    """{file name: value map} for every source of ``platform`` other than
+    ``workbook``: sidecars in files/ or _originals/ written from another file,
+    and the long-format tox_study CSVs in _originals/ (converted in a scratch
+    folder).  Each is compared with the workbook on its own."""
+    import tempfile
+    from bmdx_pipe import tox_study_csv_to_pivot_txt
+    from bmdx_pipe.file_integrator import detect_platform_and_type
+
+    out: dict[str, dict] = {}
+    for folder in (session_dir / "files", session_dir / "_originals"):
+        for sc_path in sorted(folder.glob("*.sidecar.json")):
+            try:
+                sc = load_sidecar(str(sc_path))
+            except Exception:
+                continue
+            if sc.get("platform") == platform and sc.get("source") != workbook:
+                out[sc_path.name] = _sidecar_value_map(sc)
+    originals = session_dir / "_originals"
+    if not originals.is_dir():
+        return out
+    for f in sorted(originals.glob("*.csv")) + sorted(originals.glob("*.txt")):
+        if detect_platform_and_type(f.name, f.suffix.lstrip("."), f.stat().st_size) \
+                != (platform, "tox_study"):
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                tox_study_csv_to_pivot_txt(str(f), tmp, platform, "tox_study")
+            except Exception:
+                continue
+            smap: dict = {}
+            for sc_path in Path(tmp).glob("*.sidecar.json"):
+                smap.update(_sidecar_value_map(load_sidecar(str(sc_path))))
+        if smap:
+            out[f.name] = smap
+    return out
+
+
 def check_value_provenance(dtxsid, fps, coverage_matrix, session_dir) -> list[dict]:
     """Value-level xlsx↔derived-CSV cross-check for a session.
 
@@ -180,26 +222,25 @@ def check_value_provenance(dtxsid, fps, coverage_matrix, session_dir) -> list[di
             if dtype == "tox_study":
                 tox_study_platforms.add(plat)
 
-    # 1. Platforms with an original xlsx → value cross-check against the sidecar.
+    # 1. Platforms with a study workbook: the pool's data for them is derived
+    #    from it (pipeline.pool_fingerprints), so what is checked is every OTHER
+    #    source of the platform the session was given — a CSV or pivot the
+    #    workbook superseded, kept in _originals/.  Each must agree with it.
     for platform, (xlsx_path, xlsx_fid) in study_xlsx.items():
-        sidecar_paths = find_sidecar_paths(str(session_dir), platform)
-        if not sidecar_paths:
-            continue  # xlsx-only platform (e.g. Clinical Observations) — nothing to compare
+        sources = _other_sources_value_maps(session_dir, platform, Path(xlsx_path).name)
+        if not sources:
+            continue
         try:
             xmap = extract_xlsx_value_map(xlsx_path)
         except Exception:
             continue
-        if not xmap:
-            continue
-        smap: dict = {}
-        sidecar_fids = []
-        for sc_path in sidecar_paths.values():
-            try:
-                smap.update(_sidecar_value_map(load_sidecar(sc_path)))
-            except Exception:
-                continue
-        files_involved = [xlsx_fid]
-        issues.extend(_compare_platform(platform, xmap, smap, files_involved))
+        for source, smap in sources.items():
+            # Only the sexes the source covers (a male-only CSV is not missing
+            # the females).
+            sexes = {k[0] for k in smap}
+            xs = {k: v for k, v in xmap.items() if k[0] in sexes}
+            if xs:
+                issues.extend(_compare_platform(platform, xs, smap, [xlsx_fid], source))
 
     # 2. Platforms with a derived CSV but NO original xlsx → unverified warning.
     for platform in sorted(tox_study_platforms - set(study_xlsx)):

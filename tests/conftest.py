@@ -156,7 +156,9 @@ def reference_session(tmp_path, monkeypatch):
     CSV per sex + its .units.json companion) into sessions/<dtxsid>/files/,
     then pool fingerprinting converts the CSVs to pivots + sidecars exactly as
     an upload does.  `with_workbooks=True` also places the workbooks in the
-    pool (the source-of-truth xlsx a customer may supply alongside the CSVs).
+    pool (the source-of-truth xlsx a customer may supply alongside the CSVs);
+    they then drive, and the CSVs are set aside.  `csvs=False` places the
+    workbooks alone.
 
         session = reference_session("NIEHS-10", "DTXSID50469320")
         sidecars = find_sidecar_paths(str(session), "Tissue Concentration")
@@ -174,7 +176,7 @@ def reference_session(tmp_path, monkeypatch):
     _clear_server_state()
 
     def build(report: str, dtxsid: str, *, with_workbooks: bool = False,
-              units: bool = True, study: str = "") -> Path:
+              units: bool = True, study: str = "", csvs: bool = True) -> Path:
         files = sessions_path / dtxsid / "files"
         files.mkdir(parents=True, exist_ok=True)
         workbooks = sorted((REFERENCE_DIR / report).glob(f"{study}*Individual_Animal_*.xlsx"))
@@ -182,9 +184,10 @@ def reference_session(tmp_path, monkeypatch):
             # The species of a multi-species lab workbook: its study's siblings say.
             prefix = xlsx.name.split("_", 1)[0]
             species = package_species([w.name for w in workbooks if w.name.startswith(prefix)])
-            summary = convert_workbook(str(xlsx), str(files), species)
-            assert summary["status"] in ("ok", "skipped"), summary
-            if with_workbooks:
+            if csvs:
+                summary = convert_workbook(str(xlsx), str(files), species)
+                assert summary["status"] in ("ok", "skipped"), summary
+            if with_workbooks or not csvs:
                 shutil.copy2(xlsx, files / xlsx.name)
         if not units:
             for companion in files.glob("*.units.json"):
