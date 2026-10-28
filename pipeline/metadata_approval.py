@@ -37,13 +37,19 @@ def approve_experiment_metadata(dtxsid: str, metadata_by_name: dict, *, merge: b
         raise LookupError("No integrated data found")
     sess_path = session_dir(dtxsid)
 
+    # What the study workbooks state stays (ADR-0032): an approval does not
+    # replace it (safeguards.inputs refuses one that contradicts it).
+    from pipeline.study_design import workbook_facts
+    fixed = workbook_facts(integrated)
+
     updated = 0
     for exp in integrated.get("doseResponseExperiments", []):
         name = exp.get("name", "")
         if name in metadata_by_name:
             given = metadata_by_name[name]
             exp["experimentDescription"] = (
-                {**(exp.get("experimentDescription") or {}), **given} if merge else given)
+                {**(exp.get("experimentDescription") or {}), **given} if merge else dict(given))
+            exp["experimentDescription"].update(fixed.get(name) or {})
             updated += 1
 
     # The genomics sidecar was written at integration from the metadata of

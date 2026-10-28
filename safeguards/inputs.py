@@ -4,6 +4,10 @@ anything is written: the study design and the experiment details must use the
 controlled vocabularies (bmdx_pipe.VOCABULARIES), and name experiments the
 dataset has.
 
+A statement may not contradict what the study workbooks state (ADR-0032):
+species, strain, route, duration, an experiment's sex.  Those are the study's
+own record; a contradiction is refused (``facts_contradict_workbook``).
+
 A refused statement writes nothing; the refusal (``facts_invalid``) lists
 every problem at once, so a person corrects them in one go. The core steps
 (workflow.steps.record_study_design, pipeline.metadata_approval) write what
@@ -46,24 +50,56 @@ def experiment_metadata_errors(given, integrated: dict | None, vocabularies: dic
     return errors
 
 
+def workbook_contradictions(given: dict, integrated: dict | None) -> list[str]:
+    """Where ``{experiment name: {field: value}}`` contradicts what the study
+    workbooks state for the dataset (pipeline.study_design.workbook_facts)."""
+    from pipeline.study_design import workbook_facts
+
+    facts = workbook_facts(integrated)
+    out = []
+    for name, fields in (given or {}).items():
+        for key, value in (fields or {}).items():
+            stated = (facts.get(name) or {}).get(key)
+            if stated is not None and _stated(value) and value != stated:
+                out.append(f"{name}: {key}={value!r}, but the study workbooks state {stated!r}")
+    return out
+
+
 def require_valid_design(dtxsid: str, fields) -> None:
     """The study design's fields and values (pipeline.study_design.DESIGN_FIELDS,
-    the vocabularies)."""
+    the vocabularies), and no field the study workbooks state otherwise."""
     from bmdx_pipe import VOCABULARIES
+    from pipeline.integrated_io import load_integrated
     from pipeline.study_design import design_field_errors
 
     errors = design_field_errors(fields, VOCABULARIES)
     if errors:
         raise _invalid(dtxsid, "the study design", errors)
+    integrated = load_integrated(dtxsid)
+    names = [e.get("name", "") for e in (integrated or {}).get("doseResponseExperiments") or []]
+    contradictions = sorted({c.split(": ", 1)[1] for c in workbook_contradictions(
+        {n: fields for n in names}, integrated)})
+    if contradictions:
+        raise _contradicts(dtxsid, "the study design", contradictions)
 
 
 def require_valid_experiment_metadata(dtxsid: str, given) -> None:
     from bmdx_pipe import VOCABULARIES
     from pipeline.integrated_io import load_integrated
 
-    errors = experiment_metadata_errors(given, load_integrated(dtxsid), VOCABULARIES)
+    integrated = load_integrated(dtxsid)
+    errors = experiment_metadata_errors(given, integrated, VOCABULARIES)
     if errors:
         raise _invalid(dtxsid, "the experiment details", errors)
+    contradictions = workbook_contradictions(given, integrated)
+    if contradictions:
+        raise _contradicts(dtxsid, "the experiment details", contradictions)
+
+
+def _contradicts(dtxsid: str, what: str, errors: list[str]) -> Refused:
+    return Refused("facts_contradict_workbook",
+                   f"{what} for {dtxsid} refused: " + "; ".join(errors),
+                   status_code=422, details={"what": what, "errors": errors})
 
 
 def _invalid(dtxsid: str, what: str, errors: list[str]) -> Refused:

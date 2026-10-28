@@ -221,6 +221,11 @@ REFUSALS: dict[str, Refusal] = {
         "Some of what was stated about {what} can't be used, so nothing was saved. "
         "The details list each problem: a value that isn't one of the choices "
         "offered, or an experiment the study doesn't have."), "facts"),
+    "facts_contradict_workbook": Refusal(422, (
+        "Some of what was stated about {what} contradicts the study's own workbooks, "
+        "so nothing was saved. The workbooks are the study's record of its design and "
+        "its animals; the details list each fact and what the workbooks say. Facts the "
+        "workbooks don't record, such as the vehicle, can still be stated."), "facts"),
     # ── the Background's sources (safeguards.sources) ────────────────────────
     "background_sources_unreachable": Refusal(503, (
         "The Background can't be written now: {sources} could not be reached, and "
