@@ -51,6 +51,7 @@ from pathlib import Path
 
 from bmdx_pipe import (
     FileFingerprint,
+    derived_source,
     fingerprint_file,
     lightweight_validate,
 )
@@ -223,27 +224,6 @@ def workbook_platforms(files_dir) -> dict[str, str]:
         if "Data" in sheets and any("Key to" in s for s in sheets):
             out.setdefault(platform, f.name)
     return out
-
-
-def derived_source(path) -> str | None:
-    """The file a derived file was written from: a derived CSV's first line
-    "# Source: <file>", or a pivot's (.txt) sidecar "source".  None for an
-    original."""
-    p = Path(path)
-    try:
-        with open(p, encoding="utf-8", errors="replace") as f:
-            first = f.readline()
-    except OSError:
-        return None
-    if first.startswith("# Source:"):
-        return first.split(":", 1)[1].strip()
-    sidecar = p.with_suffix(".sidecar.json")
-    if p.suffix == ".txt" and sidecar.exists():
-        try:
-            return json.loads(sidecar.read_text()).get("source")
-        except (OSError, ValueError):
-            return None
-    return None
 
 
 def _set_aside(session_dir: Path, paths: list[Path]) -> list[str]:

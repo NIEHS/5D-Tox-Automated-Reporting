@@ -3,18 +3,23 @@
 pool inputs rlm-bmdx ingests.
 
 CEBS publishes each study's apical data as NTP "Individual Animal" workbooks
-(`Key to Column Labels` + `Data` sheets).  The pool's accepted apical source is
-the long-format `*_truth_<sex>.csv` (one row per animal/observation, NTP columns):
-the filename sets platform + `tox_study`, and on upload `fingerprint_and_store`
-converts it into the wide BMDExpress pivot + per-animal `.sidecar.json`.  The
-reference set's truth CSVs are exactly the workbook `Data` sheet split by sex —
-`tests/unit/test_cebs_to_pool.py` pins that by regenerating them byte-for-byte
-from the reference workbooks.
+(`Key to Column Labels` + `Data` sheets).  These study workbooks drive the
+pool (ADR-0032): validation derives each platform's BMDExpress pivot and
+per-animal sidecar from its workbook, and checks every other file against the
+study they describe.  So a standard workbook goes into the pool as published,
+and any other layout (below) is written as a standard workbook of the same
+name, with a "Conversion" sheet saying what was converted.  The package's
+sample sheet, which traces each genomic sample to its animal
+(bmdx_pipe.sample_sheet), is copied too.
 
-The `Data` headers carry no units; the Key sheet states them per column, and
-they differ by study (plasma ng/ml in NIEHS-07 – -09, ug/ml in NIEHS-10).  Each
-CSV gets a companion `<stem>_truth_<sex>.units.json` ({column: unit},
-bmdx_pipe.key_sheet_units) that the pool's ingest records in the sidecar.
+`--csv` writes the long-format truth CSVs instead (`*_truth_<sex>.csv`, the
+workbook `Data` sheet split by sex), the route for a study supplied as CSVs:
+the filename sets platform + `tox_study`, and on upload `fingerprint_and_store`
+converts it into the pivot + sidecar.  The `Data` headers carry no units; the
+Key sheet states them per column, and they differ by study (plasma ng/ml in
+NIEHS-07 – -09, ug/ml in NIEHS-10), so each CSV gets a companion
+`<stem>_truth_<sex>.units.json` ({column: unit}, bmdx_pipe.key_sheet_units).
+`tests/unit/test_cebs_to_pool.py` pins both routes on the reference workbooks.
 
 NIEHS-02 … 05 publish the CEBS database-export layout instead of Key/Data
 (one row per animal per measurement); tooling.cebs_db_export converts it to
@@ -39,9 +44,10 @@ the bundle directory to the workbooks converted.
 The 2025 (DTT) workbooks changed the schema: the `Data` sheet has NO `Sex`
 column (the studies are single-sex) and says `Study Number` instead of
 `NTP Study Number`.  The sex is stated only in the Key sheet's study title
-("… in Female Sprague Dawley Rats …").  We fill the `Sex` column from that title
-— an inference from the file's own text, reported in the run summary — and
-refuse a workbook whose title names both sexes or neither.
+("… in Female Sprague Dawley Rats …").  The `Sex` column is filled from that
+title — an inference from the file's own text, reported in the run summary; by
+bmdx_pipe.study_workbook whenever the workbook is read, and here for the CSVs —
+and a workbook whose title names both sexes or neither is refused.
 
 Gene expression: the BMDExpress project's experiment names are tissue codes
 (`rat_4D_HE_No0`).  The organ is taken from DATA, not the code: each project
@@ -67,6 +73,7 @@ import glob
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 
 import openpyxl
@@ -216,8 +223,18 @@ def package_species(filenames: list[str]) -> str | None:
 
 
 def convert_workbook(path: str, out_dir: str, species: str | None = None,
-                     mg_levels: list[float] | None = None, study: str | None = None) -> dict:
-    """Write one `<stem>_truth_<sex>.csv` per sex.  Returns a summary dict.
+                     mg_levels: list[float] | None = None, study: str | None = None,
+                     as_csv: bool = False) -> dict:
+    """Put one Individual Animal workbook in the pool as a study workbook (the
+    workbooks drive, ADR-0032).  Returns a summary dict.
+
+    A standard Key/Data workbook is copied as it is.  Any other layout — the
+    lab results workbook (NIEHS-12, 13), the CEBS database export (NIEHS-02 …
+    05), molar doses converted to mg/kg — is written as a standard workbook of
+    the same name, the conversion recorded on its "Conversion" sheet.
+    ``as_csv`` writes the truth CSVs instead (`<stem>_truth_<sex>.csv` per sex,
+    the route for a study supplied as CSVs).
+
     `species` picks the sheet of a multi-species lab results workbook;
     `mg_levels` (project_dose_levels) converts molar doses to mg/kg.  A
     workbook whose own Study Number is not `study` (the study being built) is
@@ -240,8 +257,13 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
                 sheets[sheet], name.split("_", 1)[0])
         except ValueError as e:
             return {"file": name, "status": "error", "reason": str(e)}
-        return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), lab_units,
-                           [f"sheet '{sheet}'"] + notes, None)
+        notes = [f"sheet '{sheet}'"] + notes
+        if as_csv:
+            return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), lab_units,
+                               notes, None)
+        return _write_workbook(name, out_dir, header, body, lab_units, notes,
+                               dose_unit=key_sheet_dose_unit(wb),
+                               note="the lab results workbook's sheet converted to Key/Data columns")
     if "Data" not in wb.sheetnames:
         # NIEHS-02 … 05: the CEBS database-export layout (tooling.cebs_db_export).
         sheet = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
@@ -259,8 +281,12 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
                                        if len(export_dose_units) == 1 else None, mg_levels, notes)
         except ValueError as e:
             return {"file": name, "status": "error", "reason": f"dose conversion: {e}"}
-        return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), export_units,
-                           notes, None, dose_unit)
+        if as_csv:
+            return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), export_units,
+                               notes, None, dose_unit)
+        return _write_workbook(name, out_dir, header, body, export_units, notes,
+                               dose_unit=dose_unit,
+                               note="the CEBS database export converted to Key/Data columns")
     rows = [list(r) for r in wb["Data"].iter_rows(values_only=True)]
     header = [_cell(c) for c in rows[0]]
     body = [r for r in rows[1:] if any(c is not None and str(c).strip() for c in r)]
@@ -291,11 +317,22 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
 
     units = {col: u for col, u in key_sheet_units(path).items() if col in header}
     body = [list(r) for r in body]
+    recorded = key_sheet_dose_unit(wb)
     try:
-        dose_unit = _convert_doses(header, body, key_sheet_dose_unit(wb), mg_levels, notes)
+        dose_unit = _convert_doses(header, body, recorded, mg_levels, notes)
     except ValueError as e:
         return {"file": name, "status": "error", "reason": f"dose conversion: {e}"}
-    return _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled, dose_unit)
+    if as_csv:
+        return _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled,
+                           dose_unit)
+    if dose_unit == recorded:
+        # The workbook as published: copied, untouched (the reader fills a
+        # missing Sex column from the title, as this converter would).
+        shutil.copy2(path, os.path.join(out_dir, name))
+        return {"file": name, "status": "ok", "written": [name], "notes": notes,
+                "sex_filled": filled, "units": len(units), "dose_unit": dose_unit}
+    return _write_workbook(name, out_dir, header, body, units, notes, dose_unit=dose_unit,
+                           key=wb["Key to Column Labels"], note=notes[-1], sex_filled=filled)
 
 
 def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled,
@@ -318,6 +355,57 @@ def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled
             Path(out).with_suffix(".units.json").write_text(json.dumps(units, indent=2) + "\n")
     return {"file": name, "status": "ok", "written": written, "notes": notes,
             "sex_filled": filled, "units": len(units), "dose_unit": dose_unit}
+
+
+def _write_workbook(name, out_dir, header, body, units, notes, *, dose_unit=None, key=None,
+                    note="", sex_filled=None) -> dict:
+    """A standard study workbook (Key + Data sheets) named ``name``.
+
+    The Key sheet keeps the source's column-D study identity (title, study
+    type, number, date) and explanations when there is one (``key``); doses
+    are explained in ``dose_unit``, endpoints with their ``units``.  The
+    "Conversion" sheet says what was converted (``notes``)."""
+    wb = openpyxl.Workbook()
+    ks = wb.active
+    ks.title = "Key to Column Labels"
+    identity, explained = ["", "", "", ""], {}
+    if key is not None:
+        rows = [[_cell(c) for c in r] for r in key.iter_rows(values_only=True)]
+        identity = [(r[3] if len(r) > 3 else "") for r in (rows + [[]] * 4)[:4]]
+        explained = {r[0].strip(): r[1] for r in rows[1:] if len(r) > 1 and r[0] and r[1]}
+    ks.append(["Column Label", "Explanation of Column Label", None, identity[0] or None])
+    lines = []
+    for col in header:
+        if col == "Concentration" and dose_unit:
+            text = f"Exposure in {dose_unit}" if dose_unit.lower() == "ppm" else f"Dose in {dose_unit}"
+        elif col in units:
+            text = f"{col} in {units[col]}"
+        else:
+            text = explained.get(col, col)
+        lines.append([col, text])
+    for i, line in enumerate(lines):
+        ks.append(line + [None, identity[i + 1] if i + 1 < 4 and identity[i + 1] else None])
+    ds = wb.create_sheet("Data")
+    ds.append(list(header))
+    for r in body:
+        ds.append([_cell(c) for c in r[:len(header)]])
+    cs = wb.create_sheet("Conversion")
+    cs.append([f"Written by tooling.cebs_to_pool from the published {name}: {note}."])
+    for n in notes:
+        cs.append([n])
+    wb.save(os.path.join(out_dir, name))
+    return {"file": name, "status": "ok", "written": [name], "notes": notes,
+            "sex_filled": sex_filled, "units": len(units), "dose_unit": dose_unit}
+
+
+def sample_sheets(package_dir: str) -> list[str]:
+    """The package's sample sheets (bmdx_pipe.sample_sheet: a genomic sample
+    → its animal), in its unzipped animal metadata."""
+    from bmdx_pipe.sample_sheet import is_sample_sheet
+
+    found = glob.glob(os.path.join(package_dir, "_unzipped", "*Metadata*", "**", "*.xlsx"),
+                      recursive=True)
+    return sorted(f for f in found if is_sample_sheet(f))
 
 
 def _by_ref(node, out: dict | None = None) -> dict:
@@ -376,6 +464,20 @@ def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> d
     return out
 
 
+def _sexes_written(summary: dict, out_dir: str) -> set[str]:
+    """The sexes a conversion wrote: from the truth CSVs' names, or the study
+    workbook's animals."""
+    out = set()
+    for w in summary.get("written") or []:
+        if w.endswith(".csv"):
+            out.add(w.rsplit("_", 1)[1][:-4])
+        else:
+            from bmdx_pipe import read_study_workbook
+            out.update(ob.sex.lower() for ob in read_study_workbook(os.path.join(out_dir, w))
+                       .observations() if ob.sex)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--package", required=True, help="CEBS package dir (assets/cebs/<ID>)")
@@ -386,6 +488,8 @@ def main() -> None:
     ap.add_argument("--metadata-out")
     ap.add_argument("--mg-per-kg-from", help="the genomic BMDExpress project (.json) whose mg/kg "
                     "dose levels a molar workbook dose is converted to")
+    ap.add_argument("--csv", action="store_true",
+                    help="write the truth CSVs instead of the study workbooks")
     a = ap.parse_args()
     mg_levels = project_dose_levels(a.mg_per_kg_from) if a.mg_per_kg_from else None
 
@@ -397,12 +501,26 @@ def main() -> None:
     if a.bundle:
         paths += sorted(glob.glob(os.path.join(a.bundle, pattern)))
     failed = 0
+    done: set[tuple[str, str]] = set()
     for path in paths:
-        s = convert_workbook(path, a.out, species, mg_levels, a.prefix or None)
+        name = os.path.basename(path)
+        key = (name.split("_", 1)[0], workbook_stem(name) or name)
+        if key in done:
+            # The bundle repeats a workbook the package has: the package's counts.
+            print(json.dumps({"file": name, "status": "skipped",
+                              "reason": "the package's workbook for this platform is used"}))
+            continue
+        s = convert_workbook(path, a.out, species, mg_levels, a.prefix or None, as_csv=a.csv)
         print(json.dumps(s))
         failed += s.get("status") == "error"
         if s.get("status") == "ok":
-            sexes.update(w.rsplit("_", 1)[1][:-4] for w in s["written"])
+            done.add(key)
+            sexes.update(_sexes_written(s, a.out))
+    if not a.csv:
+        for sheet in sample_sheets(a.package):
+            shutil.copy2(sheet, os.path.join(a.out, os.path.basename(sheet)))
+            print(json.dumps({"file": os.path.basename(sheet), "status": "ok",
+                              "written": [os.path.basename(sheet)], "notes": ["sample sheet"]}))
     if a.genomic_bm2_json and a.metadata_out:
         study_sex = sexes.pop().title() if len(sexes) == 1 else None
         meta = genomic_metadata(a.genomic_bm2_json, a.package, study_sex)

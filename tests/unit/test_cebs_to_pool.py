@@ -1,10 +1,13 @@
-"""tooling.cebs_to_pool — CEBS Individual Animal workbooks → pool truth CSVs.
+"""tooling.cebs_to_pool — CEBS Individual Animal workbooks → the pool.
 
-The supplied PFHxSAm package's truth CSVs were hand-built from the NIEHS-10
-workbooks; the converter must regenerate them byte-for-byte from the published
-CEBS workbooks (tests/fixtures/reference/NIEHS-10), so a CEBS package ingests
-the same way the supplied one did.  The 2025 (DTT) schema has no Sex column; the sex is
-filled from the Key sheet's study title, and an ambiguous title is refused.
+The study workbooks drive (ADR-0032): a standard Key/Data workbook goes into
+the pool as published; another layout is written as a standard workbook.  The
+CSV route (``as_csv``) remains for a study supplied as truth CSVs: the
+supplied PFHxSAm package's CSVs were hand-built from the NIEHS-10 workbooks,
+and the converter regenerates them byte-for-byte from the published CEBS
+workbooks (tests/fixtures/reference/NIEHS-10).  The 2025 (DTT) schema has no
+Sex column; the sex is filled from the Key sheet's study title, and an
+ambiguous title is refused.
 """
 
 from pathlib import Path
@@ -17,10 +20,17 @@ from tooling.cebs_to_pool import convert_workbook, key_sheet_sex, workbook_stem
 from tests.conftest import GIVEN_PFHXSAM_DIR, REFERENCE_DIR
 
 
+def test_reference_workbooks_go_into_the_pool_as_published(tmp_path):
+    for xlsx in sorted((REFERENCE_DIR / "NIEHS-10").glob("*Individual_Animal_*.xlsx")):
+        summary = convert_workbook(str(xlsx), str(tmp_path))
+        assert summary["status"] == "ok" and summary["written"] == [xlsx.name], summary
+        assert (tmp_path / xlsx.name).read_bytes() == xlsx.read_bytes()
+
+
 def test_reference_workbooks_regenerate_truth_csvs_byte_for_byte(tmp_path):
     written = []
     for xlsx in sorted((REFERENCE_DIR / "NIEHS-10").glob("*Individual_Animal_*.xlsx")):
-        summary = convert_workbook(str(xlsx), str(tmp_path))
+        summary = convert_workbook(str(xlsx), str(tmp_path), as_csv=True)
         assert summary["status"] == "ok", summary
         assert summary["sex_filled"] is None  # NIEHS-10 workbooks carry a Sex column
         written += summary["written"]
@@ -52,7 +62,12 @@ def test_dtt_workbook_fills_sex_from_key_title(tmp_path):
                        "in Female Sprague Dawley Rats (HSD:Sprague Dawley SD)")
     out = tmp_path / "out"
     out.mkdir()
+    # Into the pool as published; the reader fills the sex from the title.
     summary = convert_workbook(str(src), str(out))
+    assert summary["status"] == "ok" and summary["sex_filled"] == "Female"
+    from bmdx_pipe import read_study_workbook
+    assert read_study_workbook(str(out / src.name)).sex_filled == "Female"
+    summary = convert_workbook(str(src), str(out), as_csv=True)
     assert summary["status"] == "ok"
     assert summary["sex_filled"] == "Female"
     lines = (out / "body_weight_truth_female.csv").read_text().splitlines()

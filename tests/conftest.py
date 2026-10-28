@@ -155,10 +155,10 @@ def reference_session(tmp_path, monkeypatch):
     Each Individual Animal workbook goes through tooling.cebs_to_pool (truth
     CSV per sex + its .units.json companion) into sessions/<dtxsid>/files/,
     then pool fingerprinting converts the CSVs to pivots + sidecars exactly as
-    an upload does.  `with_workbooks=True` also places the workbooks in the
-    pool (the source-of-truth xlsx a customer may supply alongside the CSVs);
+    an upload does.  `with_workbooks=True` also places the study workbooks in
+    the pool (as cebs_to_pool writes them: copied, or converted to Key/Data);
     they then drive, and the CSVs are set aside.  `csvs=False` places the
-    workbooks alone.
+    workbooks alone — what a published build now does.
 
         session = reference_session("NIEHS-10", "DTXSID50469320")
         sidecars = find_sidecar_paths(str(session), "Tissue Concentration")
@@ -185,10 +185,11 @@ def reference_session(tmp_path, monkeypatch):
             prefix = xlsx.name.split("_", 1)[0]
             species = package_species([w.name for w in workbooks if w.name.startswith(prefix)])
             if csvs:
-                summary = convert_workbook(str(xlsx), str(files), species)
+                summary = convert_workbook(str(xlsx), str(files), species, as_csv=True)
                 assert summary["status"] in ("ok", "skipped"), summary
             if with_workbooks or not csvs:
-                shutil.copy2(xlsx, files / xlsx.name)
+                summary = convert_workbook(str(xlsx), str(files), species)
+                assert summary["status"] in ("ok", "skipped"), summary
         if not units:
             for companion in files.glob("*.units.json"):
                 companion.unlink()

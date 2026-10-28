@@ -59,7 +59,7 @@ def test_concentration_table_matches_published(reference_session, report, study,
         for f in files.glob("tissue_conc_truth_*"):
             f.unlink()
         xlsx = next((REFERENCE_DIR / report).glob(f"{study}_*Concentration_Data.xlsx"))
-        assert convert_workbook(str(xlsx), str(files), "mouse")["status"] == "ok"
+        assert convert_workbook(str(xlsx), str(files), "mouse", as_csv=True)["status"] == "ok"
         csv = files / "tissue_conc_truth_female.csv"
         tox_study_csv_to_pivot_txt(str(csv), str(files), "Tissue Concentration", "tox_study",
                                    units=json.loads(csv.with_suffix(".units.json").read_text()))

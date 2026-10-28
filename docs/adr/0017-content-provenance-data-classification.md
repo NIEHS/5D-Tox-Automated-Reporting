@@ -1,6 +1,6 @@
 # 0017 — Content/provenance-based data classification (the xlsx is the anchor)
 
-- **Status:** Accepted (2026-09-08) — **Increment 1 DONE** (bmdx-pipe `7b4e749`):
+- **Status:** Accepted (2026-09-08); completed by [ADR-0032](0032-study-workbooks-drive-the-data.md) (2026-10-28: the workbooks drive the data) — **Increment 1 DONE** (bmdx-pipe `7b4e749`):
   a study-file xlsx classifies `tox_study` from its own Key+Data sheet content
   (`fingerprint_xlsx` override on `is_study_file`), fixing the 4-error dose-mismatch
   bug at its root. **Increment D DONE** (bmdx-pipe `3b6f2cc`, 2026-09-09):

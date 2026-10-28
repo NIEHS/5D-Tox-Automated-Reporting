@@ -71,7 +71,7 @@ def test_cebs_converter_writes_the_units_companion(tmp_path):
     wb.save(src)
     out = tmp_path / "out"
     out.mkdir()
-    assert convert_workbook(str(src), str(out))["units"] == 1
+    assert convert_workbook(str(src), str(out), as_csv=True)["units"] == 1
     assert json.loads((out / "clin_chem_truth_male.units.json").read_text()) == {"Albumin": "g/dL"}
 
 

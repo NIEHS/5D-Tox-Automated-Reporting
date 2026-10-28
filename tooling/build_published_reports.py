@@ -4,9 +4,12 @@ and output/<DTXSID>/, so each one is on the Bookshelf shelf.
 
 Each study goes through the normal headless path:
 
-  1. tooling.cebs_to_pool converts the package's Individual Animal workbooks
-     (and, for NIEHS-12, the Bookshelf bundle's concentration workbook) into
-     pool inputs;
+  1. tooling.cebs_to_pool puts the package's Individual Animal workbooks in
+     the pool as study workbooks, which drive the data (ADR-0032): a standard
+     workbook as published, another layout (the CEBS database export, the
+     NIEHS-12/13 lab concentration workbook from the Bookshelf bundle, molar
+     doses) written as a standard one.  The package's sample sheet, which
+     traces genomic samples to animals, joins them;
   2. the package's genomic BMDExpress project joins them — for NIEHS-07 … 10,
      whose project is shared by four chemicals, only this chemical's
      experiments (bmdx_pipe.subset_bm2);

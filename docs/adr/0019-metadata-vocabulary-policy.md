@@ -1,6 +1,6 @@
 # 0019 — Metadata is the classifier of data: a vocabulary + provenance policy
 
-- **Status:** Proposed (2026-09-14) — governing model for the DATA side of the
+- **Status:** Proposed (2026-09-14); for the fields the study workbooks record, settled by [ADR-0032](0032-study-workbooks-drive-the-data.md) (2026-10-28: workbook > approved/stated > inferred; a contradiction is refused) — governing model for the DATA side of the
   application architecture. Generalizes [ADR-0017](0017-content-provenance-data-classification.md)
   (content-anchored `dataType`) from one field to the whole metadata vocabulary, and
   supplies the policy the deferred provenance→authority question was waiting on.
