@@ -19,7 +19,7 @@ DESIGN = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
 
 
 @pytest.mark.integration
-def test_integration_reapplies_the_stated_design(given_pfhxsam, mock_bmdx_pipe):
+def test_integration_reapplies_the_stated_design(niehs10, mock_bmdx_pipe):
     from fastapi.testclient import TestClient
     from web_routes.background_server import app
 
@@ -27,21 +27,21 @@ def test_integration_reapplies_the_stated_design(given_pfhxsam, mock_bmdx_pipe):
     mock_bmdx_pipe.integrate_pool.return_value = _integrated("heart")
     client = TestClient(app)
     assert client.post(f"/api/pool/validate/{d}").status_code == 200
-    (given_pfhxsam / "study_design.json").write_text(json.dumps(
+    (niehs10 / "study_design.json").write_text(json.dumps(
         {"fields": DESIGN, "recorded_at": "2026-10-07T00:00:00+00:00"}))
     with patch("bmdx_pipe.export_integrated_bm2"):
         r = client.post(f"/api/pool/integrate/{d}",
                         json={"identity": {"name": "Test", "casrn": "123-45-6", "dtxsid": d}})
     assert r.status_code == 200, r.text
 
-    on_disk = json.loads((given_pfhxsam / "integrated.json").read_text())
+    on_disk = json.loads((niehs10 / "integrated.json").read_text())
     ed = on_disk["doseResponseExperiments"][0]["experimentDescription"]
     assert {k: ed[k] for k in DESIGN} == DESIGN
     assert ed["organ"] == "heart"  # inferred metadata the design does not name is kept
 
 
 @pytest.mark.integration
-def test_no_stated_design_leaves_integration_alone(given_pfhxsam, mock_bmdx_pipe):
+def test_no_stated_design_leaves_integration_alone(niehs10, mock_bmdx_pipe):
     from workflow.steps import reapply_study_design
     from workflow.store import DiskPoolStore
 

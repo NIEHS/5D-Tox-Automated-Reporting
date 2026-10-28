@@ -199,10 +199,37 @@ def reference_session(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def niehs10(reference_session):
+    """
+    The NIEHS-10 study (PFHxSAm, C20022-01) as its published CEBS package gives
+    it — the study workbooks and the truth CSVs converted from them — through
+    the real ingest, as DTXSID50469320, and validated.  The workbooks drive
+    (ADR-0032).
+
+    The workflow tests' reference study.  The given-PFHxSAm package is not one
+    any more: its inferred hormone files name an endpoint
+    ("Triiodiodothyronine") the workbooks don't record, so it fails validation.
+
+    Returns the session directory path.
+    """
+    from workflow.steps import validate_step
+    from workflow.store import DiskPoolStore
+
+    session = reference_session("NIEHS-10", "DTXSID50469320", with_workbooks=True)
+    report = validate_step("DTXSID50469320", DiskPoolStore())
+    assert not [i for i in report["issues"] if i["severity"] == "error"], report["issues"]
+    return session
+
+
+@pytest.fixture
 def given_pfhxsam(tmp_path, monkeypatch):
     """
     Copy the given-PFHxSAm regression session (as DTXSID50469320) into a
     fresh tmp_path.
+
+    No longer the workflow tests' reference (use ``niehs10``): its inferred
+    hormone files name an endpoint the study workbooks don't record, so it
+    fails validation (ADR-0032).
 
     This session has 12 txt/csv data files across 6 platforms, sidecars,
     fingerprints, and a validation report.  It represents a session that

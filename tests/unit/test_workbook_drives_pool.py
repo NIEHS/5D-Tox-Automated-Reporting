@@ -59,3 +59,22 @@ def test_a_csv_uploaded_after_the_workbook_is_set_aside(reference_session):
     assert (session / "_originals" / csv.name).exists() and not csv.exists()
     sc = load_sidecar(find_sidecar_paths(str(session), "Body Weight")["Male"])
     assert sc["source"] == BW
+
+
+def test_validation_checks_every_file_against_the_study(niehs10):
+    from workflow.steps import validate_step
+    from workflow.store import DiskPoolStore
+
+    report = validate_step("DTXSID50469320", DiskPoolStore())
+    st = report["study_structure"]
+    assert st["study_number"] == "C20022-01" and len(st["dose_groups"]) == 10
+    assert st["design"]["administrationMeans"] == "gavage" and not st["conflicts"]
+
+    # An inferred table naming an animal the study doesn't have, and another
+    # at the wrong dose: errors.
+    (niehs10 / "files" / "male_hormone_data.txt").write_text(
+        "# Provider: Apical\n# Platform: Hormones\n# Data Type: inferred\n"
+        "HormonesMale\t101\t999\t102\nDose\t0\t0\t4\nTotal Thyroxine\t5.1\t5.2\t5.3\n")
+    report = validate_step("DTXSID50469320", DiskPoolStore())
+    errors = {i["issue_type"] for i in report["issues"] if i["severity"] == "error"}
+    assert {"animal_not_in_study", "animal_dose_mismatch"} <= errors

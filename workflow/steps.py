@@ -192,6 +192,22 @@ def materialize_result_sections(dtxsid: str, store: PoolStore, *, policy=None) -
 # validate
 # ---------------------------------------------------------------------------
 
+def _study_structure(fps: dict, files_dir: Path):
+    """The StudyStructure the pool's study workbooks describe, or None."""
+    from bmdx_pipe import build_study_structure
+    from bmdx_pipe.file_integrator import TIER_XLSX
+
+    def get(fp, key):
+        return fp.get(key) if isinstance(fp, dict) else getattr(fp, key, None)
+
+    workbooks = {
+        str(files_dir / get(fp, "filename")): get(fp, "platform")
+        for fp in fps.values()
+        if get(fp, "tier") == TIER_XLSX and get(fp, "is_study_file") and get(fp, "platform")
+    }
+    return build_study_structure(workbooks) if workbooks else None
+
+
 @step_provenance
 def validate_step(dtxsid: str, store: PoolStore) -> dict:
     """Re-fingerprint the pool and run full cross-validation.
@@ -209,7 +225,10 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
     # Force a full re-scan of all files in the session
     fps = store.ensure_fingerprints(dtxsid, force=True)
-    report = validate_pool(dtxsid, fps)
+    # The study the workbooks describe (ADR-0032): every other file is checked
+    # against it, and integration carries it into the dataset.
+    structure = _study_structure(fps, files_dir)
+    report = validate_pool(dtxsid, fps, structure)
 
     report_dict = {
         "dtxsid": report.dtxsid,
@@ -219,6 +238,7 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
         "issues": report.issues,
         "coverage_matrix": report.coverage_matrix,
         "is_complete": report.is_complete,
+        "study_structure": structure.to_dict() if structure else None,
     }
 
     # Value-level provenance cross-check (xlsx ↔ derived CSV). Lazy import to
@@ -487,6 +507,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             test_article=test_article,
             llm_generate_json=_llm_generate_json,
             approved_metadata=approved_metadata or None,
+            study_structure=report.get("study_structure") if isinstance(report, dict) else None,
         )
         _check_dataset(dtxsid, integrated)
     except Exception as e:
