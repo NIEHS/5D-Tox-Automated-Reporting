@@ -169,10 +169,11 @@ def _endpoint_direction(row: TableRow) -> str:
     """
     Determine whether an endpoint increased or decreased relative to control.
 
-    Compares the control group mean to the highest-dose group mean.  This
-    is a simplification — real studies might have non-monotonic responses —
-    but it matches the NTP report convention of reporting the overall
-    direction of the dose-response.
+    Compares the control group mean to the mean of the highest dose group
+    that has one.  A group with no values ("–": every animal died before it
+    was sampled) is passed over.  This is a simplification — real studies
+    might have non-monotonic responses — but it matches the NTP report
+    convention of reporting the overall direction of the dose-response.
 
     Args:
         row: A TableRow with values_by_dose.
@@ -185,7 +186,11 @@ def _endpoint_direction(row: TableRow) -> str:
         return "increase"  # fallback
 
     control_mean = _parse_cell_mean(row.values_by_dose.get(sorted_doses[0], ""))
-    highest_mean = _parse_cell_mean(row.values_by_dose.get(sorted_doses[-1], ""))
+    highest_mean = next(
+        (m for d in reversed(sorted_doses[1:])
+         if (m := _parse_cell_mean(row.values_by_dose.get(d, ""))) is not None),
+        None,
+    )
 
     if control_mean is None or highest_mean is None:
         return "increase"  # fallback

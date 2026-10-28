@@ -50,6 +50,15 @@ def test_body_weight_signature_captures_direction_and_trend():
     assert sig == {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}}
 
 
+def test_direction_passes_over_a_group_with_no_values():
+    # The top dose died before it was sampled ("–", NIEHS-05's 1222 mg/kg): the
+    # direction comes from the highest dose that has a mean.
+    row = _row("Terminal Body Wt.", "41.2", "22.8",
+               {0.0: "100.0", 50.0: "85.0*", 100.0: "70.0**", 200.0: "–"})
+    sig = apical_cat_signature({"Body Weight": {"Male": [row]}}, UNIT)
+    assert sig == {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}}
+
+
 def test_signature_excludes_numeric_slots():
     sig = apical_cat_signature({"Body Weight": {"Male": [_bw_decreasing()]}}, UNIT)
     vals = sig["Male|Terminal Body Wt."]
