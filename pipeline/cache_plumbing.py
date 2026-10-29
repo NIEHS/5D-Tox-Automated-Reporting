@@ -380,7 +380,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 6  # bumped: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 7  # bumped: UREP only by a reviewer's decision (pipeline.bmd_review), never automatic. Was 6: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:

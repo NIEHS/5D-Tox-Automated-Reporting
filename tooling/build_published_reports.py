@@ -139,6 +139,13 @@ GENOMIC_STATED = {r: _MALE_LIVER for r in ("RR-8", "NIEHS-02", "NIEHS-03", "NIEH
                                            "NIEHS-05", "NIEHS-06")}
 
 
+def _review_args(session_id: str) -> list[str]:
+    """``--bmd-review`` with the book's recorded UREP decisions
+    (templates/studies/<session>/bmd_review.json, ADR-0033), when it has any."""
+    path = REPO_ROOT / "templates" / "studies" / session_id / "bmd_review.json"
+    return ["--bmd-review", str(path)] if path.exists() else []
+
+
 def _project_json(report: str) -> Path | None:
     """The package's genomic BMDExpress project as JSON (assets/cebs/<r>/_bm2json)."""
     found = sorted((CEBS / report / "_bm2json").glob("*.json"))
@@ -214,7 +221,7 @@ def build(report: str) -> tuple[str, int, str]:
                   "--name", name, "--casrn", casrn, "--compound-name", short,
                   "--dose-unit", unit, "--design", str(work / "design.json"),
                   "--front-matter", str(work / "front_matter.json"),
-                  "--method-profile", profile, *stated, "--reintegrate",
+                  "--method-profile", profile, *stated, *_review_args(dtxsid), "--reintegrate",
                   # The data deposit: the Bookshelf package's files, less the
                   # book's own (its XML, figures, TOC.pdf, NCBI's license/source).
                   "--deposit", str(BOOKSHELF / report),
@@ -262,8 +269,8 @@ def build_composed(report: str) -> tuple[str, int, str]:
                       "--name", name, "--casrn", casrn, "--compound-name", short,
                       "--dose-unit", unit, "--design", str(work / "design.json"),
                       "--front-matter", str(work / "front_matter.json"),
-                      "--method-profile", profile, *stated, "--reintegrate",
-                      "--stop-after", "process"])
+                      "--method-profile", profile, *stated, *_review_args(member),
+                      "--reintegrate", "--stop-after", "process"])
             if rc:
                 return report, rc, f"study {key} failed ({log})"
             members.append(f"{key}={member}")

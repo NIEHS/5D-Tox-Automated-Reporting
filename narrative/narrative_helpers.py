@@ -11,13 +11,11 @@ What lives here:
 
   Constants
     _DIRECTION_WORDS         UP/DOWN/empty → adjective for endpoint prose
-    ANOMALY_RATIO_THRESHOLD  factor below NOEL/LOEL that flags a BMD
-                             as model-artifact rather than potency estimate
+    ANOMALY_RATIO_THRESHOLD  factor below NOEL/LOEL at which a BMD is flagged
+                             for review (pipeline.bmd_review)
 
   BMD-quality predicates
     _is_reliable_bmd         entry has a parseable, "viable" BMD?
-    _is_anomalous_bmd        entry's curve-fit BMD is implausibly far
-                             below the statistically-observed NOEL/LOEL?
 
   Pure formatters (single value)
     _format_dose_value       drop trailing zeros, comma-group thousands,
@@ -45,8 +43,7 @@ What lives here:
 
 All functions and constants here are pure: no module-level state, no
 disk I/O, no LLM calls.  methods_report.py re-exports each name so
-existing import sites (processing_helpers.py uses _is_anomalous_bmd
-directly) keep working unchanged.
+existing import sites keep working unchanged.
 """
 
 # ---------------------------------------------------------------------------
@@ -71,15 +68,12 @@ _DIRECTION_WORDS = {
 }
 
 
-# Threshold for the anomalous-BMD heuristic.  When the curve-fit BMD is
-# this many times lower than the statistically-observed NOEL/LOEL, the
-# BMD is treated as a model artifact rather than a true potency estimate.
-#
-# The NIEHS reference report quantifies the anomaly callouts as
-# "approximately 75- to 230-fold", "140- to 430-fold", and "25- to
-# 80-fold" lower than NOEL/LOEL — implying the threshold for excluding
-# from the Abstract effects list is somewhere around 10× (any larger
-# discrepancy would be reported in the body Results as anomalous).
+# The screen for an unreliable estimate of potency (pipeline.bmd_review): a
+# BMD more than this many times below its NOEL (else its LOEL) is FLAGGED for
+# a reviewer, who decides.  It only proposes: the NIEHS reports' UREPs are a
+# subject matter expert's call (rejected at 10-fold below the NOEL in NIEHS-07
+# and -08, accepted at 25-fold in NIEHS-08), and 10 is the lowest fold any of
+# them rejected.
 ANOMALY_RATIO_THRESHOLD = 10.0
 
 
@@ -110,67 +104,6 @@ def _is_reliable_bmd(entry: dict) -> bool:
     if entry.get("bmd_status") and entry["bmd_status"] != "viable":
         return False
     return True
-
-
-def _is_anomalous_bmd(entry: dict, threshold: float = ANOMALY_RATIO_THRESHOLD) -> bool:
-    """
-    Detect whether a BMD entry has an anomalously LOW model-derived BMD
-    compared to the statistically-observed NOEL/LOEL.
-
-    Rationale: pairwise statistical tests identify the lowest dose where
-    the effect is statistically significant (LOEL) and the highest dose
-    where it isn't (NOEL).  A curve-fit BMD substantially below the NOEL
-    means the model extrapolates an "effect" at doses where the actual
-    measurements showed none — almost always a model artifact (e.g.,
-    poor model fit, control variability, BMR set too tight relative to
-    the data).  The reference report flags such BMDs as anomalous and
-    excludes them from the Abstract's "effects included..." list.
-
-    Decision rule:
-      - If NOEL is present and BMD < NOEL / threshold  → anomalous.
-      - If NOEL is None but LOEL is present and
-        BMD < LOEL / threshold → anomalous (weaker signal).
-      - Otherwise → not flagged.
-
-    Args:
-        entry: BMD summary dict with keys 'bmd', 'noel', 'loel'.
-        threshold: ratio at which BMD is considered too low to trust
-                   (default 10, i.e., BMD < NOEL/10 is anomalous).
-
-    Returns:
-        True if the BMD should be filtered out of the Abstract effects list.
-    """
-    bmd_raw = entry.get("bmd")
-    if bmd_raw is None:
-        return False
-    try:
-        bmd = float(str(bmd_raw).strip())
-    except (TypeError, ValueError):
-        return False
-    if bmd <= 0:
-        return False
-
-    noel = entry.get("noel")
-    loel = entry.get("loel")
-
-    # Prefer NOEL when available (it's the strongest evidence of "no
-    # statistical effect at this dose"); fall back to LOEL otherwise.
-    reference_dose = None
-    if noel is not None:
-        try:
-            reference_dose = float(noel)
-        except (TypeError, ValueError):
-            pass
-    if reference_dose is None and loel is not None:
-        try:
-            reference_dose = float(loel)
-        except (TypeError, ValueError):
-            pass
-
-    if reference_dose is None or reference_dose <= 0:
-        return False
-
-    return bmd < (reference_dose / threshold)
 
 
 # ---------------------------------------------------------------------------

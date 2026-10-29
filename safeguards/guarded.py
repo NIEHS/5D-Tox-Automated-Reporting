@@ -16,7 +16,9 @@ The notebook calls the core steps directly: the same workflow, unguarded.
 from __future__ import annotations
 
 from safeguards.acts import require
-from safeguards.inputs import require_valid_design, require_valid_experiment_metadata
+from safeguards.inputs import (
+    require_valid_bmd_review, require_valid_design, require_valid_experiment_metadata,
+)
 from safeguards.sections import ownership_policy, owned, require_reason
 from workflow import steps as _steps
 from workflow.phases import Action
@@ -78,6 +80,18 @@ def record_study_design(dtxsid: str, fields: dict, store) -> int:
     require(dtxsid, Action.STATE_DATASET_FACTS, store)
     require_valid_design(dtxsid, fields)
     return _steps.record_study_design(dtxsid, fields, store)
+
+
+def review_bmds(dtxsid: str, decisions: dict, store) -> dict:
+    """A reviewer's decisions on the apical BMDs the last Process flagged
+    (pipeline.bmd_review): each ``{key: {decision, reason}}``, "unreliable"
+    (UREP) or "reliable", with the reviewer's reason.  Recorded only; the next
+    Process applies them (the publish gate waits for it)."""
+    from pipeline.bmd_review import FLAGS_FILE, record_reviews
+    require(dtxsid, Action.PROCESS, store)
+    flags = (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []
+    require_valid_bmd_review(dtxsid, decisions, flags)
+    return record_reviews(store, dtxsid, decisions, flags)
 
 
 def require_state_dataset_facts(dtxsid: str, store=None) -> None:

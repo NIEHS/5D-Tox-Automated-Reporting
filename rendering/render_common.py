@@ -907,9 +907,8 @@ BMD_SUMMARY_LEGEND = (
     "benchmark response set to one standard deviation from the mean; "
     "LOEL = lowest-observed-effect level; "
     "NOEL = no-observed-effect level; "
-    "UREP = unreliable estimate of potency — a label based on review of "
-    "BMD modeling results indicating the curve-fit BMD is implausibly far "
-    "below the statistically observed effect threshold; "
+    "UREP = unreliable estimate of potency is a label based on review by a "
+    "subject matter expert and rejection of BMD modeling results; "
     "NVM = no viable model: the modeled response did not meet the benchmark "
     "dose acceptance criteria."
 )
@@ -987,6 +986,14 @@ def _finite_float(v) -> float | None:
     return f if math.isfinite(f) else None
 
 
+# Under the table when a reviewer rejected a BMD (UREP, pipeline.bmd_review):
+# the NIEHS reports' footnote (NIEHS-07 … 10, Table 8).
+UREP_NOTE = ("UREP: BMD values are much lower than would be expected given the "
+             "endpoint-specific LOEL and NOEL values, suggesting that the BMD estimates "
+             "do not accurately reflect the true potency of the effect of these endpoints "
+             "and are likely an anomalous product of the BMD modeling approach.")
+
+
 # A LOEL/NOEL that statistics did not determine (no significant dose group;
 # no tested dose below the LOEL) — printed and defined as NIEHS does.
 NOT_DETERMINED = "ND"
@@ -1044,6 +1051,8 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
         note = inferred_bmr_footnote(endpoints)
         if note:
             footnotes.append(note)
+        if any(ep.get("anomalous") for ep in endpoints):
+            footnotes.append({"kind": "definition", "text": UREP_NOTE})
 
     return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows, footnotes)
 

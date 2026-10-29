@@ -33,8 +33,15 @@ def require_publishable(dtxsid: str, store=None, *, draft: bool = False) -> dict
         logger.warning("publish gate closed for %s (%s): rendering anyway, as a draft",
                        dtxsid, keys)
         return readiness
+    sections = [b for b in blocking if not str(b.get("section_key", "")).startswith("bmd_review:")]
+    if not sections:
+        bmds = ", ".join(b["section_key"].split(":", 1)[1] for b in blocking)
+        raise Refused(
+            "bmd_review_required",
+            f"Report is not publishable: apical BMDs await review or a Process ({bmds})",
+            status_code=409, details={"keys": bmds, "blocking": blocking})
     raise Refused(
         "publish_blocked",
         f"Report is not publishable: re-accept the sections a data reprocess "
-        f"invalidated ({keys})",
+        f"invalidated ({', '.join(b['section_key'] for b in sections)})",
         status_code=409, details={"keys": keys, "blocking": blocking})

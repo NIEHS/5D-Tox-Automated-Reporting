@@ -247,3 +247,19 @@ def test_publish_readiness_clears_after_reaccept():
     # Re-accept clears stale (Phase 1 accept_section_step) — live re-derive.
     store._section_dicts["genomics_liver_male"] = {"approved": True, "stale": False}
     assert eng.publish_readiness()["can_publish"] is True
+
+
+def test_publish_readiness_waits_for_bmd_review_and_its_process():
+    # pipeline.bmd_review: a flagged BMD blocks until a reviewer decides it,
+    # then until Process applies the decision.
+    flag = {"key": "Male|Clinical Chemistry|Cholesterol", "bmd": "0.5", "decision": None}
+    store = FakeStore(files=True, docs={"bmd_flags.json": {"flags": [flag]}})
+    eng = WorkflowEngine("DTX", store)
+    assert eng.publish_readiness()["blocking"] == [
+        {"section_key": "bmd_review:Male|Clinical Chemistry|Cholesterol",
+         "reason": "bmd_review_pending"}]
+    store._docs["bmd_reviews.json"] = {"decisions": {flag["key"]: {
+        "decision": "unreliable", "reason": "fit artifact", "bmd": "0.5"}}}
+    assert eng.publish_readiness()["blocking"][0]["reason"] == "bmd_review_not_applied"
+    store._docs["bmd_flags.json"] = {"flags": [{**flag, "decision": "unreliable"}]}
+    assert eng.publish_readiness() == {"can_publish": True, "blocking": []}

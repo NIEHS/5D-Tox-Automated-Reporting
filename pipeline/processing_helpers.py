@@ -1527,9 +1527,9 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
     hard-stop (`_BMD_HARD_STOP` in process_integrated, armed) halts the run on a
     non-empty `divergences`.
     """
-    if entry.get("filled"):
-        # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row);
-        # there is no bm2 value to cross-check.
+    if entry.get("filled") or entry.get("anomalous"):
+        # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row),
+        # or a BMD a reviewer rejected: nothing to cross-check or fill.
         return
     entry["source"] = "bm2"
     entry["validated"] = None
@@ -1573,10 +1573,6 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
             entry["bmr_config"] = tox["bmr_config"]
         if tox.get("bmr"):
             entry["bmr"] = tox["bmr"]
-        # This endpoint is now a ToxicR value, not the bm2 anomaly marker.
-        entry.pop("anomalous", None)
-        entry.pop("bmd_original", None)
-        entry.pop("bmdl_original", None)
 
 
 def _build_apical_bmd_summary(
@@ -1602,22 +1598,18 @@ def _build_apical_bmd_summary(
     Only includes endpoints that have a BMD result OR significant trend/pairwise
     findings (LOEL exists).  Endpoints with neither are uninteresting.
 
-    Anomalous BMDs (curve-fit values implausibly lower than the statistical
-    NOEL/LOEL — model artifacts) are replaced with "UREP" (Unreliable
-    Extrapolation) markers in the BMD/BMDL columns and the direction is
-    blanked.  This matches NIEHS Report 10's Table 8 convention: keep the
-    row so the LOEL/NOEL columns are still informative, but flag that the
-    curve-fit BMD shouldn't be trusted.
+    A BMD a reviewer rejected (pipeline.bmd_review: the row is UREP, an
+    unreliable estimate of potency) keeps its row with "UREP" in the BMD/BMDL
+    columns and the direction blanked, NIEHS Table 8's convention: the
+    LOEL/NOEL columns stay informative.  The reviewed values are kept as
+    bmd_original / bmdl_original with the fold range.  A flagged BMD no one
+    has decided yet stays a number, marked ``review: "pending"`` (it closes
+    the publish gate).
 
     Sort order matches the reference report: rows with reliable numeric
     BMDs first (ascending by BMD), then unreliable rows (UREP/NVM) sorted
     by LOEL ascending — "Sorted by BMD or LOEL from Low to High".
     """
-    # Import the anomaly heuristic from methods_report — same threshold
-    # the abstract Results uses to drop endpoints from the "effects
-    # included..." list, so the body table and abstract stay in sync.
-    from narrative.methods_report import _is_anomalous_bmd
-
     raw_entries: list[dict] = []
     for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
@@ -1656,6 +1648,16 @@ def _build_apical_bmd_summary(
                     # Internal ToxicR join key (raw label); stripped after merge.
                     "_key": f"{sex}::{row.label}",
                 })
+                urep = getattr(row, "_urep", None)
+                if urep:
+                    # A reviewer rejected this BMD (pipeline.bmd_review).
+                    raw_entries[-1].update({
+                        "bmd_original": urep["bmd"], "bmdl_original": urep["bmdl"],
+                        "fold": urep["fold"], "direction": "–",  # en dash, as Table 8
+                        "anomalous": True,
+                    })
+                elif getattr(row, "_bmd_review_pending", False):
+                    raw_entries[-1]["review"] = "pending"
                 fill = getattr(row, "_bmd_fill", None)
                 if fill:
                     raw_entries[-1].update({
@@ -1664,20 +1666,6 @@ def _build_apical_bmd_summary(
                         **({"bmr": fill["bmr"]} if fill.get("bmr") else {}),
                         **({"model_name": fill["model_name"]} if fill.get("model_name") else {}),
                     })
-
-    # --- Apply UREP marking ---
-    # An endpoint becomes UREP when the BMD parses as a finite number but
-    # falls implausibly far below the statistically-observed NOEL/LOEL.
-    # The original numeric values are preserved on the entry as
-    # bmd_original / bmdl_original in case downstream consumers want them.
-    for entry in raw_entries:
-        if _is_anomalous_bmd(entry):
-            entry["bmd_original"] = entry["bmd"]
-            entry["bmdl_original"] = entry["bmdl"]
-            entry["bmd"] = "UREP"
-            entry["bmdl"] = "UREP"
-            entry["direction"] = "–"  # en dash — matches reference Table 8
-            entry["anomalous"] = True
 
     # --- Reconcile with ToxicR (task #34): provenance + fill + divergence flag ---
     # Only when the caller passes the ToxicR fits; otherwise the pure-bm2 summary

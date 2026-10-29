@@ -8,6 +8,11 @@ A statement may not contradict what the study workbooks state (ADR-0032):
 species, strain, route, duration, an experiment's sex.  Those are the study's
 own record; a contradiction is refused (``facts_contradict_workbook``).
 
+A reviewer's decisions on flagged apical BMDs (pipeline.bmd_review) are
+checked the same way: each names an endpoint the last Process flagged, is
+"unreliable" (UREP) or "reliable", and gives the reviewer's reason
+(``bmd_review_invalid``).
+
 A refused statement writes nothing; the refusal (``facts_invalid``) lists
 every problem at once, so a person corrects them in one go. The core steps
 (workflow.steps.record_study_design, pipeline.metadata_approval) write what
@@ -106,3 +111,33 @@ def _invalid(dtxsid: str, what: str, errors: list[str]) -> Refused:
     return Refused("facts_invalid",
                    f"{what} for {dtxsid} refused: " + "; ".join(errors),
                    status_code=422, details={"what": what, "errors": errors})
+
+
+def bmd_review_errors(decisions, flags: list[dict]) -> list[str]:
+    """What is wrong with ``{key: {decision, reason}}`` against the last
+    screen's ``flags``: every problem, so a reviewer fixes them in one go."""
+    from pipeline.bmd_review import DECISIONS
+
+    if not isinstance(decisions, dict) or not decisions:
+        return ["no decisions were given"]
+    flagged = {f["key"] for f in flags}
+    errors = []
+    for key, given in decisions.items():
+        if key not in flagged:
+            errors.append(f"{key} is not a BMD the last Process flagged")
+            continue
+        given = given if isinstance(given, dict) else {}
+        if given.get("decision") not in DECISIONS:
+            errors.append(f"{key}: the decision must be “unreliable” or “reliable”")
+        if not str(given.get("reason") or "").strip():
+            errors.append(f"{key}: the reviewer's reason is missing")
+    return errors
+
+
+def require_valid_bmd_review(dtxsid: str, decisions, flags: list[dict]) -> None:
+    """Refuse (``bmd_review_invalid``) a review with any problem; nothing is written."""
+    errors = bmd_review_errors(decisions, flags)
+    if errors:
+        raise Refused("bmd_review_invalid",
+                      f"BMD review for {dtxsid} refused: " + "; ".join(errors),
+                      status_code=422, details={"errors": "; ".join(errors)})

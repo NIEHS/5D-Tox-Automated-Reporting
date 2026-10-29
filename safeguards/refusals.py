@@ -70,6 +70,7 @@ PLACES = {
     "handoff": "editing the report in Word or Overleaf and bringing the edits back (ADR-0018)",
     "facts": "the facts a person states about the study (design, experiment details)",
     "publish": "the report's readiness to publish",
+    "bmd_review": "the review of apical BMDs far below their NOEL/LOEL (pipeline.bmd_review)",
 }
 
 
@@ -244,6 +245,16 @@ REFUSALS: dict[str, Refusal] = {
         "The report can't be published yet: sections were written again after the "
         "study's data changed ({keys}). Read each one and accept it again, then "
         "publish."), "sections"),
+    "bmd_review_required": Refusal(409, (
+        "The report can't be published yet: some apical BMDs are much lower than the "
+        "study's NOEL and LOEL would suggest ({keys}). For each, a reviewer decides "
+        "whether it is an unreliable estimate of potency (UREP) or a reliable one, and "
+        "says why; then run Process again, and publish."), "bmd_review"),
+    # ── the review of apical BMDs (safeguards.inputs) ────────────────────────
+    "bmd_review_invalid": Refusal(422, (
+        "The BMD review was not saved: {errors}. Each decision names an endpoint the "
+        "last Process flagged, is either “unreliable” (UREP) or “reliable”, and gives "
+        "the reviewer's reason."), "bmd_review"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "

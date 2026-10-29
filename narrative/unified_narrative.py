@@ -788,9 +788,27 @@ def _build_animal_condition_paragraphs(
     return paragraphs
 
 
+def _urep_sentence(row, subject: str | None = None) -> str:
+    """The NIEHS reports' sentence for a BMD a reviewer rejected (UREP,
+    pipeline.bmd_review), with the fold range kept on ``row._urep``:
+    NOEL/BMD to LOEL/BMD, or the one the endpoint has."""
+    low, high = row._urep.get("fold") or (None, None)
+    if low and high:
+        fold, refs = f"approximately {low:g}- to {high:g}-fold", "NOEL and LOEL values"
+    else:
+        fold = f"approximately {(low or high):g}-fold"
+        refs = "NOEL value" if low else "LOEL value"
+    what = f" for {subject}" if subject else ""
+    return (f"Although a BMD was estimated{what}, its value was much lower ({fold}) "
+            f"than would be expected given the endpoint-specific {refs}, suggesting that "
+            "the BMD estimate did not accurately reflect the true potency of the effect "
+            "and was likely an anomalous product of the BMD modeling approach.")
+
+
 def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
                                    animals: str = "rats",
-                                   subject: str = "Terminal body weight") -> Template:
+                                   subject: str = "Terminal body weight",
+                                   bmd_clause: bool = True) -> Template:
     """The significant-body-weight sentence as author wording + typed data slots.
 
     `sex_lower` is baked into a Literal — a row's sex is structural and never
@@ -817,6 +835,10 @@ def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
     segs += [
         Literal(" with a "),
         Slot("trend", SlotKind.CATEGORICAL),
+    ]
+    if not bmd_clause:   # a rejected BMD: the caller adds _urep_sentence
+        return segs + [Literal(" trend (Table 2).")]
+    segs += [
         Literal(" trend (Table 2). The BMD and BMDL were "),
         Slot("bmd", SlotKind.NUMERIC),
         Literal(" and "),
@@ -891,9 +913,12 @@ def _build_body_weight_paragraphs(
             low_dose = _lowest_sig_dose(bw_row)
             subject = ("Body weight gain" if bw_row.label == "Body Weight Gain"
                        else "Terminal body weight")
-            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals, subject)
+            urep = getattr(bw_row, "_urep", None)
+            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals,
+                                                 subject, bmd_clause=not urep)
             binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
-            sex_sentences.append(render(tpl, binding))
+            sex_sentences.append(render(tpl, binding)
+                                 + (" " + _urep_sentence(bw_row) if urep else ""))
         if sex_sentences:
             significant.extend(sex_sentences)
         else:
@@ -1148,6 +1173,11 @@ def _build_organ_weight_paragraphs(
             low_doses = [d for d in low_doses if d is not None]
             min_low_dose = min(low_doses) if low_doses else None
 
+            # A BMD a reviewer rejected (UREP) is not among the BMD parts; its
+            # own sentence follows the finding.
+            urep_rows = [r for r in group_rows if getattr(r, "_urep", None)]
+            group_rows = [r for r in group_rows if not getattr(r, "_urep", None)] or group_rows
+
             # Determine weight types present (per-part qualifier, or None)
             weight_types = [_weight_label(r.label)[1] for r in group_rows]
             part_qualifiers = [
@@ -1169,7 +1199,12 @@ def _build_organ_weight_paragraphs(
             )
             binding = _bind_organ_finding(
                 group_rows, dose_unit, direction, min_low_dose)
-            sex_findings.append(render(tpl, binding))
+            finding = render(tpl, binding)
+            for r in urep_rows:
+                wtype = _weight_label(r.label)[1]
+                weight = f"{wtype} " if wtype in ("absolute", "relative") else ""
+                finding += " " + _urep_sentence(r, f"{weight}{organ_name.lower()} weight")
+            sex_findings.append(finding)
 
         # Opening line + findings
         sex_para = f"In {sex.lower()} {animals} at study termination, "
@@ -1200,7 +1235,8 @@ def _build_organ_weight_paragraphs(
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _sub_platform_finding_template(label: str, has_loel: bool) -> Template:
+def _sub_platform_finding_template(label: str, has_loel: bool,
+                                   bmd_clause: bool = True) -> Template:
     """One clinical-pathology endpoint finding as author wording + typed slots.
 
     `label` (the endpoint identity, e.g. "Glucose") is baked into a Literal — it
@@ -1225,6 +1261,10 @@ def _sub_platform_finding_template(label: str, has_loel: bool) -> Template:
     segs += [
         Literal(" with a "),
         Slot("trend", SlotKind.CATEGORICAL),
+    ]
+    if not bmd_clause:   # a rejected BMD: the caller adds _urep_sentence
+        return segs + [Literal(" trend.")]
+    segs += [
         Literal(" trend. The BMD and BMDL were "),
         Slot("bmd", SlotKind.NUMERIC),
         Literal(" and "),
@@ -1301,9 +1341,11 @@ def _build_sub_platform_paragraphs(
         for r in sig_rows:
             direction = _endpoint_direction(r)
             low_dose = _lowest_sig_dose(r)
-            tpl = _sub_platform_finding_template(r.label, low_dose is not None)
+            urep = getattr(r, "_urep", None)
+            tpl = _sub_platform_finding_template(r.label, low_dose is not None,
+                                                 bmd_clause=not urep)
             binding = _bind_sub_platform_finding(r, dose_unit, direction, low_dose)
-            findings.append(render(tpl, binding))
+            findings.append(render(tpl, binding) + (" " + _urep_sentence(r) if urep else ""))
 
         sex_para = f"In {sex.lower()} {animals}, "
         sex_para += " ".join(findings)

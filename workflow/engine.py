@@ -212,6 +212,11 @@ class WorkflowEngine:
         marker when present, else "stale". Also surfaces the rewrite ATTRIBUTION
         (the reframed Phase 3a gap): a stale LLM section IS the "regenerated
         because data changed, re-accept it" signal.
+
+        An apical BMD the review screen flagged blocks too, as
+        ``bmd_review:<sex>|<platform>|<endpoint>``: ``bmd_review_pending`` until
+        a reviewer decides it, ``bmd_review_not_applied`` until Process applies
+        the decision (pipeline.bmd_review).
         """
         from workflow.reprocess import blocking_llm_sections
 
@@ -221,4 +226,11 @@ class WorkflowEngine:
             regen = sections.get(key, {}).get("regenerated")
             reason = regen.get("reason") if isinstance(regen, dict) else "stale"
             blocking.append({"section_key": key, "reason": reason})
+        # An apical BMD far below its NOEL/LOEL needs a reviewer's decision
+        # (pipeline.bmd_review), and the decision a Process to take effect.
+        from pipeline.bmd_review import FLAGS_FILE, REVIEWS_FILE, unsettled
+        flags = (self.store.read_json(self.dtxsid, FLAGS_FILE) or {}).get("flags") or []
+        reviews = self.store.read_json(self.dtxsid, REVIEWS_FILE) or {}
+        for item in unsettled(flags, reviews):
+            blocking.append({"section_key": f"bmd_review:{item['key']}", "reason": item["reason"]})
         return {"can_publish": not blocking, "blocking": blocking}

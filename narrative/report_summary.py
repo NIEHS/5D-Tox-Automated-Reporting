@@ -26,7 +26,6 @@ from narrative.abstract_apical import _format_endpoint_phrase
 from narrative.narrative_helpers import (
     genomics_bmd_decimals,
     _format_bmd_value,
-    _is_anomalous_bmd,
     _is_reliable_bmd,
     _join_oxford,
     _picks_above_lle,
@@ -58,7 +57,7 @@ def _reliable_apical(entries: list[dict], sex: str) -> list[dict]:
     """Reliable, non-anomalous apical entries of one sex, lowest BMD first."""
     out = [e for e in entries or []
            if e.get("sex") == sex and _is_reliable_bmd(e)
-           and not _is_anomalous_bmd(e) and e.get("direction")]
+           and not e.get("anomalous") and e.get("direction")]
     out.sort(key=lambda e: float(e["bmd"]))
     return out
 

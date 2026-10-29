@@ -239,6 +239,10 @@ class ProcessContext:
     # The study's resolved analysis method (pipeline.method_profile, ADR-0027);
     # None only in test scaffolds, which then get the session's (or newest) method.
     method: object | None = None
+    # A reviewer's UREP decisions (bmd_reviews.json) and the screen's flags,
+    # each with its decision or None: pending (pipeline.bmd_review).
+    bmd_reviews: dict | None = None
+    bmd_flags: list | None = None
     # The dose unit as the caller stated it (None ⇒ recorded or fallback).
     dose_unit_stated: str | None = None
     chart_images: list | None = None
@@ -520,7 +524,8 @@ def _build_bmd_summary(ctx):
     platform_tables = ctx.platform_tables
     bmds_results = ctx.bmds_results
 
-    bmd_summary_hash = _hash_bmd_summary(ctx.ntp_hash, ctx.bmds_hash)
+    from pipeline.bmd_review import with_reviews
+    bmd_summary_hash = _hash_bmd_summary(ctx.ntp_hash, with_reviews(ctx.bmds_hash, ctx.bmd_reviews))
     bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
 
     if bmd_summary_cached:
@@ -1073,13 +1078,31 @@ async def _get_bmds(ctx):
 
 
 async def _bmds_then_sections(ctx):
-    """BMDS, then the ToxicR fills onto the rows, then the section cards."""
+    """BMDS, then the ToxicR fills onto the rows, then the reviewer's UREP
+    decisions on them, then the section cards."""
     await _get_bmds(ctx)
     n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results,
                               bmd_decimals=ctx.bmd_decimals, method=_method(ctx))
     if n:
         logger.info("Filled %d bm2-blank apical BMDs from ToxicR", n)
+    _review_bmds(ctx)
     await _get_sections(ctx)
+
+
+def _review_bmds(ctx) -> None:
+    """Screen every apical BMD and apply the reviewer's decisions to the rows
+    (pipeline.bmd_review), so the tables, narratives and BMD summary agree.
+    The flags are written to bmd_flags.json: what the reviewer decides on, and
+    what the publish gate reads."""
+    from pipeline.bmd_review import FLAGS_FILE, apply_reviews, pending
+
+    ctx.bmd_flags = apply_reviews(ctx.platform_tables, ctx.bmd_reviews)
+    waiting = {f["key"] for f in pending(ctx.bmd_flags)}
+    (_session_dir(ctx.dtxsid) / FLAGS_FILE).write_text(
+        json.dumps({"flags": ctx.bmd_flags}, indent=1), encoding="utf-8")
+    if waiting:
+        logger.warning("%d apical BMD(s) of %s far below the NOEL/LOEL await review: %s",
+                       len(waiting), ctx.dtxsid, ", ".join(sorted(waiting)))
 
 
 async def _get_genomics(ctx):
@@ -1288,11 +1311,15 @@ async def run_data(ctx) -> None:
     # Phase 2: filter-agnostic sections cache — no allowlists in the key.
     ctx.bmds_hash = (_hash_bmds(ctx.bmds_inputs, _method(ctx).signature())
                      if ctx.bmds_inputs else "empty")
+    from pipeline.bmd_review import REVIEWS_FILE, with_reviews
+    ctx.bmd_reviews = read_session_json(dtxsid, REVIEWS_FILE) or {}
     ctx.sections_hash = _hash_sections(
         ctx.ntp_hash, compound_name, dose_unit,
         sidecar_hash=sections_sidecar_hash,
         imputed_cells=_meta.get("imputed_cells"),
-        bmds_hash=ctx.bmds_hash,
+        # The reviewer's UREP decisions change the rows the sections are built
+        # from (pipeline.bmd_review), as the ToxicR fills do.
+        bmds_hash=with_reviews(ctx.bmds_hash, ctx.bmd_reviews),
     )
 
     ge_source = _meta.get("source_files", {}).get("gene_expression")
