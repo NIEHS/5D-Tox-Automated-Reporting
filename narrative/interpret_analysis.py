@@ -196,7 +196,7 @@ def rank_go_sets_by_bmd(
         })
 
     # Step 6: sort by median BMD ascending (most potent first) and rank
-    results.sort(key=lambda x: x["bmd_median"])
+    results.sort(key=lambda x: (x["bmd_median"], x["go_id"]))
     for i, r in enumerate(results[:top_n], 1):
         r["rank"] = i
 
@@ -568,7 +568,7 @@ def compute_bmd_ordering(
             "fdr": pw["fdr"],
         })
 
-    ordered.sort(key=lambda x: x["median_bmd"])
+    ordered.sort(key=lambda x: (x["median_bmd"], x["pathway"]))
     return ordered
 
 
@@ -684,7 +684,7 @@ def analyze(
         gene_priority.append((gene, ev.get("evidence"), ev.get("mention_count") or 0, n_papers))
 
     evidence_order = {"consensus": 0, "moderate": 1, "single": 2, None: 3}
-    gene_priority.sort(key=lambda x: (evidence_order.get(x[1], 3), -x[2]))
+    gene_priority.sort(key=lambda x: (evidence_order.get(x[1], 3), -x[2], x[0]))
 
     for gene, evidence, mention_count, n_papers in gene_priority[:15]:
         organs = kb.gene_organs(gene)
@@ -725,7 +725,7 @@ def analyze(
         for pid, info in paper_gene_overlap.items()
         if len(info["genes"]) >= 2
     ]
-    top_papers.sort(key=lambda x: x["citation_count"], reverse=True)
+    top_papers.sort(key=lambda x: (-x["citation_count"], x["paper_id"]))
     top_papers = top_papers[:10]
 
     result = AnalysisResult(

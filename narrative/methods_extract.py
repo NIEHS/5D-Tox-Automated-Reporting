@@ -322,19 +322,19 @@ def extract_methods_context(
         elif platform == "Organ Weights":
             ctx.has_organ_weights = True
             eps = _get("endpoint_names", [])
-            ctx.organ_weight_endpoints = list(set(ctx.organ_weight_endpoints + eps))
+            ctx.organ_weight_endpoints = list(dict.fromkeys(ctx.organ_weight_endpoints + eps))
         elif platform == "Clinical Chemistry":
             ctx.has_clin_chem = True
             eps = _get("endpoint_names", [])
-            ctx.clin_chem_endpoints = list(set(ctx.clin_chem_endpoints + eps))
+            ctx.clin_chem_endpoints = list(dict.fromkeys(ctx.clin_chem_endpoints + eps))
         elif platform == "Hematology":
             ctx.has_hematology = True
             eps = _get("endpoint_names", [])
-            ctx.hematology_endpoints = list(set(ctx.hematology_endpoints + eps))
+            ctx.hematology_endpoints = list(dict.fromkeys(ctx.hematology_endpoints + eps))
         elif platform == "Hormones":
             ctx.has_hormones = True
             eps = _get("endpoint_names", [])
-            ctx.hormone_endpoints = list(set(ctx.hormone_endpoints + eps))
+            ctx.hormone_endpoints = list(dict.fromkeys(ctx.hormone_endpoints + eps))
         elif platform == "Tissue Concentration":
             ctx.has_tissue_conc = True
         if data_type == "gene_expression":
