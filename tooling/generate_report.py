@@ -571,7 +571,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--name", help="test-article name (else identity.json, else resolved)")
     ap.add_argument("--casrn", help="test-article CASRN")
     ap.add_argument("--compound-name",
-                    help="short name used in captions/narratives (default: identity name)")
+                    help="short name used in captions/narratives (default: the recorded "
+                         "abbreviation, else the identity name)")
     ap.add_argument("--dose-unit", default=None,
                     help="dose unit, e.g. mg/kg or ppm (default: the unit the data records, "
                          "else mg/kg — state it explicitly).  A ppm unit also makes the "
@@ -760,7 +761,8 @@ def main(argv: list[str] | None = None) -> int:
             # The GO ranking and cutoffs are the method profile's; only what
             # the command line states overrides it (source "request").
             params = {
-                "compound_name": args.compound_name or identity.get("name") or dtxsid,
+                "compound_name": (args.compound_name or identity.get("abbreviation")
+                                  or identity.get("name") or dtxsid),
                 "dose_unit": args.dose_unit,
                 **({"bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()]}
                    if args.bmd_stats else {}),

@@ -180,6 +180,8 @@ def _other_sources_value_maps(session_dir: Path, platform: str, workbook: str) -
     if not originals.is_dir():
         return out
     for f in sorted(originals.glob("*.csv")) + sorted(originals.glob("*.txt")):
+        if f.with_suffix(".sidecar.json").exists():
+            continue  # a pivot: its sidecar was compared above
         if detect_platform_and_type(f.name, f.suffix.lstrip("."), f.stat().st_size) \
                 != (platform, "tox_study"):
             continue
