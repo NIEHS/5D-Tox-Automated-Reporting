@@ -58,6 +58,7 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
+from common.dispositions import dispositions
 from common.session_files import read_session_json
 from pipeline.pool_globals import _session_dir
 from pipeline.session_store import cached_bm2_jsons, read_narrative_overrides
@@ -794,6 +795,7 @@ async def _get_sections(ctx):
                 platform_tables, compound_name, dose_unit,
                 dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
                 method=_method(ctx),
+                dispositions=dispositions(integrated.get("_meta", {}).get("study_structure")),
             ),
         )
         # Clinical obs tables bypass Java integration (categorical data).
@@ -907,7 +909,11 @@ async def _get_sections(ctx):
     # 1. Load mortality data from body weight sidecars
     session_dir = str(_session_dir(dtxsid))
     sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
-    sidecar_mortality = extract_mortality(sidecar_paths) if sidecar_paths else None
+    # The Removal Reasons workbook's dispositions, when the study has one, say
+    # how and when each animal left (common.dispositions).
+    sidecar_mortality = (extract_mortality(
+        sidecar_paths, integrated.get("_meta", {}).get("study_structure"))
+        if sidecar_paths else None)
 
     # 2. Load clinical obs incidence for the animal condition paragraph
     meta = integrated.get("_meta", {})
@@ -1320,6 +1326,7 @@ async def run_data(ctx) -> None:
         # The reviewer's UREP decisions change the rows the sections are built
         # from (pipeline.bmd_review), as the ToxicR fills do.
         bmds_hash=with_reviews(ctx.bmds_hash, ctx.bmd_reviews),
+        dispositions=dispositions(_meta.get("study_structure")),
     )
 
     ge_source = _meta.get("source_files", {}).get("gene_expression")

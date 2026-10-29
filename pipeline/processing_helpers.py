@@ -539,6 +539,7 @@ def _build_section_cards(
     ow_sex_allow: list[str] | None = None,
     design: dict | None = None,
     method=None,
+    dispositions: dict[str, dict] | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -657,6 +658,7 @@ def _build_section_cards(
                     dose_unit=dose_unit,
                     design=design,
                     method=method,
+                    dispositions=dispositions,
                 )
 
                 # The sidecar builder returns a full apical_sections entry

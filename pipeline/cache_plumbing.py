@@ -265,6 +265,7 @@ def _hash_sections(
     sidecar_hash: str = "",
     imputed_cells=None,
     bmds_hash: str = "",
+    dispositions: dict | None = None,
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -284,6 +285,9 @@ def _hash_sections(
         uses to footnote imputation-backed BMDs.
       - bmds_hash: the ToxicR fits, whose fills (fill_rows_from_toxicr) are in
         the section tables' BMD columns and the narratives' BMD clauses.
+      - dispositions: the Removal Reasons workbook's dispositions
+        (common.dispositions), in the body weight footnotes.  Only when the
+        study has them, so the other studies keep their caches.
 
     A schema_version is folded in so adding/renaming row-dict fields, or the
     filter-agnostic switch itself, forces a miss even when inputs are unchanged.
@@ -298,6 +302,8 @@ def _hash_sections(
     }
     if bmds_hash:
         payload["bmds"] = bmds_hash
+    if dispositions:
+        payload["dispositions"] = dispositions
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

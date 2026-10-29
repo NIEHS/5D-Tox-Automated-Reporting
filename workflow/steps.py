@@ -204,7 +204,8 @@ def _study_structure(fps: dict, files_dir: Path):
     workbooks = {
         str(files_dir / get(fp, "filename")): get(fp, "platform")
         for fp in fps.values()
-        if get(fp, "tier") == TIER_XLSX and get(fp, "is_study_file") and get(fp, "platform")
+        if get(fp, "tier") == TIER_XLSX and get(fp, "is_study_file")
+        and (get(fp, "platform") or get(fp, "data_type") == "removal_reasons")
     }
     sample_sheets = sorted(str(files_dir / get(fp, "filename")) for fp in fps.values()
                            if get(fp, "data_type") == "sample_sheet")

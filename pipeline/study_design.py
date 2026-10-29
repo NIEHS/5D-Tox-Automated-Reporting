@@ -278,6 +278,14 @@ def dose_noun(dose_unit: str | None) -> str:
     return "exposure concentrations" if is_air_concentration(dose_unit) else "doses"
 
 
+def internal_assessment(dose_unit: str | None) -> str:
+    """The internal-dose cohort's name in prose: "internal concentration
+    assessment" for an air concentration (NIEHS-12, 13), else "internal dose
+    assessment" (NIEHS-07 … 10)."""
+    return ("internal concentration assessment" if is_air_concentration(dose_unit)
+            else "internal dose assessment")
+
+
 def strain_display(facts: dict) -> str:
     strain = facts.get("strain") or ""
     return _STRAIN_DISPLAY.get(strain, strain)

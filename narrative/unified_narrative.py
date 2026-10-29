@@ -34,6 +34,7 @@ from collections import Counter
 
 from bmdx_pipe import TableRow
 from common.animal_selection import is_biosampling
+from common.dispositions import dispositions, removal_phrase, unscheduled
 
 from narrative.section_template import (
     Literal,
@@ -272,7 +273,7 @@ def _oxford_comma(items: list[str], conjunction: str = "or") -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
+def extract_mortality(sidecar_paths: dict[str, str], structure: dict | None = None) -> dict:
     """
     Extract mortality data from body weight sidecar JSON files.
 
@@ -288,6 +289,12 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
         sidecar_paths: Dict mapping sex label ("Male"/"Female") to the
                        absolute path of the sidecar JSON file.  Produced by
                        body_weight_table.find_sidecar_paths().
+        structure:     The study structure (integrated._meta.study_structure).
+                       When it records dispositions (a Removal Reasons
+                       workbook, common.dispositions), they decide the early
+                       removals: each core group's ``removals`` say how and
+                       when each animal left, and ``internal_removals`` lists
+                       the internal-dose animals removed off schedule.
 
     Returns:
         Dict with structure:
@@ -401,11 +408,46 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
         if not any_deaths:
             all_survived_doses.append(dose)
 
-    return {
+    mortality = {
         "expected_terminal_day": expected_day,
         "by_dose": by_dose,
         "all_survived_doses": all_survived_doses,
     }
+    if dispositions(structure):
+        _apply_dispositions(mortality, structure)
+    return mortality
+
+
+def _apply_dispositions(mortality: dict, structure: dict) -> None:
+    """Replace the early removals read from the body weight terminal days with
+    the recorded dispositions (common.dispositions); a disagreement is logged.
+    Adds ``removals`` [{disposition, day}] to each core (dose, sex) group and
+    ``internal_removals`` [{sex, dose, disposition, day}] for the internal-dose
+    animals."""
+    removed = unscheduled(structure)
+    core = [r for r in removed if not is_biosampling(r["selection"])]
+    by_dose = mortality["by_dose"]
+    for r in core:
+        by_dose.setdefault(r["dose"], {}).setdefault(
+            r["sex"], {"total": 0, "early_deaths": 0, "death_days": {}})
+    for dose, per_sex in by_dose.items():
+        for sex, sd in per_sex.items():
+            mine = [r for r in core if r["dose"] == dose and r["sex"] == sex]
+            if len(mine) != sd.get("early_deaths", 0):
+                logger.warning(
+                    "Mortality: %s %s group: the body weights show %d early removal(s), "
+                    "the Removal Reasons workbook %d; the workbook is used",
+                    sex, dose, sd.get("early_deaths", 0), len(mine))
+            sd["early_deaths"] = len(mine)
+            days = Counter(f"SD{r['day']}" for r in mine if r["day"] is not None)
+            sd["death_days"] = dict(days)
+            sd["removals"] = [{"disposition": r["disposition"], "day": r["day"]} for r in mine]
+    mortality["all_survived_doses"] = sorted(
+        d for d, per_sex in by_dose.items()
+        if not any(sd.get("early_deaths") for sd in per_sex.values()))
+    mortality["internal_removals"] = [
+        {k: r[k] for k in ("sex", "dose", "disposition", "day")}
+        for r in removed if is_biosampling(r["selection"])]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -593,6 +635,99 @@ def _animal_condition_death_detail_template(has_latest_day: bool, singular: bool
     return segs
 
 
+def _animal_condition_removal_detail_template() -> Template:
+    """One dose group's early removals as the Removal Reasons workbook records
+    them: "In the 250 ppm group, one female mouse was euthanized moribund on
+    study day 4."  Dose/unit are NUMERIC; the `removals` clause is CATEGORICAL
+    (how the animals left is wording, not a magnitude)."""
+    return [
+        Literal("In the "),
+        Slot("dose", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(" group, "),
+        Slot("removals", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
+
+
+def _internal_removals_template(cohort: str, animals: str, single: bool) -> Template:
+    """The internal-dose animals removed off schedule (NIEHS-12, 13): "One
+    internal concentration assessment animal in the 800 ppm group was found
+    dead on study day 4." or "In the internal concentration assessment mice,
+    one mouse in the 1 ppm group died accidentally on study day 1 and …".  The
+    `removals` clause is CATEGORICAL; `cohort` (pipeline.study_design.
+    internal_assessment) and `animals` are structural."""
+    if single:
+        return [
+            Literal(f"One {cohort} animal in the "),
+            Slot("dose", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+            Literal(" group "),
+            Slot("removals", SlotKind.CATEGORICAL),
+            Literal("."),
+        ]
+    return [
+        Literal(f"In the {cohort} {animals}, "),
+        Slot("removals", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
+
+
+_COUNT_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+
+
+def _count_word(n: int) -> str:
+    return _COUNT_WORDS[n] if 0 <= n < len(_COUNT_WORDS) else str(n)
+
+
+def _on_days(days: list[int | None]) -> str:
+    """"on study day 4" / "on study days 3 and 4" ("" when no day is recorded)."""
+    known = sorted({d for d in days if d is not None})
+    if not known:
+        return ""
+    if len(known) == 1:
+        return f" on study day {known[0]}"
+    return " on study days " + _oxford_comma([str(d) for d in known], conjunction="and")
+
+
+def _removal_clauses(removals: list[dict], noun, where: str = "") -> list[str]:
+    """One clause per disposition: "one female mouse was euthanized moribund on
+    study day 4".  ``noun(count)`` names the animals ("female mouse"); ``where``
+    follows it (" in the 250 ppm group")."""
+    by: dict[str, list] = {}
+    for r in removals:
+        by.setdefault(r["disposition"], []).append(r["day"])
+    return [f"{_count_word(len(days))} {noun(len(days))}{where} "
+            f"{removal_phrase(disposition, len(days))}{_on_days(days)}"
+            for disposition, days in by.items()]
+
+
+def _internal_removals_sentence(mortality: dict, dose_unit: str, animal: str,
+                                animals: str) -> str:
+    """The sentence for the internal-dose animals removed off schedule; "" when
+    none were (or the study records no dispositions)."""
+    from pipeline.study_design import internal_assessment
+
+    removed = mortality.get("internal_removals") or []
+    if not removed:
+        return ""
+    cohort = internal_assessment(dose_unit)
+    if len(removed) == 1:
+        r = removed[0]
+        return render(_internal_removals_template(cohort, animals, single=True), {
+            "dose": _fmt_dose(r["dose"]), "unit": dose_unit,
+            "removals": f"{removal_phrase(r['disposition'])}{_on_days([r['day']])}"})
+    clauses = []
+    for dose in sorted({r["dose"] for r in removed}):
+        clauses += _removal_clauses([r for r in removed if r["dose"] == dose],
+                                    lambda n: animal if n == 1 else animals,
+                                    where=f" in the {_fmt_dose(dose)} {dose_unit} group")
+    return render(_internal_removals_template(cohort, animals, single=False),
+                  {"removals": _oxford_comma(clauses, conjunction="and")})
+
+
 def _animal_condition_surviving_template(animals: str = "rats",
                                          observed: bool = True) -> Template:
     """The surviving-doses closing sentence.  `surv_doses` (the dose list) and
@@ -610,6 +745,28 @@ def _animal_condition_surviving_template(animals: str = "rats",
 
 
 def _build_animal_condition_paragraphs(
+    compound_name: str,
+    dose_unit: str,
+    mortality: dict,
+    clinical_obs_incidence: dict[str, list] | None,
+    design: dict | None = None,
+) -> list[str]:
+    """The "Animal Condition" paragraph(s) (_animal_condition_core), led by
+    the internal-dose animals removed off schedule when the study records them
+    (NIEHS-12, 13 put that sentence first)."""
+    from pipeline.study_design import design_or_standard, species_plural, species_singular
+
+    paragraphs = _animal_condition_core(compound_name, dose_unit, mortality,
+                                        clinical_obs_incidence, design)
+    facts = design_or_standard(design)
+    lead = _internal_removals_sentence(mortality or {}, dose_unit, species_singular(facts),
+                                       species_plural(facts))
+    if lead:
+        paragraphs = [f"{lead} {paragraphs[0]}", *paragraphs[1:]] if paragraphs else [lead]
+    return paragraphs
+
+
+def _animal_condition_core(
     compound_name: str,
     dose_unit: str,
     mortality: dict,
@@ -660,6 +817,10 @@ def _build_animal_condition_paragraphs(
     by_dose = mortality["by_dose"]
     expected_day = mortality.get("expected_terminal_day", "")
     all_survived = mortality.get("all_survived_doses", [])
+    # "All core female mice survived …" when the internal-dose animals' removals
+    # are reported beside it.
+    survivors = ("core " if mortality.get("internal_removals") else "") + \
+        _mortality_sex_subject(mortality, animals)
 
     # Identify doses with any early deaths (either sex)
     death_doses: list[float] = []
@@ -689,7 +850,7 @@ def _build_animal_condition_paragraphs(
                 binding["onset_day"] = str(onset_day)
             paragraphs.append(render(
                 _animal_condition_survived_with_signs_template(
-                    _mortality_sex_subject(mortality, animals), exposure_verb(facts),
+                    survivors, exposure_verb(facts),
                     compound_name, signs_subject, onset_day is not None),
                 binding,
             ))
@@ -697,7 +858,7 @@ def _build_animal_condition_paragraphs(
         # No mortality and no signs — brief statement that all survived
         # (template + render; byte-identical to the former f-string).
         paragraphs.append(
-            render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals),
+            render(_animal_condition_survived_template(survivors,
                                                        observed=clinical_obs_incidence is not None),
                    {"expected_day": expected_day})
         )
@@ -737,6 +898,16 @@ def _build_animal_condition_paragraphs(
     death_details: list[str] = []
     for dose in death_doses:
         dose_data = by_dose[dose]
+        if any("removals" in sd for sd in dose_data.values()):
+            # The Removal Reasons workbook says how and when each animal left.
+            clauses = [c for sex in ("Male", "Female")
+                       for c in _removal_clauses(
+                           dose_data.get(sex, {}).get("removals") or [],
+                           lambda n, sex=sex: f"{sex.lower()} {animal if n == 1 else animals}")]
+            death_details.append(render(_animal_condition_removal_detail_template(), {
+                "dose": _fmt_dose(dose), "unit": dose_unit,
+                "removals": _oxford_comma(clauses, conjunction="and")}))
+            continue
         sex_counts: list[str] = []
         # Latest death day for this dose (for the "by study day X" clause)
         latest_day_num = 0

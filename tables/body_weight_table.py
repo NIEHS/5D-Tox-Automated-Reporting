@@ -65,6 +65,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from common.dispositions import removal_phrase
 from tables.display_precision import row_decimals
 from tables.table_builder_common import (
     apical_caption,
@@ -191,6 +192,7 @@ def build_body_weight_table_from_sidecar(
     dose_unit: str = "mg/kg",
     design: dict | None = None,
     method=None,
+    dispositions: dict[str, dict] | None = None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
@@ -221,6 +223,11 @@ def build_body_weight_table_from_sidecar(
         dose_unit:     Dose unit string (default "mg/kg").
         design:        Study design facts (pipeline.study_design) for the caption's
                        species, verb and duration; None ⇒ the standard design.
+        dispositions:  {animal id: {"disposition", "day"}} from the study's
+                       Removal Reasons workbook (common.dispositions); an early
+                       removal's footnote then says how the animal left
+                       ("was euthanized moribund").  None or an animal without
+                       one ⇒ "was found dead", as before.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema,
@@ -319,6 +326,7 @@ def build_body_weight_table_from_sidecar(
                 attrition.setdefault(dose, []).append({
                     "animal_id": aid,
                     "terminal_day": terminal_day,
+                    "disposition": (dispositions or {}).get(str(aid), {}).get("disposition"),
                 })
 
             # Collect observation values by study day.
@@ -470,12 +478,8 @@ def build_body_weight_table_from_sidecar(
                 for day, day_events in sorted(by_day.items()):
                     if day != latest_day:
                         # Individual early death(s) — separate footnote
-                        individual_events.append({
-                            "sex": sex,
-                            "dose": dose,
-                            "count": len(day_events),
-                            "day": day,
-                        })
+                        individual_events.extend(
+                            _by_disposition(sex, dose, day, day_events))
 
                 # Record the mass attrition (by the latest day)
                 mass_doses.setdefault(latest_day, set()).add(dose)
@@ -484,12 +488,8 @@ def build_body_weight_table_from_sidecar(
                 # Partial attrition — some animals died but not all.
                 # Each gets its own individual footnote.
                 for day, day_events in sorted(by_day.items()):
-                    individual_events.append({
-                        "sex": sex,
-                        "dose": dose,
-                        "count": len(day_events),
-                        "day": day,
-                    })
+                    individual_events.extend(
+                        _by_disposition(sex, dose, day, day_events))
 
     # ── Pass 2: individual-death footnotes (n-row markers) ───────────
     # One lettered/cells footnote per DISTINCT (sex, study-day, count) —
@@ -506,17 +506,22 @@ def build_body_weight_table_from_sidecar(
         dose = ev["dose"]
         count = ev["count"]
         day = ev["day"]
+        disposition = ev["disposition"]
         day_num = day[2:] if day.upper().startswith("SD") else day
-        key = (sex, day, count)
+        key = (sex, day, count, disposition)
         fid = indiv_fid_by_key.get(key)
         if fid is None:
-            # First event with this (sex, day, count) — emit the footnote.
-            fid = f"indiv_death_{sex}_{day}_{count}"
+            # First event with this (sex, day, count, disposition) — emit the
+            # footnote.  Without a recorded disposition: "found dead".
+            slug = re.sub(r"\W+", "_", disposition.lower()) if disposition else ""
+            fid = f"indiv_death_{sex}_{day}_{count}" + (f"_{slug}" if slug else "")
             sex_word = sex.lower()
+            verb = (removal_phrase(disposition, count) if disposition else
+                    "was found dead" if count == 1 else "were found dead")
             if count == 1:
-                text = f"One {sex_word} {animal} was found dead on study day {day_num}."
+                text = f"One {sex_word} {animal} {verb} on study day {day_num}."
             else:
-                text = f"{count} {sex_word} {animals} were found dead on study day {day_num}."
+                text = f"{count} {sex_word} {animals} {verb} on study day {day_num}."
             footnotes.append(lettered_footnote(text, fid, target="cells"))
             indiv_fid_by_key[key] = fid
 
@@ -743,6 +748,17 @@ def build_body_weight_table_from_sidecar(
 
 
 # find_sidecar_paths is imported from table_builder_common.py.
+
+
+def _by_disposition(sex: str, dose: float, day: str, events: list[dict]) -> list[dict]:
+    """One individual-attrition event per disposition among ``events`` (the
+    early removals of one dose group on one day); disposition None when the
+    study records none."""
+    by: dict = defaultdict(int)
+    for ev in events:
+        by[ev.get("disposition")] += 1
+    return [{"sex": sex, "dose": dose, "count": n, "day": day, "disposition": d}
+            for d, n in sorted(by.items(), key=lambda kv: str(kv[0] or ""))]
 
 
 def _day_number(label: str) -> int | None:

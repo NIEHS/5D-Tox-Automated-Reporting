@@ -94,6 +94,10 @@ _WORKBOOK_STEMS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"Tissue_Concentration", re.I), "tissue_conc"),
 ]
 
+# The Removal Reasons workbook (NIEHS-12, 13): each animal's disposition and
+# removal day — no apical platform, copied as it is for the study structure.
+_REMOVALS = re.compile(r"Removal_Reasons", re.I)
+
 _SEX_WORDS = re.compile(r"\b(Male|Female)s?\b", re.I)
 
 # Chip species (BMDExpress ChipInfo, Latin) → the metadata vocabulary's common
@@ -222,6 +226,25 @@ def package_species(filenames: list[str]) -> str | None:
     return found.pop() if len(found) == 1 else None
 
 
+def _copy_removal_reasons(path: str, out_dir: str, study: str | None, as_csv: bool) -> dict:
+    """The Removal Reasons workbook, copied as it is: the study structure takes
+    each animal's disposition and removal day from it (ADR-0032).  The CSV
+    route has no place for it."""
+    name = os.path.basename(path)
+    if as_csv:
+        return {"file": name, "status": "skipped", "reason": "removal reasons: workbook route only"}
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    rows = list(wb["Data"].iter_rows(values_only=True)) if "Data" in wb.sheetnames else []
+    wb.close()
+    held = sorted({_cell(r[0]).strip() for r in rows[1:] if r and r[0] is not None} - {""})
+    if study and held and held != [study]:
+        return {"file": name, "status": "rejected",
+                "reason": f"the workbook holds study {', '.join(held)}, not {study}"}
+    shutil.copy2(path, os.path.join(out_dir, name))
+    return {"file": name, "status": "ok", "written": [name],
+            "notes": ["removal reasons: each animal's disposition and removal day"]}
+
+
 def convert_workbook(path: str, out_dir: str, species: str | None = None,
                      mg_levels: list[float] | None = None, study: str | None = None,
                      as_csv: bool = False) -> dict:
@@ -242,6 +265,8 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
     108020006_Individual_Animal_Hematology_Data.xlsx holds study 108020004
     (NIEHS-13's 1,4-dichlorobenzene rats)."""
     name = os.path.basename(path)
+    if _REMOVALS.search(name):
+        return _copy_removal_reasons(path, out_dir, study, as_csv)
     stem = workbook_stem(name)
     if stem is None:
         return {"file": name, "status": "skipped", "reason": "no apical platform"}

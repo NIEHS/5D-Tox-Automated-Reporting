@@ -160,3 +160,21 @@ def test_molar_doses_map_to_the_projects_mg_per_kg_levels():
         molar_to_mg_per_kg(["0.169", "0.338"], [61.2, 300.0])
     with pytest.raises(ValueError):            # more project levels than molar ones
         molar_to_mg_per_kg(["0.169"], [61.2, 122.5])
+
+
+def test_the_removal_reasons_workbook_is_copied_for_the_study_structure(tmp_path):
+    """NIEHS-12/13: no apical platform, but each animal's disposition."""
+    src = tmp_path / "108020007_Individual_Animal_Removal_Reasons_Data.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Study Number", "Animal ID", "Sex", "Concentration", "Disposition", "Removal Day"])
+    ws.append(["108020007", "502", "FEMALE", "250", "Euthanized Moribund", "SD4"])
+    wb.save(src)
+    out = tmp_path / "out"
+    out.mkdir()
+    assert convert_workbook(str(src), str(out), study="108020006")["status"] == "rejected"
+    assert convert_workbook(str(src), str(out), study="108020007", as_csv=True)["status"] == "skipped"
+    assert not list(out.iterdir())
+    assert convert_workbook(str(src), str(out), study="108020007")["written"] == [src.name]
+    assert (out / src.name).read_bytes() == src.read_bytes()

@@ -128,6 +128,18 @@ the `unverified_derived_data` warning.
   right dose and sex, except two NIEHS-02 arrays the sample list omits. RR-8,
   NIEHS-12 and 13 publish no sample sheet in a readable form, so their samples
   are reported as untraced.
-- **Not yet used:** NIEHS-12 and 13's *Removal Reasons* workbooks (each
-  animal's disposition and removal day). They have no platform, and the
-  attrition footnotes still infer early deaths from the study days.
+- **How each animal left the study** (2026-10-29). NIEHS-12 and 13's
+  *Removal Reasons* workbooks give each animal's disposition and removal day.
+  They have no platform: `cebs_to_pool` copies them, and the study structure
+  puts the two facts on each animal (`animals[id].disposition`,
+  `removal_day`). With them (`common.dispositions`):
+  - a body weight attrition footnote says what the workbook says: "One female
+    mouse was euthanized moribund on study day 4", not "was found dead";
+  - the Animal Condition paragraph takes its early removals from them, in the
+    same words, and reports the internal-dose animals removed off schedule
+    first, as the reports do ("One internal concentration assessment animal
+    in the 800 ppm group was found dead on study day 4"). Before, NIEHS-13
+    said nothing about those deaths.
+
+  A study without the workbook still infers its early removals from the body
+  weight study days.
