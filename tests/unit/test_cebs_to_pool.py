@@ -178,3 +178,22 @@ def test_the_removal_reasons_workbook_is_copied_for_the_study_structure(tmp_path
     assert not list(out.iterdir())
     assert convert_workbook(str(src), str(out), study="108020007")["written"] == [src.name]
     assert (out / src.name).read_bytes() == src.read_bytes()
+
+
+def test_a_database_export_takes_its_organ_weight_unit_from_the_pa06_summary(tmp_path):
+    """NIEHS-02 … 05's CEBS export records no organ weight unit; the package's
+    PA06 Organ Weights Summary prints it ("Absolute (g)")."""
+    from bmdx_pipe import key_sheet_units
+    from tooling.cebs_to_pool import pa06_weight_units
+
+    package = Path(__file__).resolve().parents[2] / "assets" / "cebs" / "NIEHS-02"
+    if not package.is_dir():
+        pytest.skip("the NIEHS-02 CEBS package is local only")
+    assert pa06_weight_units(str(package)) == {"absolute": "g", "body": "g"}
+    out = tmp_path / "out"
+    out.mkdir()
+    summary = convert_workbook(str(package / "C10674_Individual_Animal_Organ_Weight_Data.xlsx"),
+                               str(out))
+    assert any("PA06" in n for n in summary["notes"])
+    assert set(key_sheet_units(str(out / "C10674_Individual_Animal_Organ_Weight_Data.xlsx"))
+               .values()) == {"g"}

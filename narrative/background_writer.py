@@ -11,7 +11,7 @@ Paragraph structure (matches Scott Auerbach's template):
   3. Exposure routes & ADME (absorption, distribution, metabolism, excretion)
   4. Toxicological effects by duration (acute, subchronic, chronic, carcinogenicity)
   5. Mechanism of toxicity (reactive intermediates, oxidative stress, etc.)
-  6. Study purpose (linking to the specific 5-day genomic dose-response study)
+  6. Study purpose (linking to the specific genomic dose-response study)
 
 LLM selection:
   All models are served through the LiteLLM proxy's Anthropic-format endpoint
@@ -238,8 +238,8 @@ PARAGRAPH 6 — Data Gap Analysis (Hazard Characterization & Risk Assessment)
 PARAGRAPH 7 — Study Purpose
 - One to two sentences connecting all the above to the specific study
 - Template: "Given the [uses/exposure potential] of [chemical], its
-  [key tox effects], and the [identified data gaps], this 5 day genomic
-  dose response study was conducted to
+  [key tox effects], and the [identified data gaps], this short-term in vivo
+  genomic dose-response study was conducted to
   [characterize gene expression changes / identify molecular targets /
   fill specific knowledge gaps / etc.]."
 

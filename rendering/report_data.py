@@ -453,7 +453,8 @@ def marshal_export_data(
                 from genomics.pca_figure import build_pca_figure
                 _ip = _sdir_roster(_dtxsid_roster) / "integrated.json"
                 _pca = build_pca_figure(_json_pca.loads(_ip.read_text(encoding="utf-8")),
-                                        dose_unit=body.get("dose_unit") or "mg/kg") \
+                                        dose_unit=body.get("dose_unit") or "mg/kg",
+                                        tissue_order=_definition_fact(_dtxsid_roster or "", "tissue_order")) \
                     if _ip.exists() else None
             except Exception:  # noqa: BLE001 — leaves the figure's pending note
                 _pca = None

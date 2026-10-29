@@ -34,3 +34,31 @@ def recorded_units(sidecars, endpoint_filter) -> dict[str, str]:
             if unit and endpoint_filter(ep):
                 out[ep] = display_unit(unit)
     return out
+
+
+# Mass units, as the Key sheets spell them ("grams", "g") → the symbol a row
+# label prints ("Liver Absolute (g)"); the name a footnote prints ("presented
+# in grams"); a thousandth, for the relative organ weights ×1000 ("mg/g").
+_MASS = {"g": "g", "gm": "g", "gram": "g", "grams": "g",
+         "mg": "mg", "milligram": "mg", "milligrams": "mg",
+         "kg": "kg", "kilogram": "kg", "kilograms": "kg"}
+_MASS_NAME = {"g": "grams", "mg": "milligrams", "kg": "kilograms", "µg": "micrograms"}
+_THOUSANDTH = {"kg": "g", "g": "mg", "mg": "µg"}
+
+
+def mass_unit(sidecars, endpoint_filter) -> str | None:
+    """The one mass symbol ("g") the sidecars record for the endpoints
+    `endpoint_filter` accepts; None when none is recorded, the endpoints
+    disagree, or a unit is not a mass."""
+    symbols = {_MASS.get(str(u).strip().lower()) for u in
+               recorded_units(sidecars, endpoint_filter).values()}
+    return symbols.pop() if len(symbols) == 1 and None not in symbols else None
+
+
+def mass_name(symbol: str | None) -> str | None:
+    return _MASS_NAME.get(symbol) if symbol else None
+
+
+def thousandth(symbol: str | None) -> str | None:
+    """The unit of a value ×1000: "g" → "mg"."""
+    return _THOUSANDTH.get(symbol) if symbol else None

@@ -773,7 +773,7 @@ async def _get_sections(ctx):
     apical_sex_allow = (ctx.sex_filters or {}).get("apical")
     # Species, verb and duration for the table captions (the render path
     # recomposes them from the current design, so a cached caption is not stale).
-    from pipeline.study_design import study_design_facts
+    from pipeline.study_design import internal_assessment, study_design_facts
     _design = study_design_facts(integrated, dose_unit)
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
@@ -832,8 +832,8 @@ async def _get_sections(ctx):
                     # The builder states what the data hold (matrices and study
                     # days) when it can; the G2 plasma table is biosampling-only.
                     narrative = [tc_result.get("summary") or (
-                        f"Plasma concentrations of {compound_name} were "
-                        f"measured in biosampling animals.")]
+                        f"Plasma concentrations of {compound_name} were measured in "
+                        f"animals dedicated for {internal_assessment(dose_unit)}.")]
                     sections.append({
                         "platform": "Tissue Concentration",
                         "title": "Tissue Concentration",

@@ -226,6 +226,24 @@ def package_species(filenames: list[str]) -> str | None:
     return found.pop() if len(found) == 1 else None
 
 
+def pa06_weight_units(package_dir: str) -> dict[str, str]:
+    """``{"absolute": "g", "body": "g"}``: the organ weight units the
+    package's PA06 Organ Weights Summary prints ("Terminal Body Wt. (g)",
+    "Absolute (g)"), which the CEBS database export (NIEHS-02 … 05) leaves
+    out; {} when the package has no such summary or it names none."""
+    import pypdf
+    for pdf in sorted(glob.glob(os.path.join(package_dir, "*PA06*Organ*Weight*.pdf"))):
+        try:
+            text = "\n".join(p.extract_text() or "" for p in pypdf.PdfReader(pdf).pages[:2])
+        except Exception:  # noqa: BLE001 — an unreadable summary names no unit
+            continue
+        body = re.search(r"Terminal Body Wt\.?\s*\(([^)\s]+)\)", text)
+        absolute = re.search(r"Absolute\s*\(([^)\s]+)\)", text)
+        if body and absolute:
+            return {"absolute": absolute.group(1), "body": body.group(1)}
+    return {}
+
+
 def _copy_removal_reasons(path: str, out_dir: str, study: str | None, as_csv: bool) -> dict:
     """The Removal Reasons workbook, copied as it is: the study structure takes
     each animal's disposition and removal day from it (ADR-0032).  The CSV
@@ -298,6 +316,16 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None,
         export_rows = [r for r in sheet[1:] if any(c is not None and str(c).strip() for c in r)]
         header, body, export_units, notes = cebs_db_export.to_key_data(stem, export_header, export_rows)
         notes = notes + ["CEBS database export converted to Key/Data columns"]
+        if stem == "organ_weights" and not export_units:
+            # The export records no organ weight unit; the package's PA06
+            # summary prints it.
+            pa06 = pa06_weight_units(os.path.dirname(path))
+            if pa06:
+                organs = header[header.index("Removal Day") + 1:]
+                export_units = {c: pa06["body"] if c == "Terminal Body Weight" else pa06["absolute"]
+                                for c in organs}
+                notes.append(f"organ weight units from the PA06 summary: absolute "
+                             f"{pa06['absolute']}, terminal body weight {pa06['body']}")
         unit_col = export_header.index("DOSE_UNIT") if "DOSE_UNIT" in export_header else None
         export_dose_units = {_cell(r[unit_col]).strip() for r in export_rows} - {""} \
             if unit_col is not None else set()

@@ -112,8 +112,17 @@ BODY_WEIGHT_GAIN = "Body Weight Gain"
 # column header.  Their text is verbatim from NIEHS Report 10 Table 2.
 FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean; "
-    "body weight data are presented in grams."
+    "body weight data are presented in {unit}."
 )
+
+
+def data_format_footnote(sidecars) -> str:
+    """FOOTNOTE_DATA_FORMAT in the unit the sidecars record for body weight
+    (the Key sheet's "grams"); a Placeholder when none is recorded."""
+    from tables.units import UNIT_NOT_RECORDED, mass_name, mass_unit
+    unit = mass_name(mass_unit(sidecars, lambda ep: "body weight" in ep.lower()))
+    return FOOTNOTE_DATA_FORMAT.format(
+        unit=unit or UNIT_NOT_RECORDED.format(what="body weight"))
 
 
 # BMD_DEFINITION is imported from table_builder_common.py.
@@ -272,8 +281,8 @@ def build_body_weight_table_from_sidecar(
     # endpoint.  Falls back to the latest day if no terminal flags exist.
     _all_terminal_days: list[str] = []
     _all_obs_days: set[str] = set()
-    for sc_path in sidecar_paths.values():
-        sc = _load_sidecar(sc_path)
+    loaded_sidecars = [_load_sidecar(p) for p in sidecar_paths.values()]
+    for sc in loaded_sidecars:
         for rec in sc.get("animals", {}).values():
             for obs in rec.get("observations", []):
                 day = obs.get("day", "")
@@ -293,7 +302,7 @@ def build_body_weight_table_from_sidecar(
             key=lambda d: int(d[2:]) if d.upper().startswith("SD") and d[2:].isdigit() else 999,
         )
     else:
-        expected_terminal_day = "SD5"  # last resort default
+        expected_terminal_day = ""  # no observations: no study day to name
 
     for sex, sc_path in sidecar_paths.items():
         sc = _load_sidecar(sc_path)
@@ -415,7 +424,7 @@ def build_body_weight_table_from_sidecar(
     # body-weight footnote is Canonical — anchored in NIEHS Report 10 Table 2.
     footnotes: list[dict] = [
         definition_footnote(BMD_DEFINITION),
-        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format", target="header"),
+        lettered_footnote(data_format_footnote(loaded_sidecars), "data_format", target="header"),
     ]
     # The statistical-method footnote names the tests the study's method
     # profile ran for body weights (ADR-0027).
@@ -588,7 +597,10 @@ def build_body_weight_table_from_sidecar(
         ))
 
     # ── Which study days are TABLE ROWS: per sex, see _display_days ─────
-    first_day = "SD0"
+    # The first is the earliest day the study weighed its animals (SD0, the
+    # baseline, in every NIEHS study).
+    first_day = min(_all_obs_days, key=lambda d: (_day_number(d) is None, _day_number(d) or 0),
+                    default="")
 
     # ── Build the complete row grid per sex ──────────────────────────────
     # Python builds every row the table will contain — including the `n`

@@ -87,6 +87,7 @@ def build_report_summary(
     bmd_decimals: int | None = None,
     design: dict | None = None,
     abbreviation: str = "",
+    tissue_order: list[str] | None = None,
 ) -> list[str]:
     """The Summary paragraphs (empty when there is nothing to summarize).
 
@@ -97,7 +98,8 @@ def build_report_summary(
     is the study design (pipeline.study_design) for the species word; None ⇒
     the standard design.  ``abbreviation`` is the study's recorded short form
     of the chemical: the Summary introduces it at the first mention and uses
-    it after (narrative.test_article)."""
+    it after (narrative.test_article).  ``tissue_order`` is the report's
+    (document_tree.tissue_key), so the organs come in the tables' order."""
     from pipeline.study_design import design_or_standard, species_plural
 
     animals = species_plural(design_or_standard(design))
@@ -179,10 +181,9 @@ def build_report_summary(
         paragraphs.append(" ".join(sentences))
 
     # 4. Per organ: most sensitive gene set and gene, by sex.
-    # Liver, then kidney, then the rest alphabetically — the genomics tables' order.
-    organ_rank = {"liver": 0, "kidney": 1}
-    organs = sorted({key.rsplit("_", 1)[0] for key in genomics},
-                    key=lambda o: (organ_rank.get(o, 99), o))
+    # In the report's tissue order — the genomics tables' order.
+    from document_model.document_tree import tissue_key
+    organs = sorted({key.rsplit("_", 1)[0] for key in genomics}, key=tissue_key(tissue_order))
     for organ in organs:
         gs_parts, gene_parts = [], []
         for sex in sexes:

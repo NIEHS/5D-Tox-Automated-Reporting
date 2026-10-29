@@ -323,7 +323,7 @@ in square brackets, e.g. "... consistent with Nrf2 pathway activation [P3]."
 - Cite the papers that genuinely support each claim; you need not cite all of them."""
 
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
-NIEHS/NTP 5-day study technical report on {compound}.
+NIEHS/NTP in vivo repeat dose biological potency study report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.
@@ -380,7 +380,7 @@ Return ONLY valid JSON, no markdown formatting."""
         gene_table = "\n".join(gene_lines) if gene_lines else "(no genes)"
 
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
-NIEHS/NTP 5-day study technical report on {compound}.
+NIEHS/NTP in vivo repeat dose biological potency study report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.

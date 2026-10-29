@@ -108,8 +108,26 @@ def _organ_weight_caption(serialized: dict, compound_name: str,
 # Additional organ-weight-specific footnotes from the NIEHS reference:
 FOOTNOTE_RELATIVE_WEIGHT = (
     "Relative organ weights (organ weight-to-body weight ratios) "
-    "are given as mg organ weight/g body weight."
+    "are given as {organ} organ weight/{body} body weight."
 )
+
+
+def weight_units(sidecars) -> dict[str, str]:
+    """The units the organ weight rows print, from the sidecars' Key-sheet
+    units: ``absolute`` (the organs' "g"), ``body`` (terminal body weight's),
+    ``relative`` ("mg/g": the organ unit's thousandth per body weight unit,
+    relative weights being ×1000) and ``relative_organ`` ("mg").  A unit the
+    data don't record (or record inconsistently) is a Placeholder."""
+    from tables.units import UNIT_NOT_RECORDED, mass_unit, thousandth
+    is_tbw = lambda ep: "terminal body weight" in ep.lower()  # noqa: E731
+    organ = mass_unit(sidecars, lambda ep: not is_tbw(ep))
+    body = mass_unit(sidecars, is_tbw)
+    missing = UNIT_NOT_RECORDED.format(what="organ weight")
+    milli = thousandth(organ)
+    return {"absolute": organ or missing,
+            "body": body or UNIT_NOT_RECORDED.format(what="terminal body weight"),
+            "relative": f"{milli}/{body}" if milli and body else missing,
+            "relative_organ": milli or missing}
 
 # The significance-marker text (SIGNIFICANCE_EXPLANATION + the */** legend)
 # is shared across every apical table and lives in table_builder_common -
@@ -228,6 +246,7 @@ def build_organ_weight_table_from_sidecar(
     sidecar_data: dict[str, dict] = {}
     for sex, sc_path in sidecar_paths.items():
         sidecar_data[sex] = load_sidecar(sc_path)
+    units = weight_units(sidecar_data.values())
 
     # ── Detect Core Animal availability per dose (shared helper) ──────────
     # Splits each dose group's Core Animals into "has usable data" vs
@@ -449,7 +468,7 @@ def build_organ_weight_table_from_sidecar(
             else:
                 tbw_row_vals[dk] = "\u2013"
         rows.append({
-            "label": "Terminal Body Weight (g)",
+            "label": f"Terminal Body Weight ({units['body']})",
             "decimals": row_decimals("Terminal Body Weight"),
             "doses": sorted_doses,
             "values": tbw_row_vals,
@@ -511,7 +530,7 @@ def build_organ_weight_table_from_sidecar(
             # the absolute-weight row is emphasized when it passed the NTP
             # responsive gate OR BMDExpress produced a reportable BMD.
             abs_entry = {
-                "label": f"{organ} Absolute (g)",
+                "label": f"{organ} Absolute ({units['absolute']})",
                 "decimals": row_decimals(f"{organ} Absolute"),
                 "doses": sorted_doses,
                 "values": abs_values,
@@ -553,7 +572,7 @@ def build_organ_weight_table_from_sidecar(
                 rel_bmd = rel_bmdl = "ND"
                 rel_responsive = False
             rel_entry = {
-                "label": f"{organ} Relative (mg/g)",
+                "label": f"{organ} Relative ({units['relative']})",
                 "decimals": row_decimals(f"{organ} Relative"),
                 "doses": sorted_doses,
                 "values": rel_values,
@@ -595,7 +614,8 @@ def build_organ_weight_table_from_sidecar(
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for organ weights.
     footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight")
-    footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT, "relative_weight"))
+    footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT.format(
+        organ=units["relative_organ"], body=units["body"]), "relative_weight"))
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # Same detection and footnote-building as clinical pathology; see

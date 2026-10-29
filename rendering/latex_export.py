@@ -452,16 +452,13 @@ def _convert_genomics_cache(
         sex = (entry.get("sex") or "").strip()
         by_organ.setdefault(organ.lower(), {})[sex.lower()] = entry
 
-    def _organ_rank(organ_lower: str) -> tuple[int, str]:
-        # Liver first, Kidney second, then anything else alphabetically.
-        order = {"liver": 0, "kidney": 1}
-        return (order.get(organ_lower, 99), organ_lower)
-
     def _sex_rank(sex_lower: str) -> tuple[int, str]:
         order = {"male": 0, "female": 1}
         return (order.get(sex_lower, 99), sex_lower)
 
-    for organ_lower in sorted(by_organ, key=_organ_rank):
+    # Alphabetical here; the caller puts them in the report's tissue order
+    # (document_tree.order_tissues with the definition's tissue_order).
+    for organ_lower in sorted(by_organ):
         sexes = by_organ[organ_lower]
         # Display organ name from the first cache entry (preserves casing).
         any_entry = next(iter(sexes.values()))
@@ -926,6 +923,16 @@ def load_session_data(
         if converted:
             data["genomics_sections"] = converted
 
+    # A study whose integrated project measured no gene expression has no
+    # genomics tables: the scaffold's placeholder entries (liver, kidney) go, so
+    # the gene_expression gate prunes the genomics nodes.  An unintegrated
+    # session keeps the scaffold.
+    _ge_project = _load_json(session_dir / "integrated.json")
+    if isinstance(_ge_project, dict) and _ge_project.get("doseResponseExperiments") and not any(
+            ((e.get("experimentDescription") or {}).get("dataType") or "").lower() == "gene_expression"
+            for e in _ge_project["doseResponseExperiments"]):
+        data["genomics_sections"] = []
+
     # This study's own authored content for study-bound freeform nodes.
     from styling_export.freeform_content import load_study_authored
     data["authored"] = load_study_authored(dtxsid)
@@ -946,10 +953,12 @@ def load_session_data(
 
     # ── Appendix C.1: PCA of the modeled expression data ──────────────
     try:
+        from document_model.view_config import study_document_facts
         from genomics.pca_figure import build_pca_figure
         _pca = build_pca_figure(_load_json(session_dir / "integrated.json") or {},
                                 dose_unit=((methods_cache or {}).get("context") or {}).get("dose_unit")
-                                or "mg/kg")
+                                or "mg/kg",
+                                tissue_order=study_document_facts(definition_of or dtxsid)["tissue_order"])
     except Exception:  # noqa: BLE001 — a figure failure leaves the pending note
         _pca = None
     if _pca:

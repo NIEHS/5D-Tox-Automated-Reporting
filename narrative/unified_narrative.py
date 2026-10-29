@@ -77,8 +77,8 @@ _NOT_EVALUATED_STATEMENT: dict[str, str] = {
     "apical": "Body and organ weights were not evaluated in this study.",
     "clinical_pathology": "Clinical pathology (clinical chemistry, hematology, and "
                           "hormone analyses) was not evaluated in this study.",
-    "internal_dose": "The internal dose (plasma concentration) was not assessed in "
-                     "this study.",
+    # The matrix is not named: plasma (NIEHS-07 … 10) or blood and tissues (12, 13).
+    "internal_dose": "Internal dose was not assessed in this study.",
 }
 
 

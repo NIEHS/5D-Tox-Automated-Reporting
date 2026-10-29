@@ -247,7 +247,7 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
     by_sex = tk.get("by_sex") or {}
     if not by_sex:
         return []
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import design_or_standard, internal_assessment, species_plural
 
     facts = design_or_standard(design)
     animals = species_plural(facts)
@@ -264,8 +264,8 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
         hrs = " and ".join(f"{int(h) if float(h).is_integer() else h}" for h in hours)
         dgs = " and ".join(f"{_fmt_dose(d)} {dose_unit}" for d in doses)
         paragraphs.append(
-            f"Plasma concentrations of {compound_name} were measured in biosampling "
-            f"animals at {hrs} hours following the final {final} in the {dgs} "
+            f"Plasma concentrations of {compound_name} were measured in animals "
+            f"dedicated for {internal_assessment(dose_unit)} at {hrs} hours following the final {final} in the {dgs} "
             f"{'exposure' if final == 'exposure' else 'dose'} groups. "
             f"Average plasma concentrations{f' (in {unit})' if unit else ''} are "
             f"summarized in the accompanying table."

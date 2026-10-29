@@ -494,3 +494,18 @@ def test_assign_genomics_figure_numbers_sequential_across_entries():
     nums = [(c["key"], c["figure_number"])
             for s in sections for c in s.get("charts", [])]
     assert nums == [("umap", 1), ("cluster", 2), ("umap", 3), ("cluster", 4)]
+
+
+def test_a_study_without_transcriptomics_has_no_genomics_tables(sessions_dir):
+    """The scaffold's placeholder genomics entries (liver, kidney) go when the
+    integrated project measured no gene expression, so the gene_expression
+    gate prunes the genomics tables; an unintegrated session keeps them."""
+    sess = sessions_dir / "DTXSID_TEST"
+    sess.mkdir(parents=True)
+    assert load_session_data("DTXSID_TEST")["genomics_sections"]      # the scaffold's
+    (sess / "integrated.json").write_text(json.dumps({"doseResponseExperiments": [
+        {"name": "BW", "experimentDescription": {"dataType": "tox_study", "platform": "Body Weight"}},
+    ]}))
+    data = load_session_data("DTXSID_TEST")
+    assert data["genomics_sections"] == []
+    assert "gene_expression" not in data["collected_platforms"]

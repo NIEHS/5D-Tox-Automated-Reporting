@@ -23,14 +23,17 @@ import math
 
 import numpy as np
 
-_ORGAN_RANK = {"liver": 0, "kidney": 1}
 _SEX_RANK = {"male": 0, "female": 1}
 _PAIRS = ((0, 1), (0, 2), (1, 2))
 
 CAPTION = "Principal Component Analysis of the Normalized Transcriptomic Data"
 
 
-def _experiments(integrated: dict) -> list[dict]:
+def _experiments(integrated: dict, tissue_order: list[str] | None = None) -> list[dict]:
+    """The gene-expression experiments in the report's tissue order
+    (document_tree.tissue_key), then male before female."""
+    from document_model.document_tree import tissue_key
+    organ_key = tissue_key(tissue_order)
     out = []
     for exp in integrated.get("doseResponseExperiments") or []:
         desc = exp.get("experimentDescription") or {}
@@ -38,8 +41,7 @@ def _experiments(integrated: dict) -> list[dict]:
             continue
         out.append(exp)
     out.sort(key=lambda e: (
-        _ORGAN_RANK.get(str((e.get("experimentDescription") or {}).get("organ") or "").lower(), 99),
-        str((e.get("experimentDescription") or {}).get("organ") or ""),
+        organ_key((e.get("experimentDescription") or {}).get("organ")),
         _SEX_RANK.get(str((e.get("experimentDescription") or {}).get("sex") or "").lower(), 99),
     ))
     return out
@@ -81,11 +83,12 @@ def _dose_label(d: float) -> str:
     return f"{d:g}"
 
 
-def build_pca_figure(integrated: dict, dose_unit: str = "mg/kg") -> dict | None:
+def build_pca_figure(integrated: dict, dose_unit: str = "mg/kg",
+                     tissue_order: list[str] | None = None) -> dict | None:
     """The figure payload ``{png_b64, caption}`` for Appendix C, or None when the
     project has no gene-expression experiment large enough for a PCA."""
     panels = []
-    for exp in _experiments(integrated):
+    for exp in _experiments(integrated, tissue_order):
         m = _matrix(exp)
         if m is None:
             continue

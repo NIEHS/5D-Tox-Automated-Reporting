@@ -419,7 +419,7 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 #    concentrations, no vehicle or formulations.
 # 4: the biosampling cohort is recognized in either CEBS spelling ("Biosample
 #    Animals" in NIEHS-07/-12/-13), so its doses reach Study Design.
-_METHODS_CACHE_SCHEMA_VERSION = 5  # bumped: group sizes count every animal of a study that marks no Core cohort
+_METHODS_CACHE_SCHEMA_VERSION = 6  # bumped: the prompt no longer supplies procedures, instruments or a gene-set statistic the data lack
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:
