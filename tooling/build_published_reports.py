@@ -203,7 +203,11 @@ def build(report: str) -> tuple[str, int, str]:
         if token:
             from bmdx_pipe import subset_bm2
             subset = inputs / f"{dtxsid}_genomic.bm2"
-            subset_bm2(str(project), str(subset), token)
+            try:
+                subset_bm2(str(project), str(subset), token)
+            except RuntimeError as e:
+                fh.write(f"subset {project.name} failed: {e}\n")
+                return report, 1, f"subset failed ({log})"
             fh.write(f"subset {project.name} to experiments containing {token!r}\n")
         else:
             subset = inputs / project.name
@@ -294,6 +298,10 @@ def main(argv=None) -> int:
         raise SystemExit(f"unknown report(s) {unknown}")
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
+    # The genomic subset runs Java in this process, before generate_report
+    # sets up its env: JDK 21 first on PATH, BMDX_PROJECT_ROOT, the CA bundle.
+    from tooling.generate_report import _bootstrap_env
+    _bootstrap_env()
     failed = 0
     with ThreadPoolExecutor(max_workers=a.jobs) as pool:
         for report, rc, where in pool.map(build, reports):
