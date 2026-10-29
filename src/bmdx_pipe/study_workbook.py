@@ -101,6 +101,13 @@ class StudyWorkbook:
         return None
 
     @property
+    def is_removal_reasons(self) -> bool:
+        """The study's Removal Reasons workbook (NIEHS-12, 13): each animal's
+        disposition ("Scheduled Removal (Terminal)", "Found Dead", "Euthanized
+        Moribund", …) and removal day.  It records the animals, not a platform."""
+        return self.col("Disposition") is not None and self.col("Removal Day") is not None
+
+    @property
     def endpoint_cols(self) -> list[int]:
         """Indices of the measured columns: everything that isn't META_COLS."""
         return [i for i, h in enumerate(self.header)

@@ -468,7 +468,8 @@ class FileFingerprint:
       platform      — Apical platform name ("Body Weight", "Clinical Chemistry",
                         etc.) or None for gene expression / unrecognized files
       data_type     — "tox_study", "inferred", "gene_expression", or
-                      "sample_sheet" (sample_sheet: genomic sample → animal)
+                      "sample_sheet" (sample_sheet: genomic sample → animal), or
+                      "removal_reasons" (each animal's disposition; no platform)
       endpoint_names — e.g., ["SD0", "SD5"] or ["Liver Weight Absolute", ...]
       animal_ids    — e.g., ["101", "102", ...] — for cross-tier count comparison
       n_animals_by_dose — {0.0: 10, 4.0: 8, ...} — animals per dose group
@@ -911,7 +912,11 @@ def fingerprint_xlsx(
     # "..._Organ_Weight_Data.xlsx" as `inferred` for lack of a `_truth` token.
     # Platform (from filename) is left as detected; only the data_type
     # provenance is corrected. Non-study xlsx keep the filename-derived data_type.
-    if fp.is_study_file:
+    if fp.is_study_file and wb.is_removal_reasons:
+        # Each animal's disposition and removal day (the study structure's):
+        # the animals are fingerprinted for the roster checks, no platform.
+        fp.platform, fp.data_type = None, "removal_reasons"
+    elif fp.is_study_file:
         fp.data_type = "tox_study"
     else:
         # The study's sample sheet (sample_sheet): which animal each genomic
@@ -975,7 +980,7 @@ def fingerprint_xlsx(
         dose: {sex: sorted(aids) for sex, aids in sex_map.items()}
         for dose, sex_map in sorted(core_by_dose_sex.items())
     }
-    fp.endpoint_names = sorted(wb.endpoints)
+    fp.endpoint_names = [] if fp.data_type == "removal_reasons" else sorted(wb.endpoints)
     return fp
 
 

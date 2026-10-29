@@ -42,7 +42,9 @@ class StudyStructure:
     design: dict[str, str] = field(default_factory=dict)
     sexes: list[str] = field(default_factory=list)
     dose_groups: list[float] = field(default_factory=list)
-    # {animal id: {"sex": "Male", "dose": 4.0, "selection": "Core Animals"}}
+    # {animal id: {"sex": "Male", "dose": 4.0, "selection": "Core Animals"}},
+    # with "disposition" and "removal_day" when the study has a Removal
+    # Reasons workbook (e.g. "Euthanized Moribund", "SD4").
     animals: dict[str, dict] = field(default_factory=dict)
     # {platform: {"workbook", "endpoints", "units", "days"}}
     platforms: dict[str, dict] = field(default_factory=dict)
@@ -71,7 +73,9 @@ def build_study_structure(workbooks: dict[str, str],
     """The structure the study workbooks describe.
 
     Args:
-        workbooks:     {path: platform} of the pool's study workbooks.
+        workbooks:     {path: platform} of the pool's study workbooks; the
+                       Removal Reasons workbook (platform None) adds each
+                       animal's disposition and removal day.
         sample_sheets: paths of the pool's sample sheets (sample_sheet), which
                        map genomic samples to animals.
     """
@@ -91,9 +95,10 @@ def build_study_structure(workbooks: dict[str, str],
     doses: set[float] = set()
     sexes: set[str] = set()
 
-    for path, platform in sorted(workbooks.items()):
+    for path, platform in sorted(workbooks.items(), key=lambda kv: kv[0]):
         name = os.path.basename(path)
         wb = read_study_workbook(path)
+        removals = wb.is_removal_reasons
         for n in ([wb.study_number] if wb.study_number else []) + wb.held_study_numbers:
             numbers.setdefault(n, [])
             if name not in numbers[n]:
@@ -115,10 +120,15 @@ def build_study_structure(workbooks: dict[str, str],
                 sexes.add(ob.sex)
             if ob.dose is not None:
                 doses.add(ob.dose)
+            if removals:
+                rec["disposition"] = ob.values.get("Disposition") or None
+                rec["removal_day"] = ob.day or None
             prior = seen.get(ob.animal_id)
             if prior is None:
                 seen[ob.animal_id] = (rec, name)
                 continue
+            if removals:
+                prior[0].update(disposition=rec["disposition"], removal_day=rec["removal_day"])
             known, where = prior
             for key in ("sex", "dose"):
                 if rec[key] is not None and known[key] is not None and rec[key] != known[key]:
@@ -128,6 +138,8 @@ def build_study_structure(workbooks: dict[str, str],
                     known[key] = rec[key]
             if known["selection"] is None:
                 known["selection"] = rec["selection"]
+        if removals:
+            continue
         st.platforms[platform] = {
             "workbook": name,
             "endpoints": wb.endpoints,

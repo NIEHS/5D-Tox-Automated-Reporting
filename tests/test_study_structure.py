@@ -133,3 +133,23 @@ def test_a_file_whose_content_was_not_read_cannot_pass(tmp_path):
                          ts_added="t", platform="Body Weight", data_type="inferred")
     kinds = [i.issue_type for i in check_against_structure({"b": fp}, st)]
     assert kinds == ["file_not_checked"]
+
+
+def test_the_removal_reasons_workbook_gives_each_animal_its_disposition(tmp_path):
+    from bmdx_pipe.file_integrator import fingerprint_file
+
+    rr = tmp_path / "S1_Individual_Animal_Removal_Reasons_Data.xlsx"
+    _workbook(rr, [["S1", "0", "1", "Male", "Core Animals", "Scheduled Removal (Terminal)", "SD5"],
+                   ["S1", "4", "2", "Male", "Core Animals", "Euthanized Moribund", "SD3"]],
+              header=["NTP Study Number", "Concentration", "Animal ID", "Sex", "Selection",
+                      "Disposition", "Removal Day"])
+    bw = _workbook(tmp_path / "a.xlsx", ROWS)
+    st = build_study_structure({bw: "Body Weight", str(rr): None})
+    assert st.animals["2"] == {"sex": "Male", "dose": 4.0, "selection": "Core Animals",
+                               "disposition": "Euthanized Moribund", "removal_day": "SD3"}
+    assert "11" in st.animals and "disposition" not in st.animals["11"]
+    assert set(st.platforms) == {"Body Weight"} and not st.conflicts
+
+    fp = fingerprint_file("r", rr.name, str(rr), "xlsx", "t")
+    assert (fp.platform, fp.data_type, fp.endpoint_names) == (None, "removal_reasons", [])
+    assert fp.animal_doses == {"1": 0.0, "2": 4.0}
