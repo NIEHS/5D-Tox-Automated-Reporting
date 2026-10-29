@@ -35,6 +35,7 @@ from collections import Counter
 from bmdx_pipe import TableRow
 from common.animal_selection import is_biosampling
 from common.dispositions import dispositions, removal_phrase, unscheduled
+from narrative.clinical_signs import sign_phrases
 
 from narrative.section_template import (
     Literal,
@@ -529,12 +530,14 @@ def _animal_condition_survived_with_signs_template(
 
 
 def _signs_at_doses(clinical_obs_incidence: dict[str, list] | None,
-                    doses: list[float]) -> tuple[list[str], int | None]:
+                    doses: list[float], inhaled: bool = False) -> tuple[list[str], int | None]:
     """(findings, onset day) of the clinical signs seen in the given dose
-    groups: the findings in incidence order, and the earliest study day any of
-    them was observed there (IncidenceRow.onset_day_by_dose; None when the
+    groups: the findings in incidence order, worded as the reports word them
+    (narrative.clinical_signs), and the earliest study day any of them was
+    observed there (IncidenceRow.onset_day_by_dose; None when the
     observations record no day)."""
-    findings: list[str] = []
+    findings: list = []
+    labels: set[str] = set()
     onset: int | None = None
     wanted = set(doses)
     for _sex, rows in (clinical_obs_incidence or {}).items():
@@ -544,23 +547,26 @@ def _signs_at_doses(clinical_obs_incidence: dict[str, list] | None,
             if not hit:
                 continue
             label = str(getattr(row, "label", row)).lower()
-            if label not in findings:
-                findings.append(label)
+            if label not in labels:
+                labels.add(label)
+                findings.append(row)
             onsets = getattr(row, "onset_day_by_dose", None) or {}
             for d in hit:
                 day = onsets.get(d)
                 if day is not None and (onset is None or day < onset):
                     onset = day
-    return findings, onset
+    return sign_phrases(findings, inhaled), onset
 
 
-def _treated_signs(clinical_obs_incidence: dict[str, list] | None
+def _treated_signs(clinical_obs_incidence: dict[str, list] | None, inhaled: bool = False
                    ) -> tuple[list[float], list[str], list[str]]:
     """(doses, sexes, findings) of the clinical signs seen in TREATED groups
-    (dose > 0, incidence n > 0), from the Core-cohort incidence tables."""
+    (dose > 0, incidence n > 0), from the Core-cohort incidence tables; the
+    findings worded as the reports word them (narrative.clinical_signs)."""
     doses: set[float] = set()
     sexes: list[str] = []
-    findings: list[str] = []
+    findings: list = []
+    labels: set[str] = set()
     for sex, rows in (clinical_obs_incidence or {}).items():
         for row in rows:
             hit = [d for d, cell in (getattr(row, "incidence_by_dose", None) or {}).items()
@@ -571,9 +577,10 @@ def _treated_signs(clinical_obs_incidence: dict[str, list] | None
             if sex not in sexes:
                 sexes.append(sex)
             label = str(getattr(row, "label", row)).lower()
-            if label not in findings:
-                findings.append(label)
-    return sorted(doses), sexes, findings
+            if label not in labels:
+                labels.add(label)
+                findings.append(row)
+    return sorted(doses), sexes, sign_phrases(findings, inhaled)
 
 
 def _animal_condition_opening_template(
@@ -815,6 +822,7 @@ def _animal_condition_core(
         return paragraphs
 
     by_dose = mortality["by_dose"]
+    inhaled = facts.get("route") == "inhaled"
     expected_day = mortality.get("expected_terminal_day", "")
     all_survived = mortality.get("all_survived_doses", [])
     # "All core female mice survived …" when the internal-dose animals' removals
@@ -833,18 +841,19 @@ def _animal_condition_core(
             death_doses.append(dose)
 
     if not death_doses:
-        sign_doses, sign_sexes, sign_findings = _treated_signs(clinical_obs_incidence)
+        sign_doses, sign_sexes, sign_findings = _treated_signs(clinical_obs_incidence, inhaled)
         if sign_findings:
             # Everyone survived, but treated groups showed clinical signs: never
             # claim "without signs of overt toxicity" over the incidence data.
             signs_subject = _mortality_sex_subject(
                 {"by_dose": {0: {s: {} for s in sign_sexes}}}, animals)
-            _, onset_day = _signs_at_doses(clinical_obs_incidence, sign_doses)
+            _, onset_day = _signs_at_doses(clinical_obs_incidence, sign_doses, inhaled)
             binding = {
                 "expected_day": expected_day,
                 "doses": _oxford_comma([_fmt_dose(d) for d in sign_doses], conjunction="and"),
                 "unit": dose_unit,
-                "signs": _oxford_comma(sign_findings[:5], conjunction="and"),
+                # Every sign, as the reports list them (NIEHS-07: nine).
+                "signs": _oxford_comma(sign_findings, conjunction="and"),
             }
             if onset_day is not None:
                 binding["onset_day"] = str(onset_day)
@@ -872,7 +881,7 @@ def _animal_condition_core(
 
     # Clinical signs seen in the groups with deaths, and the study day the
     # first appeared (the clinical observations' onset, never a death day).
-    clinical_signs, onset_day = _signs_at_doses(clinical_obs_incidence, death_doses)
+    clinical_signs, onset_day = _signs_at_doses(clinical_obs_incidence, death_doses, inhaled)
 
     # The opening sentence (template + render) — only when the clinical
     # observations record signs in those groups; without them the death
@@ -881,8 +890,8 @@ def _animal_condition_core(
     if clinical_signs:
         opening_binding = {
             "doses": dose_list_str, "unit": dose_unit,
-            # Limit to the first 5 signs to keep the prose manageable
-            "signs": _oxford_comma(clinical_signs[:5], conjunction="and"),
+            # Every sign, as the reports list them (NIEHS-07: nine).
+            "signs": _oxford_comma(clinical_signs, conjunction="and"),
         }
         if onset_day is not None:
             opening_binding["onset_day"] = str(onset_day)

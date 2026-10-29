@@ -102,3 +102,8 @@ Abstract reports, and a model's answer would change from run to run.
 - **Cache keys.** A study's caches change only when it has decisions: the
   sections and BMD-summary keys include them. The BMD summary's cache version
   was bumped once, when the automatic rule was removed.
+- **NIEHS-08 male TSH stays pending** (maintainer, 2026-10-29). Ours is 13.6, a
+  ToxicR Hill fill, 12- to 35-fold below its NOEL and LOEL; the book prints
+  138.7 from a BMDS 2.7 fit and accepted it. Neither decision fits: the value
+  to judge is the legacy engine's. It stays pending until the BMDS 2.7 engine
+  (ADR-0030) runs, so NIEHS-08 renders only with `--draft`.

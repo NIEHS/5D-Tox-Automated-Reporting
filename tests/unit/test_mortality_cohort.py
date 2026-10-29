@@ -46,11 +46,13 @@ def test_scheduled_biosampling_removal_is_not_mortality(tmp_path):
 def test_survivors_with_clinical_signs_are_not_called_sign_free(tmp_path):
     m = extract_mortality(_sidecar(tmp_path))
     inc = {"Female": [IncidenceRow(label="Tremors (Moderate)",
-                                   incidence_by_dose={0.0: "0/2", 800.0: "2/2"})]}
+                                   incidence_by_dose={0.0: "0/2", 800.0: "2/2"},
+                                   parts={"observation": "Tremors", "site": "",
+                                          "modifier": "", "severity": "Moderate"})]}
     text = _build_animal_condition_paragraphs("DCB", "ppm", m, inc, INHALED_RATS)[0]
     assert text == ("All female rats survived to study termination (SD5). Female rats "
                     "exposed to 800 ppm of DCB exhibited clinical signs, which included "
-                    "tremors (moderate).")
+                    "moderate tremors.")
     quiet = _build_animal_condition_paragraphs("DCB", "ppm", m, {}, INHALED_RATS)[0]
     assert quiet.endswith("without signs of overt toxicity.")
     # No clinical observations recorded: no claim either way.
