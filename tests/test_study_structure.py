@@ -123,3 +123,13 @@ def test_workbooks_own_pivot_stays_tox_study(tmp_path):
     report = validate_pool("DTXSID", fps, build_study_structure({wb: "Clinical Chemistry"}))
     assert pivot.data_type == "tox_study"
     assert not [i for i in report.issues if i["severity"] == "error"], report.issues
+
+
+def test_a_file_whose_content_was_not_read_cannot_pass(tmp_path):
+    # A .bm2 Java could not export has a name-only fingerprint: no animals, no
+    # endpoints.  Unchecked is not the same as consistent.
+    st = build_study_structure({_workbook(tmp_path / "a.xlsx", ROWS): "Body Weight"})
+    fp = FileFingerprint(file_id="b", filename="Body weight.bm2", file_type="bm2", tier=3,
+                         ts_added="t", platform="Body Weight", data_type="inferred")
+    kinds = [i.issue_type for i in check_against_structure({"b": fp}, st)]
+    assert kinds == ["file_not_checked"]

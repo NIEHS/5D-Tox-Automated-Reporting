@@ -1360,11 +1360,11 @@ def fingerprint_bm2(
         except Exception:
             pass
 
-    if bm2_json is None and not (fp.platform or fp.data_type):
-        # The filename says nothing about the file's purpose, and only its
-        # content can (ADR-0017).  Pay for the one Java export here rather than
-        # rejecting the file as unassigned; the result is cached, so later
-        # preview/process reads are free.
+    if bm2_json is None:
+        # Only the content says what the file holds (ADR-0017), and the study
+        # structure checks its animals, doses and endpoints (ADR-0032): a file
+        # fingerprinted from its name alone would pass unchecked.  Pay for the
+        # one Java export; the result is cached, so later reads are free.
         bm2_json = _export_and_cache_bm2_json(path)
 
     if bm2_json is None:

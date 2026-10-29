@@ -209,6 +209,16 @@ def check_against_structure(fingerprints: dict, st: StudyStructure) -> list:
             continue
         name = _get(fp, "filename")
         platform = _get(fp, "platform") or "unknown"
+        if not (_get(fp, "animal_ids") or _get(fp, "animal_doses") or _get(fp, "endpoint_names")):
+            # Nothing of the file's content was read (a .bm2 Java could not
+            # export): it can't be checked against the study, so it can't pass.
+            issues.append(ValidationIssue(
+                severity="error", platform=platform, issue_type="file_not_checked",
+                message=f"{name}: its content could not be read, so it was not checked "
+                        "against the study workbooks",
+                files_involved=[fid],
+            ))
+            continue
         doses = _get(fp, "animal_doses") or {}
         file_sexes = {s for s in _get(fp, "sexes") or [] if s in ("Male", "Female")}
         one_sex = next(iter(file_sexes)) if len(file_sexes) == 1 else None

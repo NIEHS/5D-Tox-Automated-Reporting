@@ -70,11 +70,14 @@ def test_uncached_unnamed_bm2_is_exported_once_for_content(tmp_path, monkeypatch
     assert fp.data_type == "gene_expression"
 
 
-def test_named_bm2_is_not_exported(tmp_path, monkeypatch):
-    """When the filename already classifies the file, no Java export runs."""
+def test_named_bm2_is_still_read(tmp_path, monkeypatch):
+    """A filename that classifies the file is not enough: its content is read
+    (exported once when not cached), so the study structure can check it."""
     import bmdx_pipe.file_integrator as fi
+    exported = []
     monkeypatch.setattr(fi, "_export_and_cache_bm2_json",
-                        lambda path: pytest.fail("exported a filename-classified .bm2"))
+                        lambda path: exported.append(path) or _project("BPAF_Liver", BIOSPYDER))
     monkeypatch.setattr("bmdx_pipe.bm2_cache.get_json", lambda path: None)
     fp = fingerprint_bm2("id", "BPAF_gene_expression_0826.bm2", str(tmp_path / "x.bm2"), "2026-10-02")
-    assert fp.data_type == "gene_expression"
+    assert exported and fp.data_type == "gene_expression"
+    assert fp.animal_ids
