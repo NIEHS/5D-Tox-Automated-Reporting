@@ -38,3 +38,14 @@ def test_onset_day_is_the_earliest_observation_per_dose(tmp_path):
                            "1,800,2,Female,Core Animals,SD3,Tremors,,,Moderate\n")
     row = build_clinical_obs_tables([str(path)])["Female"][0]
     assert row.onset_day_by_dose == {800.0: 0}
+
+
+def test_a_row_keeps_the_columns_its_label_is_built_from(tmp_path):
+    """Prose can't parse "Discharge — Eye, Bilateral, Red" back: is "Eye" a
+    site or a modifier?  The row keeps the four columns."""
+    path = tmp_path / "clin.csv"
+    path.write_text(_CSV + "1,800,3,Female,Core Animals,SD2,Discharge,Eye,\"Bilateral, Red\",\n")
+    rows = {r.label: r for r in build_clinical_obs_tables([str(path)])["Female"]}
+    assert rows["Discharge — Eye, Bilateral, Red"].parts == {
+        "observation": "Discharge", "site": "Eye", "modifier": "Bilateral, Red", "severity": ""}
+    assert rows["Tremors (Moderate)"].parts["severity"] == "Moderate"
