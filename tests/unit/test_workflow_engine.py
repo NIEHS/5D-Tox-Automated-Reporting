@@ -54,7 +54,8 @@ class FakeStore:
         return name in self._present
 
     def read_json(self, dtxsid, name):
-        return self._docs.get(name)
+        # (session, name) for another session's document; a bare name is DTX's.
+        return self._docs.get((dtxsid, name), self._docs.get(name) if dtxsid == "DTX" else None)
 
     def read_section_states(self, dtxsid):
         return dict(self._section_states)
@@ -263,3 +264,21 @@ def test_publish_readiness_waits_for_bmd_review_and_its_process():
     assert eng.publish_readiness()["blocking"][0]["reason"] == "bmd_review_not_applied"
     store._docs["bmd_flags.json"] = {"flags": [{**flag, "decision": "unreliable"}]}
     assert eng.publish_readiness() == {"can_publish": True, "blocking": []}
+
+
+def test_a_report_over_several_studies_waits_for_each_members_bmd_review():
+    # NIEHS-12/13: the report session lists a rat and a mouse study
+    # (studies.json); a flag in either member blocks the report.
+    flag = {"key": "Female|Hormones|Thyroid Stimulating Hormone", "bmd": "1.0", "decision": None}
+    store = FakeStore(files=True, docs={
+        "studies.json": {"rat": "DTX_rat", "mouse": "DTX_mouse"},
+        ("DTX_mouse", "bmd_flags.json"): {"flags": [flag]},
+    })
+    eng = WorkflowEngine("DTX", store)
+    assert eng.publish_readiness() == {"can_publish": False, "blocking": [{
+        "section_key": "bmd_review:DTX_mouse:Female|Hormones|Thyroid Stimulating Hormone",
+        "reason": "bmd_review_pending", "session": "DTX_mouse"}]}
+    store._docs[("DTX_mouse", "bmd_reviews.json")] = {"decisions": {flag["key"]: {
+        "decision": "reliable", "reason": "plausible", "bmd": "1.0"}}}
+    store._docs[("DTX_mouse", "bmd_flags.json")] = {"flags": [{**flag, "decision": "reliable"}]}
+    assert eng.publish_readiness()["can_publish"] is True

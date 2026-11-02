@@ -216,7 +216,10 @@ class WorkflowEngine:
         An apical BMD the review screen flagged blocks too, as
         ``bmd_review:<sex>|<platform>|<endpoint>``: ``bmd_review_pending`` until
         a reviewer decides it, ``bmd_review_not_applied`` until Process applies
-        the decision (pipeline.bmd_review).
+        the decision (pipeline.bmd_review).  A report over several studies
+        (studies.json: NIEHS-12/13's rat and mouse) waits for each member
+        study's flags too, as ``bmd_review:<member session>:<key>`` with the
+        member's ``session``, where the decision is recorded.
         """
         from workflow.reprocess import blocking_llm_sections
 
@@ -229,8 +232,17 @@ class WorkflowEngine:
         # An apical BMD far below its NOEL/LOEL needs a reviewer's decision
         # (pipeline.bmd_review), and the decision a Process to take effect.
         from pipeline.bmd_review import FLAGS_FILE, REVIEWS_FILE, unsettled
-        flags = (self.store.read_json(self.dtxsid, FLAGS_FILE) or {}).get("flags") or []
-        reviews = self.store.read_json(self.dtxsid, REVIEWS_FILE) or {}
-        for item in unsettled(flags, reviews):
-            blocking.append({"section_key": f"bmd_review:{item['key']}", "reason": item["reason"]})
+        from rendering.report_compose import STUDIES_FILE
+
+        members = self.store.read_json(self.dtxsid, STUDIES_FILE) or {}
+        for session in [self.dtxsid, *members.values()]:
+            flags = (self.store.read_json(session, FLAGS_FILE) or {}).get("flags") or []
+            reviews = self.store.read_json(session, REVIEWS_FILE) or {}
+            prefix = "" if session == self.dtxsid else f"{session}:"
+            for item in unsettled(flags, reviews):
+                entry = {"section_key": f"bmd_review:{prefix}{item['key']}",
+                         "reason": item["reason"]}
+                if prefix:
+                    entry["session"] = session
+                blocking.append(entry)
         return {"can_publish": not blocking, "blocking": blocking}

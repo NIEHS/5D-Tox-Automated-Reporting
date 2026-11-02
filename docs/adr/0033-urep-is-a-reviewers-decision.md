@@ -78,7 +78,10 @@ Abstract reports, and a model's answer would change from run to run.
 4. **The publish gate.** Publishing waits until each flag is decided
    (`bmd_review_pending`), and until a Process has applied each decision
    (`bmd_review_not_applied`). The refusal is `bmd_review_required`; `--draft`
-   overrides it, as it overrides the other blocks.
+   overrides it, as it overrides the other blocks. A report over several
+   studies (NIEHS-12/13's rat and mouse, `studies.json`) waits for each
+   member study's flags too (2026-11-02); each is decided in its member
+   session, which the block names.
 5. **Where a reviewer decides.**
    - Command line: `--bmd-review decisions.json`. Every run lists the flags as
      "BMD review:" lines. The decisions are recorded after the run's Process,
