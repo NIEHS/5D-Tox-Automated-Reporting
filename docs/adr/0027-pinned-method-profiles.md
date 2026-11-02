@@ -202,3 +202,23 @@ paragraph takes these facts from the profile (ADR-0029 §11).
   (the NIEHS-12/13 member studies) stay there. The eFDR is the report
   session's (`efdr.json`), and the report session resolves to the newest
   profile.
+
+## Amendment (2026-11-02): the 2021 plasma rules settled
+
+`ntp-5day-2021` left two plasma-concentration rules unsettled (`null`):
+`internal_dose.bd_if_detected_share_at_most` and `internal_dose.outliers`.
+`null` resolved to the built-in defaults: BD at 20%, which the books apply,
+and a Dixon outlier test, which they don't. The plasma table did not read
+the method at all, so neither showed: it printed half the LOQ for every
+group, never BD.
+
+- **The revised record is a new profile.** `ntp-5day-2021.1` is
+  `ntp-5day-2021` with BD at 20% and `outliers: {test: none}`, a value
+  the schema now accepts for "settled: no outlier test". These reproduce
+  every Table 7 cell of NIEHS-07 to 10, BD included
+  (`tests/unit/test_plasma_table_rules.py`, against each package's PA48
+  summary).
+- **Re-pinned.** The published builds of RR-8 and NIEHS-02 to 10 now pin
+  `ntp-5day-2021.1`. The 2018 studies have no plasma data, so for them the
+  two profiles give the same results. Its effective date ("2021.1") sorts
+  before 2025, so the newest profile is unchanged.

@@ -37,7 +37,7 @@ import math
 
 from tables.table_builder_common import load_sidecar, mean_se
 from tables.units import recorded_units
-from tables.tissue_concentration_table import _find_loq_value, _parse_timepoint
+from tables.tissue_concentration_table import _parse_timepoint
 
 # t_half above this (hours) is flagged as a screening-level bioaccumulation signal.
 BIOACCUM_HALF_LIFE_H = 24.0
@@ -50,38 +50,20 @@ def _timepoint_hours(timepoint: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def _extract_group_conc(sidecar: dict) -> dict[str, dict[float, list[float]]]:
-    """Per-timepoint, per-dose biosampling-animal plasma values from one sidecar.
+def _extract_group_conc(sidecar: dict, method) -> dict[str, dict[float, list[float]]]:
+    """Per-timepoint, per-dose biosampling-animal plasma values from one sidecar:
+    {"<hours> Hour": {dose: [value, ...]}}.  The table's groups and rules
+    (tissue_concentration_table.plasma_groups / group_values: half the limit
+    below it; a BD group has no values), so the analysis and the table are
+    computed from the SAME numbers."""
+    from tables.tissue_concentration_table import group_values, plasma_groups
 
-    Returns {timepoint_label: {dose: [value, ...]}}. Mirrors the tissue table
-    builder's extraction (biosampling animals only; ½·LOQ substitution when a value
-    is missing but its LOQ is present on the same study day) so the analysis and the
-    table are computed from the SAME numbers.
-    """
     out: dict[str, dict[float, list[float]]] = {}
-    for rec in (sidecar.get("animals") or {}).values():
-        if not is_biosampling(rec.get("selection", "") or ""):
-            continue
-        dose = rec.get("dose")
-        if dose is None:
-            continue
-        observations = rec.get("observations", []) or []
-        for obs in observations:
-            timepoint = _parse_timepoint(obs.get("endpoint", ""))
-            if timepoint is None:
-                continue
-            val_str = obs.get("value")
-            if val_str and str(val_str).strip():
-                try:
-                    out.setdefault(timepoint, {}).setdefault(float(dose), []).append(
-                        float(val_str)
-                    )
-                    continue
-                except (ValueError, TypeError):
-                    pass
-            loq = _find_loq_value(observations, obs.get("endpoint", ""), day=obs.get("day", ""))
-            if loq is not None and loq > 0:
-                out.setdefault(timepoint, {}).setdefault(float(dose), []).append(loq / 2)
+    for hours, by_dose in plasma_groups(sidecar).items():
+        for dose, group in by_dose.items():
+            values, _ = group_values(group, method)
+            if values:
+                out.setdefault(f"{hours} Hour", {})[dose] = values
     return out
 
 
@@ -98,11 +80,13 @@ def _half_life(c_early: float, c_late: float, dt_hours: float) -> tuple[float, f
     return ke, math.log(2) / ke
 
 
-def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
+def compute_toxicokinetics(sidecar_paths: dict[str, str], method=None) -> dict:
     """Screening-level internal-dose toxicokinetics from the plasma sidecars.
 
     Args:
         sidecar_paths: {"Male": ".../male.sidecar.json", "Female": ...}.
+        method:        The study's resolved method (pipeline.method_profile): its
+                       internal_dose rules decide BD groups; None ⇒ the newest.
 
     Returns a dict:
         {
@@ -134,7 +118,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
         except Exception:
             continue
         units.update(recorded_units([sidecar], lambda ep: _parse_timepoint(ep) is not None).values())
-        conc = _extract_group_conc(sidecar)
+        conc = _extract_group_conc(sidecar, method)
         if not conc:
             continue
 

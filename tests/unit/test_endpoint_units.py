@@ -51,7 +51,8 @@ def test_niehs10_unit_comes_from_the_study_workbook(reference_session):
         "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"}
 
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
-    assert tc["footnotes"][0]["text"].endswith("plasma concentration data are presented in µg/mL.")
+    assert {r["label"] for r in tc["table_data"]["Male"] if not r.get("is_n_row")} == {
+        "2 Hours Postdose (µg/mL)", "24 Hours Postdose (µg/mL)"}
     tk = compute_toxicokinetics(paths)
     assert tk["unit"] == "µg/mL"
     assert "(in µg/mL)" in build_internal_dose_narrative(tk, CHEM)[0]

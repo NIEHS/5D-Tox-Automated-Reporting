@@ -228,6 +228,10 @@ def _build_toc_entries(
         Clinical Pathology).  Ready if unified narrative exists OR any
         child table node has platform data in apical_sections.
         """
+        # A section the study did not collect states so (its gate): ready.
+        from document_model.document_tree import platform_gate_closed
+        if platform_gate_closed(node, data.get("collected_platforms")):
+            return True
         nk = getattr(node, "narrative_key", None)
         if nk:
             un = data.get("unified_narratives", {})

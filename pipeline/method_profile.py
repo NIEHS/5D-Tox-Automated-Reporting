@@ -65,7 +65,9 @@ IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
     # profile names it yet (ADR-0030).
     "eligibility": {"trend_and_pairwise": True, "all_endpoints": False,
                     "trend_or_pairwise": False},
-    "outlier_test": {"dixon_r10": True},
+    # "none": a settled "no outlier test" (NIEHS-07 … 10's plasma tables);
+    # null would leave it to the built-in default.
+    "outlier_test": {"dixon_r10": True, "none": True},
     "below_limit": {"half_limit": True},
     "above_highest_dose": {"nvm": True, "keep": True},
     "bmr_type": {"sd": True, "rel_dev": True},
@@ -149,8 +151,10 @@ def _bmr(path, v):
 
 
 def _outliers(path, v):
+    if v == {"test": "none"}:
+        return
     if not isinstance(v, dict) or set(v) != {"test", "alpha"}:
-        _fail(path, f"expected {{test, alpha}}, got {v!r}")
+        _fail(path, f"expected {{test, alpha}} or {{test: none}}, got {v!r}")
     _impl("outlier_test")(f"{path}.test", v["test"])
     _prob(f"{path}.alpha", v["alpha"])
 

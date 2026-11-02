@@ -102,7 +102,7 @@ class Rules:
     def from_method(cls, method) -> "Rules":
         outliers = method.get("internal_dose.outliers")
         dixon = None
-        if outliers:
+        if outliers and outliers.get("test") != "none":
             dixon = DIXON_R10_CRITICAL.get(outliers["alpha"])
             if dixon is None:
                 from pipeline.method_profile import MethodProfileError

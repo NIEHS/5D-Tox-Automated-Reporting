@@ -971,7 +971,7 @@ async def _get_sections(ctx):
             )
             _id_paths = _find_sc(str(_session_dir(dtxsid)), platform="Tissue Concentration")
             if _id_paths:
-                _tk = compute_toxicokinetics(_id_paths)
+                _tk = compute_toxicokinetics(_id_paths, _method(ctx))
                 _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit, _design)
                 if not _id_paras:
                     # No plasma time course to model (the G3 blood/tissue table by
@@ -987,33 +987,9 @@ async def _get_sections(ctx):
         except Exception:
             logger.exception("Internal-dose narrative failed for %s (skipped)", dtxsid)
 
-    # "Not collected" domains: a Results section whose data domains were ALL absent
-    # from the pool gets an explicit, shippable "not evaluated" statement (its table
-    # nodes are pruned at render).  Only for a section that produced no narrative of
-    # its own — a section with real data keeps its findings prose (including the
-    # "no significant effects" wording for collected-but-nonsignificant endpoints).
-    # Gated on the study having SOME collected content (apical platforms or genomics,
-    # read from _meta.source_files — genomics may still be extracting concurrently),
-    # so a pure-empty/scaffold session stays a pending stub rather than asserting
-    # "not evaluated" for everything.
-    _has_content = bool(platform_tables) or (
-        "gene_expression" in integrated.get("_meta", {}).get("source_files", {}))
-    if _has_content:
-        from narrative.unified_narrative import SECTION_DOMAINS, not_evaluated_narrative
-        _collected = set(platform_tables.keys())
-        _section_titles = {
-            "apical": "Animal Condition, Body Weights, and Organ Weights",
-            "clinical_pathology": "Clinical Pathology",
-            "internal_dose": "Internal Dose Assessment",
-        }
-        for _key, _domains in SECTION_DOMAINS.items():
-            if _key in unified_narratives or _collected & _domains:
-                continue
-            _paras = not_evaluated_narrative(_key)
-            if _paras:
-                unified_narratives[_key] = {
-                    "title": _section_titles[_key], "paragraphs": _paras,
-                }
+    # A Results section whose data domains were all absent states so from its
+    # document node's gate (requires_platform / not_collected_text, rendered by
+    # render_common.narrative_plan) — the wording is the document's, not Process's.
 
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives

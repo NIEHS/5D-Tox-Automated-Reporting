@@ -491,7 +491,7 @@ def extract_methods_context(
     # cross-sex comparison sentence (e.g., "Half-lives ... were 78.2
     # and 25.6 hours for the 4 and 37 mg/kg groups...").
     if session_dir:
-        concs, t_half, timepoints = _extract_pk_data(session_dir)
+        concs, t_half, timepoints = _extract_pk_data(session_dir, method)
         if concs:
             ctx.pk_concentrations = concs
         if t_half:
@@ -605,7 +605,7 @@ def _extract_biosampling_doses(session_dir: str) -> list[float]:
     return sorted(doses)
 
 
-def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
+def _extract_pk_data(session_dir: str, method=None) -> tuple[dict, dict, list[int]]:
     """
     Extract pharmacokinetic data from tissue concentration sidecars.
 
@@ -636,15 +636,14 @@ def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
     if not os.path.isdir(files_dir):
         return {}, {}, []
 
-    # Per (sex, dose, hour) → list of concentration values
-    raw_values: dict[tuple[str, float, int], list[float]] = {}
+    # The plasma groups the table computes from (tissue_concentration_table:
+    # half the limit below it, BD groups have no mean, no unreceived sample).
+    from tables.tissue_concentration_table import group_values, plasma_groups
+    from tables.table_builder_common import mean_se
+
+    concentrations: dict[str, dict[float, dict[int, float]]] = {}
     timepoints_seen: set[int] = set()
-
-    # Pattern to extract the timepoint hours from endpoint names like
-    # "Plasma 2 Hour Perfluorohexanesulfonamide Concentration".
-    _HOUR_RE = re.compile(r"Plasma\s+(\d+)\s+Hour", re.IGNORECASE)
-
-    for fname in os.listdir(files_dir):
+    for fname in sorted(os.listdir(files_dir)):
         if not fname.startswith("tissue_conc") or not fname.endswith(".sidecar.json"):
             continue
         try:
@@ -652,50 +651,18 @@ def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
                 sc = json.load(f)
         except (json.JSONDecodeError, OSError):
             continue
-
         # The sidecar's "sex" field carries the per-file sex (e.g., "Male"),
         # which we trust over per-animal sex (often None in tissue conc).
         sex = sc.get("sex") or ""
         if not sex:
             continue
-
-        for _aid, rec in sc.get("animals", {}).items():
-            selection = str(rec.get("selection", ""))
-            if not is_biosampling(selection):
-                continue
-            dose = rec.get("dose")
-            if dose is None:
-                continue
-            try:
-                dose = float(dose)
-            except (TypeError, ValueError):
-                continue
-
-            for obs in rec.get("observations", []):
-                ep = obs.get("endpoint", "")
-                if "Concentration" not in ep:
-                    continue  # skip LOQ rows
-                m = _HOUR_RE.search(ep)
-                if not m:
+        for hour, by_dose in plasma_groups(sc).items():
+            for dose, group in by_dose.items():
+                values, _ = group_values(group, method)
+                if not values:
                     continue
-                hour = int(m.group(1))
-                val = obs.get("value")
-                if val is None:
-                    continue
-                try:
-                    v = float(val)
-                except (TypeError, ValueError):
-                    continue
-                raw_values.setdefault((sex, dose, hour), []).append(v)
+                concentrations.setdefault(sex, {}).setdefault(dose, {})[hour] = mean_se(values)[0]
                 timepoints_seen.add(hour)
-
-    # Aggregate to means
-    concentrations: dict[str, dict[float, dict[int, float]]] = {}
-    for (sex, dose, hour), vs in raw_values.items():
-        if not vs:
-            continue
-        mean = sum(vs) / len(vs)
-        concentrations.setdefault(sex, {}).setdefault(dose, {})[hour] = mean
 
     # Compute half-lives where we have two-timepoint monotonic decay
     half_lives: dict[str, dict[float, float]] = {}

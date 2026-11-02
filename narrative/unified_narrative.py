@@ -62,32 +62,9 @@ CLINICAL_PATH_PLATFORMS = {"Clinical Chemistry", "Hematology", "Hormones"}
 CLINICAL_PATH_ORDER = ["Clinical Chemistry", "Hematology", "Hormones"]
 
 
-# "Not collected" domains (section-level collapse): when a Results section's data
-# domains were ALL absent from the pool, its table nodes are pruned at render
-# (report_data._prune_uncollected_tables) and the section carries this explicit,
-# shippable statement — distinct from "collected, no findings" (which the
-# generators word as "no significant effects ...") and from a pending scaffold
-# stub.  Keyed by the section's narrative_key.
-SECTION_DOMAINS: dict[str, frozenset] = {
-    "apical": frozenset(APICAL_PLATFORMS),
-    "clinical_pathology": frozenset(CLINICAL_PATH_PLATFORMS),
-    "internal_dose": frozenset({"Tissue Concentration"}),
-}
-_NOT_EVALUATED_STATEMENT: dict[str, str] = {
-    "apical": "Body and organ weights were not evaluated in this study.",
-    "clinical_pathology": "Clinical pathology (clinical chemistry, hematology, and "
-                          "hormone analyses) was not evaluated in this study.",
-    # The matrix is not named: plasma (NIEHS-07 … 10) or blood and tissues (12, 13).
-    "internal_dose": "Internal dose was not assessed in this study.",
-}
-
-
-def not_evaluated_narrative(section_key: str) -> list[str]:
-    """The one-line "not evaluated in this study" statement for a Results section
-    whose data domains were all absent (not-collected domains).  Returns a
-    single-paragraph list, or [] for an unknown key."""
-    stmt = _NOT_EVALUATED_STATEMENT.get(section_key)
-    return [stmt] if stmt else []
+# A Results section whose data domains were all absent states so from its
+# document node's gate (requires_platform / not_collected_text in the template),
+# rendered by render_common.narrative_plan — the wording is the document's.
 
 
 # ═══════════════════════════════════════════════════════════════════════════

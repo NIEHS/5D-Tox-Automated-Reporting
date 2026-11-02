@@ -1194,14 +1194,14 @@
     {
       "id": "clinical-path",
       "level": 2,
-      "ready": false,
+      "ready": true,
       "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "internal-dose",
       "level": 2,
-      "ready": false,
+      "ready": true,
       "scope": null,
       "title": "Internal Dose Assessment"
     },
