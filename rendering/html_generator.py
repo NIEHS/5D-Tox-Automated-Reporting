@@ -865,7 +865,7 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     notes = _emit_table_footnotes(plan.footnotes)
     return (
         '<table class="niehstable">'
-        f"<caption>{_esc(plan.caption)}</caption>"
+        f"<caption>{_render_inline(plan.caption_units) if plan.caption_units else _esc(plan.caption)}</caption>"
         f"{head}"
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"

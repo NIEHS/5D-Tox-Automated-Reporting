@@ -205,7 +205,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str, method_sig: str = "") -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 29  # bumped: the plasma table applies the BD rule, leaves out unreceived samples, labels rows "2 Hours Postdose (unit)". Was 28: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 30  # bumped: footnote marks placed as the books place them (header, caption, row label, a removal's later cells; a cell may carry several); a group of one prints no SE. Was 29: the plasma table applies the BD rule, leaves out unreceived samples, labels rows "2 Hours Postdose (unit)". Was 28: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:

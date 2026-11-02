@@ -382,9 +382,11 @@ def build_tissue_concentration_table_from_sidecar(
         footnotes.append(definition_footnote(
             f"BD = below detection; group did not have over {share} of its values above the "
             "limit of detection so mean and standard error were not calculated."))
+    # Marked on the caption: the table has no first-column header to carry
+    # it (NIEHS-07 … 10, Table 7).
     footnotes.append(lettered_footnote(
         "Data are displayed as mean \u00b1 standard error of the mean.", "data_format",
-        target="header"))
+        target="caption"))
     for text, fid in short_notes.items():
         footnotes.append(lettered_footnote(text, fid, target="cells"))
     if any_outlier:

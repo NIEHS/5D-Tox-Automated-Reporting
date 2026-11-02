@@ -138,3 +138,11 @@ def test_several_sexes_label_groups_by_sex_and_study():
     from rendering.report_compose import _study_sexes
     assert _study_sexes({"apical_sections": [{"table_data": {"Male": [1], "Female": [1]}}]}) == {
         "Male", "Female"}
+
+
+def test_a_cell_with_several_notes_keeps_each_renamed():
+    from rendering.report_compose import _remap_markers
+
+    rows = [{"marker_refs": {"4": ["short", "clot"], "label": "relative"}}]
+    _remap_markers(rows, {"short": "short--mice", "relative": "relative--mice"})
+    assert rows[0]["marker_refs"] == {"4": ["short--mice", "clot"], "label": "relative--mice"}

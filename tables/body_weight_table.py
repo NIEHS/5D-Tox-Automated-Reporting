@@ -81,6 +81,7 @@ from tables.table_builder_common import (
     lettered_footnote,
     finalize_footnotes,
     is_reportable_bmd,
+    add_marker_ref,
 )
 
 
@@ -383,7 +384,9 @@ def build_body_weight_table_from_sidecar(
     #   1. **N-row markers** — when an individual animal died before baseline
     #      measurements could be taken, reducing N below the expected count.
     #      Example: animal 203 at 1000 mg/kg found dead SD0 → N=4^c instead
-    #      of 5.  The marker goes on the n-row cell for that dose.
+    #      of 5.  The marker goes on the n-row cell for that dose.  An animal
+    #      removed after the baseline is marked on its group's later cells
+    #      instead (Pass 2).
     #
     #   2. **Dash markers** — when all animals at a dose group died before
     #      the terminal study day, so no data exists for that row.  The
@@ -443,6 +446,9 @@ def build_body_weight_table_from_sidecar(
     # finalize_footnotes turns these stable ids into the displayed letters.
     n_row_marker_refs: dict[str, dict[float, str]] = {}
     dash_marker_refs: dict[str, dict[tuple[float, str], str]] = {}
+    #   later_marker_refs  {sex: {dose: [(study day, id)]}} — animals removed
+    #       after the first weighing; marker on the cells of the later days.
+    later_marker_refs: dict[str, dict[float, list[tuple[int, str]]]] = {}
 
     # ── Pass 1: Classify individual vs mass attrition ────────────────
     # Individual deaths: animal died on a day EARLIER than the rest of
@@ -500,43 +506,49 @@ def build_body_weight_table_from_sidecar(
                     individual_events.extend(
                         _by_disposition(sex, dose, day, day_events))
 
-    # ── Pass 2: individual-death footnotes (n-row markers) ───────────
-    # One lettered/cells footnote per DISTINCT (sex, study-day, count) —
-    # NOT per event.  Two dose groups that each lost "one male rat on
-    # study day 0" share a single footnote, with its letter superscripted
-    # on both n-row cells (the typed model lets many cells point at one
-    # footnote id via marker_refs).  Emitting one footnote per event — the
-    # old behavior — produced near-duplicate notes whenever the same death
-    # pattern recurred across dose groups.  The footnote text names no
-    # dose, so it reads correctly per-cell wherever its marker appears.
-    indiv_fid_by_key: dict[tuple, str] = {}
+    # ── Pass 2: individual-removal footnotes ─────────────────────────
+    # Where the mark goes is where the removal shows (the books): an animal
+    # removed by the first weighing is not in the table, so its group's n-row
+    # cell carries it ("4^c", NIEHS-10); one removed later is in the n but
+    # missing from every later row, so the later study days' cells and the
+    # gain cell carry it ("295.8^c", NIEHS-07; "18.5 ± 0.4*^c", NIEHS-12).
+    # One note per group and placement, its removals joined as the books
+    # join them ("One male rat was moribund and euthanized on study day 1
+    # and three male rats were found dead on study day 4."); groups whose
+    # notes read the same share one.
+    first_day = min(_all_obs_days, key=lambda d: (_day_number(d) is None, _day_number(d) or 0),
+                    default="")
+    first_number = _day_number(first_day)
+    clauses: dict[tuple, list[str]] = defaultdict(list)
+    removed_from: dict[tuple, int] = {}     # a group's earliest later removal
     for ev in individual_events:
-        sex = ev["sex"]
-        dose = ev["dose"]
-        count = ev["count"]
-        day = ev["day"]
+        number = _day_number(ev["day"])
+        later = number is not None and first_number is not None and number > first_number
+        if later:
+            key = (ev["sex"], ev["dose"])
+            removed_from[key] = min(removed_from.get(key, number), number)
+        day_num = ev["day"][2:] if ev["day"].upper().startswith("SD") else ev["day"]
         disposition = ev["disposition"]
-        day_num = day[2:] if day.upper().startswith("SD") else day
-        key = (sex, day, count, disposition)
-        fid = indiv_fid_by_key.get(key)
+        count = ev["count"]
+        verb = (removal_phrase(disposition, count) if disposition else
+                "was found dead" if count == 1 else "were found dead")
+        noun = animal if count == 1 else animals
+        clauses[(ev["sex"], ev["dose"], later)].append(
+            f"{_count_word(count)} {ev['sex'].lower()} {noun} {verb} on study day {day_num}")
+    indiv_fid_by_text: dict[str, str] = {}
+    for (sex, dose, later), parts in clauses.items():
+        text = " and ".join(parts)
+        text = f"{text[0].upper()}{text[1:]}."
+        fid = indiv_fid_by_text.get(text)
         if fid is None:
-            # First event with this (sex, day, count, disposition) — emit the
-            # footnote.  Without a recorded disposition: "found dead".
-            slug = re.sub(r"\W+", "_", disposition.lower()) if disposition else ""
-            fid = f"indiv_death_{sex}_{day}_{count}" + (f"_{slug}" if slug else "")
-            sex_word = sex.lower()
-            verb = (removal_phrase(disposition, count) if disposition else
-                    "was found dead" if count == 1 else "were found dead")
-            if count == 1:
-                text = f"One {sex_word} {animal} {verb} on study day {day_num}."
-            else:
-                text = f"{count} {sex_word} {animals} {verb} on study day {day_num}."
+            fid = f"indiv_removal_{len(indiv_fid_by_text)}"
             footnotes.append(lettered_footnote(text, fid, target="cells"))
-            indiv_fid_by_key[key] = fid
-
-        # Marker goes on the n-row at this dose for this sex (the N is
-        # reduced because this animal's data was excluded from the stats).
-        n_row_marker_refs[sex][dose] = fid
+            indiv_fid_by_text[text] = fid
+        if not later:
+            n_row_marker_refs[sex][dose] = fid
+        else:
+            later_marker_refs.setdefault(sex, {}).setdefault(dose, []).append(
+                (removed_from[(sex, dose)], fid))
 
     # ── Pass 3: mass-attrition footnote (dash markers) ───────────────
     # Merge all mass-attrition doses and sexes into one combined footnote,
@@ -599,8 +611,6 @@ def build_body_weight_table_from_sidecar(
     # ── Which study days are TABLE ROWS: per sex, see _display_days ─────
     # The first is the earliest day the study weighed its animals (SD0, the
     # baseline, in every NIEHS study).
-    first_day = min(_all_obs_days, key=lambda d: (_day_number(d) is None, _day_number(d) or 0),
-                    default="")
 
     # ── Build the complete row grid per sex ──────────────────────────────
     # Python builds every row the table will contain — including the `n`
@@ -694,8 +704,7 @@ def build_body_weight_table_from_sidecar(
                 animals_at_dose = dose_vals.get(dose, [])
 
                 if animals_at_dose:
-                    mean, se = _mean_se(animals_at_dose)
-                    values[dk] = _format_mean_se(mean, se, _BW_DECIMALS) + _marker(day_stats, dose)
+                    values[dk] = _mean_se_cell(animals_at_dose, _BW_DECIMALS) + _marker(day_stats, dose)
                 else:
                     # No surviving animals at this dose for this day.
                     # Show dash (–) matching NIEHS convention.
@@ -721,13 +730,23 @@ def build_body_weight_table_from_sidecar(
             }
             if row_marker_refs:
                 entry["marker_refs"] = row_marker_refs
+            _mark_later(entry, later_marker_refs.get(sex, {}), _day_number(day))
             rows.append(entry)
 
         gain = _gain_row(per_animal.get(sex, {}), (first_day, expected_terminal_day), sorted_doses,
                          sex_stats.get(BODY_WEIGHT_GAIN))
         if gain:
+            _mark_later(gain, later_marker_refs.get(sex, {}), _day_number(expected_terminal_day))
             rows.append(gain)
 
+        # A later removal in a group with no later weights left (every
+        # animal gone) has no cell to mark: its note goes on the n-row.
+        marked = {f for r in rows for ids in (r.get("marker_refs") or {}).values()
+                  for f in ([ids] if isinstance(ids, str) else ids)}
+        for dose, removals in later_marker_refs.get(sex, {}).items():
+            for _, fid in removals:
+                if fid not in marked:
+                    add_marker_ref(n_row, _js_dose_key(dose), fid)
         serialized[sex] = rows
 
     has_gain = any(r.get("label") == BODY_WEIGHT_GAIN for rows in serialized.values() for r in rows)
@@ -771,6 +790,35 @@ def _by_disposition(sex: str, dose: float, day: str, events: list[dict]) -> list
         by[ev.get("disposition")] += 1
     return [{"sex": sex, "dose": dose, "count": n, "day": day, "disposition": d}
             for d, n in sorted(by.items(), key=lambda kv: str(kv[0] or ""))]
+
+
+def _mean_se_cell(values: list[float], decimals: int) -> str:
+    """A group's mean ± SE; the mean alone for a group of one, which has no
+    standard error ("295.8", NIEHS-07 Table 2)."""
+    text = _format_mean_se(*_mean_se(values), decimals)
+    return text if len(values) > 1 else text.split("\u00a0")[0]
+
+
+_COUNT_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+
+
+def _count_word(n: int) -> str:
+    """A count as the books write it: a word below 10 ("three"), else digits."""
+    return _COUNT_WORDS[n] if 0 <= n < len(_COUNT_WORDS) else str(n)
+
+
+def _mark_later(row: dict, refs: dict, day: int | None) -> None:
+    """Mark ``row``'s cells (a study day's, or the gain's at its last day)
+    with the notes of the animals removed before ``day`` at each dose."""
+    if day is None:
+        return
+    for dose, removals in refs.items():
+        dk = _js_dose_key(dose)
+        if row["values"].get(dk, "\u2013") in ("\u2013", "–"):
+            continue
+        for removed_on, fid in removals:
+            if removed_on < day:
+                add_marker_ref(row, dk, fid)
 
 
 def _day_number(label: str) -> int | None:
@@ -834,8 +882,7 @@ def _gain_row(animals: dict, span: tuple[str, str], doses: list[float], stats) -
         if not vals:
             values[_js_dose_key(dose)] = "\u2013"
             continue
-        mean, se = _mean_se(vals)
-        values[_js_dose_key(dose)] = _format_mean_se(mean, se, _GAIN_DECIMALS) + _marker(stats, dose)
+        values[_js_dose_key(dose)] = _mean_se_cell(vals, _GAIN_DECIMALS) + _marker(stats, dose)
     bmd, bmdl = _bmd_cells(stats)
     return {
         "label": BODY_WEIGHT_GAIN,

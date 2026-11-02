@@ -58,6 +58,7 @@ from tables.table_builder_common import (
     standard_apical_footnotes,
     availability_footnotes,
     attach_n_row_marker_refs,
+    add_marker_ref,
 )
 
 
@@ -615,7 +616,13 @@ def build_organ_weight_table_from_sidecar(
     # the study's method profile — the tests that ran for organ weights.
     footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight")
     footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT.format(
-        organ=units["relative_organ"], body=units["body"]), "relative_weight"))
+        organ=units["relative_organ"], body=units["body"]), "relative_weight", target="cells"))
+    # The books mark the note on the table's first relative weight
+    # ("Relative (mg/g)^e", NIEHS-07 … 13).
+    first_relative = next((r for rows in serialized.values() for r in rows
+                           if " Relative (" in r.get("label", "")), None)
+    if first_relative is not None:
+        add_marker_ref(first_relative, "label", "relative_weight")
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # Same detection and footnote-building as clinical pathology; see

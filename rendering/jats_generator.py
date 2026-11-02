@@ -494,7 +494,8 @@ def _emit_apical_table(node: DocNode, data: dict) -> list:
         for r in block.rows:
             # A sub-heading spans the table like the sex separator.
             rows.append([f"**{r.cells[0]}**"] if r.is_heading else r.cells)
-    return [_table_wrap(node.id, plan.caption, headers, rows, plan.footnotes)]
+    return [_table_wrap(node.id, plan.caption, headers, rows, plan.footnotes,
+                        caption_units=plan.caption_units)]
 
 
 def _emit_incidence_table(node: DocNode, data: dict) -> list:

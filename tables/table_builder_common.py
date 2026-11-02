@@ -85,21 +85,27 @@ def significance_explanation(dose_unit: str | None = None) -> str:
 #       above the lettered footnotes.
 #
 #   {"kind": "lettered",   "text": str, "id": str,
-#    "marker": {"target": "header" | "cells" | "none"},
+#    "marker": {"target": "caption" | "header" | "cells" | "none"},
 #    "letter": str}        # <- assigned by finalize_footnotes, not the builder
 #       A lettered footnote.  `id` is a stable identity (NOT the letter);
 #       `marker.target` declares where the letter also appears:
+#         "caption" — superscripted after the table's caption (a table with
+#                    no first-column header: NIEHS-07 … 10's plasma table)
 #         "header" — superscripted on the table's first-column header
+#                    ("Endpoint^a,b": the notes on the whole table)
 #         "cells"  — superscripted on specific row cells; the rows name
 #                    this footnote by `id` via their `marker_refs` dict
 #         "none"   — appears only in the footnote list, no in-table marker
 #
-# A row that hosts a cell marker carries `marker_refs: {dose_key: footnote_id}`
-# — the stable id, never a letter.  `finalize_footnotes` is the single place
-# that turns ids into letters: it assigns the letters and derives each row's
-# `markers: {dose_key: letter}` from `marker_refs`.  Because it always
+# A row that hosts a cell marker carries `marker_refs: {cell: footnote_id}` —
+# the stable id (or a list of ids, "6^c,d"), never a letter.  The cell is a
+# dose key (js_dose_key), "label" (the row's label: "Relative (mg/g)^e"), or
+# "bmd"/"bmdl".  `finalize_footnotes` is the single place that turns ids into
+# letters: it assigns the letters and derives each row's
+# `markers: {cell: "c" | "c,d"}` from `marker_refs`.  Because it always
 # re-derives from `marker_refs`, it is idempotent and safe to run again after
-# more footnotes are merged in downstream (see report_data.py).
+# more footnotes are merged in downstream (see report_data.py).  The emitters
+# print the letters (rendering.render_common.apical_table_plan).
 
 # ---------------------------------------------------------------------------
 # Report-level organ allowlist (per-area limiting factor)
@@ -173,6 +179,9 @@ def definition_footnote(text: str) -> dict:
     return {"kind": "definition", "text": text}
 
 
+MARKER_TARGETS = ("caption", "header", "cells", "none")
+
+
 def lettered_footnote(text: str, footnote_id: str, target: str = "none") -> dict:
     """
     Build a `lettered` footnote record.
@@ -183,11 +192,11 @@ def lettered_footnote(text: str, footnote_id: str, target: str = "none") -> dict
                      "attrition_333_male").  Rows reference this id in their
                      `marker_refs`; it is NOT the displayed letter.
         target:      Where the assigned letter also appears in the table —
-                     "header", "cells", or "none" (default).
+                     "caption", "header", "cells", or "none" (default).
     """
-    if target not in ("header", "cells", "none"):
+    if target not in MARKER_TARGETS:
         raise ValueError(
-            f"lettered_footnote target must be header/cells/none, got {target!r}"
+            f"lettered_footnote target must be one of {MARKER_TARGETS}, got {target!r}"
         )
     return {
         "kind": "lettered",
@@ -210,8 +219,8 @@ def finalize_footnotes(
     `legend` and `definition` records are skipped (they carry no letter).
 
     It then walks `serialized_rows` ({sex: [row, ...]}) and, for every row
-    carrying a `marker_refs` dict ({dose_key: footnote_id}), derives a
-    fresh `markers` dict ({dose_key: letter}) by resolving each id through
+    carrying a `marker_refs` dict ({cell: footnote_id or [ids]}), derives a
+    fresh `markers` dict ({cell: "c" or "c,d"}) by resolving each id through
     the letter map.  `marker_refs` is the stable, builder-owned source of
     truth; `markers` is always rebuilt from it — so this function is
     idempotent and may be called again after additional footnotes are
@@ -248,13 +257,29 @@ def finalize_footnotes(
             refs = row.get("marker_refs")
             if not refs:
                 continue
-            row["markers"] = {
-                dose_key: id_to_letter[fid]
-                for dose_key, fid in refs.items()
-                if fid in id_to_letter
-            }
+            markers = {}
+            for cell, fids in refs.items():
+                letters = sorted(id_to_letter[f] for f in _ids(fids) if f in id_to_letter)
+                if letters:
+                    markers[cell] = ",".join(letters)
+            row["markers"] = markers
 
     return footnotes
+
+
+def _ids(fids) -> list[str]:
+    """A cell's footnote ids: one id or a list of them."""
+    return [fids] if isinstance(fids, str) else list(fids or [])
+
+
+def add_marker_ref(row: dict, cell: str, footnote_id: str) -> None:
+    """Point ``row``'s ``cell`` (a dose key, "label", "bmd", "bmdl") at a
+    footnote as well as any it already points at ("6^c,d")."""
+    refs = row.setdefault("marker_refs", {})
+    ids = _ids(refs.get(cell))
+    if footnote_id not in ids:
+        ids.append(footnote_id)
+    refs[cell] = ids[0] if len(ids) == 1 else ids
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +573,8 @@ def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dic
     in render order: the significance explanation and */** marker key
     (legends), the BMD/BMDL definition, (a) the data format and, when the
     study's method profile names tests for ``platform``, (b) the statistical
-    method.  ``method`` None ⇒ the session's default method profile."""
+    method — both marked on the first-column header ("Endpoint^a,b", as
+    NIEHS-07 … 13 print them).  ``method`` None ⇒ the session's default method profile."""
     from pipeline.method_profile import marker_legend, session_method, statistics_sentence
 
     method = method if method is not None else session_method(None)
@@ -556,11 +582,11 @@ def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dic
         legend_footnote(significance_explanation(dose_unit)),
         legend_footnote(marker_legend(method)),
         definition_footnote(BMD_DEFINITION),
-        lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format"),
+        lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format", target="header"),
     ]
     stat_text = statistics_sentence(method, method.pairwise(platform))
     if stat_text:
-        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+        footnotes.append(lettered_footnote(stat_text, "stat_method", target="header"))
     return footnotes
 
 
@@ -600,10 +626,8 @@ def attach_n_row_marker_refs(
     for sex, rows in serialized.items():
         sex_refs = n_row_marker_refs.get(sex, {})
         if sex_refs and rows and rows[0].get("is_n_row"):
-            n_row = rows[0]
-            refs = n_row.get("marker_refs", {})
-            refs.update({js_dose_key(d): fid for d, fid in sex_refs.items()})
-            n_row["marker_refs"] = refs
+            for d, fid in sex_refs.items():
+                add_marker_ref(rows[0], js_dose_key(d), fid)
 
 
 # ---------------------------------------------------------------------------

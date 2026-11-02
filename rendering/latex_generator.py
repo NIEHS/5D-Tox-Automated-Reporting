@@ -787,7 +787,7 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     if plan is None:
         return _emit_table_placeholder(node)
 
-    headers = [plan.first_col] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + ([
+    headers = [_cell_latex(plan.first_col)] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + ([
         f"BMD\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
         f"BMDL\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
     ] if plan.bmd_columns else [])
@@ -815,9 +815,10 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     tabular = "\n".join(lines)
 
     notes = _emit_table_footnotes(plan.footnotes)
+    caption = _render_inline(plan.caption_units) if plan.caption_units else plan.caption
 
     return (
-        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{plan.caption}}}\n"
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
         f"{tabular}"
         f"{notes}\n"
         f"\\end{{niehstable}}"

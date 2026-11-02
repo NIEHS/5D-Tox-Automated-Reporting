@@ -1341,6 +1341,7 @@ def _render_apical_table(doc: Document, node: DocNode, data: dict) -> None:
     _booktabs_table(
         doc, headers, rows,
         caption=plan.caption, footnotes=plan.footnotes, merged_label_rows=True,
+        caption_units=plan.caption_units,
     )
 
 
