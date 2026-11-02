@@ -89,3 +89,19 @@ def test_a_group_short_of_samples_and_the_bd_rule_are_footnoted(reference_sessio
     assert female_2h["label"] == "2 Hours Postdose (ng/mL)"
     assert female_2h["values"]["4"] == "BD" and "4" in female_2h["marker_refs"]
     assert tc["table_data"]["Female"][0]["values"]["4"] == "3"     # n: the animals
+
+
+def test_the_narrative_says_when_a_timepoint_fell_below_detection(reference_session):
+    """NIEHS-07: "At 24 hours postdose, the concentration fell below the limit of
+    detection … in both male and female rats, suggesting short plasma
+    half-lives" — never a mean of fill-ins."""
+    from tables.toxicokinetics import build_internal_dose_narrative, compute_toxicokinetics
+
+    session = reference_session("NIEHS-07", STUDIES["NIEHS-07"])
+    tk = compute_toxicokinetics(find_sidecar_paths(str(session), "Tissue Concentration"),
+                                resolve("ntp-5day-2021.1"))
+    text = " ".join(build_internal_dose_narrative(tk, "6:1 FTOH", "mg/kg", {"species": "rat"}))
+    assert ("At 24 hours postdose, plasma concentrations in male and female rats were below "
+            "the limit of detection in every dose group, suggesting short plasma half-lives.") in text
+    assert "male rats were higher than those in female rats" in text
+    assert "24 hours;" not in text and "half-lives (from" not in text   # no ratio or t½ from BD

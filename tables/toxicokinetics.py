@@ -50,11 +50,11 @@ def _timepoint_hours(timepoint: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def _extract_group_conc(sidecar: dict, method) -> dict[str, dict[float, list[float]]]:
+def _extract_group_conc(sidecar: dict, method) -> dict[str, dict[float, list[float] | None]]:
     """Per-timepoint, per-dose biosampling-animal plasma values from one sidecar:
-    {"<hours> Hour": {dose: [value, ...]}}.  The table's groups and rules
-    (tissue_concentration_table.plasma_groups / group_values: half the limit
-    below it; a BD group has no values), so the analysis and the table are
+    {"<hours> Hour": {dose: [value, ...], or None for a BD group}}.  The
+    table's groups and rules (tissue_concentration_table.plasma_groups /
+    group_values: half the limit below it), so the analysis and the table are
     computed from the SAME numbers."""
     from tables.tissue_concentration_table import group_values, plasma_groups
 
@@ -62,7 +62,7 @@ def _extract_group_conc(sidecar: dict, method) -> dict[str, dict[float, list[flo
     for hours, by_dose in plasma_groups(sidecar).items():
         for dose, group in by_dose.items():
             values, _ = group_values(group, method)
-            if values:
+            if values is None or values:
                 out.setdefault(f"{hours} Hour", {})[dose] = values
     return out
 
@@ -131,7 +131,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str], method=None) -> dict:
                 continue
             tp_hours[tp] = h
             doses.update(dose_vals.keys())
-        if len(tp_hours) < 2 or not doses:
+        if not tp_hours or not doses:
             continue
 
         sorted_tps = sorted(tp_hours.items(), key=lambda kv: kv[1])  # (label, hour)
@@ -140,12 +140,15 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str], method=None) -> dict:
 
         means: dict[float, dict[float, float]] = {}
         n: dict[float, int] = {}
+        bd: dict[float, list[float]] = {}          # {hour: [doses BD there]}
         for dose in sorted_doses:
             per_hour: dict[float, float] = {}
             n_here = 0
             for tp, h in sorted_tps:
                 vals = conc.get(tp, {}).get(dose, [])
-                if vals:
+                if vals is None:
+                    bd.setdefault(h, []).append(dose)
+                elif vals:
                     m, _ = mean_se(vals)
                     per_hour[h] = m
                     n_here = max(n_here, len(vals))
@@ -178,6 +181,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str], method=None) -> dict:
             "means": means,
             "n": n,
             "half_life": half_life,
+            "bd": bd,
             "ke": ke_map,
             "bioaccumulative": bioaccum,
         }
@@ -266,6 +270,25 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
                 f"Average plasma concentrations in {higher} {animals} were higher than "
                 f"those in {lower} {animals}, indicating a sex difference in internal exposure."
             )
+
+    # 2b. Timepoints every group of a sex was below detection (NIEHS-07: "At
+    # 24 hours postdose, the concentration fell below the limit of detection …
+    # in both male and female rats, suggesting short plasma half-lives").
+    after = "postexposure" if final == "exposure" else "postdose"
+    for h in hours:
+        gone = [s for s in sexes
+                if set(by_sex[s].get("bd", {}).get(h, [])) >= set(by_sex[s]["doses"])]
+        if not gone:
+            continue
+        who = " and ".join(s.lower() for s in gone)
+        earlier = any(by_sex[s]["means"].get(d, {}).get(e) is not None
+                      for s in gone for d in by_sex[s]["doses"] for e in hours if e < h)
+        sentence = (f"At {int(h) if float(h).is_integer() else h} hours {after}, plasma "
+                    f"concentrations in {who} {animals} were below the limit of detection in "
+                    f"every dose group")
+        if earlier and len(gone) == len(sexes):
+            sentence += ", suggesting short plasma half-lives"
+        paragraphs.append(sentence + ".")
 
     # 3. Dose proportionality → ADME inference.
     dp = tk.get("dose_proportionality") or {}
