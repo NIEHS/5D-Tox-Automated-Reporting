@@ -39,7 +39,6 @@ from narrative.chat_agent import run_turn
 from narrative.chat_tools import ChatToolbox, SourceRegistry, TOOL_SPECS
 from query.session_query import SessionQuerier
 
-DEFAULT_KB_PATH = "bmdx.duckdb"
 OUTPUT_DIR = Path("output")
 DEFAULT_MODEL = "claude-sonnet-4-6"
 WRITER_MAX_TOKENS = 16000
@@ -228,9 +227,18 @@ def _genomics_block(q: SessionQuerier, go_clusters: dict[str, int]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def assemble_totality_brief(dtxsid: str, kb_path: str = DEFAULT_KB_PATH) -> str:
+def _session_kb(dtxsid: str, kb_path: str | None) -> str:
+    """An explicit knowledge base database, else the session's own
+    (knowledge_base.registry.kb_for)."""
+    if kb_path:
+        return kb_path
+    from knowledge_base.registry import kb_for
+    return str(kb_for(dtxsid)["path"])
+
+
+def assemble_totality_brief(dtxsid: str, kb_path: str | None = None) -> str:
     """Deterministic brief covering the totality of the study's data."""
-    go_clusters = _load_go_clusters(kb_path)
+    go_clusters = _load_go_clusters(_session_kb(dtxsid, kb_path))
     with SessionQuerier(dtxsid) as q:
         brief = (
             f"# Totality data brief — {dtxsid}\n\n"
@@ -266,7 +274,7 @@ _GO_CLUSTER_TOOL = {
 class TotalityToolbox(ChatToolbox):
     """ChatToolbox plus a GO-cluster drill-down tool for the totality writer."""
 
-    def __init__(self, *args, kb_path: str = DEFAULT_KB_PATH, **kwargs):
+    def __init__(self, *args, kb_path: str | None = None, **kwargs):
         super().__init__(*args, kb_path=kb_path, **kwargs)
         self._go_clusters = _load_go_clusters(str(self.kb_path))
 
@@ -420,7 +428,7 @@ async def write_totality_analysis(
     *,
     chemical: str,
     model: str = DEFAULT_MODEL,
-    kb_path: str = DEFAULT_KB_PATH,
+    kb_path: str | None = None,
 ) -> Path:
     brief = assemble_totality_brief(dtxsid, kb_path=kb_path)
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -469,7 +477,8 @@ def main() -> None:
     ap.add_argument("--dtxsid", default="DTXSID50469320")
     ap.add_argument("--chemical", default="", help="Friendly compound name for the prose.")
     ap.add_argument("--model", default=DEFAULT_MODEL)
-    ap.add_argument("--kb", default=DEFAULT_KB_PATH, help="Path to bmdx.duckdb")
+    ap.add_argument("--kb", default=None,
+                    help="A knowledge base database (default: the session's own)")
     ap.add_argument("--brief-only", action="store_true",
                     help="Assemble and print the deterministic brief; no LLM call.")
     args = ap.parse_args()

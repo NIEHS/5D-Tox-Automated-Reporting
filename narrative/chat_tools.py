@@ -19,9 +19,10 @@ set of TOOLS and decides, per question, what to look up:
                                        what the report says.
   * `kb_gene_evidence` /
     `kb_papers_for_genes` /
-    `kb_pathway_genes`               — the toxicogenomics knowledge graph
-                                       (bmdx.duckdb): pathways, GO terms,
-                                       organs, literature claims and PAPERS.
+    `kb_pathway_genes`               — the report's knowledge base
+                                       (knowledge_base.registry): pathways,
+                                       GO terms, organs, literature claims
+                                       and PAPERS, as far as it holds them.
 
 Every paper a knowledge-graph tool returns is registered in a `SourceRegistry`
 and handed to the model as a stable `[Sn]` token. The model may cite ONLY
@@ -57,9 +58,6 @@ logger = logging.getLogger(__name__)
 # never blows the context window, while still useful (200 rows of a BMD table).
 TOOL_MAX_ROWS = 200
 TOOL_MAX_CHARS = 12_000
-# Path of the knowledge graph, resolved the same way the genomics narrative
-# does (relative to the working directory / repo root).
-DEFAULT_KB_PATH = "bmdx.duckdb"
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +255,10 @@ class ChatToolbox:
                        across turns).
         chemical_name / casrn: passed to the report-data loader so the report
                        sections read as they render.
-        kb_path:       path to bmdx.duckdb; missing ⇒ knowledge tools report
-                       "unavailable" rather than failing the turn.
+        kb_path:       a knowledge base database to read (tests); by default
+                       the report's own (knowledge_base.registry.kb_for).  None
+                       usable, or one lacking what a tool asks ⇒ that tool
+                       reports "unavailable" rather than failing the turn.
     """
 
     def __init__(
@@ -268,13 +268,19 @@ class ChatToolbox:
         *,
         chemical_name: str = "the test article",
         casrn: str = "",
-        kb_path: str | Path = DEFAULT_KB_PATH,
+        kb_path: str | Path | None = None,
     ):
         self.dtxsid = dtxsid
         self.registry = registry
         self.chemical_name = chemical_name
         self.casrn = casrn
-        self.kb_path = Path(kb_path)
+        if kb_path is not None:
+            self.kb_path, self.kb_capabilities = Path(kb_path), None
+        else:
+            from knowledge_base.registry import kb_or_none
+            kb = kb_or_none(dtxsid, needs=())
+            self.kb_path = kb["path"] if kb else None
+            self.kb_capabilities = set(kb["capabilities"]) if kb else set()
         self._report_data: dict | None = None
         # Every executed call, for the transcript's tool trace.
         self.trace: list[dict] = []
@@ -368,9 +374,17 @@ class ChatToolbox:
 
     # -- knowledge graph ---------------------------------------------------
 
-    def _kb(self):
-        if not self.kb_path.exists():
-            raise RuntimeError(f"knowledge base unavailable ({self.kb_path} not found)")
+    def _require_kb(self, needs: set[str]) -> None:
+        """Refuse a tool the knowledge base cannot answer.  An explicit kb_path
+        (kb_capabilities None) is taken as able to answer everything."""
+        if self.kb_path is None or not self.kb_path.exists():
+            raise RuntimeError(f"knowledge base unavailable ({self.kb_path or 'none assigned'})")
+        lacking = needs - self.kb_capabilities if self.kb_capabilities is not None else set()
+        if lacking:
+            raise RuntimeError(f"knowledge base unavailable: it holds no {sorted(lacking)}")
+
+    def _kb(self, needs: set[str]):
+        self._require_kb(needs)
         from knowledge_base.toxkb import ToxKBQuerier
         return ToxKBQuerier(str(self.kb_path))
 
@@ -391,7 +405,7 @@ class ChatToolbox:
         gene = str(inputs.get("gene_symbol") or "").strip().upper()
         if not gene:
             return {"error": "gene_symbol is required"}
-        with self._kb() as kb:
+        with self._kb({"papers", "claims", "genes", "organs", "go", "pathways"}) as kb:
             papers = kb.gene_papers(gene)
             meta = kb.papers_metadata([p["paper_id"] for p in papers])
             for p in papers:
@@ -412,8 +426,7 @@ class ChatToolbox:
         if not genes:
             return {"error": "gene_symbols is required"}
         limit = max(1, min(int(inputs.get("limit") or 10), 25))
-        if not self.kb_path.exists():
-            raise RuntimeError(f"knowledge base unavailable ({self.kb_path} not found)")
+        self._require_kb({"papers", "genes"})
         from narrative.references_builder import build_reference_pool_for_genes
         pool = build_reference_pool_for_genes(genes, str(self.kb_path), pool_size=limit)
         return {"genes": genes, "papers": self._register_papers(pool)}
@@ -422,5 +435,5 @@ class ChatToolbox:
         name = str(inputs.get("pathway_name") or "").strip()
         if not name:
             return {"error": "pathway_name is required"}
-        with self._kb() as kb:
+        with self._kb({"pathways"}) as kb:
             return {"pathway": name, "genes": kb.pathway_genes(name)}

@@ -44,7 +44,7 @@ imports are package-qualified (`from rendering.render_common import ...`,
 | `tables/` | `table_builder_common`, `*_table`, `apical_bmds`, `sample_counts_table` |
 | `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, LLM generators `apical_bmd_llm` + `genomics_llm`, prompt workshop `prompt_templates` + `summary_llm` + `prompt_workshop`, `citation_check`, session chat `chat_tools` + `chat_agent` (ADR-0022) |
 | `genomics/` | `genomics_*`, `gene_bodies`, `chart_registry`, `chart_style` |
-| `knowledge_base/` | `build_db`, `toxkb`, `citegraph`, `crawl_*`, `fulltext`, `extract`, `enrichr_*`, `enrichment_stats`, `pathway_enrich`, `go_gene_map` |
+| `knowledge_base/` | named crawl queries → named knowledge bases (ADR-0034): `crawl_queries`, `query_agent`, `run_crawl`, `citegraph`, `entity_crawl`, `extract`, `fulltext`, `annotate`, `build_db`, `registry` (`kb_for`: the one resolver), `toxkb`, `corpus_curation`, `enrichr_*`, `enrichment_stats`; old crawl modules in `retired/` |
 | `styling_export/` | `docx_style_extract`, `freeform_content`, `export_sessions`, `*_provision`, `llm_endpoints`, `llm_helpers` |
 | `safeguards/` | the idiot-proofing, as a layer (ADR-0031): front ends (web routes, CLI) call `safeguards.guarded`, which checks the act (`acts`: R6, phase, method chosen; `sections`: ownership, reasons; `inputs`; `sources`; `publish`) then calls the core step; refusals explained (`refusals`). Core packages never import it; the notebook calls the core unguarded |
 | `tooling/` | dev/scratch/build scripts |
@@ -62,7 +62,7 @@ Before making changes, identify which type of work this session involves and loa
 | **Table builders** | `constraints_table_builders.md` | `tables/` — `*_table.py`, `table_builder_common.py`, `apical_bmds.py`; consume integrated.json only |
 | **UI / sessions** | behind the wall (see top); for the new UI: `docs/ui-redesign/HANDOFF.md` | `workflow/`, `web_routes/` (not `compare_routes.py`), `pipeline/session_store.py` — state derivation never imperative |
 | **LLM narratives** | `constraints_llm_narratives.md` | `narrative/` (`background_writer.py`, `interpret.py`, `unified_narrative.py`) + `web_routes/llm_routes.py` — know which sections are LLM vs programmatic |
-| **Knowledge base** | `constraints_knowledge_base.md` | `knowledge_base/` — `build_db.py`, `toxkb.py` ToxKBQuerier, crawl pipeline; schema is a cross-project contract |
+| **Knowledge base** | `constraints_knowledge_base.md` | `knowledge_base/`, `crawl_queries/`, `knowledge_bases/` — the query drives every stage; readers resolve through `registry.kb_for`; the toxkb tables are a contract |
 | **Cross-cutting refactor** | `constraints_cross_cutting_refactor.md` | May touch anything, but must map blast radius first and test full flow |
 
 If work spans multiple types, say so explicitly and follow the stricter constraints of each. When uncertain whether something is in-scope, err toward not touching it.
@@ -92,7 +92,7 @@ Consult these memory files when working in unfamiliar areas:
 - `expertise_java_interop.md` — .bm2 serialization traps, subprocess patterns, transient vs persisted fields
 - `expertise_ntp_statistics.md` — Python/Java test split, responsive flag logic, BMD classification, table business rules, footnote scheme
 - `expertise_data_pipeline.md` — source-of-truth hierarchy, pivot data loss, integration lifecycle, bmdx-pipe dependency
-- `expertise_knowledge_base.md` — bmdx.duckdb schema, ToxKBQuerier, static artifact status
+- `expertise_knowledge_base.md` — named knowledge bases (ADR-0034), toxkb schema, ToxKBQuerier
 - `expertise_document_tree.md` — DocNode structure, four-surface render IR (Typst dead), NIEHS fidelity gap
 - `docs/ui-redesign/HANDOFF.md` — the workflow, its checkpoints and the requirements, for the new UI (the old `expertise_ui_state.md` is behind the wall)
 - `todo.md` — prioritized work items (CRITICAL/HIGH/MEDIUM/LONG-TERM)

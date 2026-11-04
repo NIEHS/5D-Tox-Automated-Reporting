@@ -41,16 +41,12 @@ from workflow.section_catalog import catalog_for_session
 from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
 
-# The shared knowledge base (bmdx.duckdb) is a repo-level static artifact, resolved
-# cwd-relative — the same default ToxKBQuerier(db_path="bmdx.duckdb") uses, and the
-# server runs from the repo root. Not per-session.
-_KNOWLEDGE_BASE_FILE = "bmdx.duckdb"
-
-
-def _has_knowledge_base() -> bool:
-    """Whether the shared knowledge base (bmdx.duckdb) is present."""
-    from pathlib import Path
-    return Path(_KNOWLEDGE_BASE_FILE).exists()
+def _has_knowledge_base(dtxsid: str) -> bool:
+    """Whether the session's report has a knowledge base that can ground its
+    genomics interpretation: the one its document definition names, else the
+    default (knowledge_base.registry)."""
+    from knowledge_base.registry import kb_or_none
+    return kb_or_none(dtxsid) is not None
 
 
 def _is_processed(session_dir) -> bool:
@@ -137,12 +133,11 @@ class WorkflowEngine:
             # end of Process — the cheap "has this session been processed" signal
             # the data-prep DB-view button gates on. Read-only stat, like above.
             "hasQuerySubstrate": self.store.artifact_exists(self.dtxsid, "session.duckdb"),
-            # Presence of the shared knowledge base (bmdx.duckdb, repo-level). Gates
+            # The report's knowledge base, usable for the genomics interpretation
+            # (knowledge_base.registry: its definition's, else the default). Gates
             # the KB-dependent document sections (genomics interpretation → graph-
-            # grounded references). Not per-session; resolved cwd-relative to match
-            # ToxKBQuerier's default. Always present today — infrastructure for when
-            # the KB becomes buildable/absent (the deferred K-graph GUI).
-            "hasKnowledgeBase": _has_knowledge_base(),
+            # grounded references).
+            "hasKnowledgeBase": _has_knowledge_base(self.dtxsid),
         }
 
     # -- derived state -----------------------------------------------------
@@ -193,7 +188,7 @@ class WorkflowEngine:
         return derive_section_readiness(
             section_states,
             resources={
-                "knowledge_base": _has_knowledge_base(),
+                "knowledge_base": _has_knowledge_base(self.dtxsid),
                 "processed": _is_processed(self.store.session_dir(self.dtxsid)),
             },
             catalog=catalog,

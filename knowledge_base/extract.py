@@ -1,23 +1,23 @@
 """
-LLM-based extraction from paper abstracts using local Ollama instances.
+LLM extraction from papers: abstracts, or full text when it was fetched.
 
-Extracts:
-- Key claims / findings
-- Gene names mentioned
-- Organ relevance
-- Whether the paper supports/challenges consensus
+What to extract is the crawl query's (knowledge_base.crawl_queries, ``extract``):
+the analyst the model is told it is (``system``) and the fields, each with what
+it holds (``describe``, ``describe_fulltext``), its type (list, text, number)
+and how its values are normalised (``normalize``).  Nothing here knows the
+topic.  The consensus counts one list field per paper (``consensus``).
 
-Uses local Ollama instances in parallel across multiple GPUs.
+The model runs locally (Ollama) or through the approved gateway (Claude,
+styling_export.llm_endpoints — the egress guard), several workers at once.
 """
 
+import copy
 import json
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Optional
 
 import requests
 
@@ -156,74 +156,90 @@ def build_claude_endpoints(n_workers: int = 6,
 
 
 # ---------------------------------------------------------------------------
-# Extraction data structures
+# Prompts, from the query's fields
 # ---------------------------------------------------------------------------
 
-@dataclass
-class PaperExtraction:
-    paper_id: str
-    title: str
-    year: Optional[int] = None
-    claims: list[str] = field(default_factory=list)
-    genes: list[str] = field(default_factory=list)
-    organs: list[str] = field(default_factory=list)
-    methods: list[str] = field(default_factory=list)
-    species: list[str] = field(default_factory=list)
-    stance: str = ""          # "supports_consensus", "challenges", "neutral", "novel"
-    confidence: float = 0.0   # how confident the LLM is in its extraction
-    summary: str = ""
-    dose_response: list[str] = field(default_factory=list)
-    raw_response: str = ""
-    endpoint_used: str = ""
-    text_source: str = ""  # "abstract", "pmc", "arxiv", "s2_oa", "unpaywall", "doi_proxy"
+_EMPTY = {"list": [], "text": "", "number": 0.0}
 
 
-# ---------------------------------------------------------------------------
-# Extraction prompts
-# ---------------------------------------------------------------------------
+def _field_schema(fields: list[dict], fulltext: bool) -> str:
+    lines = []
+    for f in fields:
+        if f.get("fulltext_only") and not fulltext:
+            continue
+        describe = (f.get("describe_fulltext") if fulltext else None) or f["describe"]
+        kind = f.get("type", "list")
+        value = (json.dumps([describe]) if kind == "list" else
+                 describe if kind == "number" else json.dumps(describe))
+        lines.append(f'  "{f["name"]}": {value}')
+    return "{\n" + ",\n".join(lines) + "\n}"
 
-SYSTEM_PROMPT = """You are a scientific literature analyst specializing in toxicogenomics.
-You extract structured information from paper abstracts with precision.
-Always respond in valid JSON. Never add commentary outside the JSON."""
 
-EXTRACTION_PROMPT = """Analyze this scientific paper abstract and extract structured information.
+def prompts(spec: dict) -> tuple[str, str, str]:
+    """(system, abstract prompt, full-text prompt) for an extract spec; the
+    prompts are format strings over title, year and abstract / text."""
+    system = spec.get("system") or (
+        "You are a scientific literature analyst.\n"
+        "You extract structured information from papers with precision.\n"
+        "Always respond in valid JSON. Never add commentary outside the JSON.")
+    fields = spec["fields"]
+    tail = ("Respond with ONLY a JSON object (no markdown, no explanation) with these fields:\n")
+    abstract = ("Analyze this scientific paper abstract and extract structured information.\n\n"
+                "Title: {title}\nYear: {year}\nAbstract: {abstract}\n\n" + tail
+                + _field_schema(fields, False).replace("{", "{{").replace("}", "}}"))
+    fulltext = ("Analyze this scientific paper and extract structured information.\n\n"
+                "Title: {title}\nYear: {year}\n\nFull text (may be truncated):\n{text}\n\n"
+                + tail + _field_schema(fields, True).replace("{", "{{").replace("}", "}}"))
+    return system, abstract, fulltext
 
-Title: {title}
-Year: {year}
-Abstract: {abstract}
 
-Respond with ONLY a JSON object (no markdown, no explanation) with these fields:
-{{
-  "claims": ["list of key scientific findings or conclusions, each as a concise statement"],
-  "genes": ["list of gene names/symbols mentioned (e.g. CYP1A1, NRF2, TP53)"],
-  "organs": ["list of organs/tissues studied (e.g. liver, kidney, heart)"],
-  "methods": ["list of methods used (e.g. microarray, RNA-seq, qPCR, WGCNA)"],
-  "species": ["list of species (e.g. rat, human, mouse)"],
-  "stance": "one of: supports_consensus, challenges_consensus, neutral, novel_finding",
-  "confidence": 0.0 to 1.0,
-  "summary": "one-sentence summary of the paper's main contribution to toxicogenomics"
-}}"""
+def _record(paper: dict, spec: dict) -> dict:
+    """An empty extraction record for a paper: its identity, every field empty."""
+    rec = {"paper_id": paper["paper_id"], "title": paper.get("title", ""),
+           "year": paper.get("year")}
+    for f in spec["fields"]:
+        rec[f["name"]] = copy.copy(_EMPTY[f.get("type", "list")])
+    rec.update(raw_response="", endpoint_used="", text_source="")
+    return rec
 
-FULLTEXT_EXTRACTION_PROMPT = """Analyze this scientific paper and extract structured information.
 
-Title: {title}
-Year: {year}
+def _fill(rec: dict, data: dict, spec: dict, fulltext: bool) -> None:
+    """Copy a model's answer into a record, field by field, by type."""
+    for f in spec["fields"]:
+        name, kind = f["name"], f.get("type", "list")
+        if f.get("fulltext_only") and not fulltext:
+            continue
+        value = data.get(name)
+        if kind == "list":
+            rec[name] = [str(v) for v in value if v] if isinstance(value, list) else []
+            if (f.get("normalize") or {}).get("case") == "upper":
+                rec[name] = [v.upper() for v in rec[name]]
+        elif kind == "number":
+            try:
+                rec[name] = float(value)
+            except (TypeError, ValueError):
+                rec[name] = 0.0
+        else:
+            rec[name] = "" if value is None else str(value)
 
-Full text (may be truncated):
-{text}
 
-Respond with ONLY a JSON object (no markdown, no explanation) with these fields:
-{{
-  "claims": ["list of key scientific findings, each as a concise statement - extract MORE detail than an abstract would provide"],
-  "genes": ["list of ALL gene names/symbols mentioned (e.g. CYP1A1, NRF2, TP53) - check methods, results, and supplementary references"],
-  "organs": ["list of organs/tissues studied"],
-  "methods": ["list of methods used"],
-  "species": ["list of species"],
-  "dose_response": ["any dose-response relationships mentioned, including specific concentrations/doses"],
-  "stance": "one of: supports_consensus, challenges_consensus, neutral, novel_finding",
-  "confidence": 0.0 to 1.0,
-  "summary": "2-3 sentence summary of the paper's main contribution"
-}}"""
+def _merge(records: list[dict], spec: dict) -> dict:
+    """Merge a paper's chunk records: list fields unioned in order; text and
+    numbers from the first chunk, except a number field's maximum."""
+    if len(records) == 1:
+        return records[0]
+    merged = dict(records[0])
+    for f in spec["fields"]:
+        name, kind = f["name"], f.get("type", "list")
+        if kind == "list":
+            seen: dict[str, None] = {}
+            for r in records:
+                for v in r.get(name) or []:
+                    seen[v] = None
+            merged[name] = list(seen)
+        elif kind == "number":
+            merged[name] = max(r.get(name) or 0.0 for r in records)
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -257,56 +273,6 @@ def _chunk_text_for_extraction(text: str, max_chunk_chars: int = 30_000,
     return chunks
 
 
-def _merge_extractions(extractions: list[PaperExtraction]) -> PaperExtraction:
-    """Merge multiple chunk extractions into a single result (union of entities)."""
-    if len(extractions) == 1:
-        return extractions[0]
-
-    merged = PaperExtraction(
-        paper_id=extractions[0].paper_id,
-        title=extractions[0].title,
-        year=extractions[0].year,
-    )
-
-    # Union all entity lists (deduplicate)
-    all_claims: dict[str, None] = {}
-    all_genes: dict[str, None] = {}
-    all_organs: dict[str, None] = {}
-    all_methods: dict[str, None] = {}
-    all_species: dict[str, None] = {}
-    all_dose_response: dict[str, None] = {}
-
-    for ext in extractions:
-        for c in ext.claims:
-            all_claims[c] = None
-        for g in ext.genes:
-            all_genes[g] = None
-        for o in ext.organs:
-            all_organs[o] = None
-        for m in ext.methods:
-            all_methods[m] = None
-        for s in ext.species:
-            all_species[s] = None
-        for d in ext.dose_response:
-            all_dose_response[d] = None
-
-    merged.claims = list(all_claims)
-    merged.genes = list(all_genes)
-    merged.organs = list(all_organs)
-    merged.methods = list(all_methods)
-    merged.species = list(all_species)
-    merged.dose_response = list(all_dose_response)
-
-    # Take best metadata from first extraction
-    merged.stance = extractions[0].stance
-    merged.confidence = max(ext.confidence for ext in extractions)
-    merged.summary = extractions[0].summary
-    merged.endpoint_used = extractions[0].endpoint_used
-    merged.text_source = extractions[0].text_source
-
-    return merged
-
-
 # ---------------------------------------------------------------------------
 # JSON parsing
 # ---------------------------------------------------------------------------
@@ -338,92 +304,49 @@ def parse_json_response(text: str) -> dict | None:
 # Single-paper extraction (stateless, used by workers)
 # ---------------------------------------------------------------------------
 
-def extract_one(paper: dict, endpoint: OllamaEndpoint,
-                full_text: str | None = None,
-                text_source: str = "") -> PaperExtraction:
-    """Extract structured info from one paper using a given endpoint.
+def extract_one(paper: dict, endpoint, spec: dict,
+                full_text: str | None = None, text_source: str = "") -> dict:
+    """Extract a paper's fields (``spec``: the query's extract section) with one
+    endpoint: from its full text, chunked, when there is one; else from its
+    abstract.  Returns the extraction record."""
+    system, abstract_prompt, fulltext_prompt = prompts(spec)
+    chunk = spec.get("chunk") or {}
+    title, year = paper.get("title", ""), paper.get("year")
+    rec = _record(paper, spec)
 
-    If full_text is provided, uses the fulltext prompt and chunking.
-    Otherwise falls back to abstract extraction.
-    """
-    pid = paper["paper_id"]
-    title = paper.get("title", "")
-    abstract = paper.get("abstract")
-    year = paper.get("year")
-
-    extraction = PaperExtraction(
-        paper_id=pid,
-        title=title,
-        year=year,
-    )
-
-    # Full text path: chunk and extract from each chunk, then merge
     if full_text and len(full_text.strip()) > 200:
-        extraction.text_source = text_source or "fulltext"
-        chunks = _chunk_text_for_extraction(full_text)
-
-        chunk_extractions = []
-        for chunk in chunks:
-            chunk_ext = PaperExtraction(paper_id=pid, title=title, year=year)
-            prompt = FULLTEXT_EXTRACTION_PROMPT.format(
-                title=title,
-                year=year or "unknown",
-                text=chunk,
-            )
-            response = endpoint.generate(prompt, system=SYSTEM_PROMPT)
+        rec["text_source"] = text_source or "fulltext"
+        chunks = []
+        for part in _chunk_text_for_extraction(full_text, chunk.get("max_chars", 30_000),
+                                               chunk.get("overlap", 2_000)):
+            response = endpoint.generate(
+                fulltext_prompt.format(title=title, year=year or "unknown", text=part),
+                system=system)
             if not response:
                 continue
-            chunk_ext.raw_response = response
-            chunk_ext.endpoint_used = endpoint.name
-            chunk_ext.text_source = text_source or "fulltext"
+            part_rec = _record(paper, spec)
+            part_rec.update(raw_response=response, endpoint_used=endpoint.name,
+                            text_source=rec["text_source"])
             data = parse_json_response(response)
             if data:
-                chunk_ext.claims = data.get("claims", [])
-                chunk_ext.genes = [g.upper() for g in data.get("genes", []) if g]
-                chunk_ext.organs = data.get("organs", [])
-                chunk_ext.methods = data.get("methods", [])
-                chunk_ext.species = data.get("species", [])
-                chunk_ext.dose_response = data.get("dose_response", [])
-                chunk_ext.stance = data.get("stance", "neutral")
-                chunk_ext.confidence = float(data.get("confidence", 0.0))
-                chunk_ext.summary = data.get("summary", "")
-            chunk_extractions.append(chunk_ext)
+                _fill(part_rec, data, spec, fulltext=True)
+            chunks.append(part_rec)
+        return _merge(chunks, spec) if chunks else rec
 
-        if chunk_extractions:
-            extraction = _merge_extractions(chunk_extractions)
-        return extraction
-
-    # Abstract fallback path
-    extraction.text_source = "abstract"
-
+    rec["text_source"] = "abstract"
+    abstract = paper.get("abstract")
     if not abstract or len(abstract.strip()) < 50:
-        return extraction
-
-    prompt = EXTRACTION_PROMPT.format(
-        title=title,
-        year=year or "unknown",
-        abstract=abstract,
-    )
-
-    response = endpoint.generate(prompt, system=SYSTEM_PROMPT)
+        return rec
+    response = endpoint.generate(
+        abstract_prompt.format(title=title, year=year or "unknown", abstract=abstract),
+        system=system)
     if not response:
-        return extraction
-
-    extraction.raw_response = response
-    extraction.endpoint_used = endpoint.name
-
+        return rec
+    rec.update(raw_response=response, endpoint_used=endpoint.name)
     data = parse_json_response(response)
     if data:
-        extraction.claims = data.get("claims", [])
-        extraction.genes = [g.upper() for g in data.get("genes", [])]
-        extraction.organs = data.get("organs", [])
-        extraction.methods = data.get("methods", [])
-        extraction.species = data.get("species", [])
-        extraction.stance = data.get("stance", "neutral")
-        extraction.confidence = float(data.get("confidence", 0.0))
-        extraction.summary = data.get("summary", "")
-
-    return extraction
+        _fill(rec, data, spec, fulltext=False)
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -432,11 +355,13 @@ def extract_one(paper: dict, endpoint: OllamaEndpoint,
 
 class ParallelExtractionEngine:
     """
-    Distributes paper extraction across multiple Ollama endpoints.
-    Each endpoint gets its own thread; papers are assigned round-robin.
+    Distributes paper extraction across endpoints (local Ollama GPUs, or N
+    concurrent gateway workers).  Each endpoint gets its own thread; papers are
+    assigned by weighted round-robin.  ``spec`` is the query's extract section.
     """
 
-    def __init__(self, endpoints: list[OllamaEndpoint] | None = None):
+    def __init__(self, spec: dict, endpoints: list | None = None):
+        self.spec = spec
         if endpoints is None:
             endpoints = [LOCAL_OLLAMA, REMOTE_OLLAMA]
 
@@ -450,736 +375,171 @@ class ParallelExtractionEngine:
                 print(f"  [DOWN] {ep.name} ({ep.url}) — skipping")
 
         if not self.endpoints:
-            raise RuntimeError("No Ollama endpoints available")
+            raise RuntimeError("No extraction endpoint available")
 
         self.print_lock = Lock()
-        self.stats = {
-            "processed": 0,
-            "failed": 0,
-            "skipped_no_abstract": 0,
-        }
+        self.stats = {"processed": 0, "failed": 0, "skipped_no_abstract": 0}
         self.stats_lock = Lock()
-        # Per-endpoint counters
-        for ep in self.endpoints:
-            self.stats[f"ep_{ep.name}"] = 0
 
-    def _worker(self, paper: dict, endpoint: OllamaEndpoint,
-                index: int, total: int,
-                full_text: str | None = None,
-                text_source: str = "") -> PaperExtraction:
+    def _worker(self, paper: dict, endpoint, index: int, total: int,
+                full_text: str | None = None, text_source: str = "") -> dict:
         """Process one paper on one endpoint."""
-        title = paper.get("title", "")
-        relevance = paper.get("relevance_score", 0)
-
-        extraction = extract_one(paper, endpoint,
-                                 full_text=full_text, text_source=text_source)
-
+        rec = extract_one(paper, endpoint, self.spec,
+                          full_text=full_text, text_source=text_source)
+        has_abstract = len((paper.get("abstract") or "").strip()) >= 50
         with self.print_lock:
-            status = ""
-            if extraction.genes:
-                status += f" Genes: {', '.join(extraction.genes[:8])}"
-            if extraction.organs:
-                status += f" Organs: {', '.join(extraction.organs[:5])}"
-            if not extraction.raw_response and (paper.get("abstract") or "").strip():
-                status = " [FAILED]"
-            elif not paper.get("abstract") or len((paper.get("abstract") or "").strip()) < 50:
-                status = " [no abstract]"
-
-            ft_tag = f" [{extraction.text_source}]" if extraction.text_source else ""
-            print(f"[{index}/{total}] [{endpoint.name}]{ft_tag} [{relevance:.2f}] "
-                  f"{title[:60]}...{status}")
-
+            status = " [FAILED]" if not rec["raw_response"] and (has_abstract or full_text) else (
+                "" if rec["raw_response"] else " [no abstract]")
+            print(f"[{index}/{total}] [{endpoint.name}] [{rec['text_source']}] "
+                  f"{(paper.get('title') or '')[:60]}...{status}")
         with self.stats_lock:
-            if extraction.raw_response:
+            if rec["raw_response"]:
                 self.stats["processed"] += 1
-                self.stats[f"ep_{endpoint.name}"] += 1
-            elif paper.get("abstract") and len((paper.get("abstract") or "").strip()) >= 50:
+            elif has_abstract or full_text:
                 self.stats["failed"] += 1
             else:
                 self.stats["skipped_no_abstract"] += 1
+        return rec
 
-        return extraction
-
-    def process_papers(self, papers_file: str,
-                       max_papers: int | None = None,
-                       fulltext_results: dict | None = None,
-                       ) -> list[PaperExtraction]:
-        """Process papers in parallel across all available endpoints.
-
-        Args:
-            papers_file: Path to papers.json
-            max_papers: Limit number of papers to process
-            fulltext_results: Dict mapping paper_id -> FullTextResult
-                              (from fulltext.FullTextFetcher)
-        """
+    def process_papers(self, papers: list[dict],
+                       fulltext_results: dict | None = None) -> list[dict]:
+        """Extract every paper, in parallel across the endpoints; records come
+        back in the papers' order.  ``fulltext_results``: paper_id ->
+        fulltext.FullTextResult."""
         fulltext_results = fulltext_results or {}
-        with open(papers_file) as f:
-            papers = json.load(f)
-
-        if max_papers:
-            papers = papers[:max_papers]
-
         total = len(papers)
-        n_endpoints = len(self.endpoints)
-
-        # Weighted distribution: assign papers proportional to endpoint weight
-        total_weight = sum(ep.weight for ep in self.endpoints)
-
-        ft_count = sum(1 for p in papers if p.get("paper_id", "") in fulltext_results)
-        print(f"\nProcessing {total} papers across {n_endpoints} GPU(s)...")
-        if ft_count:
-            print(f"  Full text available for {ft_count}/{total} papers")
-        for ep in self.endpoints:
-            share = round(total * ep.weight / total_weight)
-            print(f"  {ep.name}: {ep.model} (weight={ep.weight}, ~{share} papers)")
-        print()
-
-        # Build weighted round-robin sequence: e.g. weight=2,1 -> [A,A,B,A,A,B,...]
-        weighted_seq: list[OllamaEndpoint] = []
+        weighted_seq: list = []
         for ep in self.endpoints:
             weighted_seq.extend([ep] * ep.weight)
-
-        assignments: list[tuple[dict, OllamaEndpoint, int]] = []
+        queues: dict[str, list[tuple[dict, int]]] = {ep.name: [] for ep in self.endpoints}
         for i, paper in enumerate(papers):
-            ep = weighted_seq[i % len(weighted_seq)]
-            assignments.append((paper, ep, i + 1))
+            queues[weighted_seq[i % len(weighted_seq)].name].append((paper, i + 1))
 
-        # Process with one thread per endpoint
-        # Each endpoint handles its papers sequentially (GPU can only do one at a time)
-        # But endpoints run in parallel with each other
-        endpoint_queues: dict[str, list[tuple[dict, int]]] = {
-            ep.name: [] for ep in self.endpoints
-        }
-        for paper, ep, idx in assignments:
-            endpoint_queues[ep.name].append((paper, idx))
+        results: dict[str, dict] = {}
 
-        results: dict[str, PaperExtraction] = {}  # paper_id -> extraction
-
-        def run_endpoint_queue(endpoint: OllamaEndpoint,
-                               queue: list[tuple[dict, int]]):
+        def run_queue(endpoint, queue):
             for paper, idx in queue:
-                pid = paper["paper_id"]
-                ft_result = fulltext_results.get(pid)
-                ft_text = ft_result.text if ft_result else None
-                ft_source = ft_result.source if ft_result else ""
-                ext = self._worker(paper, endpoint, idx, total,
-                                   full_text=ft_text, text_source=ft_source)
-                results[pid] = ext
+                ft = fulltext_results.get(paper["paper_id"])
+                results[paper["paper_id"]] = self._worker(
+                    paper, endpoint, idx, total,
+                    full_text=ft.text if ft else None, text_source=ft.source if ft else "")
 
         start_time = time.time()
-
-        with ThreadPoolExecutor(max_workers=n_endpoints) as pool:
-            futures = []
-            for ep in self.endpoints:
-                queue = endpoint_queues[ep.name]
-                futures.append(pool.submit(run_endpoint_queue, ep, queue))
-
-            # Wait for all to complete
-            for f in futures:
+        with ThreadPoolExecutor(max_workers=len(self.endpoints)) as pool:
+            for f in [pool.submit(run_queue, ep, queues[ep.name]) for ep in self.endpoints]:
                 f.result()
-
-        elapsed = time.time() - start_time
-
-        # Rebuild list in original order
-        extractions = []
-        for paper in papers:
-            pid = paper["paper_id"]
-            if pid in results:
-                extractions.append(results[pid])
-
-        self._print_summary(extractions, elapsed)
-        return extractions
-
-    def _print_summary(self, extractions: list[PaperExtraction],
-                       elapsed: float):
-        """Print extraction summary."""
-        all_genes: dict[str, int] = {}
-        all_organs: dict[str, int] = {}
-        all_methods: dict[str, int] = {}
-
-        for ext in extractions:
-            for g in ext.genes:
-                all_genes[g] = all_genes.get(g, 0) + 1
-            for o in ext.organs:
-                o_lower = o.lower()
-                all_organs[o_lower] = all_organs.get(o_lower, 0) + 1
-            for m in ext.methods:
-                m_lower = m.lower()
-                all_methods[m_lower] = all_methods.get(m_lower, 0) + 1
-
-        print(f"\n{'='*60}")
-        print("EXTRACTION SUMMARY")
-        print(f"{'='*60}")
-        print(f"Time: {elapsed:.1f}s ({elapsed/60:.1f} min)")
-        print(f"Papers/sec: {len(extractions)/elapsed:.2f}")
-        print(f"Stats: {self.stats}")
-        print("\nTop 30 genes (by frequency across papers):")
-        for gene, count in sorted(all_genes.items(),
-                                   key=lambda x: x[1], reverse=True)[:30]:
-            print(f"  {gene}: {count} papers")
-        print("\nOrgan coverage:")
-        for organ, count in sorted(all_organs.items(),
-                                    key=lambda x: x[1], reverse=True)[:20]:
-            print(f"  {organ}: {count} papers")
-        print("\nMethods used:")
-        for method, count in sorted(all_methods.items(),
-                                     key=lambda x: x[1], reverse=True)[:15]:
-            print(f"  {method}: {count} papers")
-
-    def save(self, extractions: list[PaperExtraction],
-             path: str = "citegraph_output/extractions.json"):
-        """Save all extractions to JSON."""
-        out = [asdict(ext) for ext in extractions]
-        with open(path, "w") as f:
-            json.dump(out, f, indent=2, default=str)
-        print(f"\nSaved {len(out)} extractions to {path}")
+        print(f"\nExtracted {total} papers in {time.time() - start_time:.0f}s: {self.stats}")
+        return [results[p["paper_id"]] for p in papers if p["paper_id"] in results]
 
 
 # ---------------------------------------------------------------------------
-# Gene name normalization
+# Normalisation (each field's ``normalize`` rules)
 # ---------------------------------------------------------------------------
 
-# Canonical HGNC symbols for common aliases/variants found in literature.
-# Maps variant -> canonical symbol.
-GENE_ALIASES: dict[str, str] = {
-    # p53 family
-    "P53": "TP53",
-    "TRP53": "TP53",
-    "P53/TP53": "TP53",
+def normalizer(field_spec: dict | None):
+    """A function normalising one value of a field by its ``normalize`` rules:
+    trim; ``case`` (upper | lower); "" when it contains a ``drop_containing``
+    phrase; its ``aliases`` entry; trailing ``strip`` characters removed; its
+    alias again.  A field with no rules: trimmed only."""
+    rules = (field_spec or {}).get("normalize") or {}
+    case = rules.get("case")
+    drop = [d.upper() if case == "upper" else d.lower() if case == "lower" else d
+            for d in rules.get("drop_containing") or []]
+    aliases = rules.get("aliases") or {}
+    if case == "lower":
+        aliases = {k.lower(): v for k, v in aliases.items()}
+    strip = rules.get("strip") or ""
 
-    # BCL2 family
-    "BCL-2": "BCL2",
-    "BCL-XL": "BCL2L1",
-    "BAK1": "BAK1",
-    "BAK": "BAK1",
-
-    # Caspases
-    "CASPASE-3": "CASP3",
-    "CASPASE3": "CASP3",
-    "CASPASE-9": "CASP9",
-    "CASPASE-8": "CASP8",
-    "CASPASE-1": "CASP1",
-
-    # TNF/NF-kB signaling
-    "TNF-Α": "TNF",
-    "TNFΑ": "TNF",
-    "TNF-ALPHA": "TNF",
-    "TNFA": "TNF",
-    "NF-ΚB": "NFKB1",
-    "NF-KB": "NFKB1",
-    "NF-KAPPAB": "NFKB1",
-    "NFKB": "NFKB1",
-    "NF-ΚB P65": "RELA",
-    "IL-6": "IL6",
-    "IL-1Β": "IL1B",
-    "IL-1B": "IL1B",
-    "IL-10": "IL10",
-    "IL-33": "IL33",
-    "IL-1": "IL1B",
-
-    # NRF2/KEAP1 pathway
-    "NRF2": "NFE2L2",
-    "NRF1": "NFE2L1",
-    "KEAP-1": "KEAP1",
-
-    # Nuclear receptors
-    "PPARΑ": "PPARA",
-    "PPAR-ALPHA": "PPARA",
-    "PPAR-Α": "PPARA",
-    "PPARα": "PPARA",
-    "RXRΑ": "RXRA",
-    "HIF-1Α": "HIF1A",
-    "HIF-1A": "HIF1A",
-    "PGC1Α": "PPARGC1A",
-    "PGC-1Α": "PPARGC1A",
-    "PGC1A": "PPARGC1A",
-    "FOXO3A": "FOXO3",
-    "ERΑ": "ESR1",
-
-    # Xenobiotic metabolism
-    "CYTOCHROME P450": "CYP",  # too generic, but normalize
-    "CYP 1A1": "CYP1A1",
-    "CYP 2E1": "CYP2E1",
-
-    # Growth factors / signaling
-    "TGF-Β": "TGFB1",
-    "TGF-B": "TGFB1",
-    "TGF-BETA": "TGFB1",
-    "TGFB": "TGFB1",
-    "TNF-Β": "LTA",
-    "VEGF": "VEGFA",
-    "VEGF-A": "VEGFA",
-    "HGF": "HGF",
-    "FGF-21": "FGF21",
-    "GDF-15": "GDF15",
-
-    # Apoptosis / cell cycle
-    "P21": "CDKN1A",
-    "P27": "CDKN1B",
-    "P62": "SQSTM1",
-    "BECLIN-1": "BECN1",
-
-    # Kinases / signaling
-    "ERK": "MAPK1",
-    "ERK1/2": "MAPK1",
-    "JNK": "MAPK8",
-    "P-AKT": "AKT1",
-    "AKT": "AKT1",
-    "P-AMPK": "PRKAA1",
-    "AMPK": "PRKAA1",
-    "MTOR": "MTOR",
-    "PI3K": "PIK3CA",
-
-    # Oxidative stress
-    "HMOX1": "HMOX1",
-    "HMOX-1": "HMOX1",
-    "HO-1": "HMOX1",
-    "SOD": "SOD1",
-    "SOD1": "SOD1",
-    "SOD2": "SOD2",
-    "GPX": "GPX1",
-    "COX-2": "PTGS2",
-    "COX2": "PTGS2",
-
-    # Mitochondrial
-    "DRP-1": "DNM1L",
-    "DRP1": "DNM1L",
-    "MFN-2": "MFN2",
-
-    # Kidney biomarkers
-    "KIM-1": "HAVCR1",
-    "KIM1": "HAVCR1",
-    "NGAL": "LCN2",
-
-    # Misc
-    "HSP90": "HSP90AA1",
-    "HSP70": "HSPA1A",
-    "SIRT-1": "SIRT1",
-    "DJ-1/PARK7": "PARK7",
-    "DJ-1": "PARK7",
-}
-
-
-def normalize_gene(name: str) -> str:
-    """
-    Normalize a gene name to its canonical HGNC symbol.
-
-    Steps:
-    1. Uppercase and strip whitespace
-    2. Remove common prefixes (p-, h-, r- for protein/human/rat)
-    3. Look up in alias table
-    4. Strip trailing hyphens and normalize punctuation
-    """
-    name = name.strip().upper()
-
-    # Skip obviously non-gene entries
-    skip_patterns = [
-        "NOT EXPLICITLY", "KEY GENES", "CORE GENES",
-        "GENE EXPRESSION", "SIGNATURE", "PATHWAY",
-        "TOTAL", "IMPLIED", "LISTED",
-    ]
-    for pattern in skip_patterns:
-        if pattern in name:
+    def normalize(value) -> str:
+        v = str(value).strip()
+        if case == "upper":
+            v = v.upper()
+        elif case == "lower":
+            v = v.lower()
+        if any(d in v for d in drop):
             return ""
+        if v in aliases:
+            return aliases[v]
+        v = v.rstrip(strip) if strip else v
+        return aliases.get(v, v)
 
-    # Direct alias lookup
-    if name in GENE_ALIASES:
-        return GENE_ALIASES[name]
-
-    # Strip trailing punctuation that shouldn't be there
-    name = name.rstrip(".,;:")
-
-    # Check alias again after cleanup
-    if name in GENE_ALIASES:
-        return GENE_ALIASES[name]
-
-    return name
+    return normalize
 
 
-def normalize_organ(name: str) -> str:
-    """Normalize organ names to reduce duplicates."""
-    name = name.strip().lower()
-
-    organ_map = {
-        "hepatocytes": "liver",
-        "hepatocyte": "liver",
-        "hepatic": "liver",
-        "renal": "kidney",
-        "kidneys": "kidney",
-        "lungs": "lung",
-        "hearts": "heart",
-        "brains": "brain",
-        "cerebellum": "brain",
-        "hippocampus": "brain",
-        "cortex": "brain",
-        "frontal cortex": "brain",
-        "striatum": "brain",
-        "amygdala": "brain",
-        "nervous system": "brain",
-        "cardiovascular system": "heart",
-        "pulmonary system": "lung",
-        "gastrointestinal tract": "intestine",
-        "gut": "intestine",
-        "colon": "intestine",
-        "colorectal tissue": "intestine",
-        "rectum": "intestine",
-        "esophagus": "stomach",
-        "gallbladder": "liver",
-        "bile duct": "liver",
-        "breast tissue": "breast",
-        "skeletal muscle": "muscle",
-        "plasma": "blood",
-        "peripheral blood mononuclear cells (pbmc)": "blood",
-    }
-
-    return organ_map.get(name, name)
+def field_spec(spec: dict, name: str) -> dict | None:
+    return next((f for f in spec.get("fields") or [] if f["name"] == name), None)
 
 
 # ---------------------------------------------------------------------------
-# Gene consensus analysis
+# Consensus: how many papers name each value of a field
 # ---------------------------------------------------------------------------
 
-def analyze_gene_consensus(extractions_file: str = "citegraph_output/extractions.json"):
-    """
-    Analyze extracted genes to find:
-    - Consensus hallmark genes (appear in many papers, across methods)
-    - Organ-specific gene sets
-    - Outlier/novel genes (few mentions but high confidence)
-    """
-    with open(extractions_file) as f:
-        extractions = json.load(f)
-
-    # Build gene-to-papers mapping
-    gene_papers: dict[str, list[dict]] = {}
-    gene_organs: dict[str, set] = {}
-
-    for ext in extractions:
-        genes = ext.get("genes", [])
-        organs = ext.get("organs", [])
-        normalized_organs = {normalize_organ(o) for o in organs}
-        # Remove overly broad/noisy organ tags
-        normalized_organs.discard("")
-
-        for raw_gene in genes:
-            gene = normalize_gene(raw_gene)
-            if not gene:  # skip non-gene entries
-                continue
-            if gene not in gene_papers:
-                gene_papers[gene] = []
-                gene_organs[gene] = set()
-            gene_papers[gene].append({
-                "paper_id": ext["paper_id"],
-                "title": ext["title"],
-                "year": ext.get("year"),
-                "confidence": ext.get("confidence", 0),
-            })
-            gene_organs[gene].update(normalized_organs)
-
-    # Categorize genes
-    consensus = {}      # >= 3 papers
-    moderate = {}       # 2 papers
-    single_mention = {} # 1 paper
-
-    for gene, papers in gene_papers.items():
-        entry = {
-            "count": len(papers),
-            "organs": sorted(gene_organs.get(gene, set())),
-            "years": sorted(set(p["year"] for p in papers if p.get("year"))),
-            "papers": papers,
-        }
-        if len(papers) >= 3:
-            consensus[gene] = entry
-        elif len(papers) == 2:
-            moderate[gene] = entry
-        else:
-            single_mention[gene] = entry
-
-    # Organ-specific gene sets
-    organ_genes: dict[str, dict[str, int]] = {}
-    for gene, organs in gene_organs.items():
-        for organ in organs:
-            if organ not in organ_genes:
-                organ_genes[organ] = {}
-            organ_genes[organ][gene] = len(gene_papers[gene])
-
-    result = {
-        "consensus_genes": dict(sorted(consensus.items(),
-                                        key=lambda x: x[1]["count"],
-                                        reverse=True)),
-        "moderate_evidence": dict(sorted(moderate.items(),
-                                          key=lambda x: x[1]["count"],
-                                          reverse=True)),
-        "single_mentions": len(single_mention),
-        "organ_specific_genes": {
-            organ: dict(sorted(genes.items(),
-                               key=lambda x: x[1], reverse=True)[:20])
-            for organ, genes in sorted(organ_genes.items())
-        },
-        "total_unique_genes": len(gene_papers),
-    }
-
-    # Print report
-    print(f"\n{'='*60}")
-    print("GENE CONSENSUS ANALYSIS")
-    print(f"{'='*60}")
-    print(f"Total unique genes: {result['total_unique_genes']}")
-    print(f"Consensus (3+ papers): {len(consensus)}")
-    print(f"Moderate (2 papers): {len(moderate)}")
-    print(f"Single mention: {len(single_mention)}")
-
-    print("\nConsensus hallmark genes:")
-    for gene, info in list(result["consensus_genes"].items())[:30]:
-        organs_str = ", ".join(info["organs"]) if info["organs"] else "unspecified"
-        print(f"  {gene}: {info['count']} papers | organs: {organs_str}")
-
-    print("\nOrgan-specific top genes:")
-    for organ, genes in result["organ_specific_genes"].items():
-        top = list(genes.items())[:10]
-        if top:
-            genes_str = ", ".join(f"{g}({c})" for g, c in top)
-            print(f"  {organ}: {genes_str}")
-
-    # Save
-    outpath = "citegraph_output/gene_consensus.json"
-    with open(outpath, "w") as f:
-        json.dump(result, f, indent=2, default=list)
-    print(f"\nSaved to {outpath}")
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Merge gene consensus across multiple extraction files
-# ---------------------------------------------------------------------------
-
-def merge_gene_consensus(
-    extraction_files: list[str],
-    output_path: str = "citegraph_output/gene_consensus_merged.json",
-) -> dict:
-    """
-    Merge extractions from multiple crawl directories, deduplicate papers
-    by paper_id, and re-run consensus analysis on the combined set.
-
-    This is used after all crawls (main, organ-specific, gene-function) have
-    been extracted, to produce a unified gene consensus.
-    """
-    # Collect all extractions, deduplicating by paper_id
-    seen_ids: set[str] = set()
+def merge_extractions(paths: list[Path]) -> list[dict]:
+    """Every crawl's extraction records, one per paper (the first crawl's wins)."""
+    seen: set[str] = set()
     merged: list[dict] = []
-
-    for filepath in extraction_files:
+    for path in paths:
         try:
-            with open(filepath) as f:
-                extractions = json.load(f)
+            records = json.loads(Path(path).read_text())
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"  [skip] {filepath}: {e}")
+            print(f"  [skip] {path}: {e}")
             continue
+        for rec in records:
+            pid = rec.get("paper_id", "")
+            if pid and pid not in seen:
+                seen.add(pid)
+                merged.append(rec)
+    return merged
 
-        added = 0
-        for ext in extractions:
-            pid = ext.get("paper_id", "")
-            if pid and pid not in seen_ids:
-                seen_ids.add(pid)
-                merged.append(ext)
-                added += 1
-        print(f"  {filepath}: {len(extractions)} total, {added} new (deduped)")
 
-    print(f"\nMerged: {len(merged)} unique papers from {len(extraction_files)} files")
+def consensus(extractions: list[dict], extract_spec: dict, cons: dict) -> dict:
+    """The consensus of ``cons["field"]`` (e.g. genes) over the papers: each
+    normalised value with the papers naming it and the ``by`` values (e.g.
+    organs) of those papers; ``strong`` (named by at least cons.strong papers),
+    ``moderate`` (at least cons.moderate), the count of single mentions, and
+    the top values per ``by`` value."""
+    name, by = cons["field"], cons.get("by")
+    norm = normalizer(field_spec(extract_spec, name))
+    norm_by = normalizer(field_spec(extract_spec, by)) if by else None
+    strong_at, moderate_at = cons.get("strong", 3), cons.get("moderate", 2)
 
-    # Write merged extractions to a temp file for analyze_gene_consensus()
-    merged_extractions_path = output_path.replace(".json", "_extractions.json")
-    with open(merged_extractions_path, "w") as f:
-        json.dump(merged, f, indent=2, default=str)
-
-    # Re-run consensus analysis on the merged set
-    # We call the same logic but with a custom output path
-    # Build gene-to-papers mapping (same as analyze_gene_consensus)
-    gene_papers: dict[str, list[dict]] = {}
-    gene_organs: dict[str, set] = {}
-
-    for ext in merged:
-        genes = ext.get("genes", [])
-        organs = ext.get("organs", [])
-        normalized_organs = {normalize_organ(o) for o in organs}
-        normalized_organs.discard("")
-
-        for raw_gene in genes:
-            gene = normalize_gene(raw_gene)
-            if not gene:
+    papers_of: dict[str, list[dict]] = {}
+    by_of: dict[str, set[str]] = {}
+    for rec in extractions:
+        bys = {norm_by(b) for b in rec.get(by) or []} - {""} if by else set()
+        for raw in rec.get(name) or []:
+            value = norm(raw)
+            if not value:
                 continue
-            if gene not in gene_papers:
-                gene_papers[gene] = []
-                gene_organs[gene] = set()
-            gene_papers[gene].append({
-                "paper_id": ext["paper_id"],
-                "title": ext["title"],
-                "year": ext.get("year"),
-                "confidence": ext.get("confidence", 0),
-            })
-            gene_organs[gene].update(normalized_organs)
+            papers_of.setdefault(value, []).append({
+                "paper_id": rec["paper_id"], "title": rec.get("title"),
+                "year": rec.get("year"), "confidence": rec.get("confidence", 0)})
+            by_of.setdefault(value, set()).update(bys)
 
-    consensus = {}
-    moderate = {}
-    single_mention = {}
-
-    for gene, papers in gene_papers.items():
-        entry = {
-            "count": len(papers),
-            "organs": sorted(gene_organs.get(gene, set())),
-            "years": sorted(set(p["year"] for p in papers if p.get("year"))),
-            "papers": papers,
-        }
-        if len(papers) >= 3:
-            consensus[gene] = entry
-        elif len(papers) == 2:
-            moderate[gene] = entry
+    strong, moderate, single = {}, {}, 0
+    for value, papers in papers_of.items():
+        entry = {"count": len(papers), "by": sorted(by_of.get(value, set())),
+                 "years": sorted({p["year"] for p in papers if p.get("year")}),
+                 "papers": papers}
+        if len(papers) >= strong_at:
+            strong[value] = entry
+        elif len(papers) >= moderate_at:
+            moderate[value] = entry
         else:
-            single_mention[gene] = entry
+            single += 1
 
-    organ_genes: dict[str, dict[str, int]] = {}
-    for gene, organs in gene_organs.items():
-        for organ in organs:
-            if organ not in organ_genes:
-                organ_genes[organ] = {}
-            organ_genes[organ][gene] = len(gene_papers[gene])
+    per_by: dict[str, dict[str, int]] = {}
+    for value, bys in by_of.items():
+        for b in bys:
+            per_by.setdefault(b, {})[value] = len(papers_of[value])
 
-    result = {
-        "consensus_genes": dict(sorted(consensus.items(),
-                                        key=lambda x: x[1]["count"],
-                                        reverse=True)),
-        "moderate_evidence": dict(sorted(moderate.items(),
-                                          key=lambda x: x[1]["count"],
-                                          reverse=True)),
-        "single_mentions": len(single_mention),
-        "organ_specific_genes": {
-            organ: dict(sorted(genes.items(),
-                               key=lambda x: x[1], reverse=True)[:20])
-            for organ, genes in sorted(organ_genes.items())
-        },
-        "total_unique_genes": len(gene_papers),
-        "source_files": extraction_files,
-        "total_papers_merged": len(merged),
+    def ranked(d):
+        return dict(sorted(d.items(), key=lambda x: x[1]["count"], reverse=True))
+
+    return {
+        "field": name, "by": by, "thresholds": {"strong": strong_at, "moderate": moderate_at},
+        "strong": ranked(strong), "moderate": ranked(moderate), "single_mentions": single,
+        "top_by": {b: dict(sorted(v.items(), key=lambda x: x[1], reverse=True)[:20])
+                   for b, v in sorted(per_by.items())},
+        "total_unique": len(papers_of), "papers": len(extractions),
     }
-
-    # Print report
-    print(f"\n{'='*60}")
-    print("MERGED GENE CONSENSUS")
-    print(f"{'='*60}")
-    print(f"Total unique genes: {result['total_unique_genes']}")
-    print(f"Consensus (3+ papers): {len(consensus)}")
-    print(f"Moderate (2 papers): {len(moderate)}")
-    print(f"Single mention: {len(single_mention)}")
-
-    print("\nConsensus hallmark genes:")
-    for gene, info in list(result["consensus_genes"].items())[:30]:
-        organs_str = ", ".join(info["organs"]) if info["organs"] else "unspecified"
-        print(f"  {gene}: {info['count']} papers | organs: {organs_str}")
-
-    # Save
-    with open(output_path, "w") as f:
-        json.dump(result, f, indent=2, default=list)
-    print(f"\nSaved to {output_path}")
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) > 1 and sys.argv[1] == "analyze":
-        extractions_file = sys.argv[2] if len(sys.argv) > 2 else "citegraph_output/extractions.json"
-        analyze_gene_consensus(extractions_file)
-    elif len(sys.argv) > 1 and sys.argv[1] == "merge":
-        # Usage: python extract.py merge [extraction_file1] [extraction_file2] ...
-        # If no files specified, auto-discover all extractions.json in citegraph_output_* dirs
-        if len(sys.argv) > 2:
-            files = sys.argv[2:]
-        else:
-            from pathlib import Path
-            files = sorted(str(p) for p in Path(".").glob("citegraph_output*/extractions.json"))
-            print(f"Auto-discovered {len(files)} extraction files:")
-            for f in files:
-                print(f"  {f}")
-        if not files:
-            print("No extraction files found. Run extract.py on crawl outputs first.")
-            sys.exit(1)
-        merge_gene_consensus(files)
-    else:
-        # Usage: python extract.py [papers_dir] [max_papers] [--fulltext] [--email EMAIL]
-        #                          [--proxy URL] [--claude] [--workers N]
-        args = sys.argv[1:]
-        use_fulltext = False
-        email = "user@example.com"
-        proxy = None
-        max_papers = None
-        papers_dir = "citegraph_output_800"
-        use_claude = False
-        workers = 6
-
-        i = 0
-        while i < len(args):
-            if args[i] == "--fulltext":
-                use_fulltext = True
-                i += 1
-            elif args[i] == "--email" and i + 1 < len(args):
-                email = args[i + 1]
-                i += 2
-            elif args[i] == "--proxy" and i + 1 < len(args):
-                proxy = args[i + 1]
-                i += 2
-            elif args[i] == "--claude":
-                use_claude = True
-                i += 1
-            elif args[i] == "--workers" and i + 1 < len(args):
-                workers = int(args[i + 1])
-                i += 2
-            elif args[i] in ("analyze", "merge"):
-                break  # handled above
-            elif args[i].isdigit():
-                max_papers = int(args[i])
-                i += 1
-            else:
-                papers_dir = args[i]
-                i += 1
-
-        papers_file = f"{papers_dir}/papers.json"
-        output_file = f"{papers_dir}/extractions.json"
-
-        # Fetch full texts if requested
-        fulltext_results = None
-        if use_fulltext:
-            from knowledge_base.fulltext import FullTextFetcher
-
-            with open(papers_file) as f:
-                papers_data = json.load(f)
-            if max_papers:
-                papers_data = papers_data[:max_papers]
-
-            print(f"Fetching full text for {len(papers_data)} papers...")
-            fetcher = FullTextFetcher(email=email, proxy_url=proxy)
-            fulltext_results = fetcher.fetch_batch(papers_data, max_workers=4)
-            fetcher.print_stats()
-            print()
-
-        if use_claude:
-            # The Anthropic SDK verifies TLS against certifi, which lacks the NIH
-            # proxy's internal CA. Point it at the system bundle (curl already
-            # trusts it) so an unattended run doesn't fail with APIConnectionError.
-            _sys_ca = "/etc/ssl/certs/ca-certificates.crt"
-            if not os.environ.get("SSL_CERT_FILE") and os.path.exists(_sys_ca):
-                os.environ["SSL_CERT_FILE"] = _sys_ca
-            print(f"Extraction backend: Claude ({CLAUDE_EXTRACTION_MODEL}, "
-                  f"{workers} workers via litellm proxy)")
-            engine = ParallelExtractionEngine(
-                endpoints=build_claude_endpoints(workers))
-        else:
-            engine = ParallelExtractionEngine()
-
-        extractions = engine.process_papers(papers_file, max_papers=max_papers,
-                                            fulltext_results=fulltext_results)
-        engine.save(extractions, output_file)
-        print(f"\nRun 'python extract.py analyze {output_file}' for consensus analysis.")

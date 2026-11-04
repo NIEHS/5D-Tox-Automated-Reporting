@@ -26,7 +26,8 @@ from narrative.references_builder import (
     references_paragraphs,
 )
 
-DB_PATH = pathlib.Path(__file__).resolve().parents[2] / "bmdx.duckdb"
+DB_PATH = (pathlib.Path(__file__).resolve().parents[2]
+           / "knowledge_bases" / "baseline-2026-05" / "kb.duckdb")
 
 # A gene set with known KB coverage (liver/male PFHxSAm responsive genes).
 _GENES = ["CYP7A1", "EGR1", "MYC", "NFKBIA", "PRLR", "ABCB1A"]
@@ -210,7 +211,7 @@ def test_detect_override_in_pool_tokens_do_not_warn():
 # ---------------------------------------------------------------------------
 # Real-DB tests — the pool against the shipped bmdx.duckdb (no network)
 # ---------------------------------------------------------------------------
-@pytest.mark.skipif(not DB_PATH.exists(), reason="bmdx.duckdb not present")
+@pytest.mark.skipif(not DB_PATH.exists(), reason="baseline knowledge base not present")
 class TestRealDB:
     def test_pool_from_real_graph_is_deterministic_and_resolved(self):
         pool_a = build_reference_pool_for_genes(_GENES, str(DB_PATH), pool_size=20)

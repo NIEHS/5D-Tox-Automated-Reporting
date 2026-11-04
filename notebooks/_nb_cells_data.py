@@ -228,7 +228,7 @@ LLM layers need, exactly as the command line sets it.
 1. `os.chdir(ROOT)`: the repository (`BMDX_REPO` when a workspace sets it,
    else this notebook's parent directory). The app resolves several things relative to the working
    directory: `templates/`, `profiles/`, `sessions/` (via
-   `common.paths.SESSIONS_DIR`) and the knowledge base `bmdx.duckdb`. The repo
+   `common.paths.SESSIONS_DIR`) and the knowledge bases `knowledge_bases/`. The repo
    root goes on `sys.path` too, because the packages are imported by name
    from there (no `pip install`).
 2. `tooling.generate_report._bootstrap_env()`, the same function
@@ -264,7 +264,7 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get("BMDX_REPO") or
             (Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()))
-os.chdir(ROOT)                      # the app is cwd-relative (templates, profiles, bmdx.duckdb)
+os.chdir(ROOT)                      # the app is cwd-relative (templates, profiles, knowledge_bases)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -1066,6 +1066,66 @@ settings = session_method(DTXSID).to_json()["settings"]
 print(f"\n{len(settings)} resolved settings (value — the layer that set it):")
 for path, s in settings.items():
     print(f"  {path:48} {str(s['value'])[:46]:46} {s['source']}")
+""")
+
+_md(r"""
+### The knowledge base
+
+**Purpose.** The genomics interpretation (step 12) is grounded in a literature
+**knowledge base**: papers, the claims extracted from them, the genes they name
+and the organs, GO terms and pathways. A report reads one, and which one is part
+of what it is reported under.
+
+**Where a knowledge base comes from** (ADR-0034). A **crawl query** is named YAML
+text, `crawl_queries/<name>.yaml`: the seed papers and searches, how a paper is
+judged and tagged, what is extracted from each paper (and by which model), what
+is counted, which follow-on crawls are seeded from that, what is annotated.
+Nothing in the code knows the topic; `crawl_queries/baseline.yaml` states the
+toxicogenomics query of May 2026 in full. A person edits the text directly or
+asks the query agent (`knowledge_base.query_agent.propose(text, request)`),
+which returns a revised text, an explanation and a diff, and saves nothing.
+`crawl_queries.save` archives the text it replaces.
+
+`python -m knowledge_base.run_crawl <query> --as <name>` runs a query, stage by
+stage, into `knowledge_bases/<name>/`: `kb.duckdb`, the crawl's outputs, and
+`manifest.json` (the query's text and hash, each stage's status, the database's
+hash, and its **capabilities**: what it holds, read off its tables). A stage
+that could not run (a source unreachable) leaves the knowledge base unfinished,
+and an unfinished one is never read. A finished one never changes; its name is
+never reused.
+
+**Which one a report reads.** `knowledge_base.registry.kb_for(dtxsid)`: the
+`knowledge_base:` its document definition names (inherited through `extends`,
+like the rest of the definition), else the default named in
+`knowledge_bases/DEFAULT`. Every reader resolves through it: the
+interpretation, its references, the chat tools. A report's knowledge base must
+hold papers, claims, genes, GO and pathways; `safeguards.knowledge` refuses
+assigning one that doesn't (`document_model.knowledge_base_assignment.assign`
+is the unguarded core step, which writes the key into
+`templates/studies/<id>/document.yaml`).
+
+**When it changes.** At Process, `pipeline.kb_currency.reconcile` compares the
+knowledge base with the one the session last processed with
+(`knowledge_base.json`); on a change it discards the interpretation store
+(`_cache_interpretation_*.json`) and marks the genomics sections stale with the
+reason `knowledge_base_changed`, so they are written again and the publish gate
+waits for a person to accept them.
+
+**Reads → writes.** This cell only reads: the definition, `knowledge_bases/`.
+""")
+
+_code(r"""
+from knowledge_base import crawl_queries, registry
+
+kb = registry.kb_for(DTXSID)
+m = registry.manifest(kb["name"])
+print(f"{DTXSID} reads {kb['name']} ({kb['source']}), sha256 {kb['sha256'][:12]}…")
+print(f"  made from the query {m['query']['name']!r}; holds {', '.join(kb['capabilities'])}")
+print(f"  tables: {m.get('tables')}")
+print("\nqueries:", [q["name"] for q in crawl_queries.list_queries()])
+print("knowledge bases:", [(k["name"], "complete" if k.get("complete") else "unfinished")
+                           for k in registry.list_knowledge_bases()],
+      "— default:", registry.default_name())
 """)
 
 # ---------------------------------------------------------------------------

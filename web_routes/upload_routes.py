@@ -663,9 +663,10 @@ async def api_process_genomics(request: Request):
 
         def _run_genomics():
             # Open a read-only connection to the knowledge base for GO term
-            # lookups.  The KB is the bmdx.duckdb file in the project root.
-            db_path = str(Path(__file__).parent.parent / "bmdx.duckdb")
-            kb = ToxKBQuerier(db_path)
+            # lookups: the session's (when the body names one), else the
+            # default (knowledge_base.registry).
+            from knowledge_base.registry import kb_for
+            kb = ToxKBQuerier(str(kb_for(body.get("dtxsid") or None, needs={"go"})["path"]))
             try:
                 gene_sets = rank_go_sets_by_bmd(df, kb, top_n=10)
                 top_genes = rank_genes_by_bmd(df, top_n=10)

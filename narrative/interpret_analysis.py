@@ -118,7 +118,7 @@ def rank_go_sets_by_bmd(
     Args:
         df:    Gene-level BMD DataFrame.  Required columns: gene_symbol, bmd.
                Optional: bmdl, fold_change, direction, gof_p, bmdu.
-        kb:    ToxKBQuerier connected to bmdx.duckdb — used to look up
+        kb:    ToxKBQuerier connected to the knowledge base — used to look up
                which genes belong to which GO terms.
         top_n: How many top gene sets to return (default 10, matching NIEHS).
 
@@ -866,7 +866,7 @@ def build_interpretation_context(
 
 def build_genomics_interpretation(
     genomics_section: dict,
-    db_path: str = "bmdx.duckdb",
+    db_path: str,
     fdr_cutoff: float = 0.05,
 ) -> dict:
     """
@@ -874,7 +874,7 @@ def build_genomics_interpretation(
 
     Converts a genomics_section dict (as produced by _extract_genomics() in
     pool_orchestrator.py) into a DataFrame and runs the analyze() pipeline
-    against bmdx.duckdb to produce pathway enrichment, GO enrichment,
+    against a knowledge base to produce pathway enrichment, GO enrichment,
     BMD-ordered pathways, organ signatures, and per-gene literature evidence.
 
     Uses 'all_genes' when available (full responsive gene list, better for
@@ -885,7 +885,7 @@ def build_genomics_interpretation(
         genomics_section: One entry from genomics_sections dict, containing
             at minimum 'top_genes' (list of gene dicts with gene_symbol, bmd,
             bmdl, direction, fold_change) and optionally 'all_genes'.
-        db_path: Path to the bmdx.duckdb knowledge base file.
+        db_path: The knowledge base's database (knowledge_base.registry.kb_for).
         fdr_cutoff: FDR threshold for pathway/GO enrichment significance.
 
     Returns:

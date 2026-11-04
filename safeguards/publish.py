@@ -42,6 +42,6 @@ def require_publishable(dtxsid: str, store=None, *, draft: bool = False) -> dict
             status_code=409, details={"keys": bmds, "blocking": blocking})
     raise Refused(
         "publish_blocked",
-        f"Report is not publishable: re-accept the sections a data reprocess "
+        f"Report is not publishable: re-accept the sections a change of data or knowledge base "
         f"invalidated ({', '.join(b['section_key'] for b in sections)})",
         status_code=409, details={"keys": keys, "blocking": blocking})

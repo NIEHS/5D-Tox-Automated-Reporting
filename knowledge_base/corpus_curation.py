@@ -1,8 +1,8 @@
 """
 Corpus curation — a versioned, living copy of the literature knowledge base.
 
-The frozen `bmdx.duckdb` (17.5 MB, git-committed, read-only) is the immutable
-baseline. Curation is captured per session as an append-only tweak-log
+The session's knowledge base (knowledge_base.registry.kb_for — finished
+knowledge bases are immutable) is the baseline. Curation is captured per session as an append-only tweak-log
 (`corpus_tweaks.jsonl`); the working corpus (`corpus.duckdb`) is a *projection* of
 that log onto a copy of the original — so history is the source of truth and the
 DB can never drift from it.
@@ -26,12 +26,26 @@ from pathlib import Path
 
 import duckdb
 
-from knowledge_base.genefunc_crawl import ORGAN_NORMALIZE, ORGAN_SEARCH_TERMS
 from common.clock import now_iso
+from knowledge_base import registry
 from workflow.store import DiskPoolStore
 
-# The frozen, read-only baseline corpus at the repo root.
-FROZEN_CORPUS = Path(__file__).parent.parent / "bmdx.duckdb"
+# What curation reads and rewrites: genes.organs and paper_organs.
+_NEEDS = {"genes", "organs"}
+
+
+def frozen_corpus(dtxsid: str) -> Path:
+    """The session's knowledge base database: the read-only original."""
+    return registry.kb_for(dtxsid, needs=_NEEDS)["path"]
+
+
+def _query_follow_on(dtxsid: str) -> list[dict]:
+    """The follow-on crawl sections of the query the session's knowledge base
+    was made from (its manifest's copy of the text)."""
+    import yaml
+    kb = registry.kb_for(dtxsid, needs=_NEEDS)
+    text = (registry.manifest(kb["name"]).get("query") or {}).get("text") or ""
+    return list((yaml.safe_load(text) or {}).get("follow_on") or [])
 
 _TWEAKS_NAME = "corpus_tweaks.jsonl"
 _CORPUS_NAME = "corpus.duckdb"
@@ -41,14 +55,16 @@ _FINGERPRINT_NAME = ".corpus.fingerprint"
 # ---------------------------------------------------------------------------
 # Canonical vocabulary (seed suggestions for the UI)
 # ---------------------------------------------------------------------------
-def canonical_organs() -> list[str]:
-    """The hand-made canonical organ whitelist, as map suggestions."""
-    return sorted(ORGAN_SEARCH_TERMS.keys())
+def canonical_organs(dtxsid: str) -> list[str]:
+    """The tags the knowledge base's query searches by (its follow-on crawls'
+    ``tag_terms``), as map suggestions."""
+    return sorted({t for f in _query_follow_on(dtxsid) for t in (f.get("tag_terms") or {})})
 
 
-def seed_organ_map() -> dict[str, str]:
-    """A starting noisy→canonical map (the existing ORGAN_NORMALIZE), lowercased."""
-    return {k.strip().lower(): v for k, v in ORGAN_NORMALIZE.items()}
+def seed_organ_map(dtxsid: str) -> dict[str, str]:
+    """A starting noisy→canonical map: the query's ``tag_aliases``, lowercased."""
+    return {k.strip().lower(): v for f in _query_follow_on(dtxsid)
+            for k, v in (f.get("tag_aliases") or {}).items()}
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +158,7 @@ def organ_inventory(dtxsid: str) -> list[dict]:
     lists which tables a term appears in.
     """
     net = current_organ_map(dtxsid)
-    con = duckdb.connect(str(FROZEN_CORPUS), read_only=True)
+    con = duckdb.connect(str(frozen_corpus(dtxsid)), read_only=True)
     try:
         gene_rows = con.execute(
             "SELECT organ, COUNT(*) FROM (SELECT UNNEST(organs) AS organ FROM genes) "
@@ -200,7 +216,7 @@ def materialize(dtxsid: str) -> dict:
     tmp_dir = Path(tempfile.mkdtemp(dir=tmp_root))
     tmp_db = tmp_dir / _CORPUS_NAME
     try:
-        shutil.copyfile(str(FROZEN_CORPUS), str(tmp_db))
+        shutil.copyfile(str(frozen_corpus(dtxsid)), str(tmp_db))
         con = duckdb.connect(str(tmp_db))  # read-write
         try:
             con.execute("CREATE TEMP TABLE organ_map(k VARCHAR, v VARCHAR)")

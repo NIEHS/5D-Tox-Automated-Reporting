@@ -3,6 +3,11 @@ Citation graph crawler with governor system.
 
 Uses Semantic Scholar API to expand a citation graph from seed papers,
 scoring relevance and stopping when the graph saturates or budget is exhausted.
+
+Everything the crawler judges a paper by — its topic words, boosts, recency,
+the tag vocabularies, the known-entity floor — comes from a named crawl query
+(knowledge_base.crawl_queries, ``config_for``); the crawler knows no topic.
+knowledge_base.run_crawl runs each of the query's crawls through ``run_crawl``.
 """
 
 import os
@@ -34,20 +39,15 @@ def log_s2_auth_status(api_key: str | None) -> None:
         print("[S2] public pool (no key) — set S2_API_KEY for higher rate limits")
 
 
-def resolve_caps(default_papers: int, default_calls: int) -> tuple[int, int]:
-    """Allow env overrides of per-crawl governor caps for a comprehensive run."""
-    papers = int(os.getenv("CRAWL_MAX_PAPERS", default_papers))
-    calls = int(os.getenv("CRAWL_MAX_API_CALLS", default_calls))
-    return papers, calls
-
-
 # ---------------------------------------------------------------------------
 # Governor configuration
 # ---------------------------------------------------------------------------
 
 @dataclass
 class GovernorConfig:
-    """Controls when the crawler stops expanding."""
+    """Controls when the crawler stops expanding and how it judges a paper.
+    Built from a crawl query by ``config_for``; the defaults judge nothing
+    topical (no keywords: every paper scores 0.5)."""
 
     max_depth: int = 2              # max hops from any seed paper
     max_papers: int = 300           # hard cap on total papers in graph
@@ -59,67 +59,66 @@ class GovernorConfig:
     max_cites_per_paper: int = 15   # max citing papers to pull per paper
     rate_limit_delay: float = 1.5   # seconds between API calls
 
-    # Topic keywords for relevance scoring (set by user)
-    topic_keywords: list[str] = field(default_factory=lambda: [
-        "toxicogenomics", "toxicogenomic",
-        "gene expression", "transcriptomics", "transcriptomic",
-        "rat", "rattus",
-        "liver", "hepat", "kidney", "renal", "nephro",
-        "heart", "cardiac", "lung", "pulmonary",
-        "organ", "tissue",
-        "hallmark", "biomarker", "signature",
-        "toxicity", "toxic", "adverse",
-        "human health", "translational",
-        "drug-induced", "chemical exposure",
-    ])
+    # Topic words: a title hit counts three times an abstract hit.
+    topic_keywords: list[str] = field(default_factory=list)
+    review_bonus: float = 0.0
+    # Papers from recency_from_year on gain up to recency_bonus, reached
+    # recency_over_years later.
+    recency_from_year: int | None = None
+    recency_over_years: int = 5
+    recency_bonus: float = 0.0
 
-    # Organ-boost keywords: extra terms that get bonus scoring for organ-specific crawls
-    # When set, papers matching these keywords get +0.15 relevance boost
-    organ_boost_keywords: list[str] = field(default_factory=list)
+    # A crawl's boost words: one hit adds boost_one, two or more boost_two.
+    boost_keywords: list[str] = field(default_factory=list)
+    boost_one: float = 0.0
+    boost_two: float = 0.0
 
-    # Known gene symbols for hybrid scoring: if a paper mentions a known gene
-    # AND any organ keyword, it gets a relevance floor of 0.35.
-    # This retains gene-function papers that lack tox vocabulary.
-    known_genes: set[str] = field(default_factory=set)
+    # Known entities (e.g. gene symbols): a paper naming one AND any word of
+    # the floor's tag vocabulary scores at least floor_score.
+    known_entities: set[str] = field(default_factory=set)
+    floor_vocabulary: dict[str, list[str]] = field(default_factory=dict)
+    floor_score: float = 0.0
 
-    # Organ-specific keywords for tagging
-    organ_keywords: dict[str, list[str]] = field(default_factory=lambda: {
-        "liver": ["liver", "hepat", "hepatocyte", "hepatotoxic", "hepatic"],
-        "kidney": ["kidney", "renal", "nephro", "nephrotoxic", "tubular"],
-        "heart": ["heart", "cardiac", "cardiotoxic", "myocard", "cardiovascular"],
-        "lung": ["lung", "pulmonary", "pneumo", "respiratory", "alveol"],
-        "brain": ["brain", "neuro", "cerebr", "hippocamp", "cortical"],
-        "bone_marrow": ["bone marrow", "hematopoiet", "myelotoxic"],
-        "intestine": ["intestin", "gut", "gastro", "colonic", "entero"],
-        "spleen": ["spleen", "splenic"],
-        "muscle": ["muscle", "myotoxic", "skeletal muscle"],
-        "thyroid": ["thyroid"],
-        "adrenal": ["adrenal"],
-        "testis": ["testis", "testicular", "spermat"],
-    })
+    # Tag vocabularies: {vocabulary: {tag: [words]}} — a paper is tagged with
+    # every tag one of whose words it contains.
+    tags: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
 
-# ---------------------------------------------------------------------------
-# Known-gene loader (for hybrid scoring)
-# ---------------------------------------------------------------------------
+_CRAWLER_KEYS = ("max_depth", "max_papers", "max_api_calls", "relevance_threshold",
+                 "saturation_window", "saturation_threshold", "max_refs_per_paper",
+                 "max_cites_per_paper", "rate_limit_delay")
 
-def load_known_genes(
-    consensus_path: str = "citegraph_output/gene_consensus.json",
-) -> set[str]:
-    """
-    Load all gene symbols + aliases from the consensus JSON.
-    Returns a set of uppercase gene names suitable for word-boundary matching.
-    Short names (<3 chars) are excluded to avoid false positives.
-    """
-    with open(consensus_path) as f:
-        data = json.load(f)
 
-    genes: set[str] = set()
-    for category in ("consensus_genes", "moderate_evidence"):
-        for gene in data.get(category, {}):
-            if len(gene) >= 3:
-                genes.add(gene.upper())
-    return genes
+def config_for(query: dict, crawl: dict, known_entities: set[str] | None = None) -> GovernorConfig:
+    """The governor of one crawl of a query: the query's crawler defaults, its
+    relevance and tags, with what the crawl states over them (its keywords,
+    boost words, limits; its floor when it asks for one)."""
+    rel = query.get("relevance") or {}
+    cfg = GovernorConfig()
+    for key in _CRAWLER_KEYS:
+        if key in (query.get("crawler") or {}):
+            setattr(cfg, key, query["crawler"][key])
+        if key in crawl:
+            setattr(cfg, key, crawl[key])
+    cfg.topic_keywords = list(crawl.get("keywords", rel.get("keywords") or []))
+    cfg.review_bonus = float(rel.get("review_bonus", 0.0))
+    recency = rel.get("recency") or {}
+    if recency:
+        cfg.recency_from_year = int(recency["from_year"])
+        cfg.recency_over_years = int(recency.get("over_years", 5))
+        cfg.recency_bonus = float(recency.get("bonus", 0.0))
+    boost = rel.get("boost") or {}
+    cfg.boost_keywords = list(crawl.get("boost") or [])
+    cfg.boost_one = float(boost.get("one", 0.0))
+    cfg.boost_two = float(boost.get("two_or_more", boost.get("one", 0.0)))
+    cfg.tags = {v: {t: list(w) for t, w in terms.items()}
+                for v, terms in (query.get("tags") or {}).items()}
+    floor = rel.get("floor")
+    if crawl.get("floor") and floor:
+        cfg.known_entities = {e.upper() for e in (known_entities or set()) if len(e) >= 3}
+        cfg.floor_vocabulary = cfg.tags.get(floor["tag"], {})
+        cfg.floor_score = float(floor["score"])
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +144,8 @@ class Paper:
 
     # Computed fields
     relevance_score: float = 0.0
-    organs_tagged: list[str] = field(default_factory=list)
-    genes_mentioned: list[str] = field(default_factory=list)
+    tags: dict[str, list[str]] = field(default_factory=dict)   # {vocabulary: [tags]}
+    entities: list[str] = field(default_factory=list)          # a follow-on crawl's entity
     depth: int = 0                  # hops from nearest seed paper
     is_seed: bool = False
     is_review: bool = False
@@ -240,13 +239,16 @@ class S2Client:
 
 def score_relevance(paper: Paper, config: GovernorConfig) -> float:
     """
-    Score how relevant a paper is to the topic, 0.0 - 1.0.
+    Score how relevant a paper is to the query, 0.0 - 1.0.
 
-    Uses keyword matching against title + abstract. Weighted:
-    - Title matches count 3x
-    - Abstract matches count 1x
-    - Being a review adds 0.1
-    - Recency bonus: papers after 2020 get up to +0.1
+    Keyword matching against title + abstract, everything from the query
+    (config_for):
+    - title matches count 3x abstract matches; no keywords → 0.5
+    - a review adds review_bonus
+    - recency: up to recency_bonus from recency_from_year on
+    - a crawl's boost words: one hit adds boost_one, two or more boost_two
+    - the known-entity floor: a paper naming a known entity and any word of
+      the floor's vocabulary scores at least floor_score
     """
     text_title = (paper.title or "").lower()
     text_abstract = (paper.abstract or "").lower()
@@ -267,54 +269,36 @@ def score_relevance(paper: Paper, config: GovernorConfig) -> float:
     raw = (title_hits * 3 + abstract_hits) / (total_kw * 4)
     score = min(raw * 3, 1.0)  # scale up since most papers won't hit all keywords
 
-    # Review bonus
     if paper.is_review:
-        score = min(score + 0.1, 1.0)
+        score = min(score + config.review_bonus, 1.0)
 
-    # Recency bonus
-    if paper.year and paper.year >= 2020:
-        recency = min((paper.year - 2020) / 5, 1.0) * 0.1
-        score = min(score + recency, 1.0)
+    if config.recency_from_year is not None and paper.year and paper.year >= config.recency_from_year:
+        recency = min((paper.year - config.recency_from_year) / config.recency_over_years, 1.0)
+        score = min(score + recency * config.recency_bonus, 1.0)
 
-    # Organ-boost bonus: papers matching organ-specific keywords get +0.15
-    if config.organ_boost_keywords:
-        text_lower = text_title + " " + text_abstract
-        boost_hits = sum(1 for kw in config.organ_boost_keywords if kw.lower() in text_lower)
+    if config.boost_keywords:
+        boost_hits = sum(1 for kw in config.boost_keywords if kw.lower() in text_combined)
         if boost_hits >= 2:
-            score = min(score + 0.15, 1.0)
+            score = min(score + config.boost_two, 1.0)
         elif boost_hits >= 1:
-            score = min(score + 0.08, 1.0)
+            score = min(score + config.boost_one, 1.0)
 
-    # Gene-aware relevance floor: if a paper mentions a known gene AND any
-    # organ keyword, set a minimum score of 0.35. This retains gene-function
-    # papers that lack toxicogenomics vocabulary.
-    if config.known_genes:
+    if config.known_entities:
         raw_text = (paper.title or "") + " " + (paper.abstract or "")
-        has_gene = False
-        for gene in config.known_genes:
-            if re.search(r'\b' + re.escape(gene) + r'\b', raw_text):
-                has_gene = True
-                break
-        if has_gene:
-            has_organ = any(
-                kw in text_combined
-                for organ_kws in config.organ_keywords.values()
-                for kw in organ_kws
-            )
-            if has_organ:
-                score = max(score, 0.35)
+        has_entity = any(re.search(r'\b' + re.escape(e) + r'\b', raw_text)
+                         for e in config.known_entities)
+        if has_entity and any(kw in text_combined
+                              for words in config.floor_vocabulary.values() for kw in words):
+            score = max(score, config.floor_score)
 
     return round(score, 3)
 
 
-def tag_organs(paper: Paper, config: GovernorConfig) -> list[str]:
-    """Tag which organs a paper is relevant to."""
+def tag_paper(paper: Paper, config: GovernorConfig) -> dict[str, list[str]]:
+    """{vocabulary: [tags]} — each tag one of whose words the paper contains."""
     text = ((paper.title or "") + " " + (paper.abstract or "")).lower()
-    organs = []
-    for organ, keywords in config.organ_keywords.items():
-        if any(kw in text for kw in keywords):
-            organs.append(organ)
-    return organs
+    return {vocab: [tag for tag, words in terms.items() if any(w in text for w in words)]
+            for vocab, terms in config.tags.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -441,7 +425,7 @@ class CitationGraphCrawler:
 
         paper.is_seed = True
         paper.relevance_score = 1.0  # seeds are maximally relevant by definition
-        paper.organs_tagged = tag_organs(paper, self.config)
+        paper.tags = tag_paper(paper, self.config)
         self.papers[paper.paper_id] = paper
         self.graph.add_node(paper.paper_id)
         self.saturation.assess(paper)
@@ -452,7 +436,7 @@ class CitationGraphCrawler:
         heapq.heappush(self.expansion_queue, (0, -1.0, paper.paper_id))
 
         print(f"  Added seed: {paper.title} ({paper.year})")
-        print(f"  Organs: {paper.organs_tagged}")
+        print(f"  Tags: {paper.tags}")
         print(f"  Refs: {paper.reference_count}, Cited by: {paper.citation_count}")
 
     def add_seed_by_search(self, query: str, max_results: int = 5):
@@ -464,7 +448,7 @@ class CitationGraphCrawler:
             if paper:
                 paper.is_seed = True
                 paper.relevance_score = score_relevance(paper, self.config)
-                paper.organs_tagged = tag_organs(paper, self.config)
+                paper.tags = tag_paper(paper, self.config)
                 if paper.relevance_score >= self.config.relevance_threshold:
                     self.papers[paper.paper_id] = paper
                     self.graph.add_node(paper.paper_id)
@@ -494,7 +478,7 @@ class CitationGraphCrawler:
 
         # Score relevance
         paper.relevance_score = score_relevance(paper, self.config)
-        paper.organs_tagged = tag_organs(paper, self.config)
+        paper.tags = tag_paper(paper, self.config)
 
         if paper.relevance_score < self.config.relevance_threshold:
             self.stats["papers_skipped_relevance"] += 1
@@ -593,7 +577,7 @@ class CitationGraphCrawler:
 
     def _report(self) -> dict:
         """Generate a summary report."""
-        organ_dist = {}
+        tag_dist: dict[str, int] = {}
         year_dist = {}
         top_cited = sorted(self.papers.values(),
                           key=lambda p: p.citation_count, reverse=True)[:20]
@@ -602,8 +586,9 @@ class CitationGraphCrawler:
         reviews = [p for p in self.papers.values() if p.is_review]
 
         for p in self.papers.values():
-            for organ in p.organs_tagged:
-                organ_dist[organ] = organ_dist.get(organ, 0) + 1
+            for vocab, tags in p.tags.items():
+                for tag in tags:
+                    tag_dist[f"{vocab}:{tag}"] = tag_dist.get(f"{vocab}:{tag}", 0) + 1
             if p.year:
                 decade = (p.year // 5) * 5
                 year_dist[decade] = year_dist.get(decade, 0) + 1
@@ -613,18 +598,18 @@ class CitationGraphCrawler:
             "total_papers": len(self.papers),
             "total_edges": self.graph.number_of_edges(),
             "api_calls": self.client.call_count,
-            "organ_distribution": dict(sorted(organ_dist.items(),
-                                              key=lambda x: x[1], reverse=True)),
+            "tag_distribution": dict(sorted(tag_dist.items(),
+                                            key=lambda x: x[1], reverse=True)),
             "year_distribution": dict(sorted(year_dist.items())),
             "reviews_found": len(reviews),
             "top_cited": [
                 {"title": p.title, "year": p.year, "citations": p.citation_count,
-                 "relevance": p.relevance_score, "organs": p.organs_tagged}
+                 "relevance": p.relevance_score, "tags": p.tags}
                 for p in top_cited
             ],
             "top_relevant": [
                 {"title": p.title, "year": p.year, "citations": p.citation_count,
-                 "relevance": p.relevance_score, "organs": p.organs_tagged}
+                 "relevance": p.relevance_score, "tags": p.tags}
                 for p in top_relevant
             ],
         }
@@ -639,20 +624,20 @@ class CitationGraphCrawler:
         print(f"Skipped (low relevance): {self.stats['papers_skipped_relevance']}")
         print(f"Skipped (max depth): {self.stats['papers_skipped_depth']}")
         print(f"Reviews found: {report['reviews_found']}")
-        print("\nOrgan distribution:")
-        for organ, count in report['organ_distribution'].items():
-            print(f"  {organ}: {count}")
+        print("\nTag distribution:")
+        for tag, count in report['tag_distribution'].items():
+            print(f"  {tag}: {count}")
         print("\nTop 10 most relevant papers:")
         for i, p in enumerate(report['top_relevant'][:10], 1):
             print(f"  {i}. [{p['relevance']:.2f}] {p['title'][:70]} "
-                  f"({p['year']}) [{p['citations']} cites] {p['organs']}")
+                  f"({p['year']}) [{p['citations']} cites] {p['tags']}")
 
         return report
 
     def save(self, path: str = "citegraph_output"):
         """Save graph and paper data to files."""
         outdir = Path(path)
-        outdir.mkdir(exist_ok=True)
+        outdir.mkdir(parents=True, exist_ok=True)
 
         # Save papers as JSON
         papers_out = []
@@ -679,7 +664,8 @@ class CitationGraphCrawler:
                 g.nodes[node]["year"] = p.year or 0
                 g.nodes[node]["relevance"] = p.relevance_score
                 g.nodes[node]["citations"] = p.citation_count
-                g.nodes[node]["organs"] = ",".join(p.organs_tagged)
+                g.nodes[node]["tags"] = ",".join(
+                    f"{v}:{t}" for v, ts in p.tags.items() for t in ts)
                 g.nodes[node]["is_review"] = p.is_review
                 g.nodes[node]["depth"] = p.depth
         nx.write_gml(g, str(outdir / "citation_graph.gml"))
@@ -691,225 +677,22 @@ class CitationGraphCrawler:
 
 
 # ---------------------------------------------------------------------------
-# Convenience runner
+# One crawl of a query
 # ---------------------------------------------------------------------------
 
-def run_toxicogenomics_crawl(
-    max_depth: int = 2,
-    max_papers: int = 400,
-    max_api_calls: int = 1000,
-    api_key: str | None = None,
-):
-    """
-    Run a targeted crawl for toxicogenomics hallmark genes.
-    """
-    max_papers, max_api_calls = resolve_caps(max_papers, max_api_calls)
+def run_crawl(query: dict, crawl: dict, out_dir: str | Path, api_key: str | None = None,
+              known_entities: set[str] | None = None) -> dict:
+    """Run one of a query's crawls — its seeds and searches, expanded under its
+    governor (config_for) — and save it to ``out_dir``.  Returns the report."""
+    config = config_for(query, crawl, known_entities)
     log_s2_auth_status(api_key)
-    config = GovernorConfig(
-        max_depth=max_depth,
-        max_papers=max_papers,
-        max_api_calls=max_api_calls,
-        rate_limit_delay=1.0,
-    )
-
     crawler = CitationGraphCrawler(config=config, api_key=api_key)
-
-    # Seed 1: The 2025 Nature Reviews Genetics review (anchor paper)
-    crawler.add_seed("DOI:10.1038/s41576-024-00767-1")
-
-    # Seed 2: TXG-MAP liver modules
-    crawler.add_seed("DOI:10.1038/tpj.2017.17")
-
-    # Seed 3: Human hepatocyte TXG-MAPr
-    crawler.add_seed("DOI:10.1007/s00204-021-03141-w")
-
-    # Seed 4: Open TG-GATEs database paper
-    crawler.add_seed("DOI:10.1093/nar/gku955")
-
-    # Seed 5: TransTox multi-organ (2024)
-    crawler.add_seed("DOI:10.1038/s41746-024-01317-z")
-
-    # Seed 6: Reconciled rat-human metabolic networks
-    crawler.add_seed("DOI:10.1038/ncomms14250")
-
-    # Seed 7: MSigDB hallmark gene sets
-    crawler.add_seed("DOI:10.1016/j.cels.2015.12.004")
-
-    # Search-based seeds for organ-specific coverage
-    crawler.add_seed_by_search(
-        "toxicogenomics rat kidney gene expression biomarkers", max_results=3)
-    crawler.add_seed_by_search(
-        "toxicogenomics rat heart cardiac gene signatures", max_results=3)
-    crawler.add_seed_by_search(
-        "toxicogenomics organ-specific hallmark genes rat human", max_results=3)
-
-    # Expand
+    print(f"\n{'='*60}\nCRAWL: {crawl['name']}  (max {config.max_papers} papers, "
+          f"{config.max_api_calls} API calls)\n{'='*60}\n")
+    for seed in crawl.get("seeds") or []:
+        crawler.add_seed(seed)
+    for search in crawl.get("searches") or []:
+        crawler.add_seed_by_search(search["query"], max_results=search.get("limit", 5))
     report = crawler.expand()
-
-    # Save
-    crawler.save("citegraph_output")
-
-    return crawler, report
-
-
-# ---------------------------------------------------------------------------
-# Organ-specific crawl configurations
-# ---------------------------------------------------------------------------
-
-ORGAN_CRAWL_CONFIGS = {
-    "heart": {
-        "seeds": [
-            # Open TG-GATEs (multi-tissue including heart)
-            "DOI:10.1093/nar/gku955",
-            # Meier et al. 2024 review (anchor)
-            "DOI:10.1038/s41576-024-00767-1",
-            # Multiscale mapping of cardiotoxic drug transcriptomic signatures (2024)
-            "DOI:10.1038/s41467-024-52145-4",
-            # Pharmacogenomics in drug-induced cardiotoxicity review (2022)
-            "DOI:10.3389/fcvm.2022.966261",
-            # Anthracycline shared cardiac gene expression signature (2024)
-            "DOI:10.1371/journal.pgen.1011164",
-            # Rat cardiac genomic biomarkers, preclinical (2013)
-            "DOI:10.1016/j.tox.2012.09.012",
-        ],
-        "searches": [
-            ("cardiotoxicity transcriptomics gene expression rat", 5),
-            ("drug-induced cardiotoxicity biomarker gene signature", 5),
-            ("cardiac toxicogenomics rat heart gene expression profiling", 3),
-            ("doxorubicin cardiotoxicity transcriptomic rat", 3),
-            ("myocardial toxicity gene expression rat preclinical", 3),
-        ],
-        "boost_keywords": [
-            "cardiac", "cardiotoxic", "cardiotoxicity", "heart",
-            "myocardial", "myocardium", "cardiomyocyte", "cardiomyopathy",
-            "doxorubicin", "anthracycline", "troponin",
-            "cardiovascular", "arrhythm", "qtc",
-        ],
-    },
-    "brain": {
-        "seeds": [
-            # Meier et al. 2024 review (anchor)
-            "DOI:10.1038/s41576-024-00767-1",
-            # Toxicogenomics review - broad coverage (2018)
-            "DOI:10.1039/c8mo00042e",
-            # High-throughput transcriptomics platform (2021)
-            "DOI:10.1093/toxsci/kfab009",
-            # Rat brain polymyxin B neurotoxicity transcriptomics (2023)
-            "DOI:10.1007/s12035-022-03140-7",
-            # ML brain transcriptomics organophosphate ester (2023)
-            "DOI:10.1093/toxsci/kfad062",
-        ],
-        "searches": [
-            ("neurotoxicogenomics gene expression brain rat", 5),
-            ("neurotoxicity transcriptomic biomarker rat brain", 5),
-            ("drug-induced neurotoxicity gene expression profiling", 3),
-            ("developmental neurotoxicity transcriptomics rat", 3),
-            ("neurodegeneration toxicogenomics gene signature", 3),
-        ],
-        "boost_keywords": [
-            "brain", "neurotoxic", "neurotoxicity", "neurotoxicogenomics",
-            "neurodegeneration", "neurodegenerative",
-            "cerebral", "cortical", "hippocampal", "hippocampus",
-            "dopaminergic", "serotonergic", "glutamatergic",
-            "cns", "blood-brain", "astrocyte", "microglia", "neuron",
-            "seizure", "encephalopathy",
-        ],
-        },
-    "lung": {
-        "seeds": [
-            # Meier et al. 2024 review (anchor)
-            "DOI:10.1038/s41576-024-00767-1",
-            # Meta-analysis pulmonary nanomaterial transcriptomics (2016)
-            "DOI:10.1186/s12989-016-0137-5",
-            # MWCNT AOP framework with transcriptomics (2016)
-            "DOI:10.1186/s12989-016-0125-9",
-            # Rat TiO2 inhalation transcriptomics (2018)
-            "DOI:10.1016/j.taap.2018.07.013",
-            # MWCNT rat inhalation gene expression (2022)
-            "DOI:10.1080/08958378.2022.2081386",
-        ],
-        "searches": [
-            ("pulmonary toxicogenomics gene expression rat lung", 5),
-            ("inhalation toxicology transcriptomics rat respiratory", 5),
-            ("lung toxicity biomarker gene expression profiling", 3),
-            ("nanoparticle pulmonary toxicity transcriptomic rat", 3),
-            ("drug-induced pulmonary toxicity gene signature", 3),
-        ],
-        "boost_keywords": [
-            "lung", "pulmonary", "respiratory", "inhalation",
-            "pneumotoxic", "alveolar", "bronchial", "bronchiolar",
-            "fibrosis", "pneumonitis",
-            "nanoparticle", "nanotube", "aerosol",
-            "surfactant", "clara cell", "type ii pneumocyte",
-        ],
-    },
-}
-
-
-def run_organ_crawl(
-    organ: str,
-    max_depth: int = 2,
-    max_papers: int = 800,
-    max_api_calls: int = 1000,
-    api_key: str | None = None,
-):
-    """
-    Run an organ-specific toxicogenomics crawl.
-
-    Supported organs: heart, brain, lung
-    """
-    if organ not in ORGAN_CRAWL_CONFIGS:
-        print(f"Unknown organ: {organ}. Available: {list(ORGAN_CRAWL_CONFIGS.keys())}")
-        return None, None
-
-    organ_cfg = ORGAN_CRAWL_CONFIGS[organ]
-
-    max_papers, max_api_calls = resolve_caps(max_papers, max_api_calls)
-    log_s2_auth_status(api_key)
-    config = GovernorConfig(
-        max_depth=max_depth,
-        max_papers=max_papers,
-        max_api_calls=max_api_calls,
-        rate_limit_delay=1.5,
-        organ_boost_keywords=organ_cfg["boost_keywords"],
-    )
-
-    crawler = CitationGraphCrawler(config=config, api_key=api_key)
-
-    print(f"\n{'='*60}")
-    print(f"ORGAN-SPECIFIC CRAWL: {organ.upper()}")
-    print(f"Max papers: {max_papers}, Boost keywords: {len(organ_cfg['boost_keywords'])}")
-    print(f"{'='*60}\n")
-
-    # Add DOI seeds
-    for doi in organ_cfg["seeds"]:
-        crawler.add_seed(doi)
-
-    # Add search-based seeds
-    for query, limit in organ_cfg["searches"]:
-        crawler.add_seed_by_search(query, max_results=limit)
-
-    # Expand
-    report = crawler.expand()
-
-    # Save to organ-specific directory
-    output_dir = f"citegraph_output_{organ}"
-    crawler.save(output_dir)
-
-    return crawler, report
-
-
-if __name__ == "__main__":
-    import sys
-
-    api_key = resolve_s2_api_key()
-
-    if len(sys.argv) >= 2 and sys.argv[1] in ORGAN_CRAWL_CONFIGS:
-        # Organ-specific crawl: python citegraph.py heart|brain|lung [max_papers]
-        organ = sys.argv[1]
-        max_papers = int(sys.argv[2]) if len(sys.argv) > 2 else 800
-        crawler, report = run_organ_crawl(organ, max_papers=max_papers, api_key=api_key)
-    else:
-        # Original general crawl: python citegraph.py [max_papers]
-        max_papers = int(sys.argv[1]) if len(sys.argv) > 1 else 400
-        crawler, report = run_toxicogenomics_crawl(max_papers=max_papers, api_key=api_key)
+    crawler.save(str(out_dir))
+    return report

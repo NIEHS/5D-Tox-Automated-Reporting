@@ -1007,6 +1007,18 @@ def load_dose_terms(name: str) -> dict:
     return terms
 
 
+def load_knowledge_base(name: str) -> str | None:
+    """The literature knowledge base the definition names (knowledge_base.registry);
+    None when it names none (the report reads the default)."""
+    raw = _load_raw(name)
+    kb = raw.get("knowledge_base") if isinstance(raw, dict) else None
+    if kb is None:
+        return None
+    if not isinstance(kb, str) or not kb.strip():
+        raise ValueError(f"template {name!r}: knowledge_base is a knowledge base's name, got {kb!r}")
+    return kb.strip()
+
+
 def load_abstract_genes(name: str) -> bool:
     """Whether the abstract names individual genes (ADR-0029): the 2023 books
     do, the 2026 books name gene sets only.  True when the template says

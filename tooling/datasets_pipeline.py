@@ -4,9 +4,10 @@ Bulk-corpus pipeline via the Semantic Scholar Datasets API.
 An alternative to the per-paper graph crawl (citegraph.py): instead of walking
 references/citations at ~1 req/sec, download whole-corpus snapshots (papers,
 abstracts, citations, tldrs) as gzipped JSONL shards, then filter locally to the
-toxicogenomics slice. Output is written in the SAME contract citegraph.py emits
-(citegraph_output_<name>/papers.json + edges.json), so extract.py and build_db.py
-consume it unchanged.
+slice a crawl query judges relevant (knowledge_base.crawl_queries: its relevance
+and tags, as one of its crawls states them). Output is written in the SAME
+contract citegraph.py emits (papers.json + edges.json), so the extraction and
+build stages of knowledge_base.run_crawl consume it unchanged.
 
 Three stages, independently runnable:
   manifest  — fetch shard download URLs from the API host (works today)
@@ -40,8 +41,9 @@ import requests
 from knowledge_base.citegraph import (
     Paper,
     GovernorConfig,
+    config_for,
     score_relevance,
-    tag_organs,
+    tag_paper,
     resolve_s2_api_key,
     log_s2_auth_status,
 )
@@ -247,7 +249,7 @@ def _paper_from_s2_record(rec: dict, abstract: str | None,
         is_review="Review" in pubtypes,
     )
     p.relevance_score = score_relevance(p, config)
-    p.organs_tagged = tag_organs(p, config)
+    p.tags = tag_paper(p, config)
     p._fields = fields  # transient, used by the field gate below
     return p
 
@@ -266,7 +268,7 @@ def filter_corpus(local_shards: dict[str, list[str]] | None = None,
 
     Writes OUTPUT_DIR/papers.json + edges.json in the citegraph.py contract.
     """
-    config = config or GovernorConfig()
+    config = config or GovernorConfig()  # judges nothing topical
     threshold = (relevance_threshold if relevance_threshold is not None
                  else config.relevance_threshold)
 
@@ -361,13 +363,16 @@ def main(argv: list[str]) -> int:
         print("Options:")
         print("  --max-shards N        — cap shards per dataset (testing)")
         print("  --local-shards DIR    — filter from a local shard dir (offline)")
-        print("  --threshold F         — relevance cutoff (default from GovernorConfig)")
+        print("  --threshold F         — relevance cutoff (default: the query's)")
+        print("  --query NAME          — the crawl query that judges relevance (default baseline)")
+        print("  --crawl NAME          — which of its crawls (default its first)")
         return 1
 
     stage = argv[0]
     max_shards = None
     local_dir = None
     threshold = None
+    query_name, crawl_name = "baseline", None
     i = 1
     while i < len(argv):
         if argv[i] == "--max-shards" and i + 1 < len(argv):
@@ -376,12 +381,22 @@ def main(argv: list[str]) -> int:
             local_dir = argv[i + 1]; i += 2
         elif argv[i] == "--threshold" and i + 1 < len(argv):
             threshold = float(argv[i + 1]); i += 2
+        elif argv[i] == "--query" and i + 1 < len(argv):
+            query_name = argv[i + 1]; i += 2
+        elif argv[i] == "--crawl" and i + 1 < len(argv):
+            crawl_name = argv[i + 1]; i += 2
         else:
             i += 1
 
     api_key = resolve_s2_api_key()
     log_s2_auth_status(api_key)
-    config = GovernorConfig()
+    from knowledge_base import crawl_queries
+    query = crawl_queries.parse(crawl_queries.read(query_name))
+    crawl = next((c for c in query["crawls"] if crawl_name in (None, c["name"])), None)
+    if crawl is None:
+        print(f"query {query_name!r} has no crawl {crawl_name!r}")
+        return 1
+    config = config_for(query, crawl)
 
     if stage in ("manifest", "all"):
         manifest = fetch_manifest(api_key=api_key)

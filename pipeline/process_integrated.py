@@ -413,7 +413,7 @@ async def _build_genomics_llm_narratives(ctx):
 
     Runs the shared `generate_genomics_narrative_async` once per
     organ × sex, in parallel.  Each call does enrichment against
-    bmdx.duckdb (cached in `_cache_interpretation_*.json`) and
+    the report's knowledge base (cached in `_cache_interpretation_*.json`) and
     then one LLM call for the biology interpretation.  Per-sex
     results are aggregated under each organ into the narrative
     dict's `by_organ_llm` field so both HTML and PDF render
@@ -1469,7 +1469,9 @@ def _content_fingerprint(ctx) -> str:
     genomics_narrative_overrides.json — so an override edit re-runs content."""
     session = _session_dir(ctx.dtxsid)
     user_files: list[list] = []
-    for name in ("identity.json", "genomics_narrative_overrides.json"):
+    # knowledge_base.json: the knowledge base the genomics prose is grounded in
+    # (pipeline.kb_currency rewrites it when that changes).
+    for name in ("identity.json", "genomics_narrative_overrides.json", "knowledge_base.json"):
         p = session / name
         try:
             st = p.stat()
@@ -1688,6 +1690,11 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     ensure_definition_pin(dtxsid)
     if (moved := drift(dtxsid)):
         logger.warning("Document definition: %s", moved)
+    # The knowledge base the definition (else the default) names: a change
+    # discards the genomics interpretation written from the previous one and
+    # stales its sections (pipeline.kb_currency).
+    from pipeline.kb_currency import reconcile as reconcile_knowledge_base
+    reconcile_knowledge_base(dtxsid)
     bmd_stats = list(method.get("genomics.go_ranking"))
     bmd_stat = bmd_stats[0]  # primary stat for category lookup
     _go = method.get("genomics.go_display")

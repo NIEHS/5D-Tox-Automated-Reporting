@@ -186,3 +186,21 @@ def discard_section_step(dtxsid: str, section_key: str, store, *, reason: str = 
         raise owned(key, "discard")
     require_reason(reason, key, "discard")
     return _steps.discard_section_step(dtxsid, key, store, reason=reason)
+
+
+# --- the knowledge bases (safeguards.knowledge) ------------------------------
+
+def assign_knowledge_base(dtxsid: str, name: str | None) -> dict:
+    """Name the knowledge base the report reads (None: the default again)."""
+    from document_model.knowledge_base_assignment import assign
+    from safeguards.knowledge import require_assignable
+    require_assignable(dtxsid, name)
+    return assign(dtxsid, name)
+
+
+def set_default_knowledge_base(name: str) -> None:
+    """Make ``name`` the knowledge base of every report that names none."""
+    from knowledge_base.registry import set_default
+    from safeguards.knowledge import require_serves_genomics
+    require_serves_genomics(name)
+    set_default(name)

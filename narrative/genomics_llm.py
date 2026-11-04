@@ -91,7 +91,8 @@ async def generate_genomics_narrative_async(
     chosen_model = model or DEFAULT_CLAUDE_MODEL
 
     # --- Attempt enrichment analysis via interpret.py pipeline ---
-    # The enrichment pipeline queries bmdx.duckdb for pathway/GO/literature
+    # The enrichment pipeline queries the report's knowledge base
+    # (knowledge_base.registry.kb_for: its definition's, else the default) for pathway/GO/literature
     # evidence, producing a ~200-line structured context block that gives the
     # LLM real biological grounding instead of just raw gene/GO tables.
     context_text = ""
@@ -115,10 +116,16 @@ async def generate_genomics_narrative_async(
     # no genes, in which case the prompt carries no catalogue and no [Pn] rules.
     reference_pool: list[dict] = []
 
-    # Only attempt enrichment if we have genes to analyze and the DB exists.
+    # Only attempt enrichment if we have genes to analyze and the report has a
+    # knowledge base that can answer the genomics questions.
+    from knowledge_base.registry import kb_or_none
     has_genes = bool(all_genes or top_genes)
-    db_path = Path("bmdx.duckdb")
-    if has_genes and db_path.exists():
+    kb = kb_or_none(dtxsid)
+    if has_genes and kb is None:
+        logger.warning("No usable knowledge base for %s: genomics narrative without "
+                       "enrichment", dtxsid)
+    db_path = kb["path"] if kb else None
+    if has_genes and kb is not None:
         # Responsive gene symbols for the pool — prefer the full all_genes list
         # (same input the enrichment uses), falling back to top_genes.
         _gene_syms = [
@@ -264,6 +271,9 @@ async def generate_genomics_narrative_async(
                 # reference list without re-querying the graph.
                 if reference_pool:
                     interp["reference_pool"] = reference_pool
+                # The knowledge base the context came from (pipeline.kb_currency
+                # discards this store when the report's knowledge base changes).
+                interp["knowledge_base"] = {"name": kb["name"], "sha256": kb["sha256"]}
 
                 # Persist to cache so regenerations are instant.
                 if cache_path and context_text:
@@ -289,7 +299,7 @@ async def generate_genomics_narrative_async(
 
             except Exception:
                 # Enrichment failed — fall back to the basic prompt below.
-                # This keeps the endpoint functional even if bmdx.duckdb has
+                # This keeps the endpoint functional even if the knowledge base has
                 # schema issues or interpret.py raises on unusual data.
                 logger.warning(
                     "Enrichment pipeline failed, falling back to basic prompt",

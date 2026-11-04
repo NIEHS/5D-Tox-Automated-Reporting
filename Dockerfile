@@ -69,10 +69,10 @@ COPY _bmdx_jars/bmdx-core.jar ./bmdx/target/bmdx-core.jar
 COPY _bmdx_jars/deps/ ./bmdx/target/deps/
 
 # ---------------------------------------------------------------------------
-# DuckDB knowledge base — staged by deploy.sh into _data/.
-# Contains gene-gene co-mention data, organ mappings, GO ground truth.
+# The knowledge bases (knowledge_base.registry) — staged by deploy.sh into
+# _data/: each one's database and manifest, and DEFAULT (crawl outputs stay out).
 # ---------------------------------------------------------------------------
-COPY _data/bmdx.duckdb ./bmdx.duckdb
+COPY _data/knowledge_bases/ ./knowledge_bases/
 
 # ---------------------------------------------------------------------------
 # Sessions directory — created empty here; at runtime it is overlaid by a

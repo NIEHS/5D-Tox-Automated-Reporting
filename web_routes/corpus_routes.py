@@ -27,7 +27,7 @@ async def api_corpus_organs(dtxsid: Dtxsid):
     """The organ inventory (term, frequencies, current mapping) + curated flag."""
     return JSONResponse({
         "inventory": cc.organ_inventory(dtxsid),
-        "canonical": cc.canonical_organs(),
+        "canonical": cc.canonical_organs(dtxsid),
         "is_curated": cc.is_curated(dtxsid),
     })
 

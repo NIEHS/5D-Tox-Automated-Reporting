@@ -136,7 +136,7 @@ def test_summary_is_pure_function_of_approved_set():
 
 
 # --- KB resource gate: genomics interpretation is grounded in the knowledge graph
-#     (bmdx.duckdb), so genomics sections are gated on the knowledge_base resource.
+#     (the report's knowledge base), so genomics sections are gated on the knowledge_base resource.
 
 
 def test_genomics_gated_on_knowledge_base_present():

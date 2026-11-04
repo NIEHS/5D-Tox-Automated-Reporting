@@ -55,7 +55,7 @@ from pipeline.session_store import read_narrative_overrides  # noqa: E402
 
 def build_reference_pool_for_genes(
     genes: list[str],
-    db_path: str = "bmdx.duckdb",
+    db_path: str,
     pool_size: int = 25,
 ) -> list[dict]:
     """
@@ -69,7 +69,8 @@ def build_reference_pool_for_genes(
     Args:
         genes:     Responsive gene symbols (case-insensitive; the graph stores
                    upper-case HGNC symbols).
-        db_path:   Path to bmdx.duckdb (read-only).
+        db_path:   The knowledge base's database (knowledge_base.registry.kb_for;
+                   read-only).
         pool_size: How many candidate papers to offer.
 
     Returns:
