@@ -50,6 +50,10 @@ def _query_follow_on(dtxsid: str) -> list[dict]:
 _TWEAKS_NAME = "corpus_tweaks.jsonl"
 _CORPUS_NAME = "corpus.duckdb"
 _FINGERPRINT_NAME = ".corpus.fingerprint"
+# The projection of the log onto a copy of the session's knowledge base: set
+# aside when that knowledge base changes (pipeline.kb_currency); the log stays
+# and is projected onto the new one when the person materializes again.
+PROJECTION_FILES = (_CORPUS_NAME, _FINGERPRINT_NAME)
 
 
 # ---------------------------------------------------------------------------

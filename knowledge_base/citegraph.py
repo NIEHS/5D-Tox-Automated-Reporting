@@ -152,6 +152,32 @@ class Paper:
     expanded: bool = False          # have we fetched refs/cites?
 
 
+def paper_from_s2(data: dict, depth: int = 0) -> Paper | None:
+    """A Paper from a Semantic Scholar record (S2_FIELDS); None without an id."""
+    pid = data.get("paperId")
+    if not pid:
+        return None
+    ext = data.get("externalIds") or {}
+    return Paper(
+        paper_id=pid,
+        title=data.get("title") or "",
+        authors=[a.get("name", "") for a in (data.get("authors") or [])[:10]],
+        year=data.get("year"),
+        abstract=data.get("abstract"),
+        venue=data.get("venue") or "",
+        citation_count=data.get("citationCount") or 0,
+        reference_count=data.get("referenceCount") or 0,
+        doi=ext.get("DOI"),
+        arxiv_id=ext.get("ArXiv"),
+        url=data.get("url"),
+        pmid=ext.get("PubMed"),
+        pmcid=ext.get("PubMedCentral"),
+        open_access_pdf=(data.get("openAccessPdf") or {}).get("url"),
+        is_review="Review" in (data.get("publicationTypes") or []),
+        depth=depth,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Semantic Scholar API client
 # ---------------------------------------------------------------------------
@@ -388,36 +414,6 @@ class CitationGraphCrawler:
             "stop_reason": "",
         }
 
-    def _dict_to_paper(self, data: dict, depth: int = 0) -> Paper | None:
-        """Convert S2 API response dict to Paper object."""
-        pid = data.get("paperId")
-        if not pid:
-            return None
-
-        ext = data.get("externalIds") or {}
-        pub_types = data.get("publicationTypes") or []
-        authors_raw = data.get("authors") or []
-
-        p = Paper(
-            paper_id=pid,
-            title=data.get("title") or "",
-            authors=[a.get("name", "") for a in authors_raw[:10]],
-            year=data.get("year"),
-            abstract=data.get("abstract"),
-            venue=data.get("venue") or "",
-            citation_count=data.get("citationCount") or 0,
-            reference_count=data.get("referenceCount") or 0,
-            doi=ext.get("DOI"),
-            arxiv_id=ext.get("ArXiv"),
-            url=data.get("url"),
-            pmid=ext.get("PubMed"),
-            pmcid=ext.get("PubMedCentral"),
-            open_access_pdf=(data.get("openAccessPdf") or {}).get("url"),
-            is_review="Review" in pub_types,
-            depth=depth,
-        )
-        return p
-
     def _should_stop(self) -> tuple[bool, str]:
         """Check all governor conditions."""
         if len(self.papers) >= self.config.max_papers:
@@ -436,7 +432,7 @@ class CitationGraphCrawler:
             print(f"  Could not fetch: {paper_id}")
             return
 
-        paper = self._dict_to_paper(data, depth=0)
+        paper = paper_from_s2(data, depth=0)
         if not paper:
             return
 
@@ -461,7 +457,7 @@ class CitationGraphCrawler:
         print(f"Searching: {query}")
         results = self.client.search(query, limit=max_results)
         for data in results:
-            paper = self._dict_to_paper(data, depth=0)
+            paper = paper_from_s2(data, depth=0)
             if paper:
                 paper.is_seed = True
                 paper.relevance_score = score_relevance(paper, self.config)
@@ -478,7 +474,7 @@ class CitationGraphCrawler:
     def _ingest_neighbor(self, data: dict, source_id: str,
                          depth: int, is_reference: bool) -> bool:
         """Process a reference or citation, return True if added."""
-        paper = self._dict_to_paper(data, depth=depth)
+        paper = paper_from_s2(data, depth=depth)
         if not paper or not paper.paper_id:
             return False
 

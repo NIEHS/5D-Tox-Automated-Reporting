@@ -4,7 +4,8 @@ Unit tests for the graph-grounded references builder.
 Two concerns are pinned:
   * the candidate POOL is a pure, deterministic graph computation (same genes ->
     same pool, stable [Pn] token order, full metadata resolution) — tested
-    against the real bmdx.duckdb shipped in the worktree, with NO network;
+    against the baseline knowledge base shipped in the worktree
+    (knowledge_bases/baseline-2026-05), with NO network;
   * report-wide ASSEMBLY merges per-stratum [Pn] citations into ONE globally
     numbered list and rewrites inline tokens to [n] — tested with tiny in-memory
     fixtures so it needs no DB and no LLM.
@@ -209,7 +210,7 @@ def test_detect_override_in_pool_tokens_do_not_warn():
 
 
 # ---------------------------------------------------------------------------
-# Real-DB tests — the pool against the shipped bmdx.duckdb (no network)
+# Real-DB tests — the pool against the shipped baseline knowledge base (no network)
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not DB_PATH.exists(), reason="baseline knowledge base not present")
 class TestRealDB:

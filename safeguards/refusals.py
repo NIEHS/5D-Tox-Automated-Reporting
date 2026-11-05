@@ -270,6 +270,9 @@ REFUSALS: dict[str, Refusal] = {
         "it holds no {lacking}. A report's knowledge base must hold papers, claims, "
         "genes, GO terms and pathways; its crawl query decides what it holds."),
         "knowledge_base"),
+    "knowledge_base_unavailable": Refusal(409, (
+        "This report has no knowledge base that can be read here: {problem}. Assign "
+        "it one that can, or make one the default."), "knowledge_base"),
     "knowledge_base_definition_fixed": Refusal(409, (
         "This report's document definition is fixed, so a knowledge base named in it "
         "now would not reach the report. Pin the definition to track the current one "

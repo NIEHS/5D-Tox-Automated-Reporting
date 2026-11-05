@@ -32,6 +32,7 @@ from knowledge_base.citegraph import (
     Paper,
     GovernorConfig,
     config_for,
+    paper_from_s2,
     tag_paper,
     log_s2_auth_status,
 )
@@ -131,34 +132,10 @@ class EntityCrawler:
             return True
         return False
 
-    @staticmethod
-    def _dict_to_paper(data: dict) -> Paper | None:
-        pid = data.get("paperId")
-        if not pid:
-            return None
-        ext = data.get("externalIds") or {}
-        return Paper(
-            paper_id=pid,
-            title=data.get("title") or "",
-            authors=[a.get("name", "") for a in (data.get("authors") or [])[:10]],
-            year=data.get("year"),
-            abstract=data.get("abstract"),
-            venue=data.get("venue") or "",
-            citation_count=data.get("citationCount") or 0,
-            reference_count=data.get("referenceCount") or 0,
-            doi=ext.get("DOI"),
-            arxiv_id=ext.get("ArXiv"),
-            url=data.get("url"),
-            pmid=ext.get("PubMed"),
-            pmcid=ext.get("PubMedCentral"),
-            open_access_pdf=(data.get("openAccessPdf") or {}).get("url"),
-            is_review="Review" in (data.get("publicationTypes") or []),
-        )
-
     def _consider(self, data: dict, entity: str, tags: list[str],
                   source: str | None = None) -> str | None:
         """Keep a paper that fits the entity; returns its id when newly kept."""
-        paper = self._dict_to_paper(data)
+        paper = paper_from_s2(data)
         if not paper:
             return None
         paper.relevance_score = entity_relevance(paper, entity, tags, self.spec, self.config)

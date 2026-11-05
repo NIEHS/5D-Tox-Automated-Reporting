@@ -12,7 +12,10 @@ written from it (the catalog's knowledge-base sections:
 workflow.section_catalog.is_grounded_in_knowledge_base) are marked stale with
 the reason ``knowledge_base_changed``: Process writes them again from the new
 knowledge base, and the publish gate waits until a person accepts them again,
-as after a data change (pipeline.pool_state).
+as after a data change (pipeline.pool_state).  A curated corpus
+(knowledge_base.corpus_curation: the person's organ tweaks projected onto a
+copy of the knowledge base) is set aside with it; the tweaks stay, to be
+projected onto the new one.
 
 A report whose knowledge base cannot be resolved (none assigned, or the one
 named is missing or unfinished: a store moved, a mistyped name) has not
@@ -76,10 +79,13 @@ def current(dtxsid: str) -> dict:
 
 
 def _archive(session, before: dict) -> list[str]:
-    """Move the interpretation store aside: ``history/_knowledge_base/<stamp>-
-    <previous name>/``.  Returns the files moved."""
+    """Move the interpretation store, and a curated corpus, aside:
+    ``history/_knowledge_base/<stamp>-<previous name>/``.  Returns the files
+    moved."""
     from common.clock import now_iso
-    caches = sorted(session.glob(CACHE_GLOB))
+    from knowledge_base.corpus_curation import PROJECTION_FILES
+    caches = sorted(session.glob(CACHE_GLOB)) + [
+        session / name for name in PROJECTION_FILES if (session / name).exists()]
     if not caches:
         return []
     dest = session / ARCHIVE_DIR / f"{now_iso().replace(':', '')}-{before.get('name') or 'unknown'}"

@@ -77,6 +77,11 @@ mkdir -p _data/knowledge_bases
 cp knowledge_bases/DEFAULT _data/knowledge_bases/
 for kb in knowledge_bases/*/; do
   name=$(basename "$kb")
+  # Only a finished knowledge base is ever read (knowledge_base.registry.usable).
+  if [ ! -f "$kb/kb.duckdb" ] || ! python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("complete") else 1)' "$kb/manifest.json" 2>/dev/null; then
+    echo "    skipping $name (unfinished)"
+    continue
+  fi
   mkdir -p "_data/knowledge_bases/$name"
   cp "$kb/kb.duckdb" "$kb/manifest.json" "_data/knowledge_bases/$name/"
 done

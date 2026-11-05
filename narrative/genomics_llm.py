@@ -4,8 +4,9 @@ interpretation for one organ × sex.
 
 What it does: for a given organ/sex it (1) runs the deterministic knowledge-
 base analysis (narrative.interpret.build_genomics_interpretation → ranked GO
-sets / genes + a [Pn] paper catalogue drawn from bmdx.duckdb), (2) builds the
-prompt that forbids citing anything outside that catalogue, (3) calls the
+sets / genes + a [Pn] paper catalogue drawn from the report's knowledge base,
+knowledge_base.registry.kb_for), (2) builds the prompt that forbids citing
+anything outside that catalogue, (3) calls the
 model through the shared styling_export.llm_helpers chokepoint, and (4)
 caches the organ×sex result under the session directory. That cache doubles
 as the narrative *store*: a user's Lock/Unlock edits persist alongside it and
@@ -394,8 +395,9 @@ Do NOT include table data in the narrative — the tables are presented separate
 
 Return ONLY valid JSON, no markdown formatting."""
     else:
-        # Fallback: basic gene/GO tables (original behavior for sessions
-        # without bmdx.duckdb or with enrichment failures).
+        # Fallback: basic gene/GO tables (a stratum with no genes to enrich,
+        # or an enrichment that failed; without a knowledge base no narrative
+        # is written at all — see above).
         gs_lines = []
         for gs in gene_sets[:10]:
             n_up = gs.get("n_up")

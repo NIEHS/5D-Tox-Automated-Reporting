@@ -125,4 +125,10 @@ assigned (in its YAML), or that is the default.
 - **The old crawl modules are retired, not deleted.** They import functions
   that no longer exist.
 - **Per-session organ curation reads the session's knowledge base.**
-  `corpus_curation` takes its vocabulary from that knowledge base's query.
+  `corpus_curation` takes its vocabulary from that knowledge base's query. When
+  the knowledge base changes, the curated corpus (its projection) is archived
+  with the interpretation store; the person's tweaks stay.
+- **The consensus counts papers.** A paper naming a value by two spellings
+  counts once (`consensus.count: papers`, the default). The May 2026 run
+  counted every mention; `baseline.yaml` states `count: mentions`, so it still
+  rebuilds that knowledge base row for row.

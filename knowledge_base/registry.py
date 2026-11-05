@@ -26,10 +26,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
 
 from common.paths import REPO_ROOT
+from knowledge_base.crawl_queries import NAME_RULE, is_name
 
 # Overridable (tests, a separate workspace), as SESSIONS_DIR is.
 KB_ROOT = Path(os.environ.get("KNOWLEDGE_BASES_DIR", REPO_ROOT / "knowledge_bases"))
@@ -37,8 +37,6 @@ DEFAULT_FILE = "DEFAULT"
 DB_FILE = "kb.duckdb"
 MANIFEST_FILE = "manifest.json"
 CRAWL_DIR = "crawl"
-
-_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 # What a table set lets a reader ask: capability -> the tables it needs.
 CAPABILITY_TABLES = {
@@ -60,10 +58,8 @@ class KnowledgeBaseError(ValueError):
 
 
 def check_name(name: str) -> str:
-    if not isinstance(name, str) or not _NAME.match(name):
-        raise KnowledgeBaseError(
-            f"{name!r} is not a knowledge base name (letters, digits, '.', '_', '-'; "
-            "at most 64 characters)")
+    if not is_name(name):
+        raise KnowledgeBaseError(f"{name!r} is not a knowledge base name ({NAME_RULE})")
     return name
 
 

@@ -77,7 +77,8 @@ GENOMICS_TABLES = {"papers": 1, "paper_claims": 1, "genes": 1, "paper_genes": 1,
 def test_baseline_query_is_a_valid_query():
     query = crawl_queries.parse((REPO / "crawl_queries" / "baseline.yaml").read_text())
     assert [c["name"] for c in query["crawls"]][0] == "toxicogenomics"
-    assert query["consensus"] == {"field": "genes", "by": "organs", "strong": 3, "moderate": 2}
+    assert query["consensus"] == {"field": "genes", "by": "organs", "strong": 3, "moderate": 2,
+                                  "count": "mentions"}
 
 
 def test_save_archives_the_text_it_replaces(stores):
@@ -108,6 +109,19 @@ def test_a_malformed_query_is_refused_and_nothing_saved(stores, text, problem):
     with pytest.raises(crawl_queries.QueryError, match=problem):
         crawl_queries.save("bad", text)
     assert not (queries / "bad.yaml").exists()
+
+
+def test_the_consensus_counts_a_paper_once_unless_the_query_says_mentions():
+    from knowledge_base.extract import consensus
+    spec = {"fields": [{"name": "genes", "describe": "genes",
+                        "normalize": {"case": "upper", "aliases": {"NRF2": "NFE2L2"}}}]}
+    papers = [{"paper_id": "p1", "genes": ["Nrf2", "NFE2L2"]}]
+    by_paper = consensus(papers, spec, {"field": "genes", "strong": 2, "moderate": 2})
+    assert by_paper["strong"] == {} and by_paper["single_mentions"] == 1
+    by_mention = consensus(papers, spec, {"field": "genes", "strong": 2, "count": "mentions"})
+    assert by_mention["strong"]["NFE2L2"]["count"] == 2
+    with pytest.raises(crawl_queries.QueryError, match="consensus.count"):
+        crawl_queries.parse(GENERIC_QUERY + "consensus: {field: rivers, count: words}\n")
 
 
 def test_the_check_never_judges_the_topic():
@@ -503,9 +517,12 @@ def test_a_changed_knowledge_base_stales_the_genomics_sections(stores, templates
     assert json.loads((session / RECORD_FILE).read_text())["name"] == "tox"
     assert cache.exists()
 
+    (session / "corpus.duckdb").write_text("projection")      # a curated corpus
+    (session / "corpus_tweaks.jsonl").write_text("{}\n")
     registry.set_default("tox-2")
     out = reconcile("DTXSIDX")
-    assert out["changed"] is True and out["archived"] == [cache.name]
+    assert out["changed"] is True and out["archived"] == [cache.name, "corpus.duckdb"]
+    assert (session / "corpus_tweaks.jsonl").exists()       # the person's tweaks stay
     assert not cache.exists()                       # set aside, never deleted
     [kept] = (session / "history" / "_knowledge_base").glob(f"*-tox/{cache.name}")
     assert kept.read_text() == "{}"
@@ -628,6 +645,14 @@ BASELINE = REPO / "knowledge_bases" / "baseline-2026-05"
 def test_the_baseline_rebuilds_row_for_row(tmp_path):
     from knowledge_base.build_db import build
     query = crawl_queries.parse((REPO / "crawl_queries" / "baseline.yaml").read_text())
+    # The consensus the query states (count: mentions) is the one the run made.
+    from knowledge_base.extract import consensus
+    merged = json.loads((BASELINE / "crawl" / "extractions_merged.json").read_text())
+    recounted = consensus(merged, query["extract"], query["consensus"])
+    kept = json.loads((BASELINE / "crawl" / "consensus.json").read_text())
+    for level in ("strong", "moderate"):
+        assert {g: e["count"] for g, e in recounted[level].items()} == \
+               {g: e["count"] for g, e in kept[level].items()}, level
     rebuilt = tmp_path / "kb.duckdb"
     build(rebuilt, BASELINE / "crawl", query)
     old = duckdb.connect(str(BASELINE / "kb.duckdb"), read_only=True)
@@ -675,3 +700,8 @@ def test_the_routes_save_list_and_refuse(client, stores, templates):
 
     r = client.post("/api/knowledge-bases/run", json={"query": "rivers", "name": "tox"})
     assert r.status_code == 409 and r.json()["code"] == "knowledge_base_name_taken"
+
+
+def test_curation_without_a_knowledge_base_is_explained(client, stores, templates):
+    r = client.get("/api/corpus/DTXSIDX/organs")
+    assert r.status_code == 409 and r.json()["code"] == "knowledge_base_unavailable"

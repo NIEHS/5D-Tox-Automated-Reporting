@@ -1,7 +1,8 @@
 """
 Graph-grounded literature references for the generated report.
 
-The genomics interpretation already queries the knowledge graph (bmdx.duckdb)
+The genomics interpretation already queries the report's knowledge base
+(knowledge_base.registry.kb_for)
 for real, DOI-anchored papers and names them to the LLM as context, but those
 citations evaporated — they never became a structured reference list.  This
 module closes that loop end-to-end:

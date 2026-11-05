@@ -494,20 +494,25 @@ def consensus(extractions: list[dict], extract_spec: dict, cons: dict) -> dict:
     normalised value with the papers naming it and the ``by`` values (e.g.
     organs) of those papers; ``strong`` (named by at least cons.strong papers),
     ``moderate`` (at least cons.moderate), the count of single mentions, and
-    the top values per ``by`` value."""
+    the top values per ``by`` value.  ``cons.count``: "papers" (default)
+    counts a paper once per value however many of its spellings normalise to
+    it; "mentions" counts each of them (how the May 2026 run counted)."""
     name, by = cons["field"], cons.get("by")
     norm = normalizer(field_spec(extract_spec, name))
     norm_by = normalizer(field_spec(extract_spec, by)) if by else None
     strong_at, moderate_at = cons.get("strong", 3), cons.get("moderate", 2)
+    per_paper = cons.get("count", "papers") == "papers"
 
     papers_of: dict[str, list[dict]] = {}
     by_of: dict[str, set[str]] = {}
     for rec in extractions:
         bys = {norm_by(b) for b in rec.get(by) or []} - {""} if by else set()
+        counted: set[str] = set()
         for raw in rec.get(name) or []:
             value = norm(raw)
-            if not value:
+            if not value or (per_paper and value in counted):
                 continue
+            counted.add(value)
             papers_of.setdefault(value, []).append({
                 "paper_id": rec["paper_id"], "title": rec.get("title"),
                 "year": rec.get("year"), "confidence": rec.get("confidence", 0)})
@@ -534,7 +539,8 @@ def consensus(extractions: list[dict], extract_spec: dict, cons: dict) -> dict:
         return dict(sorted(d.items(), key=lambda x: x[1]["count"], reverse=True))
 
     return {
-        "field": name, "by": by, "thresholds": {"strong": strong_at, "moderate": moderate_at},
+        "field": name, "by": by, "count": cons.get("count", "papers"),
+        "thresholds": {"strong": strong_at, "moderate": moderate_at},
         "strong": ranked(strong), "moderate": ranked(moderate), "single_mentions": single,
         "top_by": {b: dict(sorted(v.items(), key=lambda x: x[1], reverse=True)[:20])
                    for b, v in sorted(per_by.items())},

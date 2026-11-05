@@ -44,7 +44,10 @@ Format 1 (every key optional unless marked):
                 fulltext_only, normalize: {case, strip, drop_containing, aliases}}]
       chunk: {max_chars, overlap}
       model / workers
-    consensus: {field, by, strong, moderate}
+    consensus: {field, by, strong, moderate,
+                count: papers | mentions}       # papers (default): each paper once
+                                                # per value; mentions: every
+                                                # mention (the May 2026 run's way)
     follow_on: [{name, entities: consensus | [{entity, tags, focus}], ...}]
     annotate: {field, go: {terms, annotations: {species: source}},
                pathways: {kegg: {<organism code>: <label>},
@@ -77,6 +80,8 @@ _CRAWLER_INTS = ("max_depth", "max_papers", "max_api_calls", "saturation_window"
                  "max_refs_per_paper", "max_cites_per_paper")
 _CRAWLER_FRACTIONS = ("relevance_threshold", "saturation_threshold")
 _FIELD_TYPES = ("list", "text", "number")
+# How the consensus counts a value (consensus.count).
+COUNTS = ("papers", "mentions")
 _TOP_KEYS = {"format", "description", "crawler", "relevance", "tags", "crawls",
              "extract", "consensus", "follow_on", "annotate"}
 
@@ -85,10 +90,18 @@ class QueryError(ValueError):
     """A query text the stages could not read, or a name that is not one."""
 
 
+# The one rule for a name that becomes a file or directory: a query's, a
+# crawl's, a knowledge base's (knowledge_base.registry).
+NAME_RULE = "letters, digits, '.', '_', '-'; at most 64 characters"
+
+
+def is_name(name) -> bool:
+    return isinstance(name, str) and bool(_NAME.match(name))
+
+
 def check_name(name: str) -> str:
-    if not isinstance(name, str) or not _NAME.match(name):
-        raise QueryError(f"{name!r} is not a query name (letters, digits, '.', '_', '-'; "
-                         "at most 64 characters)")
+    if not is_name(name):
+        raise QueryError(f"{name!r} is not a query name ({NAME_RULE})")
     return name
 
 
@@ -210,6 +223,8 @@ def check(query) -> None:
             for key in ("strong", "moderate"):
                 if key in cons and (not isinstance(cons[key], int) or cons[key] < 1):
                     raise QueryError(f"consensus.{key} must be a whole number of papers")
+            if cons.get("count", "papers") not in COUNTS:
+                raise QueryError(f"consensus.count is one of {list(COUNTS)}")
     elif query.get("consensus") is not None:
         raise QueryError("consensus counts an extracted field; the query extracts nothing")
 

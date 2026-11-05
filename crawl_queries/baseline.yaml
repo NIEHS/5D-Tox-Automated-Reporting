@@ -393,6 +393,9 @@ consensus:
   by: organs
   strong: 3
   moderate: 2
+  # The May 2026 run counted every mention: a paper naming a gene by two
+  # spellings counted twice.  Stated, so this query rebuilds that knowledge base.
+  count: mentions
 follow_on:
 - name: genefunc
   entities: consensus

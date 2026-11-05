@@ -697,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [s for s in surfaces if s not in SURFACE_SUFFIX]
     if unknown:
         raise SystemExit(f"unknown surface(s): {unknown}; choose from {list(SURFACE_SUFFIX)}")
-    # Resolve user paths BEFORE chdir: the app is cwd-relative (bmdx.duckdb, templates).
+    # Resolve user paths BEFORE chdir: the app is cwd-relative (templates).
     files = [p.resolve() for p in args.files]
     metadata = args.metadata.resolve() if args.metadata else None
     design = args.design.resolve() if args.design else None

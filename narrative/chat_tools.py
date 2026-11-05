@@ -405,7 +405,8 @@ class ChatToolbox:
         gene = str(inputs.get("gene_symbol") or "").strip().upper()
         if not gene:
             return {"error": "gene_symbol is required"}
-        with self._kb({"papers", "claims", "genes", "organs", "go", "pathways"}) as kb:
+        # The gene's organs are genes.organs (the "genes" capability), not paper_organs.
+        with self._kb({"papers", "claims", "genes", "go", "pathways"}) as kb:
             papers = kb.gene_papers(gene)
             meta = kb.papers_metadata([p["paper_id"] for p in papers])
             for p in papers:

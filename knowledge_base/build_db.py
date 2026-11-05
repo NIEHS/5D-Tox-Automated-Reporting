@@ -152,9 +152,10 @@ def load_extracted(con, extractions: list[dict], extract_spec: dict) -> tuple[in
 # ---------------------------------------------------------------------------
 
 def load_genes(con, consensus: dict, extractions: list[dict], extract_spec: dict,
-               go_table: Path | None) -> int:
+               go_table: Path | None, count: str = "papers") -> int:
     """Every gene: the consensus's strong ("consensus") and moderate genes, the
-    genes named once ("single"), then the GO annotation's other genes (no
+    genes named once ("single", counted as the consensus counts: ``count``,
+    the query's consensus.count), then the GO annotation's other genes (no
     evidence)."""
     norm_gene = normalizer(field_spec(extract_spec, "genes"))
     norm_organ = normalizer(field_spec(extract_spec, "organs"))
@@ -168,8 +169,8 @@ def load_genes(con, consensus: dict, extractions: list[dict], extract_spec: dict
     organs: dict[str, set[str]] = {}
     for rec in extractions:
         rec_organs = {norm_organ(o) for o in rec.get("organs") or []} - {""}
-        for raw in rec.get("genes") or []:
-            g = norm_gene(raw)
+        named = [norm_gene(raw) for raw in rec.get("genes") or []]
+        for g in (dict.fromkeys(named) if count == "papers" else named):
             if g:
                 counts[g] = counts.get(g, 0) + 1
                 organs.setdefault(g, set()).update(rec_organs)
@@ -278,7 +279,8 @@ def build(db_path: Path, crawl_dir: Path, query: dict) -> dict:
             go_table = crawl_dir / "go_term_genes.tsv"
             go_table = go_table if (annotate.get("go") and go_table.exists()) else None
             consensus = json.loads((crawl_dir / "consensus.json").read_text())
-            counts["genes"] = load_genes(con, consensus, extractions, extract_spec, go_table)
+            counts["genes"] = load_genes(con, consensus, extractions, extract_spec, go_table,
+                                         query["consensus"].get("count", "papers"))
             counts["paper_genes"], counts["paper_organs"] = load_paper_genes_organs(
                 con, extractions, extract_spec)
             if go_table is not None:
