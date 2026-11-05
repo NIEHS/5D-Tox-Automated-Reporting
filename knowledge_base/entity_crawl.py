@@ -210,7 +210,9 @@ class EntityCrawler:
 
 def run_follow_on(query: dict, spec: dict, consensus: dict | None, out_dir: str | Path,
                   api_key: str | None = None) -> dict:
-    """Run one follow-on crawl of a query and save it.  Returns a report."""
+    """Run one follow-on crawl of a query and save it.  Returns a report.
+    Raises citegraph.SourceIncomplete, saving nothing, when Semantic Scholar
+    left a request unanswered."""
     log_s2_auth_status(api_key)
     config = config_for(query, {"name": spec["name"]})
     targets = (consensus_targets(spec, consensus or {}) if spec["entities"] == "consensus"
@@ -222,6 +224,7 @@ def run_follow_on(query: dict, spec: dict, consensus: dict | None, out_dir: str 
             break
         print(f"[{i + 1}/{len(targets)}] {entity}: {', '.join(tags) or '-'}")
         crawler.crawl_entity(entity, tags, focus)
+    crawler.client.require_complete()       # nothing saved from a crawl answered in part
     crawler.save(out_dir)
     found = set().union(*crawler.paper_entities.values()) if crawler.paper_entities else set()
     return {"papers": len(crawler.papers), "edges": crawler.graph.number_of_edges(),

@@ -49,6 +49,11 @@ class SourceUnreachable(RuntimeError):
     """An annotation source the run could not read (network, missing file)."""
 
 
+def _data_rows(path: Path) -> int:
+    with open(path, encoding="utf-8") as f:
+        return sum(1 for _ in f) - 1
+
+
 def _local(path: str) -> Path:
     p = Path(path)
     return p if p.is_absolute() else REPO_ROOT / p
@@ -99,7 +104,7 @@ def go_table(spec: dict, out_path: Path) -> int:
     human spelling shown when both species have the gene).  Returns its rows."""
     if spec.get("table"):
         shutil.copyfile(_local(spec["table"]), out_path)
-        return sum(1 for _ in open(out_path)) - 1
+        return _data_rows(out_path)
     terms = read_go_terms(spec["terms"])
     by_species = {sp: parse_gaf(_read_source(src))
                   for sp, src in (spec.get("annotations") or {}).items()}
@@ -167,21 +172,34 @@ def kegg_pathways(organism: str) -> dict[str, list[tuple[str, str]]]:
     return dict(out)
 
 
-def reactome_pathways(gene: str, species: str) -> list[tuple[str, str]]:
-    try:
-        r = requests.get(f"{REACTOME_BASE}/search/query",
-                         params={"query": gene, "species": species, "types": "Pathway"},
-                         timeout=15)
-        if r.status_code == 404:
-            return []
-        r.raise_for_status()
-        data = r.json()
-    except requests.ConnectionError as e:
-        raise SourceUnreachable(f"Reactome: {e}") from None
-    except (requests.RequestException, ValueError):
-        return []
-    return [(e["stId"], e["name"]) for g in data.get("results", [])
-            for e in g.get("entries", []) if e.get("stId") and e.get("name")]
+def reactome_pathways(gene: str, species: str, retries: int = 3) -> list[tuple[str, str]]:
+    """[(pathway id, name)] Reactome gives a gene in a species ([] when it
+    knows none: 404).  Raises SourceUnreachable when Reactome does not answer
+    (after ``retries`` for throttling and server errors), so a gene is never
+    left without pathways because the source failed."""
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(f"{REACTOME_BASE}/search/query",
+                             params={"query": gene, "species": species, "types": "Pathway"},
+                             timeout=15)
+        except requests.RequestException as e:
+            problem = f"{type(e).__name__}: {e}"
+        else:
+            if r.status_code == 404:
+                return []
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                except ValueError:
+                    raise SourceUnreachable(f"Reactome {gene}: the answer is not JSON") from None
+                return [(e["stId"], e["name"]) for g in data.get("results", [])
+                        for e in g.get("entries", []) if e.get("stId") and e.get("name")]
+            problem = f"HTTP {r.status_code}"
+            if r.status_code != 429 and r.status_code < 500:
+                break
+        if attempt < retries:
+            time.sleep(2 ** attempt)
+    raise SourceUnreachable(f"Reactome {gene} ({species}): {problem}")
 
 
 def pathway_table(spec: dict, genes: list[str], out_path: Path) -> int:
@@ -189,7 +207,7 @@ def pathway_table(spec: dict, genes: list[str], out_path: Path) -> int:
     moderate values): KEGG for each organism, Reactome per gene.  Returns rows."""
     if spec.get("table"):
         shutil.copyfile(_local(spec["table"]), out_path)
-        return sum(1 for _ in open(out_path)) - 1
+        return _data_rows(out_path)
     kegg = {label: kegg_pathways(org) for org, label in (spec.get("kegg") or {}).items()}
     reactome_species = list((spec.get("reactome") or {}).items())
     rows = 0

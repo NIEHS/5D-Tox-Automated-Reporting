@@ -282,8 +282,19 @@ REFUSALS: dict[str, Refusal] = {
         "A crawl into {name} is running already. Wait for it to finish; its "
         "progress is in the knowledge base's record."), "knowledge_base"),
     "crawl_query_invalid": Refusal(422, (
-        "The crawl query was not saved: {problem}. The query's text is YAML; the "
+        "The crawl query can't be used: {problem}. The query's text is YAML; the "
         "details say where it does not have the form the crawl reads."), "knowledge_base"),
+    "crawl_query_names_unpublished_results": Refusal(409, (
+        "The crawl query was not saved: its searches now name genes from the results "
+        "of a study that is not published ({genes}). When the query runs, its searches "
+        "go to Semantic Scholar, a public service. Take them out, or confirm that they "
+        "are there for another reason and save again."), "knowledge_base"),
+    "crawl_names_unpublished_results": Refusal(409, (
+        "The crawl did not start: its searches name genes from the results of a study "
+        "that is not published ({genes}), and no crawl has sent them before. Running it "
+        "sends them to Semantic Scholar, a public service. Take them out of the query, "
+        "or confirm that they are there for another reason and run it again."),
+        "knowledge_base"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "

@@ -39,6 +39,33 @@ from styling_export.llm_helpers import llm_generate_json_async
 logger = logging.getLogger(__name__)
 
 
+def _stored_narrative(dtxsid: str, organ: str, sex: str) -> dict | None:
+    """The narrative already stored for an organ × sex (the most recent
+    ``_cache_interpretation_<organ>_<sex>_*.json`` with both narratives), in
+    the shape generate_genomics_narrative_async returns; None when there is
+    none."""
+    if not dtxsid:
+        return None
+    from genomics.genomics_narratives import interpretation_cache_prefix
+    session_dir = SESSIONS_DIR / validate_dtxsid(dtxsid)
+    prefix = interpretation_cache_prefix(organ, sex)
+    for path in sorted(session_dir.glob(f"{prefix}*.json"),
+                       key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            cached = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if cached.get("gene_set_narrative") and cached.get("gene_narrative") is not None:
+            return {
+                "gene_set_narrative": cached.get("gene_set_narrative") or [],
+                "gene_narrative": cached.get("gene_narrative") or [],
+                "model_used": cached.get("model_used", "claude-sonnet-4-6"),
+                "enrichment_available": bool(cached.get("context_text")),
+                "unresolved_citations": cached.get("unresolved_citations") or [],
+            }
+    return None
+
+
 async def generate_genomics_narrative_async(
     *,
     dtxsid: str,
@@ -122,8 +149,17 @@ async def generate_genomics_narrative_async(
     has_genes = bool(all_genes or top_genes)
     kb = kb_or_none(dtxsid)
     if has_genes and kb is None:
-        logger.warning("No usable knowledge base for %s: genomics narrative without "
-                       "enrichment", dtxsid)
+        # Refused, not degraded (ADR-0034): no interpretation is written without
+        # the literature it is grounded in.  The narrative already stored for
+        # this organ × sex (written from the knowledge base the report read
+        # before) stands; pipeline.kb_currency keeps it while none resolves.
+        stored = None if force else _stored_narrative(dtxsid, organ, sex)
+        if stored is not None:
+            return stored
+        logger.warning("No usable knowledge base for %s: no genomics narrative for %s/%s",
+                       dtxsid, organ, sex)
+        return {"error": "no usable knowledge base: the report's genomics interpretation "
+                         "is written only from one (knowledge_base.registry)"}
     db_path = kb["path"] if kb else None
     if has_genes and kb is not None:
         # Responsive gene symbols for the pool — prefer the full all_genes list

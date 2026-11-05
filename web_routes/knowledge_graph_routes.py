@@ -6,10 +6,11 @@ an edit (the old text archived), or ask the query agent for a proposed edit
 (knowledge_base.query_agent — it saves nothing).  A named crawl runs a query
 into a named knowledge base in the background (knowledge_base.run_crawl); its
 progress is its manifest.  A report reads the knowledge base its document
-definition names, else the default (knowledge_base.registry): assigning one
-and setting the default go through the safeguards (safeguards.knowledge),
-which refuse a knowledge base that cannot ground a report's genomics
-interpretation.
+definition names, else the default (knowledge_base.registry).  Saving a query,
+running a crawl, assigning a knowledge base and setting the default go through
+the safeguards (safeguards.guarded, safeguards.knowledge): they refuse a
+knowledge base that cannot ground a report's genomics interpretation, and a
+query that would send an unpublished study's genes unconfirmed.
 """
 
 from __future__ import annotations
@@ -47,10 +48,6 @@ async def _body(request: Request) -> dict:
 
 def _invalid(e: Exception) -> Refused:
     return Refused("crawl_query_invalid", str(e), 422, {"problem": str(e)})
-
-
-def _kb_refusal(e: registry.KnowledgeBaseError, name: str) -> Refused:
-    return Refused("knowledge_base_name_taken", str(e), 409, {"name": name})
 
 
 # ---------------------------------------------------------------------------
@@ -91,31 +88,20 @@ async def api_save_query(name: str, request: Request):
 
     A text whose searches would send genes of an unpublished study's results
     to Semantic Scholar, that the text it was edited from (``from``: a query's
-    name; else the saved text of ``name``) did not, is not saved until the
-    person confirms (``confirm: true``): the reply names them."""
-    from safeguards.knowledge import unpublished_results_named
+    name; else the saved text of ``name``) did not, is refused until the
+    person confirms (``confirm: true``): the refusal names them
+    (safeguards.knowledge)."""
+    from safeguards.guarded import save_crawl_query
     try:
         body = await _body(request)
-        text = str(body.get("text") or "")
-        query = crawl_queries.parse(text)
-        source = body.get("from") or name
-        try:
-            previous = crawl_queries.parse(crawl_queries.read(source))
-        except crawl_queries.QueryError:
-            previous = None
-        exposed = unpublished_results_named(query, previous)
-        if exposed and not body.get("confirm"):
-            return JSONResponse({"saved": False, "needs_confirmation": True,
-                                 "unpublished_results": exposed}, status_code=409)
-        saved = crawl_queries.save(name, text)
+        saved = save_crawl_query(name, str(body.get("text") or ""),
+                                 edited_from=body.get("from") or None,
+                                 confirm=bool(body.get("confirm")))
     except Refused as e:
         return refusal_response(e)
     except crawl_queries.QueryError as e:
         return refusal_response(_invalid(e))
-    if exposed:
-        logger.warning("Crawl query %s saved naming unpublished results (confirmed): %s",
-                       name, exposed)
-    return JSONResponse({"saved": True, **saved, "unpublished_results": exposed})
+    return JSONResponse({"saved": True, **saved})
 
 
 @router.get("/api/crawl-queries/{name}/history/{entry}")
@@ -190,21 +176,17 @@ def _run_in_background(query: str, name: str, resume: bool) -> None:
 
 @router.post("/api/knowledge-bases/run")
 async def api_run_crawl(request: Request):
-    """Run ``{query, name, resume?}`` into the knowledge base ``name``, in the
-    background.  Its progress is its manifest (GET /api/knowledge-bases/{name})."""
-    from knowledge_base.run_crawl import Run
+    """Run ``{query, name, resume?, confirm?}`` into the knowledge base
+    ``name``, in the background.  Its progress is its manifest (GET
+    /api/knowledge-bases/{name}).  Refused before it starts when the run could
+    not take the name, or would send an unpublished study's genes unconfirmed
+    (safeguards.knowledge)."""
+    from safeguards.guarded import require_crawl_run
     try:
         body = await _body(request)
         query, name = str(body.get("query") or ""), str(body.get("name") or "")
         resume = bool(body.get("resume"))
-        try:
-            registry.check_name(name)
-        except registry.KnowledgeBaseError as e:
-            raise Refused("bad_request", str(e), 422) from None
-        try:
-            Run(query, name, resume).check()     # refuses a taken name before starting
-        except registry.KnowledgeBaseError as e:
-            raise _kb_refusal(e, name) from None
+        require_crawl_run(query, name, resume, confirm=bool(body.get("confirm")))
         with _running_lock:
             if name in _running:
                 raise Refused("crawl_running", f"a crawl into {name!r} is running", 409,
@@ -212,8 +194,6 @@ async def api_run_crawl(request: Request):
             _running.add(name)
     except Refused as e:
         return refusal_response(e)
-    except crawl_queries.QueryError as e:
-        return refusal_response(_invalid(e))
     threading.Thread(target=_run_in_background, args=(query, name, resume),
                      name=f"crawl-{name}", daemon=True).start()
     return JSONResponse({"started": True, "query": query, "name": name}, status_code=202)

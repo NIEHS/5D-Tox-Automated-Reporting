@@ -1086,12 +1086,15 @@ asks the query agent (`knowledge_base.query_agent.propose(text, request)`),
 which returns a revised text, an explanation and a diff, and saves nothing.
 `crawl_queries.save` archives the text it replaces.
 
-`python -m knowledge_base.run_crawl <query> --as <name>` runs a query, stage by
-stage, into `knowledge_bases/<name>/`: `kb.duckdb`, the crawl's outputs, and
+`knowledge_base.run_crawl.run(query, name)` runs a query, stage by stage, into
+`knowledge_bases/<name>/`: `kb.duckdb`, the crawl's outputs, and
 `manifest.json` (the query's text and hash, each stage's status, the database's
 hash, and its **capabilities**: what it holds, read off its tables). A stage
-that could not run (a source unreachable) leaves the knowledge base unfinished,
-and an unfinished one is never read. A finished one never changes; its name is
+that could not run (a source unreachable, or one that answered only in part)
+leaves the knowledge base unfinished, and an unfinished one is never read. The
+command line, `python -m tooling.run_crawl <query> --as <name>`, runs it
+through the safeguards, which hold back a query whose searches would send an
+unpublished study's genes until the person confirms. A finished one never changes; its name is
 never reused.
 
 **Which one a report reads.** `knowledge_base.registry.kb_for(dtxsid)`: the

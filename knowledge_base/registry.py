@@ -114,10 +114,11 @@ def capabilities_of(db_path: Path) -> list[str]:
 
 def usable(name: str) -> dict:
     """The manifest of a finished knowledge base; refused when it is missing,
-    unfinished, or its database is not the one the manifest recorded."""
+    unfinished, or has no database."""
     m = manifest(name)
     if not m.get("complete"):
-        missing = [s["stage"] for s in m.get("stages", []) if s.get("status") != "ran"]
+        missing = [s["stage"] for s in m.get("stages", [])
+                   if s.get("status") not in ("ran", "skipped")]
         raise KnowledgeBaseError(
             f"knowledge base {name!r} is unfinished: stage(s) {missing} did not run")
     db = kb_dir(name) / DB_FILE

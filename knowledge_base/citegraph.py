@@ -159,8 +159,17 @@ class Paper:
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 S2_FIELDS = "paperId,title,authors,year,abstract,venue,citationCount,referenceCount,externalIds,url,publicationTypes,openAccessPdf"
 
+class SourceIncomplete(RuntimeError):
+    """Semantic Scholar did not answer every request of a crawl (after its
+    retries): the crawl is not saved — a crawl the source answered in part is
+    not the crawl its query states (knowledge_base.run_crawl: the stage could
+    not run, and is resumed)."""
+
+
 class S2Client:
-    """Thin wrapper around Semantic Scholar API with rate limiting."""
+    """Thin wrapper around Semantic Scholar API with rate limiting.  A request
+    still unanswered after its retries returns None and is kept in
+    ``failures`` ("<status or error> <url>") for the crawl to report."""
 
     def __init__(self, api_key: Optional[str] = None, delay: float = 1.0):
         self.session = requests.Session()
@@ -168,6 +177,7 @@ class S2Client:
             self.session.headers["x-api-key"] = api_key
         self.delay = delay
         self.call_count = 0
+        self.failures: list[str] = []
 
     def _get(self, url: str, params: dict | None = None,
              _retries: int = 3) -> dict | None:
@@ -181,23 +191,30 @@ class S2Client:
                 time.sleep(wait)
                 if _retries > 0:
                     return self._get(url, params, _retries - 1)
+                self.failures.append(f"429 {url}")
                 return None
             if r.status_code != 200:
                 print(f"  [API error {r.status_code} for {url}]")
                 if r.status_code >= 500 and _retries > 0:
                     time.sleep(5)
                     return self._get(url, params, _retries - 1)
+                self.failures.append(f"{r.status_code} {url}")
                 return None
-            data = r.json()
-            if data is None:
-                return None
-            return data
-        except requests.RequestException as e:
+            return r.json()
+        except (requests.RequestException, ValueError) as e:
             print(f"  [request error: {e}]")
             if _retries > 0:
                 time.sleep(3)
                 return self._get(url, params, _retries - 1)
+            self.failures.append(f"{type(e).__name__} {url}")
             return None
+
+    def require_complete(self) -> None:
+        """Raise SourceIncomplete when any request went unanswered."""
+        if self.failures:
+            shown = "; ".join(self.failures[:3]) + (" …" if len(self.failures) > 3 else "")
+            raise SourceIncomplete(f"Semantic Scholar left {len(self.failures)} request(s) "
+                                   f"unanswered ({shown})")
 
     def get_paper(self, paper_id: str) -> dict | None:
         """Fetch a single paper by ID (S2 ID, DOI, ArXiv:xxxx, etc.)."""
@@ -683,7 +700,9 @@ class CitationGraphCrawler:
 def run_crawl(query: dict, crawl: dict, out_dir: str | Path, api_key: str | None = None,
               known_entities: set[str] | None = None) -> dict:
     """Run one of a query's crawls — its seeds and searches, expanded under its
-    governor (config_for) — and save it to ``out_dir``.  Returns the report."""
+    governor (config_for) — and save it to ``out_dir``.  Returns the report.
+    Raises SourceIncomplete, saving nothing, when Semantic Scholar left a
+    request unanswered (a seed it could not give, a page of references)."""
     config = config_for(query, crawl, known_entities)
     log_s2_auth_status(api_key)
     crawler = CitationGraphCrawler(config=config, api_key=api_key)
@@ -694,5 +713,6 @@ def run_crawl(query: dict, crawl: dict, out_dir: str | Path, api_key: str | None
     for search in crawl.get("searches") or []:
         crawler.add_seed_by_search(search["query"], max_results=search.get("limit", 5))
     report = crawler.expand()
+    crawler.client.require_complete()       # nothing saved from a crawl answered in part
     crawler.save(str(out_dir))
     return report

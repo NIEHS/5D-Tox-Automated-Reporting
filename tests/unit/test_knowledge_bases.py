@@ -210,6 +210,145 @@ def test_a_paper_the_model_did_not_answer_for_stops_the_extract_stage(stores, mo
     assert not (registry.kb_dir("rivers-3") / "crawl" / "rivers" / "extractions.json").exists()
 
 
+FOLLOW_ON_QUERY = GENERIC_QUERY + textwrap.dedent("""\
+    consensus: {field: rivers, strong: 2, moderate: 1}
+    follow_on:
+      - name: more
+        entities: consensus
+        templates: ["{entity} {tag_term}"]
+    """)
+
+
+def _follow_on_finds(monkeypatch, papers: list[dict]) -> None:
+    from knowledge_base import entity_crawl
+
+    def follow(query, spec, consensus, out_dir, api_key):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "papers.json").write_text(json.dumps(papers))
+        (out_dir / "edges.json").write_text("[]")
+
+    monkeypatch.setattr(entity_crawl, "run_follow_on", follow)
+
+
+def _statuses(m: dict) -> dict:
+    return {s["stage"]: s["status"] for s in m["stages"]}
+
+
+def test_a_failure_is_recorded_on_the_stage_it_stopped(stores, monkeypatch):
+    """A follow-on crawl's extraction that fails is that stage's failure, not
+    the next stage's; the stages after it did not run (or have no section)."""
+    from knowledge_base import run_crawl
+    from knowledge_base.extract import ParallelExtractionEngine
+    _stub_pipeline(monkeypatch)
+    _follow_on_finds(monkeypatch, [{"paper_id": "f1", "title": "The Danube delta",
+                                    "abstract": "Danube sediment " * 10, "year": 2021}])
+
+    class Silent(_StubModel):
+        def generate(self, prompt, system=""):
+            return "" if "Danube" in prompt else super().generate(prompt, system)
+
+    monkeypatch.setattr(run_crawl, "extraction_engine",
+                        lambda spec: ParallelExtractionEngine(spec, [Silent()]))
+    crawl_queries.save("rivers", FOLLOW_ON_QUERY)
+    m = run_crawl.run("rivers", "rivers-fo")
+    assert m["complete"] is False
+    assert _statuses(m) == {"crawl": "ran", "extract": "ran", "consensus": "ran",
+                            "follow_on": "ran", "follow_on.extract": "could_not_run",
+                            "annotate": "skipped", "build": "not_run"}
+    with pytest.raises(registry.KnowledgeBaseError, match=r"\['follow_on.extract', 'build'\]"):
+        registry.usable("rivers-fo")
+
+
+def test_a_follow_on_crawl_that_finds_nothing_could_not_run(stores, monkeypatch):
+    from knowledge_base import run_crawl
+    _stub_pipeline(monkeypatch)
+    _follow_on_finds(monkeypatch, [])
+    crawl_queries.save("rivers", FOLLOW_ON_QUERY)
+    m = run_crawl.run("rivers", "rivers-empty")
+    assert m["complete"] is False
+    stopped = next(s for s in m["stages"] if s["status"] == "could_not_run")
+    assert stopped["stage"] == "follow_on" and "found no papers" in stopped["detail"]
+
+
+def test_a_crawl_the_source_answered_in_part_could_not_run(stores, monkeypatch):
+    import knowledge_base.citegraph as citegraph
+    from knowledge_base import run_crawl
+    _stub_pipeline(monkeypatch)
+
+    def partial(query, crawl, out_dir, api_key, known):
+        raise citegraph.SourceIncomplete("Semantic Scholar left 1 request(s) unanswered")
+
+    monkeypatch.setattr(citegraph, "run_crawl", partial)
+    crawl_queries.save("rivers", GENERIC_QUERY)
+    m = run_crawl.run("rivers", "rivers-part")
+    assert m["stages"][0]["status"] == "could_not_run"
+    assert "unanswered" in m["stages"][0]["detail"]
+    assert not (registry.kb_dir("rivers-part") / "crawl" / "rivers" / "papers.json").exists()
+
+
+def test_the_s2_client_keeps_what_it_could_not_get(monkeypatch):
+    import knowledge_base.citegraph as citegraph
+    monkeypatch.setattr(citegraph.time, "sleep", lambda s: None)
+
+    class Answer:
+        status_code, headers = 503, {}
+
+    client = citegraph.S2Client(delay=0)
+    monkeypatch.setattr(client.session, "get", lambda *a, **k: Answer())
+    assert client.get_paper("DOI:10.1/x") is None
+    assert client.failures == [f"503 {citegraph.S2_BASE}/paper/DOI:10.1/x"]
+    with pytest.raises(citegraph.SourceIncomplete, match="1 request"):
+        client.require_complete()
+
+
+def test_an_answer_that_is_not_the_fields_is_a_failure(stores, monkeypatch):
+    from knowledge_base import run_crawl
+    from knowledge_base.extract import ParallelExtractionEngine
+    _stub_pipeline(monkeypatch)
+
+    class Chatty(_StubModel):
+        def generate(self, prompt, system=""):
+            return "I could not find rivers." if "Rhine" in prompt else super().generate(prompt, system)
+
+    monkeypatch.setattr(run_crawl, "extraction_engine",
+                        lambda spec: ParallelExtractionEngine(spec, [Chatty()]))
+    crawl_queries.save("rivers", GENERIC_QUERY)
+    m = run_crawl.run("rivers", "rivers-chatty")
+    extract = next(s for s in m["stages"] if s["stage"] == "extract")
+    assert extract["status"] == "could_not_run" and "1 of 3 papers" in extract["detail"]
+
+
+def test_an_unexpected_error_is_recorded_then_raised(stores, monkeypatch):
+    from knowledge_base import build_db, run_crawl
+    _stub_pipeline(monkeypatch)
+
+    def broken(*a, **k):
+        raise KeyError("organs")
+
+    monkeypatch.setattr(build_db, "build", broken)
+    crawl_queries.save("rivers", GENERIC_QUERY)
+    with pytest.raises(KeyError):
+        run_crawl.run("rivers", "rivers-broken")
+    m = registry.manifest("rivers-broken")
+    assert m["complete"] is False
+    assert m["stages"][-1] == {"stage": "build", "status": "failed", "detail": "KeyError: 'organs'"}
+
+
+def test_reactome_that_does_not_answer_stops_the_annotation(monkeypatch):
+    from knowledge_base import annotate
+    monkeypatch.setattr(annotate.time, "sleep", lambda s: None)
+
+    class Answer:
+        def __init__(self, status):
+            self.status_code = status
+
+    monkeypatch.setattr(annotate.requests, "get", lambda *a, **k: Answer(404))
+    assert annotate.reactome_pathways("NFE2L2", "Homo sapiens") == []
+    monkeypatch.setattr(annotate.requests, "get", lambda *a, **k: Answer(429))
+    with pytest.raises(annotate.SourceUnreachable, match="HTTP 429"):
+        annotate.reactome_pathways("NFE2L2", "Homo sapiens")
+
+
 # ---------------------------------------------------------------------------
 # Which knowledge base a report reads
 # ---------------------------------------------------------------------------
@@ -366,7 +505,10 @@ def test_a_changed_knowledge_base_stales_the_genomics_sections(stores, templates
 
     registry.set_default("tox-2")
     out = reconcile("DTXSIDX")
-    assert out["changed"] is True and out["deleted"] == [cache.name]
+    assert out["changed"] is True and out["archived"] == [cache.name]
+    assert not cache.exists()                       # set aside, never deleted
+    [kept] = (session / "history" / "_knowledge_base").glob(f"*-tox/{cache.name}")
+    assert kept.read_text() == "{}"
     assert out["marked_stale"] == ["genomics_liver_male.json"]
     section = json.loads((session / "genomics_liver_male.json").read_text())
     assert section["stale"] is True
@@ -387,6 +529,91 @@ def test_a_session_processed_before_named_knowledge_bases_read_the_legacy_one(
     (sessions_dir / "DTXSIDX" / "_cache_interpretation_liver_male_abc.json").write_text("{}")
     out = reconcile("DTXSIDX")
     assert out["previous"]["name"] == "legacy" and out["changed"] is True
+
+
+def test_a_knowledge_base_that_does_not_resolve_changes_nothing(stores, templates, sessions_dir):
+    """A store moved or a name mistyped is not a change of knowledge base: the
+    interpretation store is kept and the record stands."""
+    from pipeline.kb_currency import RECORD_FILE, reconcile
+    _toy_kb("tox", GENOMICS_TABLES)
+    registry.set_default("tox")
+    session = sessions_dir / "DTXSIDX"
+    cache = session / "_cache_interpretation_liver_male_abc.json"
+    cache.write_text("{}")
+    (session / "genomics_liver_male.json").write_text(json.dumps({"paragraphs": ["text"]}))
+    reconcile("DTXSIDX")
+    record = (session / RECORD_FILE).read_text()
+
+    (registry.KB_ROOT / registry.DEFAULT_FILE).write_text("gone\n")
+    out = reconcile("DTXSIDX")
+    assert out["changed"] is False and out["knowledge_base"]["problem"]
+    assert cache.exists() and (session / RECORD_FILE).read_text() == record
+    assert "stale" not in json.loads((session / "genomics_liver_male.json").read_text())
+
+
+# ---------------------------------------------------------------------------
+# An unpublished study's results do not leave unasked
+# ---------------------------------------------------------------------------
+
+def _unpublished_study_with(sessions_dir, genes: list[str]) -> None:
+    """DTXSIDY: a study with no published book, its responsive genes cached."""
+    d = sessions_dir / "DTXSIDY"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "_cache_genomics_abc.json").write_text(json.dumps(
+        {"liver_male": {"all_genes": [{"gene_symbol": g} for g in genes]}}))
+
+
+GENE_QUERY = GENERIC_QUERY.replace("seeds: ['DOI:10.1/river']",
+                                   "searches: [{query: 'Zfp36l9 river', limit: 5}]")
+
+
+def test_a_run_that_would_send_unpublished_results_waits_for_confirmation(
+        stores, sessions_dir, monkeypatch):
+    from safeguards import guarded
+    from safeguards.refusals import Refused, explain
+    _stub_pipeline(monkeypatch)
+    _unpublished_study_with(sessions_dir, ["ZFP36L9"])
+    (crawl_queries.QUERIES_DIR / "genes.yaml").write_text(GENE_QUERY)   # edited on disk
+    with pytest.raises(Refused) as refused:
+        guarded.run_crawl("genes", "genes-1")
+    err = explain(refused.value)["error"]
+    assert err["code"] == "crawl_names_unpublished_results"
+    assert "ZFP36L9 (DTXSIDY)" in err["say"]
+    assert not registry.kb_dir("genes-1").exists()          # nothing ran
+
+    m = guarded.run_crawl("genes", "genes-1", confirm=True)
+    assert m["complete"] is True
+    # What a crawl has sent already is not sent anew: no confirmation again.
+    (crawl_queries.QUERIES_DIR / "genes2.yaml").write_text(GENE_QUERY)
+    assert guarded.run_crawl("genes2", "genes-2")["complete"] is True
+
+
+def test_a_save_that_newly_names_unpublished_results_waits_for_confirmation(
+        client, stores, sessions_dir):
+    _unpublished_study_with(sessions_dir, ["ZFP36L9"])
+    r = client.post("/api/crawl-queries/genes", json={"text": GENE_QUERY})
+    assert r.status_code == 409 and r.json()["code"] == "crawl_query_names_unpublished_results"
+    assert r.json()["details"]["unpublished_results"] == [
+        {"session": "DTXSIDY", "genes": ["ZFP36L9"]}]
+    assert not (crawl_queries.QUERIES_DIR / "genes.yaml").exists()
+    r = client.post("/api/crawl-queries/genes", json={"text": GENE_QUERY, "confirm": True})
+    assert r.status_code == 200 and r.json()["saved"] is True
+
+
+def test_no_interpretation_is_written_without_a_knowledge_base(stores, sessions_dir):
+    """The stored narrative stands; with none stored, none is written."""
+    import asyncio
+    from narrative.genomics_llm import generate_genomics_narrative_async
+    session = sessions_dir / "DTXSIDX"
+    session.mkdir(parents=True, exist_ok=True)
+    args = dict(dtxsid="DTXSIDX", compound="c", organ="liver", sex="male", gene_sets=[],
+                top_genes=[{"gene_symbol": "NFE2L2"}], all_genes=[], total_responsive=1)
+    out = asyncio.run(generate_genomics_narrative_async(**args))
+    assert "no usable knowledge base" in out["error"]
+    (session / "_cache_interpretation_liver_male_abc.json").write_text(json.dumps(
+        {"gene_set_narrative": ["kept"], "gene_narrative": [], "context_text": "ctx"}))
+    out = asyncio.run(generate_genomics_narrative_async(**args))
+    assert out["gene_set_narrative"] == ["kept"] and out["enrichment_available"] is True
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,10 @@
 Run a named crawl: a saved crawl query, run through every stage, into a named
 knowledge base (knowledge_base.registry).
 
-    python -m knowledge_base.run_crawl <query> --as <crawl name> [--resume]
+    python -m tooling.run_crawl <query> --as <crawl name> [--resume]
+
+(the command line runs it through the safeguards: safeguards.guarded.run_crawl;
+the notebook calls ``run`` here directly.)
 
 The stages, each reading its section of the query (knowledge_base.crawl_queries);
 a stage whose section is absent is skipped:
@@ -16,18 +19,19 @@ a stage whose section is absent is skipped:
     build       the database                                 -> kb.duckdb
 
 The manifest records each stage's status — ran, skipped, could not run (and
-why) — and the knowledge base is ``complete`` only when no stage the query asks
-for failed.  An unfinished knowledge base is never read (registry.usable); it
+why), failed (an error the run did not expect), not run (after one that did
+not) — and the knowledge base is ``complete`` only when every stage the query
+asks for ran in full: a crawl a source answered only in part, a paper the model
+did not answer for, a gene the pathway source did not answer for, each leaves
+the stage unrun, never a smaller knowledge base recorded as finished.  An unfinished knowledge base is never read (registry.usable); it
 can be resumed (``--resume``: a stage's outputs already on disk are reused).
 A finished knowledge base's name is never reused.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import shutil
-import sys
 from pathlib import Path
 
 from common.clock import now_iso
@@ -109,7 +113,7 @@ def extract_dir(engine, source: Path, resume: bool) -> int:
         # knowledge base without a trace: nothing of this crawl is kept, and a
         # resume extracts it again.
         raise StageCouldNotRun(f"{failed} of {len(papers)} papers of {source.name} could not "
-                               "be extracted (the model did not answer)")
+                               "be extracted (the model gave no usable answer)")
     out.write_text(json.dumps(records, indent=2, default=str))
     return len(records)
 
@@ -146,6 +150,8 @@ class Run:
         self.resume = resume
         self.stages: list[dict] = []
         self.order: list[str] = []
+        self.stage = "crawl"            # the stage running (a failure is recorded on it)
+        self.started = now_iso()
 
     def check(self) -> None:
         """Refuse a name that cannot take this run: a finished knowledge base,
@@ -163,11 +169,13 @@ class Run:
                 raise registry.KnowledgeBaseError(
                     f"knowledge base {self.kb_name!r} was started from another text of "
                     f"{self.query_name!r}; resume it with that text or start a new name")
+        floor = (self.query.get("relevance") or {}).get("floor") or {}
+        if floor.get("entities_from"):
+            registry.usable(floor["entities_from"])   # the floor's known entities
 
     def _open(self) -> None:
         self.check()
         self.crawl_dir.mkdir(parents=True, exist_ok=True)
-        self.started = now_iso()
 
     def _record(self, stage: str, status: str, detail: str = "", **counts) -> None:
         self.stages.append({"stage": stage, "status": status, "detail": detail, **counts})
@@ -178,14 +186,15 @@ class Run:
         return registry.write_manifest(self.kb_name, {
             "query": {"name": self.query_name, "hash": crawl_queries.text_hash(self.text),
                       "text": self.text},
-            "started": getattr(self, "started", now_iso()), "finished": now_iso() if complete else None,
+            "started": self.started, "finished": now_iso() if complete else None,
             "stages": self.stages, "sources": self.order, "complete": complete,
         })
 
     # -- stages ------------------------------------------------------------
 
     def crawl(self, api_key) -> None:
-        from knowledge_base.citegraph import run_crawl
+        from knowledge_base.citegraph import SourceIncomplete, run_crawl
+        self.stage = "crawl"
         floor = (self.query.get("relevance") or {}).get("floor") or {}
         entities = known_entities(floor.get("entities_from"), floor.get("entity", "")) \
             if floor else set()
@@ -193,7 +202,10 @@ class Run:
         for crawl in self.query["crawls"]:
             out = self.crawl_dir / crawl["name"]
             if not (self.resume and (out / "papers.json").exists()):
-                run_crawl(self.query, crawl, out, api_key, entities)
+                try:
+                    run_crawl(self.query, crawl, out, api_key, entities)
+                except SourceIncomplete as e:
+                    raise StageCouldNotRun(f"crawl {crawl['name']!r}: {e}") from None
             n = len(json.loads((out / "papers.json").read_text()))
             if n == 0:
                 raise StageCouldNotRun(f"crawl {crawl['name']!r} found no papers")
@@ -202,27 +214,38 @@ class Run:
         self._record("crawl", "ran", crawls=len(self.query["crawls"]), papers=papers)
 
     def extract(self, names: list[str], stage: str = "extract") -> None:
+        self.stage = stage
         engine = extraction_engine(self.query["extract"])
         n = sum(extract_dir(engine, self.crawl_dir / name, self.resume) for name in names)
         merged = merge(self.crawl_dir, self.order)
         self._record(stage, "ran", papers=n, merged=len(merged))
 
     def consensus(self, stage: str = "consensus") -> dict:
+        self.stage = stage
         result = count(self.query, self.crawl_dir)
         self._record(stage, "ran", strong=len(result.get("strong", {})),
                      moderate=len(result.get("moderate", {})))
         return result
 
     def follow_on(self, consensus: dict, api_key) -> None:
+        from knowledge_base.citegraph import SourceIncomplete
         from knowledge_base.entity_crawl import run_follow_on
-        names = []
+        self.stage = "follow_on"
+        names, papers = [], 0
         for spec in self.query["follow_on"]:
             out = self.crawl_dir / spec["name"]
             if not (self.resume and (out / "papers.json").exists()):
-                run_follow_on(self.query, spec, consensus, out, api_key)
+                try:
+                    run_follow_on(self.query, spec, consensus, out, api_key)
+                except SourceIncomplete as e:
+                    raise StageCouldNotRun(f"follow-on crawl {spec['name']!r}: {e}") from None
+            n = len(json.loads((out / "papers.json").read_text()))
+            if n == 0:
+                raise StageCouldNotRun(f"follow-on crawl {spec['name']!r} found no papers")
+            papers += n
             names.append(spec["name"])
             self.order.append(spec["name"])
-        self._record("follow_on", "ran", crawls=len(names))
+        self._record("follow_on", "ran", crawls=len(names), papers=papers)
         if self.query.get("extract"):
             self.extract(names, stage="follow_on.extract")
             if self.query.get("consensus"):
@@ -230,6 +253,7 @@ class Run:
 
     def annotate(self, consensus: dict) -> None:
         from knowledge_base.annotate import SourceUnreachable, go_table, pathway_table
+        self.stage = "annotate"
         ann = self.query["annotate"]
         try:
             counts = {}
@@ -245,6 +269,7 @@ class Run:
 
     def build(self) -> dict:
         from knowledge_base.build_db import build
+        self.stage = "build"
         (self.crawl_dir / "sources.json").write_text(json.dumps(self.order, indent=2))
         counts = build(self.dir / registry.DB_FILE, self.crawl_dir, self.query)
         self._record("build", "ran", **counts)
@@ -285,13 +310,26 @@ class Run:
                 elif stage == "build":
                     self.build()
         except StageCouldNotRun as e:
-            done = {s["stage"] for s in self.stages}
-            current = next(s for s in plan if s not in done)
-            self._record(current, "could_not_run", str(e))
-            for s in plan[plan.index(current) + 1:]:
-                self._record(s, "not_run", f"after {current}")
+            self._stop("could_not_run", str(e), plan, wanted)
             return self._write_manifest(complete=False)
+        except Exception as e:
+            # An error the run did not expect: recorded on the stage it stopped,
+            # then raised (the traceback is the maintainer's).
+            self._stop("failed", f"{type(e).__name__}: {e}", plan, wanted)
+            self._write_manifest(complete=False)
+            raise
         return self._write_manifest(complete=True)
+
+    def _stop(self, status: str, detail: str, plan: list[str], wanted: dict) -> None:
+        """Record the running stage as stopped, and each later one of the plan
+        as not run (or skipped, when the query has no section for it)."""
+        self._record(self.stage, status, detail)
+        top = self.stage.split(".")[0]
+        for s in plan[plan.index(top) + 1:]:
+            if wanted[s]:
+                self._record(s, "not_run", f"after {self.stage}")
+            else:
+                self._record(s, "skipped", "the query has no section for it")
 
     def _crawled(self) -> bool:
         return all((self.crawl_dir / c["name"] / "papers.json").exists()
@@ -308,22 +346,3 @@ def discard(kb_name: str) -> None:
     if m.get("complete"):
         raise registry.KnowledgeBaseError(f"knowledge base {kb_name!r} is finished; it is kept")
     shutil.rmtree(registry.kb_dir(kb_name))
-
-
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Run a named crawl query into a named knowledge base.")
-    ap.add_argument("query", help="a query in crawl_queries/ (its name, without .yaml)")
-    ap.add_argument("--as", dest="name", required=True, help="the knowledge base's name")
-    ap.add_argument("--resume", action="store_true",
-                    help="continue an unfinished knowledge base of this name")
-    a = ap.parse_args(argv)
-    # The gateway's CA and the model key, as the server and the report CLI have them.
-    from tooling.generate_report import _bootstrap_env
-    _bootstrap_env()
-    m = run(a.query, a.name, a.resume)
-    print(json.dumps({k: m[k] for k in ("name", "complete", "capabilities") if k in m}, indent=2))
-    return 0 if m.get("complete") else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

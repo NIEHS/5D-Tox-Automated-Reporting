@@ -11,7 +11,8 @@
   - `crawl_queries/baseline.yaml` (the May 2026 query, stated in full);
   - `knowledge_base/crawl_queries.py` (the store and the shape check);
   - `knowledge_base/query_agent.py` (proposed edits);
-  - `knowledge_base/run_crawl.py` (the stages), `citegraph.py`, `entity_crawl.py`,
+  - `knowledge_base/run_crawl.py` (the stages; its command line is
+    `tooling/run_crawl.py`), `citegraph.py`, `entity_crawl.py`,
     `extract.py`, `annotate.py`, `build_db.py`;
   - `knowledge_base/registry.py` (the knowledge bases, `kb_for`);
   - `document_model/document_definition.py` (`knowledge_base:`),
@@ -54,13 +55,20 @@ assigned (in its YAML), or that is the default.
    and runs nothing. It knows the format and the text it is given, nothing of
    any session. It calls the model through the approved gateway.
 4. **A named crawl makes a named knowledge base.** `python -m
-   knowledge_base.run_crawl <query> --as <name>` (or the route) writes
+   tooling.run_crawl <query> --as <name>` (or the route; both through the
+   safeguards, `safeguards.guarded`; the notebook calls
+   `knowledge_base.run_crawl.run`) writes
    `knowledge_bases/<name>/`: `kb.duckdb`, the crawl's outputs (untracked),
    and `manifest.json`. The manifest holds the query's name, text and hash, each
    stage's status, the database's SHA-256 and its **capabilities**, which are read
    off the tables it holds.
 5. **No partial result.** A stage that cannot run (a source unreachable, no
-   model) leaves the knowledge base unfinished; an unfinished one is never read,
+   model) leaves the knowledge base unfinished; so does one a source answered
+   only in part (a Semantic Scholar request unanswered after its retries, a
+   paper the model gave no usable answer for, a gene Reactome did not answer
+   for, a follow-on crawl that found nothing). The manifest records the stage
+   that stopped (`could_not_run`, or `failed` for an error the run did not
+   expect) and those after it (`not_run`). An unfinished one is never read,
    and can be resumed. A finished one never changes, and its name is never
    reused.
 6. **Two layers in the database.** Any query yields `papers`, `citation_edges`,
@@ -84,10 +92,13 @@ assigned (in its YAML), or that is the default.
 9. **A change is never silent.** The interpretation cache is a narrative store
    that is never rewritten unasked. So at Process, `kb_currency.reconcile`
    compares the report's knowledge base with the one the session last processed
-   with (`knowledge_base.json`). On a change it discards the store and marks the
-   catalog's knowledge-base sections (genomics) stale with the reason
-   `knowledge_base_changed`. They are written again, and the publish gate waits
-   for a person to accept them.
+   with (`knowledge_base.json`). On a change it archives the store
+   (`history/_knowledge_base/`) and marks the catalog's knowledge-base sections
+   (genomics) stale with the reason `knowledge_base_changed`. They are written
+   again, and the publish gate waits for a person to accept them. A knowledge
+   base that does not resolve (a store moved, a name mistyped) is not a change:
+   the store and the record stand, and no interpretation is written without one
+   (`genomics_llm` keeps the stored narrative, else writes none).
 10. **Today's database is the first named one.** `bmdx.duckdb` is registered as
     `knowledge_bases/baseline-2026-05/` (`replaces: bmdx.duckdb`), from
     `baseline.yaml`, and is the default. A session processed before named
@@ -98,10 +109,14 @@ assigned (in its YAML), or that is the default.
 - **Nothing changes for the existing reports.** The query-driven build, run on
   the May 2026 crawl outputs under `baseline.yaml`, gives back every table of
   `bmdx.duckdb` row for row. A test checks this when the outputs are present.
-- **A query leaves.** Its searches go to Semantic Scholar, a public service. A
-  save whose searches newly name genes from an unpublished study's results
-  (sessions with no published book) is held until the person confirms. Whether
-  to refuse instead is the maintainer's call.
+- **A query leaves.** Its searches go to Semantic Scholar, a public service.
+  A run whose searches name genes from an unpublished study's results
+  (sessions with no published book) that no crawl has sent before (the query
+  texts the knowledge bases' manifests record) does not start until the person
+  confirms (`safeguards.knowledge.require_crawl_may_run`): the run is when they
+  leave, however the text was written. A save through the application asks
+  the same, earlier, against the text it was edited from. Whether to refuse
+  instead is the maintainer's call.
 - **A real crawl here needs the network.**
   - Semantic Scholar answers, but without `S2_API_KEY` it rate-limits.
   - `rest.kegg.jp`, `reactome.org` and the GO annotation hosts are blocked, so

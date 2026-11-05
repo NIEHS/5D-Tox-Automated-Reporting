@@ -15,13 +15,18 @@ The notebook calls the core steps directly: the same workflow, unguarded.
 
 from __future__ import annotations
 
+import logging
+
 from safeguards.acts import require
 from safeguards.inputs import (
     require_valid_bmd_review, require_valid_design, require_valid_experiment_metadata,
 )
+from safeguards.refusals import Refused
 from safeguards.sections import ownership_policy, owned, require_reason
 from workflow import steps as _steps
 from workflow.phases import Action
+
+logger = logging.getLogger(__name__)
 
 
 # --- files ------------------------------------------------------------------
@@ -204,3 +209,47 @@ def set_default_knowledge_base(name: str) -> None:
     from safeguards.knowledge import require_serves_genomics
     require_serves_genomics(name)
     set_default(name)
+
+
+def save_crawl_query(name: str, text: str, *, edited_from: str | None = None,
+                     confirm: bool = False) -> dict:
+    """Save a crawl query's text (the old text archived).  ``edited_from``: the
+    query the text was edited from (default: the saved text of ``name``)."""
+    from knowledge_base import crawl_queries
+    from safeguards.knowledge import require_query_may_be_saved
+    try:
+        query = crawl_queries.parse(text)
+    except crawl_queries.QueryError as e:
+        raise Refused("crawl_query_invalid", str(e), 422, {"problem": str(e)}) from None
+    try:
+        previous = crawl_queries.parse(crawl_queries.read(edited_from or name))
+    except crawl_queries.QueryError:
+        previous = None
+    exposed = require_query_may_be_saved(name, query, previous, confirm)
+    saved = crawl_queries.save(name, text)
+    if exposed:
+        logger.warning(
+            "Crawl query %s saved naming unpublished results (confirmed): %s", name, exposed)
+    return {**saved, "unpublished_results": exposed}
+
+
+def require_crawl_run(query_name: str, kb_name: str, resume: bool = False, *,
+                      confirm: bool = False) -> list[dict]:
+    """The checks of running a crawl, for a front end that runs it itself (the
+    web route, in the background).  Returns the unpublished results it sends
+    (confirmed)."""
+    from safeguards.knowledge import require_crawl_may_run
+    exposed = require_crawl_may_run(query_name, kb_name, resume, confirm)
+    if exposed:
+        logger.warning(
+            "Crawl %s → %s runs naming unpublished results (confirmed): %s",
+            query_name, kb_name, exposed)
+    return exposed
+
+
+def run_crawl(query_name: str, kb_name: str, resume: bool = False, *,
+              confirm: bool = False) -> dict:
+    """Run a crawl query into a named knowledge base (knowledge_base.run_crawl)."""
+    from knowledge_base.run_crawl import run
+    require_crawl_run(query_name, kb_name, resume, confirm=confirm)
+    return run(query_name, kb_name, resume)

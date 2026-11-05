@@ -305,10 +305,14 @@ def parse_json_response(text: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def extract_one(paper: dict, endpoint, spec: dict,
-                full_text: str | None = None, text_source: str = "") -> dict:
+                full_text: str | None = None, text_source: str = "") -> tuple[dict, bool | None]:
     """Extract a paper's fields (``spec``: the query's extract section) with one
     endpoint: from its full text, chunked, when there is one; else from its
-    abstract.  Returns the extraction record."""
+    abstract.  Returns (the extraction record, answered): answered is None when
+    the paper has nothing to extract from (no full text, no abstract), False
+    when the model did not answer every part with a JSON object of the fields
+    (no reply, or one that is not such an object) — the record then holds
+    only what it did answer, and is not kept (knowledge_base.run_crawl)."""
     system, abstract_prompt, fulltext_prompt = prompts(spec)
     chunk = spec.get("chunk") or {}
     title, year = paper.get("title", ""), paper.get("year")
@@ -316,37 +320,36 @@ def extract_one(paper: dict, endpoint, spec: dict,
 
     if full_text and len(full_text.strip()) > 200:
         rec["text_source"] = text_source or "fulltext"
-        chunks = []
+        chunks, answered = [], True
         for part in _chunk_text_for_extraction(full_text, chunk.get("max_chars", 30_000),
                                                chunk.get("overlap", 2_000)):
             response = endpoint.generate(
                 fulltext_prompt.format(title=title, year=year or "unknown", text=part),
                 system=system)
-            if not response:
+            data = parse_json_response(response) if response else None
+            if not isinstance(data, dict):
+                answered = False
                 continue
             part_rec = _record(paper, spec)
             part_rec.update(raw_response=response, endpoint_used=endpoint.name,
                             text_source=rec["text_source"])
-            data = parse_json_response(response)
-            if data:
-                _fill(part_rec, data, spec, fulltext=True)
+            _fill(part_rec, data, spec, fulltext=True)
             chunks.append(part_rec)
-        return _merge(chunks, spec) if chunks else rec
+        return (_merge(chunks, spec) if chunks else rec), answered
 
     rec["text_source"] = "abstract"
     abstract = paper.get("abstract")
     if not abstract or len(abstract.strip()) < 50:
-        return rec
+        return rec, None
     response = endpoint.generate(
         abstract_prompt.format(title=title, year=year or "unknown", abstract=abstract),
         system=system)
-    if not response:
-        return rec
+    data = parse_json_response(response) if response else None
+    if not isinstance(data, dict):
+        return rec, False
     rec.update(raw_response=response, endpoint_used=endpoint.name)
-    data = parse_json_response(response)
-    if data:
-        _fill(rec, data, spec, fulltext=False)
-    return rec
+    _fill(rec, data, spec, fulltext=False)
+    return rec, True
 
 
 # ---------------------------------------------------------------------------
@@ -384,21 +387,15 @@ class ParallelExtractionEngine:
     def _worker(self, paper: dict, endpoint, index: int, total: int,
                 full_text: str | None = None, text_source: str = "") -> dict:
         """Process one paper on one endpoint."""
-        rec = extract_one(paper, endpoint, self.spec,
-                          full_text=full_text, text_source=text_source)
-        has_abstract = len((paper.get("abstract") or "").strip()) >= 50
+        rec, answered = extract_one(paper, endpoint, self.spec,
+                                    full_text=full_text, text_source=text_source)
         with self.print_lock:
-            status = " [FAILED]" if not rec["raw_response"] and (has_abstract or full_text) else (
-                "" if rec["raw_response"] else " [no abstract]")
+            status = {True: "", False: " [FAILED]", None: " [no abstract]"}[answered]
             print(f"[{index}/{total}] [{endpoint.name}] [{rec['text_source']}] "
                   f"{(paper.get('title') or '')[:60]}...{status}")
         with self.stats_lock:
-            if rec["raw_response"]:
-                self.stats["processed"] += 1
-            elif has_abstract or full_text:
-                self.stats["failed"] += 1
-            else:
-                self.stats["skipped_no_abstract"] += 1
+            self.stats[{True: "processed", False: "failed",
+                        None: "skipped_no_abstract"}[answered]] += 1
         return rec
 
     def process_papers(self, papers: list[dict],

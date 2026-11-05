@@ -1,6 +1,7 @@
 """
 safeguards.knowledge — a report reads only a knowledge base that can ground
-its genomics interpretation.
+its genomics interpretation; a crawl sends no unpublished study's results to a
+public service unasked.
 
 A knowledge base holds what its crawl query asked for (knowledge_base.registry
 capabilities): a query that extracts no genes makes one that cannot answer the
@@ -10,6 +11,14 @@ what it lacks; so is one that is unknown or unfinished, and an assignment a
 report would not see (its document definition is fixed).  The core steps
 (document_model.knowledge_base_assignment, registry.set_default) assign what
 they are given: the notebook may.
+
+A crawl query's searches go to Semantic Scholar when it runs, so running one
+(``require_crawl_may_run``) whose searches name genes of an unpublished study's
+results, that no crawl has sent before, waits for the person to confirm: the
+run is when they leave, however the text was written (the query agent, the
+editor, the file itself).  Saving such a text through the application
+(``require_query_may_be_saved``) asks the same, earlier, against the text it
+was edited from.
 """
 
 from __future__ import annotations
@@ -122,12 +131,7 @@ def _words(query: dict | None) -> set[str]:
     return {w.upper() for s in _sent_text(query or {}) for w in re.findall(r"[A-Za-z0-9-]+", s)}
 
 
-def unpublished_results_named(query: dict, previous: dict | None = None) -> list[dict]:
-    """A warning, not a refusal: the genes of unpublished studies' results that
-    the query would send to Semantic Scholar and ``previous`` (the text it was
-    edited from) did not, ``[{session, genes}]``.  Whether a query naming them
-    may be saved is the person's call (the maintainer may make it a refusal)."""
-    words = _words(query) - _words(previous)
+def _named(words: set[str]) -> list[dict]:
     if not words:
         return []
     out = []
@@ -136,3 +140,98 @@ def unpublished_results_named(query: dict, previous: dict | None = None) -> list
         if named:
             out.append({"session": session, "genes": named})
     return out
+
+
+def unpublished_results_named(query: dict, previous: dict | None = None) -> list[dict]:
+    """The genes of unpublished studies' results that the query would send to
+    Semantic Scholar and ``previous`` (the text it was edited from) did not,
+    ``[{session, genes}]``."""
+    return _named(_words(query) - _words(previous))
+
+
+def _already_sent() -> set[str]:
+    """The words every crawl run so far has sent (the query text each knowledge
+    base's manifest records): sending them again exposes nothing new."""
+    import yaml
+    from knowledge_base import registry
+    words: set[str] = set()
+    for m in registry.list_knowledge_bases():
+        try:
+            query = yaml.safe_load((m.get("query") or {}).get("text") or "")
+            words |= _words(query if isinstance(query, dict) else None)
+        except (yaml.YAMLError, AttributeError, TypeError):
+            continue
+    return words
+
+
+def unpublished_results_to_send(query: dict) -> list[dict]:
+    """The genes of unpublished studies' results that running ``query`` would
+    send to Semantic Scholar and no crawl has sent before, ``[{session, genes}]``."""
+    return _named(_words(query) - _already_sent())
+
+
+def _exposure_details(exposed: list[dict]) -> dict:
+    return {"unpublished_results": exposed, "needs_confirmation": True,
+            "genes": "; ".join(f"{', '.join(e['genes'])} ({e['session']})" for e in exposed)}
+
+
+def require_query_may_be_saved(name: str, query: dict, previous: dict | None,
+                               confirm: bool) -> list[dict]:
+    """Before saving ``query`` as ``name``: refused while it newly names an
+    unpublished study's genes (against ``previous``, the text it was edited
+    from) and the person has not confirmed.  Returns what it names."""
+    exposed = unpublished_results_named(query, previous)
+    if exposed and not confirm:
+        raise Refused("crawl_query_names_unpublished_results",
+                      f"crawl query {name!r} newly names genes of unpublished results",
+                      409, _exposure_details(exposed))
+    return exposed
+
+
+def _require_usable(name: str) -> None:
+    from knowledge_base import registry
+    try:
+        registry.usable(name)
+    except registry.KnowledgeBaseError as e:
+        try:
+            m = registry.manifest(name)
+        except registry.KnowledgeBaseError:
+            raise Refused("knowledge_base_unknown", str(e), 404, {"name": name}) from None
+        missing = [s["stage"] for s in m.get("stages", [])
+                   if s.get("status") not in ("ran", "skipped")]
+        raise Refused("knowledge_base_unfinished", str(e), 409,
+                      {"name": name, "missing": ", ".join(missing) or "the database"}) from None
+
+
+def require_crawl_may_run(query_name: str, kb_name: str, resume: bool,
+                          confirm: bool) -> list[dict]:
+    """Before running the query ``query_name`` into ``kb_name``: the names
+    are names, the query reads, the knowledge base its relevance floor reads
+    is usable, ``kb_name`` can take the run (not finished; an unfinished one
+    resumed from the same text), and — unless the person confirms — it sends
+    no unpublished study's genes no crawl has sent before.  Returns what it
+    sends of them."""
+    from knowledge_base import crawl_queries, registry
+    from knowledge_base.run_crawl import Run
+    for check in (crawl_queries.check_name, registry.check_name):
+        try:
+            check(query_name if check is crawl_queries.check_name else kb_name)
+        except ValueError as e:
+            raise Refused("bad_request", str(e), 422) from None
+    try:
+        run = Run(query_name, kb_name, resume)
+    except crawl_queries.QueryError as e:
+        raise Refused("crawl_query_invalid", str(e), 422, {"problem": str(e)}) from None
+    floor = (run.query.get("relevance") or {}).get("floor") or {}
+    if floor.get("entities_from"):
+        _require_usable(floor["entities_from"])
+    try:
+        run.check()
+    except registry.KnowledgeBaseError as e:
+        raise Refused("knowledge_base_name_taken", str(e), 409, {"name": kb_name}) from None
+    exposed = unpublished_results_to_send(run.query)
+    if exposed and not confirm:
+        raise Refused("crawl_names_unpublished_results",
+                      f"crawl query {query_name!r} would send genes of unpublished results",
+                      409, _exposure_details(exposed))
+    return exposed
