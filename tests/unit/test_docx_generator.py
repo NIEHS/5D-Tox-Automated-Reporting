@@ -815,7 +815,7 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     `pageBreakBefore` on each target node's first paragraph — the reference's
     mechanism, which composes idempotently with the dotx's own style breaks.
 
-    Targets whose STYLE does not auto-break rely on this entirely (TOC, About,
+    Targets whose STYLE does not auto-break rely on this entirely (TOC, Authors,
     Publication, Tables 3/5/6, appendices); the style-covered ones (Peer Review,
     Abstract, Results, Summary, References) also carry it for cross-surface
     parity.  Tables the reference lets flow (2/4/7/8) must NOT break."""
@@ -823,9 +823,12 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     broken = {p.text.strip() for p in doc.paragraphs
               if p.paragraph_format.page_break_before}
     # Must start a new page.
-    for t in ("Table of Contents", "About This Report", "Publication Details",
+    # (ADR-0028: the book's "About This Report" is two parts, Authors and
+    # Contributors; Authors starts the page, Contributors follows on it.)
+    for t in ("Table of Contents", "Authors", "Publication Details",
               "Peer Review", "Abstract", "Results", "Summary", "References"):
         assert t in broken, f"{t!r} should carry pageBreakBefore"
+    assert "Contributors" not in broken
     # Body apical tables 3/5/6 break; 4 flows.
     assert any(s.startswith("Table") and "Liver Weights" in s for s in broken)      # T3
     assert any(s.startswith("Table") and "Hematology" in s for s in broken)         # T5
