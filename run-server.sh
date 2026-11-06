@@ -15,7 +15,7 @@
 #   resolves. We source the same PEM path settings.json records.
 #
 # The secret is read from settings.json into an env var at runtime and never
-# written to disk or echoed, so this script is safe to commit (like deploy.sh).
+# written to disk or echoed, so this script is safe to commit (as retired/cloud-run/deploy.sh was).
 #
 # Usage:
 #   ./run-server.sh                 # port 9000, bound to 0.0.0.0 (see below)

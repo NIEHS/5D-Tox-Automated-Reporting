@@ -174,15 +174,10 @@ Any query also yields `paper_entities(paper_id, field, value)`, one row per valu
 
 ## Deployment
 
-The application ships with a `Dockerfile` targeting Google Cloud Run.
-
-```bash
-./deploy.sh
-```
-
-`deploy.sh` stages `bmdx-core.jar`, its Maven dependencies, and the knowledge bases (`knowledge_bases/*/kb.duckdb` + manifests) into `_bmdx_jars/` and `_data/` before the Docker build, so those artifacts never enter version control.
-
-Sessions are persisted to a GCS bucket mounted via GCS FUSE (`gs://rlm-bmdx-sessions/sessions/`) — the container mounts `/app/sessions` to this volume at runtime, so session data survives redeploys.
+The Google Cloud Run deployment is retired (2026-11-06); its files are kept
+in `retired/cloud-run/`. The application runs from the repository
+(`python -m web_routes.background_server`; separate workspaces for other people:
+`tooling/workspace.sh`).
 
 Single uvicorn worker is required because DuckDB is not safe to share across forked processes.
 
