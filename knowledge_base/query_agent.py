@@ -11,7 +11,8 @@ saves it (knowledge_base.crawl_queries.save) or not.
 The agent knows only the query's format (crawl_queries.FORMAT_DOC) and the
 text it is given — nothing of a session, its data or the knowledge bases.  A
 query is sent to Semantic Scholar when it runs, so the prompt tells the agent
-never to add a study's results to it.  The call goes through the approved
+never to name a test article beside genes (safeguards.knowledge), nor a
+study's results.  The call goes through the approved
 gateway (styling_export.llm_endpoints): a query names no study data, but the
 person's request might.
 
@@ -48,8 +49,11 @@ key order exactly as given.
 - Keep the YAML valid and in the format above. Keep `format: 1`.
 - Do not invent DOIs. Add a seed only when the person gives its DOI; otherwise \
 add a search (`searches: [{{query, limit}}]`) that finds such papers.
-- Never put a study's own results (its responsive genes, its doses, its \
-findings) into the query: the query's searches are sent to a public service.
+- A query is broadly scoped: never name a test article (a chemical's name, \
+abbreviation, CAS number or DTXSID) in a query that names genes or crawls from \
+extracted genes. A query about a test article is kept separate and names no \
+genes. Never put a study's own results (its doses, its findings) into a query. \
+The query's searches are sent to a public service.
 - If the request is a question, answer it in the explanation and return the \
 text unchanged.
 

@@ -146,10 +146,10 @@ Knowledge bases are named, and each is made by a named crawl query (ADR-0034):
 - **A crawl** runs a query into `knowledge_bases/<crawl name>/` (`kb.duckdb`, `manifest.json`, and the crawl's outputs):
 
   ```bash
-  uv run python -m tooling.run_crawl <query> --as <crawl name> [--resume] [--confirm-unpublished]
+  uv run python -m tooling.run_crawl <query> --as <crawl name> [--resume]
   ```
 
-  A stage that cannot run, or that a source answered only in part, leaves the knowledge base unfinished, and an unfinished one is never used. A query whose searches would send genes of an unpublished study's results that no crawl has sent before does not run until you confirm.
+  A stage that cannot run, or that a source answered only in part, leaves the knowledge base unfinished, and an unfinished one is never used. Crawls are broadly scoped: a query never names a test article beside genes. A crawl about a test article is kept separate and names no genes; the safeguards refuse a query that breaks this, at save and at run.
 - **A report** reads the knowledge base its document definition names (`knowledge_base: <name>`), else the one named in `knowledge_bases/DEFAULT`.
 
 The May 2026 database (formerly `bmdx.duckdb`) is `knowledge_bases/baseline-2026-05`, made from `crawl_queries/baseline.yaml`, and is the default.

@@ -569,52 +569,81 @@ def test_a_knowledge_base_that_does_not_resolve_changes_nothing(stores, template
 
 
 # ---------------------------------------------------------------------------
-# An unpublished study's results do not leave unasked
+# A crawl never ties a test article to genes
 # ---------------------------------------------------------------------------
 
-def _unpublished_study_with(sessions_dir, genes: list[str]) -> None:
-    """DTXSIDY: a study with no published book, its responsive genes cached."""
+def _study(sessions_dir, name="Bisphenol AF", casrn="1478-61-1") -> None:
     d = sessions_dir / "DTXSIDY"
     d.mkdir(parents=True, exist_ok=True)
-    (d / "_cache_genomics_abc.json").write_text(json.dumps(
-        {"liver_male": {"all_genes": [{"gene_symbol": g} for g in genes]}}))
+    (d / "identity.json").write_text(json.dumps({"name": name, "casrn": casrn,
+                                                 "abbreviation": "BPAF"}))
 
 
-GENE_QUERY = GENERIC_QUERY.replace("seeds: ['DOI:10.1/river']",
-                                   "searches: [{query: 'Zfp36l9 river', limit: 5}]")
+def _query(searches: str, follow_on: str = "") -> str:
+    return GENERIC_QUERY.replace("seeds: ['DOI:10.1/river']", f"searches: {searches}") + follow_on
 
 
-def test_a_run_that_would_send_unpublished_results_waits_for_confirmation(
-        stores, sessions_dir, monkeypatch):
+ARTICLE_AND_GENE = _query("[{query: 'BPAF NFE2L2 liver', limit: 5}]")
+ARTICLE_ONLY = _query("[{query: 'bisphenol AF hepatotoxicity', limit: 5}]")
+GENE_ONLY = _query("[{query: 'NFE2L2 liver function', limit: 5}]")
+ARTICLE_AND_SEEDED = _query("[{query: 'bisphenol AF liver', limit: 5}]", textwrap.dedent("""\
+    consensus: {field: rivers}
+    follow_on:
+      - {name: more, entities: consensus, templates: ["{entity} {tag_term}"]}
+    """))
+
+
+def test_a_query_naming_a_test_article_and_genes_is_refused(stores, sessions_dir, monkeypatch):
     from safeguards import guarded
     from safeguards.refusals import Refused, explain
     _stub_pipeline(monkeypatch)
-    _unpublished_study_with(sessions_dir, ["ZFP36L9"])
-    (crawl_queries.QUERIES_DIR / "genes.yaml").write_text(GENE_QUERY)   # edited on disk
+    _toy_kb("tox", GENOMICS_TABLES)
+    import safeguards.knowledge as k
+    monkeypatch.setattr(k, "_gene_symbols", lambda: {"NFE2L2"})
+    _study(sessions_dir)
+
+    (crawl_queries.QUERIES_DIR / "mixed.yaml").write_text(ARTICLE_AND_GENE)   # edited on disk
     with pytest.raises(Refused) as refused:
-        guarded.run_crawl("genes", "genes-1")
+        guarded.run_crawl("mixed", "mixed-1")
     err = explain(refused.value)["error"]
-    assert err["code"] == "crawl_names_unpublished_results"
-    assert "ZFP36L9 (DTXSIDY)" in err["say"]
-    assert not registry.kb_dir("genes-1").exists()          # nothing ran
+    assert err["code"] == "crawl_query_ties_article_to_genes"
+    assert "bpaf" in err["say"] and "NFE2L2" in err["say"]
+    assert not registry.kb_dir("mixed-1").exists()          # nothing ran
 
-    m = guarded.run_crawl("genes", "genes-1", confirm=True)
-    assert m["complete"] is True
-    # What a crawl has sent already is not sent anew: no confirmation again.
-    (crawl_queries.QUERIES_DIR / "genes2.yaml").write_text(GENE_QUERY)
-    assert guarded.run_crawl("genes2", "genes-2")["complete"] is True
+    (crawl_queries.QUERIES_DIR / "seeded.yaml").write_text(ARTICLE_AND_SEEDED)
+    with pytest.raises(Refused, match="follow-on"):
+        guarded.require_crawl_run("seeded", "seeded-1")
+
+    # Broadly scoped (genes, no article) and a separate article crawl (no genes) run.
+    for name, text in (("broad", GENE_ONLY), ("article", ARTICLE_ONLY)):
+        (crawl_queries.QUERIES_DIR / f"{name}.yaml").write_text(text)
+        assert guarded.run_crawl(name, f"{name}-1")["complete"] is True
 
 
-def test_a_save_that_newly_names_unpublished_results_waits_for_confirmation(
-        client, stores, sessions_dir):
-    _unpublished_study_with(sessions_dir, ["ZFP36L9"])
-    r = client.post("/api/crawl-queries/genes", json={"text": GENE_QUERY})
-    assert r.status_code == 409 and r.json()["code"] == "crawl_query_names_unpublished_results"
-    assert r.json()["details"]["unpublished_results"] == [
-        {"session": "DTXSIDY", "genes": ["ZFP36L9"]}]
-    assert not (crawl_queries.QUERIES_DIR / "genes.yaml").exists()
-    r = client.post("/api/crawl-queries/genes", json={"text": GENE_QUERY, "confirm": True})
+def test_saving_a_query_that_ties_an_article_to_genes_is_refused(client, stores, sessions_dir,
+                                                                   monkeypatch):
+    import safeguards.knowledge as k
+    monkeypatch.setattr(k, "_gene_symbols", lambda: {"NFE2L2"})
+    _study(sessions_dir)
+    r = client.post("/api/crawl-queries/mixed", json={"text": ARTICLE_AND_GENE})
+    assert r.status_code == 422 and r.json()["code"] == "crawl_query_ties_article_to_genes"
+    assert not (crawl_queries.QUERIES_DIR / "mixed.yaml").exists()
+    r = client.post("/api/crawl-queries/article", json={"text": ARTICLE_ONLY})
     assert r.status_code == 200 and r.json()["saved"] is True
+
+
+def test_a_gene_is_a_symbol_as_written_not_a_word():
+    import safeguards.knowledge as k
+    q = {"crawls": [{"searches": [{"query": "Nrf2 rest cat TNF signalling"}]}]}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(k, "_gene_symbols", lambda: {"NRF2", "REST", "CAT", "TNF"})
+        assert k.genes_named(q) == ["NRF2", "TNF"]
+
+
+def test_the_baseline_names_no_test_article():
+    import safeguards.knowledge as k
+    q = crawl_queries.parse((REPO / "crawl_queries" / "baseline.yaml").read_text())
+    assert k.test_articles_named(q) == []
 
 
 def test_no_interpretation_is_written_without_a_knowledge_base(stores, sessions_dir):

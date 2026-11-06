@@ -1093,8 +1093,9 @@ hash, and its **capabilities**: what it holds, read off its tables). A stage
 that could not run (a source unreachable, or one that answered only in part)
 leaves the knowledge base unfinished, and an unfinished one is never read. The
 command line, `python -m tooling.run_crawl <query> --as <name>`, runs it
-through the safeguards, which hold back a query whose searches would send an
-unpublished study's genes until the person confirms. A finished one never changes; its name is
+through the safeguards, which refuse a query that names a test article beside
+genes: crawls are broadly scoped, and a crawl about a test article names no
+genes. A finished one never changes; its name is
 never reused.
 
 **Which one a report reads.** `knowledge_base.registry.kb_for(dtxsid)`: the

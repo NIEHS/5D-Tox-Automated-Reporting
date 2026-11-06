@@ -10,7 +10,7 @@ definition names, else the default (knowledge_base.registry).  Saving a query,
 running a crawl, assigning a knowledge base and setting the default go through
 the safeguards (safeguards.guarded, safeguards.knowledge): they refuse a
 knowledge base that cannot ground a report's genomics interpretation, and a
-query that would send an unpublished study's genes unconfirmed.
+query that would tie a test article to genes.
 """
 
 from __future__ import annotations
@@ -85,18 +85,11 @@ async def api_check_query(request: Request):
 @router.post("/api/crawl-queries/{name}")
 async def api_save_query(name: str, request: Request):
     """Save ``{text}`` as the query ``name`` (an existing text archived first).
-
-    A text whose searches would send genes of an unpublished study's results
-    to Semantic Scholar, that the text it was edited from (``from``: a query's
-    name; else the saved text of ``name``) did not, is refused until the
-    person confirms (``confirm: true``): the refusal names them
-    (safeguards.knowledge)."""
+    Refused when it names a test article and genes (safeguards.knowledge)."""
     from safeguards.guarded import save_crawl_query
     try:
         body = await _body(request)
-        saved = save_crawl_query(name, str(body.get("text") or ""),
-                                 edited_from=body.get("from") or None,
-                                 confirm=bool(body.get("confirm")))
+        saved = save_crawl_query(name, str(body.get("text") or ""))
     except Refused as e:
         return refusal_response(e)
     except crawl_queries.QueryError as e:
@@ -176,17 +169,16 @@ def _run_in_background(query: str, name: str, resume: bool) -> None:
 
 @router.post("/api/knowledge-bases/run")
 async def api_run_crawl(request: Request):
-    """Run ``{query, name, resume?, confirm?}`` into the knowledge base
-    ``name``, in the background.  Its progress is its manifest (GET
-    /api/knowledge-bases/{name}).  Refused before it starts when the run could
-    not take the name, or would send an unpublished study's genes unconfirmed
-    (safeguards.knowledge)."""
+    """Run ``{query, name, resume?}`` into the knowledge base ``name``, in the
+    background.  Its progress is its manifest (GET /api/knowledge-bases/{name}).
+    Refused before it starts when the run could not take the name, or the
+    query ties a test article to genes (safeguards.knowledge)."""
     from safeguards.guarded import require_crawl_run
     try:
         body = await _body(request)
         query, name = str(body.get("query") or ""), str(body.get("name") or "")
         resume = bool(body.get("resume"))
-        require_crawl_run(query, name, resume, confirm=bool(body.get("confirm")))
+        require_crawl_run(query, name, resume)
         with _running_lock:
             if name in _running:
                 raise Refused("crawl_running", f"a crawl into {name!r} is running", 409,

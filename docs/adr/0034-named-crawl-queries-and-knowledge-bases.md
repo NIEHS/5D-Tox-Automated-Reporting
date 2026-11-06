@@ -109,14 +109,19 @@ assigned (in its YAML), or that is the default.
 - **Nothing changes for the existing reports.** The query-driven build, run on
   the May 2026 crawl outputs under `baseline.yaml`, gives back every table of
   `bmdx.duckdb` row for row. A test checks this when the outputs are present.
-- **A query leaves.** Its searches go to Semantic Scholar, a public service.
-  A run whose searches name genes from an unpublished study's results
-  (sessions with no published book) that no crawl has sent before (the query
-  texts the knowledge bases' manifests record) does not start until the person
-  confirms (`safeguards.knowledge.require_crawl_may_run`): the run is when they
-  leave, however the text was written. A save through the application asks
-  the same, earlier, against the text it was edited from. Whether to refuse
-  instead is the maintainer's call.
+- **A query leaves, and names no test article beside genes.** Its searches go
+  to Semantic Scholar, a public service. A search about a gene or an organ says
+  nothing of a study; one that also names a test article would tie them to it.
+  The maintainer's rule (2026-11-06): a crawl is broadly scoped and names no
+  test article; a crawl about a test article is kept separate and names no
+  gene, and seeds no follow-on crawl from extracted entities.
+  `safeguards.knowledge.require_query_allowed` refuses a query that breaks it
+  (`crawl_query_ties_article_to_genes`), at save and at run, however the text
+  was written; the query agent is told the same. A test article is any
+  session's name, abbreviation, CASRN or DTXSID; a gene, a word written as a
+  symbol that a finished knowledge base knows. (This replaced a check on
+  unpublished studies' responsive genes, which matched common genes and could
+  not tell intent.)
 - **A real crawl here needs the network.**
   - Semantic Scholar answers, but without `S2_API_KEY` it rate-limits.
   - `rest.kegg.jp`, `reactome.org` and the GO annotation hosts are blocked, so
