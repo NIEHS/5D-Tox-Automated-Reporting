@@ -190,14 +190,14 @@ def test_title_page_empty_config_unchanged(scaffold):
 
 def test_front_matter_headings_match_reference_body_left(scaffold):
     """Every front-matter section header (Foreword, Table of Contents, Tables,
-    About, Peer Review, etc.) gets the SAME reference front-matter heading look —
+    Authors, Contributors, Peer Review, etc.) gets the SAME reference front-matter heading look —
     Arial 16pt bold, CENTERED, 12pt after (1-23_FrontMatter_Head1) — so they are
     uniform (no one header bigger/tighter than the rest).  Body section headings
     (Background, Summary, References — `narrative` nodes routing through the same
     renderer) stay as the left-aligned built-in Heading 1, matching the NTP
     reference's left body heads."""
     doc = _open(generate_docx(scaffold))
-    front = {"Foreword", "About This Report", "Peer Review",
+    front = {"Foreword", "Authors", "Contributors", "Peer Review",
              "Publication Details", "Acknowledgments", "Abstract"}
     body = {"Background", "Materials and Methods", "Results", "Summary", "References"}
     for p in doc.paragraphs:
