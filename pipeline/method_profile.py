@@ -239,6 +239,10 @@ SCHEMA: dict = {
     "genomics": {
         "go_ranking": _stats_list,
         "go_display": _go_display,
+        # A gene whose probes' median fold change is below this (magnitude) is
+        # not reported (NIEHS-02 … 06: "<|2|"); null: no floor beyond the
+        # analysis's own filters.
+        "gene_min_fold_change": _positive,
         "recorded": {
             "bmr": _bmr,
             "model_selection": _impl("model_selection"),
@@ -259,7 +263,8 @@ SCHEMA: dict = {
 # Sections added to the schema after profiles were written.  Profiles are
 # immutable, so one that predates a section does not state it: the section is
 # "to confirm" for it (the default), and a profile written since states it.
-_ADDED_LATER = frozenset({"genomics.efdr", "apical.derived_endpoints",
+_ADDED_LATER = frozenset({"genomics.efdr", "genomics.gene_min_fold_change",
+                          "apical.derived_endpoints",
                           "apical.terminal_body_weight_tested"})
 
 _IDENTITY_KEYS = ("name", "series", "effective", "reference", "description")
@@ -349,6 +354,7 @@ def _builtin_defaults() -> dict:
         "genomics": {
             "go_ranking": ["median"],
             "go_display": {"pct": 5, "min_genes": 20, "max_genes": 500, "min_bmd": 3},
+            "gene_min_fold_change": None,
             "recorded": {"bmr": None, "model_selection": None},
             "efdr": {"generator": None, "generator_abbreviation": None, "generator_url": None,
                      "distribution": None, "resamples_per_probe": None},

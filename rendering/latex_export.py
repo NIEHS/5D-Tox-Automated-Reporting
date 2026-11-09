@@ -515,6 +515,8 @@ def _convert_genomics_cache(
                 # own this.
                 "decimals": any_entry.get("bmd_decimals") or (
                     1 if any_entry.get("top_genes_level") == "gene" else 3),
+                # A BMD below it prints "<limit (NR)" (render_common.below_lle).
+                "lle": any_entry.get("lower_limit_of_extrapolation"),
             }
 
         gene_set_entry = {

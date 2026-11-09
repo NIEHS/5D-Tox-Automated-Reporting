@@ -130,6 +130,7 @@
         "genomics.efdr.generator_abbreviation": "SaNDGen",
         "genomics.efdr.generator_url": "https://rstudio.niehs.nih.gov/sandgen/",
         "genomics.efdr.resamples_per_probe": 1000,
+        "genomics.gene_min_fold_change": null,
         "genomics.go_display": {
           "max_genes": 500,
           "min_bmd": 3,

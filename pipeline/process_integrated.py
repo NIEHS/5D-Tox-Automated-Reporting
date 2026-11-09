@@ -1110,6 +1110,7 @@ async def _get_genomics(ctx):
         result = await _extract_genomics(
             dtxsid, ctx.integrated, ctx.bmd_stats,
             **_GO_CUTOFFS_OFF,
+            gene_min_fold_change=_method(ctx).get("genomics.gene_min_fold_change"),
         )
         _save_cache(dtxsid, "genomics", genomics_hash, result)
         ctx.genomics_sections = result
@@ -1324,7 +1325,10 @@ async def run_data(ctx) -> None:
     from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
     _sidecar = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
     _sidecar_sig = str(_sidecar.stat().st_mtime_ns) if _sidecar.exists() else ""
-    ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename, _sidecar_sig)
+    # The method's gene fold-change floor shapes the cached top genes.
+    ctx.genomics_hash = _hash_genomics(
+        bmd_stats, ge_filename,
+        f"{_sidecar_sig}|fc={_method(ctx).get('genomics.gene_min_fold_change')}")
 
     # --- Materials and Methods (LLM-generated, cached) ---
     # Uses fingerprints + .bm2 metadata + animal report to extract

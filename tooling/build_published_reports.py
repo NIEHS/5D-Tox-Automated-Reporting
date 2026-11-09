@@ -35,9 +35,9 @@ is built as its own session (<DTXSID>_rat, <DTXSID>_mouse, MEMBERS) from its
 study-number prefix, its genomic project and its design — with the genomic
 experiments' tissue and species from the package (cebs_to_pool
 --metadata-out) — and the report session lists them (generate_report
---studies) and renders from them.  No method profile describes the 2018 analyses
-(RR-8, NIEHS-02 … 06); they use ntp-5day-2021.1, the nearest era, whose
-deviations the run log lists.
+--studies) and renders from them.  The 2018 analyses (RR-8, NIEHS-02 … 06)
+use ntp-5day-2018, the later ones ntp-5day-2021.1 or the 2025 profiles; the run
+log lists each profile's deviations.
 
 Usage:
     python -m tooling.build_published_reports [REPORT ...] [--jobs N]
@@ -83,23 +83,23 @@ CRL = "/Crl"                             # "B6D2F1/Crl Mice"
 STUDIES = {
     "RR-8": ("DTXSID1021952", "Triphenyl Phosphate", "115-86-6", "TPHP",
              "C11042_BMDExpressProjectFile.bm2", None, "mg/kg", ORAL, HSD_EARLY,
-             "ntp-5day-2021.1", []),
+             "ntp-5day-2018", []),
     "NIEHS-02": ("DTXSID1025300", "2-Ethylhexyl Diphenyl Phosphate", "1241-94-7", "EHDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021.1", []),
+                 "ntp-5day-2018", []),
     "NIEHS-03": ("DTXSID6024701", "tert-Butylphenyl Diphenyl Phosphate", "56803-37-3", "BPDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021.1", []),
+                 "ntp-5day-2018", []),
     "NIEHS-04": ("DTXSID3025465", "Isodecyl Diphenyl Phosphate", "29761-21-5", "IDDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021.1", []),
+                 "ntp-5day-2018", []),
     # "Phenol", as the book names it (the CEBS study page also says "Phenyl").
     "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate", "68937-41-7", "IPP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021.1", []),
+                 "ntp-5day-2018", []),
     "NIEHS-06": ("DTXSID4021391", "Tricresyl Phosphate", "1330-78-5", "TCP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021.1", []),
+                 "ntp-5day-2018", []),
     "NIEHS-07": ("DTXSID00190950", "6:1 Fluorotelomer Alcohol", "375-82-6", "6:1 FTOH",
                  "C20027-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
                  "_6-1 FTOH_", "mg/kg", ORAL, HSD, "ntp-5day-2021.1", []),

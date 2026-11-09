@@ -1087,6 +1087,7 @@ async def _extract_genomics(
     go_min_genes: int,
     go_max_genes: int,
     go_min_bmd: int,
+    gene_min_fold_change: float | None = None,
 ) -> dict:
     """
     Extract gene expression genomics data from the integrated .bm2 file.
@@ -1125,7 +1126,8 @@ async def _extract_genomics(
     from genomics.bmdexpress_categories import (
         category_analyses_by_experiment, chip_species_by_experiment, gene_level_top_genes,
         display_symbols, genomic_bmr, go_direction_counts, prefilter_fold_changes,
-        probe_gene_annotations, report_bmd_decimals,
+        lower_limits_of_extrapolation, probe_gene_annotations, report_bmd_decimals,
+        reported_go_ids,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
     # Every BMD in the report prints at one precision; stamped on each section
@@ -1134,6 +1136,7 @@ async def _extract_genomics(
     chip_species = chip_species_by_experiment(integrated)
     prefilter_fc = prefilter_fold_changes(integrated)
     probe_genes = probe_gene_annotations(integrated)
+    lle_by_exp = lower_limits_of_extrapolation(integrated)
 
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
@@ -1162,7 +1165,17 @@ async def _extract_genomics(
                 g["gene_symbol"], g["entrez_id"] = annotated[g["probe_id"]]
 
         # Filter GO terms by user-configured cutoffs
-        raw_go = exp.get("go_bp", [])
+        # Each GO term once (the export lists a term once per GO analysis the
+        # project holds), and only the deduplicated analysis's terms when the
+        # project has one.
+        kept_ids = reported_go_ids(exp_cats)
+        raw_go, seen_go = [], set()
+        for g in exp.get("go_bp", []):
+            gid = g.get("go_id")
+            if gid in seen_go or (kept_ids is not None and gid not in kept_ids):
+                continue
+            seen_go.add(gid)
+            raw_go.append(g)
         filtered_go = []
         for g in raw_go:
             n_total = g.get("n_genes", 0) or 0
@@ -1253,6 +1266,7 @@ async def _extract_genomics(
             exp_cats.get("GENE", []),
             {g.get("probe_id"): g.get("fold_change") for g in genes if g.get("probe_id")},
             chip_species.get(exp.get("name")),
+            min_fold_change=gene_min_fold_change,
         )
         genomics_sections[key] = {
             "organ": organ,
@@ -1268,6 +1282,7 @@ async def _extract_genomics(
             "genomic_bmr": genomic_bmr(integrated, exp.get("name", "")),
             "top_genes_level": "gene" if gene_level else "probe",
             "bmd_decimals": bmd_decimals,
+            "lower_limit_of_extrapolation": lle_by_exp.get(exp.get("name", "")),
             # top_genes: ranked subset (top 10) shown in the gene table.
             # Gene level (BMDExpress GENE categories) when the project has them;
             # else the per-probe fits, carrying the probe id as its own column.

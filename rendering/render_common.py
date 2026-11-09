@@ -1777,6 +1777,27 @@ def _bmd_range(lo, hi, decimals: int = _GENOMICS_DECIMALS, nc_upper: bool = Fals
     return f"{lo_s}–{hi_s}"
 
 
+def lle_text(lle: float, decimals: int) -> str:
+    """The lower limit of extrapolation as the books print it: at the table's
+    precision, and at least 3 decimals below 1 ("<20.3", "<0.333", "<0.050",
+    "<0.023")."""
+    return f"{lle:.{decimals if lle >= 1 else max(decimals, 3)}f}"
+
+
+def below_lle(bmd, display: dict | None) -> str | None:
+    """"<limit" when ``bmd`` is below the entry's lower limit of extrapolation
+    (display["lle"]: the lowest non-zero dose / 3), else None.  Its BMDL and
+    BMDU are not reportable (NR), as every NIEHS report prints them."""
+    lle = (display or {}).get("lle")
+    try:
+        b = float(bmd)
+    except (TypeError, ValueError):
+        return None
+    if not lle or math.isnan(b) or b >= lle:
+        return None
+    return f"<{lle_text(lle, (display or {}).get('decimals', _GENOMICS_DECIMALS))}"
+
+
 def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
     """
     Rows for the top-gene-sets table of one PER-ORGAN entry, in
@@ -1810,8 +1831,8 @@ def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
                 f"{n_bmd}/{n_genes}",
                 pct,
                 genes,
-                str(format_display_number(r.get("bmd"), dec)),
-                _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc),
+                below_lle(r.get("bmd"), d) or str(format_display_number(r.get("bmd"), dec)),
+                "NR" if below_lle(r.get("bmd"), d) else _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc),
                 str(r.get("n_up", "")),
                 str(r.get("n_down", "")),
             ])
@@ -1843,6 +1864,8 @@ def gene_table_rows(entry: dict) -> list[list[str]] | None:
             bmd = format_display_number(r.get("bmd"), dec)
             rng = _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc)
             bmd_cell = f"{bmd} ({rng})" if bmd != "—" else "—"
+            if below_lle(r.get("bmd"), d):
+                bmd_cell = f"{below_lle(r.get('bmd'), d)} (NR)"
             # Reference "Maximum Fold Change" is the MAGNITUDE (always positive,
             # 1 decimal); the sign lives in the Direction column instead.
             fc = r.get("fold_change")
