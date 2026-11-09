@@ -60,6 +60,7 @@ from tables.table_builder_common import (
     standard_apical_footnotes,
     availability_footnotes,
     attach_n_row_marker_refs,
+    roster_sidecars,
     add_marker_ref,
     mark_reviewed_bmd,
     reviewed_bmd_footnotes,
@@ -259,7 +260,9 @@ def build_organ_weight_table_from_sidecar(
     # tissue not collected, etc.).  Shared with clinical_pathology_table.py;
     # see table_builder_common.  Feeds the sample-availability and attrition
     # footnotes built near the end of this function.
-    availability = detect_core_animal_availability(sidecar_data)
+    # Organ weights count the scheduled necropsy only: an animal weighed at
+    # death is in its group's total, not its n (as integration counts it).
+    availability = detect_core_animal_availability(sidecar_data, scheduled_only=True)
     core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
 
     # Every dose (sidecars + NTP stats) for a column set shared by both sexes
@@ -630,9 +633,9 @@ def build_organ_weight_table_from_sidecar(
     #   definition  — BMD/BMDL abbreviation paragraph         [Canonical]
     #   (a)         — data format                            [Canonical]
     #   (b)         — statistical method (Williams/Dunnett)   [Canonical]
-    #   (c)         — relative-weight definition              [Canonical]
-    #   (d,e,...)   — sample-availability (organ not weighed) [Canonical]
+    #   (c,d,...)   — sample-availability (organ not weighed) [Canonical]
     #   (next)      — attrition (whole dose group, no data)   [Canonical]
+    #   (next)      — relative-weight definition              [Canonical]
     #
     # The sample-availability and attrition footnotes are dynamic — they
     # only appear when an organ-weight sidecar actually has Core Animals
@@ -660,8 +663,13 @@ def build_organ_weight_table_from_sidecar(
     # but they fire correctly when an animal's tissue was not collected.
     avail_records, n_row_marker_refs = availability_footnotes(
         sidecar_data, availability, sorted_doses, dose_unit, design,
+        roster=roster_sidecars(sidecar_paths),
     )
-    footnotes.extend(avail_records)
+    # Before the relative-weight note, as NIEHS-07 and 10 print them ("–^d",
+    # then "^e Relative organ weights ...").
+    at = next((i for i, f in enumerate(footnotes) if f.get("id") == "relative_weight"),
+              len(footnotes))
+    footnotes[at:at] = avail_records
 
     # Attach the marker refs to each sex's n-row (built earlier in this
     # function), then finalize_footnotes assigns letters and derives the

@@ -147,3 +147,52 @@ def test_a_group_short_of_samples_names_its_matrices_once():
     assert _short_note([("lung", 2, 1)], 3) == (
         "n = 2 for lung. One animal was identified as an outlier and thus excluded from "
         "analysis.")
+
+
+# ---------------------------------------------------------------------------
+# Whole-group attrition on the clinical and organ tables (NIEHS-10 "–^d")
+# ---------------------------------------------------------------------------
+
+def _animal(dose, obs):
+    return {"dose": dose, "selection": "Core Animals",
+            "observations": [{"endpoint": e, "value": v, "day": d} for e, v, d in obs]}
+
+
+def _roster():
+    """Body weight: 0 mg/kg weighed to SD5; all of 333 mg/kg last weighed SD1."""
+    return {"Male": {"animals": {
+        "1": _animal(0.0, [("BW", "300", "SD0"), ("BW", "310", "SD5")]),
+        "2": _animal(0.0, [("BW", "301", "SD0"), ("BW", "312", "SD5")]),
+        "3": _animal(333.0, [("BW", "300", "SD0"), ("BW", "250", "SD1")]),
+        "4": _animal(333.0, [("BW", "299", "SD0"), ("BW", "251", "SD1")]),
+    }}}
+
+
+def test_a_group_removed_before_necropsy_is_noted_though_the_platform_lacks_it():
+    from tables.table_builder_common import (
+        availability_footnotes, detect_core_animal_availability, whole_groups_removed_early,
+    )
+    assert whole_groups_removed_early(_roster()) == {"Male": {333.0: 2}}
+    clin = {"Male": {"animals": {
+        "1": _animal(0.0, [("ALT", "50", "SD5")]), "2": _animal(0.0, [("ALT", "52", "SD5")])}}}
+    av = detect_core_animal_availability(clin)
+    records, refs = availability_footnotes(clin, av, [0.0, 333.0], "mg/kg", None, roster=_roster())
+    assert [r["text"] for r in records] == [
+        "All male 333 mg/kg rats were found dead or moribund and euthanized by study day 1."]
+    assert refs["Male"] == {333.0: records[0]["id"]}
+
+
+def test_organ_weights_count_the_scheduled_necropsy_only():
+    """An animal weighed at death (terminal body weight on SD1) is in its
+    group's total but not its n, so a group that died is attrition."""
+    from tables.table_builder_common import availability_footnotes, detect_core_animal_availability
+    organ = {"Male": {"animals": {
+        "1": _animal(0.0, [("Liver", "11", "SD5"), ("Terminal Body Weight", "310", "SD5")]),
+        "3": _animal(333.0, [("Liver", None, "SD1"), ("Terminal Body Weight", "250", "SD1")]),
+    }}}
+    core_n, total, missing = detect_core_animal_availability(organ, scheduled_only=True)
+    assert (core_n["Male"].get(333.0, 0), total["Male"][333.0], missing["Male"]) == (0, 1, {})
+    records, _ = availability_footnotes(organ, (core_n, total, missing), [0.0, 333.0],
+                                        "mg/kg", None)
+    assert [r["text"] for r in records] == [
+        "All male 333 mg/kg rats were found dead or moribund and euthanized by study day 1."]

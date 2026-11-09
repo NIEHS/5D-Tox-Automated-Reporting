@@ -302,8 +302,64 @@ def add_marker_ref(row: dict, cell: str, footnote_id: str) -> None:
 # death-based (per-animal terminal-day tracking), not all-NA, so it keeps
 # its own attrition logic in body_weight_table.py.
 
+def _day(obs: dict) -> int | None:
+    m = re.search(r"-?\d+", str(obs.get("day") or ""))
+    return int(m.group()) if m else None
+
+
+def _has_value(obs: dict) -> bool:
+    v = obs.get("value")
+    return bool(v and str(v).strip() and str(v).strip().upper() != "NA")
+
+
+def removed_early(sc: dict) -> set[str]:
+    """The Core Animals of a sidecar whose last recorded value is before the
+    scheduled removal (the latest day any Core Animal has a value on): found
+    dead or moribund, weighed at death.  Integration leaves their organ
+    weights out (bmdx_pipe.pool_integrator._keep_scheduled_removals)."""
+    last: dict[str, int] = {}
+    for aid, rec in (sc or {}).get("animals", {}).items():
+        if is_biosampling(rec.get("selection")):
+            continue
+        days = [d for o in rec.get("observations", []) if _has_value(o)
+                and (d := _day(o)) is not None]
+        if days:
+            last[aid] = max(days)
+    scheduled = max(last.values(), default=None)
+    return {aid for aid, d in last.items() if d < scheduled}
+
+
+def roster_sidecars(sidecar_paths: dict[str, str]) -> dict[str, dict]:
+    """The study roster beside a platform's sidecars: the body weight
+    sidecars of the same session (every animal on study), {} when none."""
+    any_path = next(iter((sidecar_paths or {}).values()), None)
+    if not any_path:
+        return {}
+    session_dir = os.path.dirname(os.path.dirname(any_path))
+    return {sex: load_sidecar(p) for sex, p in
+            find_sidecar_paths(session_dir, platform="Body Weight").items()}
+
+
+def whole_groups_removed_early(roster: dict[str, dict] | None) -> dict[str, dict[float, int]]:
+    """``{sex: {dose: n}}``: the dose groups of the study roster (the body
+    weight sidecars: every animal on study) none of whose Core Animals reached
+    the scheduled removal."""
+    out: dict[str, dict[float, int]] = {}
+    for sex, sc in (roster or {}).items():
+        early = removed_early(sc)
+        by_dose: dict[float, list[bool]] = {}
+        for aid, rec in (sc or {}).get("animals", {}).items():
+            if not is_biosampling(rec.get("selection")):
+                by_dose.setdefault(rec["dose"], []).append(aid in early)
+        groups = {d: len(f) for d, f in by_dose.items() if f and all(f)}
+        if groups:
+            out[sex] = groups
+    return out
+
+
 def detect_core_animal_availability(
     sidecar_data: dict[str, dict],
+    scheduled_only: bool = False,
 ) -> tuple[
     dict[str, dict[float, int]],
     dict[str, dict[float, int]],
@@ -321,6 +377,10 @@ def detect_core_animal_availability(
     Args:
         sidecar_data: {sex: parsed-sidecar-dict}, as returned by
                       load_sidecar() per sex.
+        scheduled_only: an animal removed early (removed_early: weighed at
+                      death) counts in the group's total but neither as
+                      available nor as a missing sample — organ weights,
+                      which count the scheduled necropsy only.
 
     Returns:
         A 3-tuple of per-sex, per-dose dicts:
@@ -337,6 +397,7 @@ def detect_core_animal_availability(
         dose_all: dict[float, set[str]] = {}
         dose_missing: dict[float, list[str]] = {}
 
+        early = removed_early(sc) if scheduled_only else set()
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             # Include Core Animals and animals with unknown selection.
@@ -347,6 +408,8 @@ def detect_core_animal_availability(
                 continue
             dose = rec["dose"]
             dose_all.setdefault(dose, set()).add(aid)
+            if aid in early:
+                continue
 
             has_data = any(
                 obs.get("value") and obs["value"].strip()
@@ -596,17 +659,31 @@ def availability_footnotes(
     sorted_doses: list[float],
     dose_unit: str,
     design: dict | None,
+    roster: dict[str, dict] | None = None,
 ) -> tuple[list[dict], dict[str, dict[float, str]]]:
     """The sample-availability footnotes plus the attrition footnote, and the
     merged ``{sex: {dose: footnote_id}}`` n-row marker bindings of both.
-    ``availability`` is detect_core_animal_availability's result."""
+    ``availability`` is detect_core_animal_availability's result.
+
+    ``roster`` (the study's body weight sidecars) names the dose groups that
+    were all removed before the scheduled removal although this platform's
+    sidecars hold none of their animals (NIEHS-10's clinical pathology at 333
+    and 1,000 mg/kg): the attrition note covers them too, its day from the
+    roster."""
     core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
     records, sa_refs = build_sample_availability_footnotes(
         missing_sample_animals, total_core_by_sex_dose, sorted_doses,
     )
+    totals = {sex: dict(d) for sex, d in total_core_by_sex_dose.items()}
+    day_source = sidecar_data
+    absent = {sex: {d: n for d, n in groups.items() if not totals.get(sex, {}).get(d)}
+              for sex, groups in whole_groups_removed_early(roster).items()}
+    if any(absent.values()):
+        for sex, groups in absent.items():
+            totals.setdefault(sex, {}).update(groups)
+        day_source = _merge_day_sources(sidecar_data, roster or {})
     attr_record, attr_refs = build_attrition_footnote(
-        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
-        sidecar_data,
+        totals, core_n_by_sex_dose, sorted_doses, dose_unit, design, day_source,
     )
     if attr_record is not None:
         records.append(attr_record)
@@ -615,6 +692,17 @@ def availability_footnotes(
         for sex, dose_refs in refs.items():
             n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
     return records, n_row_marker_refs
+
+
+def _merge_day_sources(sidecar_data: dict[str, dict], roster: dict[str, dict]) -> dict[str, dict]:
+    """Per sex, the platform's animals and the roster's (the roster's only for
+    the animals the platform lacks), for _latest_observation_day."""
+    out: dict[str, dict] = {}
+    for sex in dict.fromkeys([*sidecar_data, *roster]):
+        animals = dict((roster.get(sex) or {}).get("animals", {}))
+        animals.update((sidecar_data.get(sex) or {}).get("animals", {}))
+        out[sex] = {"animals": animals}
+    return out
 
 
 def attach_n_row_marker_refs(
