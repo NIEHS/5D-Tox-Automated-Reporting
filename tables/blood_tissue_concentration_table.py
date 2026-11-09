@@ -216,13 +216,16 @@ def _count(n: int, noun: str) -> str:
     return f"{_COUNT_WORDS[n] if n < len(_COUNT_WORDS) else n} {noun}{'' if n == 1 else 's'}"
 
 
-def _short_note(shorts: list[tuple[str, int, int]], n: int) -> str:
+def _short_note(shorts: list[tuple[str, int, int]], n: int, outliers_noted: bool = True) -> str:
     """The note on a group short of samples for some matrices: per (n, reason),
     the matrices joined, as NIEHS-12/13 word it.  ``shorts`` is
-    [(matrix, n used, outliers left out)]; ``n`` the animals sampled."""
+    [(matrix, n used, outliers left out)]; ``n`` the animals sampled.
+    ``outliers_noted`` False: only the samples not received ("" when none)."""
     sentences = []
     groups: dict[tuple[int, bool], list[str]] = {}
     for matrix, short, outliers in shorts:
+        if outliers and not outliers_noted:
+            continue
         groups.setdefault((short, bool(outliers)), []).append(matrix)
     for (short, outlier), matrices in groups.items():
         sentences.append(f"n = {short} for {' and '.join(matrices)}.")
@@ -252,6 +255,7 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
     all_matrices: list[str] = []
     limits: dict[str, set[str]] = {}
     n_notes: dict[str, str] = {}      # note text -> footnote id
+    without: dict[str, str] = {}      # note text -> its words without the outliers
     # A note on a whole kind of cell is marked where it first applies, as the
     # books mark it: the statistics, the 0-group BD rule, "not applicable".
     first_marked: set[str] = set()
@@ -344,9 +348,14 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
             # A group short of samples: one note on its n ("3^h"), its
             # matrices joined ("n = 2 for liver and lung. No samples were
             # received for one animal.").
+            # A note naming an outlier also carries its words without them
+            # (``without_outliers``, "" when nothing is left), for a book that
+            # does not note outlier exclusions (apply_table_notes).
             for d, shorts in short_by_dose.items():
                 text = _short_note(shorts, n_by_day[day][d])
                 add_marker_ref(n_row, js_dose_key(d), n_notes.setdefault(text, f"n_{len(n_notes)}"))
+                if any(o for _, _, o in shorts):
+                    without[text] = _short_note(shorts, n_by_day[day][d], outliers_noted=False)
         serialized[sex] = rows
 
     if not serialized:
@@ -398,6 +407,8 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
         footnotes.append(lettered_footnote("Not applicable.", "not_applicable", target="cells"))
     for text, fid in n_notes.items():
         footnotes.append(lettered_footnote(text, fid, target="cells"))
+        if text in without:
+            footnotes[-1]["without_outliers"] = without[text]
     finalize_footnotes(footnotes, serialized)
 
     matrices_phrase = _series([m.title() for m in all_matrices])

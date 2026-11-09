@@ -56,7 +56,7 @@ PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
                               "phrasing", "tissue_order", "abstract_genes", "foreword",
                               "dose_terms", "organ_descriptions", "organ_description_order",
-                              "knowledge_base", "changes"})
+                              "knowledge_base", "table_notes", "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -124,6 +124,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["phrasing"] = _deep_merge(out.get("phrasing") or {}, raw["phrasing"])
     if raw.get("dose_terms"):
         out["dose_terms"] = _deep_merge(out.get("dose_terms") or {}, raw["dose_terms"])
+    if raw.get("table_notes"):
+        out["table_notes"] = {**(out.get("table_notes") or {}), **raw["table_notes"]}
     for i, change in enumerate(raw.get("changes") or []):
         try:
             apply_change(out["document"], change)

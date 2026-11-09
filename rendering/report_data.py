@@ -631,6 +631,10 @@ def marshal_export_data(
     _overlay_apical_sections(data, body, tree=active_tree)
     from rendering.report_data_overlays import attach_organ_descriptions_note
     attach_organ_descriptions_note(data, active_tree)
+    from rendering.report_data_overlays import apply_table_notes
+    if body.get("dtxsid"):
+        from document_model.view_config import study_document_facts
+        apply_table_notes(data, study_document_facts(body["dtxsid"])["table_notes"])
     _overlay_unified_and_bmd(data, body)
     _overlay_genomics(data, body)
 

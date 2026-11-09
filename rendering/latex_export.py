@@ -1123,6 +1123,10 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     from rendering.report_data_overlays import attach_organ_descriptions_note
     compute_appendix_letters(render_tree)
     attach_organ_descriptions_note(data, render_tree)
+    # The notes the report's book does not print (its definition's table_notes).
+    from document_model.view_config import study_document_facts
+    from rendering.report_data_overlays import apply_table_notes
+    apply_table_notes(data, study_document_facts(dtxsid)["table_notes"])
     # Positional table numbers for the data-driven genomics tables — continues
     # the tree sequence (Table 8 → 9, 10, ...); then the attached charts'
     # figure numbers, continuing the tree's figures (ADR-0021 D1).  Same

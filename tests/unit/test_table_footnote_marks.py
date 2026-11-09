@@ -196,3 +196,32 @@ def test_organ_weights_count_the_scheduled_necropsy_only():
                                         "mg/kg", None)
     assert [r["text"] for r in records] == [
         "All male 333 mg/kg rats were found dead or moribund and euthanized by study day 1."]
+
+
+def test_a_book_that_does_not_note_outlier_exclusions():
+    """NIEHS-12 leaves the outliers out without noting them (table_notes:
+    outlier_exclusions: false); an n-note keeps its samples-not-received words."""
+    from document_model.document_template import load_table_notes
+    from rendering.report_data_overlays import apply_table_notes
+    from tables.table_builder_common import lettered_footnote
+
+    assert load_table_notes("studies/DTXSID6020430/document") == {"outlier_exclusions": False}
+    assert load_table_notes("studies/DTXSID1020431/document") == {"outlier_exclusions": True}
+
+    out = lettered_footnote("n = 2 for lung. One animal was identified as an outlier and "
+                            "thus excluded from analysis.", "n_0", target="cells")
+    out["without_outliers"] = ""
+    mixed = lettered_footnote("n = 2 for lung. One animal ... n = 2 for blood. No samples "
+                              "were received for one animal.", "n_1", target="cells")
+    mixed["without_outliers"] = "n = 2 for blood. No samples were received for one animal."
+    rows = {"Female": [{"label": "n", "marker_refs": {"10": "n_0", "30": "n_1"}}]}
+    data = {"apical_sections": [{"table_data": rows, "footnotes": [
+        lettered_footnote("Data are presented as mean ± standard error.", "data_format",
+                          target="header"),
+        lettered_footnote("Values identified by the outlier test ...", "outliers"), out, mixed]}]}
+    apply_table_notes(data, {"outlier_exclusions": False})
+    notes = data["apical_sections"][0]["footnotes"]
+    assert [(f["letter"], f["text"]) for f in notes] == [
+        ("a", "Data are presented as mean ± standard error."),
+        ("b", "n = 2 for blood. No samples were received for one animal.")]
+    assert rows["Female"][0]["markers"] == {"30": "b"}

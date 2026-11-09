@@ -268,6 +268,31 @@ ORGAN_DESCRIPTIONS_NOTE = ("Descriptions of organ weight endpoints and changes a
                            "provided in Appendix {letter}.")
 
 
+def apply_table_notes(data: dict, table_notes: dict | None) -> None:
+    """Leave out the notes the report's definition says its book does not print
+    (``table_notes:``, document_template.load_table_notes).  With
+    ``outlier_exclusions: false`` the outlier-test note goes, and a note on n
+    keeps only its samples-not-received words (``without_outliers``; the
+    note goes when none are left): the exclusion is made, not noted."""
+    if (table_notes or {}).get("outlier_exclusions", True):
+        return
+    for sec in data.get("apical_sections") or []:
+        footnotes = sec.get("footnotes") or []
+        if not any(isinstance(f, dict) and (f.get("id") == "outliers" or "without_outliers" in f)
+                   for f in footnotes):
+            continue
+        kept = []
+        for f in footnotes:
+            if isinstance(f, dict) and f.get("id") == "outliers":
+                continue
+            if isinstance(f, dict) and "without_outliers" in f:
+                if not f["without_outliers"]:
+                    continue
+                f = {**f, "text": f["without_outliers"]}
+            kept.append(f)
+        sec["footnotes"] = finalize_footnotes(kept, sec.get("table_data") or {})
+
+
 def attach_organ_descriptions_note(data: dict, tree: "list | None") -> None:
     """Note the organ weight table's appendix (_add_organ_descriptions_note) on
     the report's rendered tree; both data paths call it (report_data,

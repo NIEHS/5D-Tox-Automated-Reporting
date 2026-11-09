@@ -900,6 +900,27 @@ def load_tissue_order(name: str) -> list[str]:
     return [t.strip().lower() for t in order]
 
 
+# Which of the notes a table may carry the report prints (``table_notes:``):
+# a book that makes an exclusion without noting it says so here.
+TABLE_NOTES = {"outlier_exclusions": True}
+
+
+def load_table_notes(name: str) -> dict:
+    """The table notes the report prints: TABLE_NOTES, with the definition's
+    ``table_notes:`` over it.  ``outlier_exclusions: false`` — the tables do
+    not note the values the outlier test excluded (NIEHS-12 excludes them
+    silently; NIEHS-13 notes them)."""
+    raw = _load_raw(name)
+    block = raw.get("table_notes") if isinstance(raw, dict) else None
+    if block is None:
+        return dict(TABLE_NOTES)
+    if not isinstance(block, dict) or set(block) - set(TABLE_NOTES) or not all(
+            isinstance(v, bool) for v in block.values()):
+        raise ValueError(f"template {name!r}: table_notes takes {sorted(TABLE_NOTES)} "
+                         f"as true/false, got {block!r}")
+    return {**TABLE_NOTES, **block}
+
+
 def load_phrasing(name: str) -> dict:
     """The wording of the prose the report writes from its data (ADR-0029 §11,
     document_model.phrasing): the definition's ``phrasing:`` block, checked
