@@ -82,6 +82,8 @@ from tables.table_builder_common import (
     finalize_footnotes,
     is_reportable_bmd,
     add_marker_ref,
+    mark_reviewed_bmd,
+    reviewed_bmd_footnotes,
 )
 
 
@@ -731,6 +733,8 @@ def build_body_weight_table_from_sidecar(
             if row_marker_refs:
                 entry["marker_refs"] = row_marker_refs
             _mark_later(entry, later_marker_refs.get(sex, {}), _day_number(day))
+            if day_stats is not None:
+                mark_reviewed_bmd(entry, day_stats)
             rows.append(entry)
 
         gain = _gain_row(per_animal.get(sex, {}), (first_day, expected_terminal_day), sorted_doses,
@@ -759,7 +763,9 @@ def build_body_weight_table_from_sidecar(
 
     # Assign letters to the lettered footnotes and derive every row's
     # `markers` dict from its `marker_refs` — see the typed footnote
-    # model in table_builder_common.
+    # model in table_builder_common.  A BMD the reviewer rejected prints with
+    # its note (mark_reviewed_bmd).
+    footnotes.extend(reviewed_bmd_footnotes(serialized))
     finalize_footnotes(footnotes, serialized)
 
     return {
@@ -884,7 +890,7 @@ def _gain_row(animals: dict, span: tuple[str, str], doses: list[float], stats) -
             continue
         values[_js_dose_key(dose)] = _mean_se_cell(vals, _GAIN_DECIMALS) + _marker(stats, dose)
     bmd, bmdl = _bmd_cells(stats)
-    return {
+    row = {
         "label": BODY_WEIGHT_GAIN,
         "doses": doses,
         "values": values,
@@ -893,3 +899,6 @@ def _gain_row(animals: dict, span: tuple[str, str], doses: list[float], stats) -
         "emphasize": is_reportable_bmd(bmd),
         "decimals": _GAIN_DECIMALS,
     }
+    if stats is not None:
+        mark_reviewed_bmd(row, stats)
+    return row

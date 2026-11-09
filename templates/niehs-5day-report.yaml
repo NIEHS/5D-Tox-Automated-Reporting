@@ -459,6 +459,9 @@ document:
     element: book-app
     book_part_type: appendix
     title: Organ Weight Descriptions
+    # The organ weight table's note (a) points here: "Descriptions of organ
+    # weight endpoints and changes are provided in Appendix E."
+    cited_as: organ-weight-descriptions
     children:
     - id: appendix-e-descriptions
       type: heading-only

@@ -107,7 +107,7 @@ _COMPUTED_OR_SPECIAL = frozenset(
 _REPEATS = ("deposit_species", "study_species", "genomic_organs", "genomic_analyses")
 # What generated prose may cite a node as (DocNode.cited_as).
 CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table",
-            "genomic-figures-appendix")
+            "genomic-figures-appendix", "organ-weight-descriptions")
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file

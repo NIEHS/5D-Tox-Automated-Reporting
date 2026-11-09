@@ -61,6 +61,8 @@ from tables.table_builder_common import (
     availability_footnotes,
     attach_n_row_marker_refs,
     add_marker_ref,
+    mark_reviewed_bmd,
+    reviewed_bmd_footnotes,
 )
 
 
@@ -498,6 +500,8 @@ def build_organ_weight_table_from_sidecar(
         tbw_trend = _stat(tbw_ntp, "trend_marker", "") if tbw_ntp is not None else ""
         if tbw_trend:
             tbw_entry["trend_marker"] = tbw_trend
+        if tbw_ntp is not None:
+            mark_reviewed_bmd(tbw_entry, tbw_ntp)
         rows.append(tbw_entry)
 
         # ── Per-organ rows: Absolute + Relative ──────────────────────────
@@ -566,6 +570,7 @@ def build_organ_weight_table_from_sidecar(
             }
             if organ_trend:
                 abs_entry["trend_marker"] = organ_trend
+            mark_reviewed_bmd(abs_entry, organ_ntp)
             rows.append(abs_entry)
 
             # Relative weight row — the NTP statistics of "<organ> Relative"
@@ -607,6 +612,8 @@ def build_organ_weight_table_from_sidecar(
             rel_trend = _stat(rel_ntp, "trend_marker", "") if rel_ntp is not None else ""
             if rel_trend:
                 rel_entry["trend_marker"] = rel_trend
+            if rel_ntp is not None:
+                mark_reviewed_bmd(rel_entry, rel_ntp)
             rows.append(rel_entry)
 
         serialized[sex] = rows
@@ -661,6 +668,8 @@ def build_organ_weight_table_from_sidecar(
     # rows' `markers` dicts from `marker_refs`.
     attach_n_row_marker_refs(serialized, n_row_marker_refs)
 
+    # A BMD the reviewer rejected prints with its note (mark_reviewed_bmd).
+    footnotes.extend(reviewed_bmd_footnotes(serialized))
     finalize_footnotes(footnotes, serialized)
 
     return {

@@ -629,6 +629,8 @@ def marshal_export_data(
     )
     _overlay_abstract(data, body)
     _overlay_apical_sections(data, body, tree=active_tree)
+    from rendering.report_data_overlays import attach_organ_descriptions_note
+    attach_organ_descriptions_note(data, active_tree)
     _overlay_unified_and_bmd(data, body)
     _overlay_genomics(data, body)
 

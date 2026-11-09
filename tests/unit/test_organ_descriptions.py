@@ -66,3 +66,29 @@ def test_nothing_without_descriptions_or_organs():
     assert DATA_KEY not in data
     attach_organ_descriptions(data, ["Liver"], TEXTS, [])
     assert _organs(data[DATA_KEY]["paragraphs"]) == ["Liver:"]
+
+
+def test_the_organ_table_points_to_the_appendix_by_its_letter():
+    """Every book with the appendix prints "Descriptions of organ weight
+    endpoints and changes are provided in Appendix E." as the organ table's
+    note (a), on its first-column header; a definition without it, none."""
+    from document_model.document_node import DocNode
+    from rendering.report_data_overlays import _add_organ_descriptions_note
+    from tables.table_builder_common import finalize_footnotes, lettered_footnote
+
+    appendix = DocNode(id="appendix-e", title="Organ Weight Descriptions", node_type="appendix",
+                       cited_as="organ-weight-descriptions")
+    appendix.appendix_letter = "F"
+    footnotes = [{"kind": "definition", "text": "BMD ..."},
+                 lettered_footnote("Data are displayed as mean ± SE.", "data_format", target="header")]
+    _add_organ_descriptions_note(footnotes, [appendix])
+    _add_organ_descriptions_note(footnotes, [appendix])           # once
+    finalize_footnotes(footnotes, {})
+    assert [(f.get("letter"), f["text"]) for f in footnotes[1:]] == [
+        ("a", "Descriptions of organ weight endpoints and changes are provided in Appendix F."),
+        ("b", "Data are displayed as mean ± SE.")]
+    assert footnotes[1]["marker"]["target"] == "header"
+
+    plain = [lettered_footnote("x", "data_format", target="header")]
+    _add_organ_descriptions_note(plain, [DocNode(id="appendix-e", title="Other", node_type="appendix")])
+    assert len(plain) == 1

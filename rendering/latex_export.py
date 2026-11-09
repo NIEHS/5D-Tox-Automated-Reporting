@@ -1118,6 +1118,11 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     from document_model.view_config import DEFAULT_VIEW, build_view_tree
     _base_tree = build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE
     render_tree = study_tree(_base_tree, _collected, data.get("authored"), data)
+    # The organ weight table's note on its appendix, by the appendix's letter.
+    from document_model.document_tree import compute_appendix_letters
+    from rendering.report_data_overlays import attach_organ_descriptions_note
+    compute_appendix_letters(render_tree)
+    attach_organ_descriptions_note(data, render_tree)
     # Positional table numbers for the data-driven genomics tables — continues
     # the tree sequence (Table 8 → 9, 10, ...); then the attached charts'
     # figure numbers, continuing the tree's figures (ADR-0021 D1).  Same

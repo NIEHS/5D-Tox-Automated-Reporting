@@ -155,3 +155,41 @@ def test_a_review_names_flagged_endpoints_a_known_decision_and_a_reason():
         "Male|Clinical Chemistry|Cholesterol: the decision must be “unreliable” or “reliable”",
         "Male|Clinical Chemistry|Cholesterol: the reviewer's reason is missing",
     ]
+
+
+def test_a_data_table_prints_the_reviewed_bmd_with_the_books_note():
+    """NIEHS-07 … 10 print a rejected BMD in the data tables as its value with
+    a lettered note ("0.811^h"); only the BMD summary prints UREP."""
+    from tables.table_builder_common import (
+        REVIEWED_BMD_NOTE, finalize_footnotes, lettered_footnote, mark_reviewed_bmd,
+        reviewed_bmd_footnotes,
+    )
+
+    store, tables = _Store(), _cc_tables()
+    record_reviews(store, "D", {"Male|Clinical Chemistry|Cholesterol":
+                                {"decision": "unreliable", "reason": "fit artifact"}}, screen(tables))
+    apply_reviews(tables, store.docs[REVIEWS_FILE])
+    serialized = {"Male": []}
+    for row in tables["Clinical Chemistry"]["Male"]:
+        entry = {"label": row.label, "bmd": row.bmd_str or "—", "bmdl": row.bmdl_str or "—"}
+        mark_reviewed_bmd(entry, row)
+        serialized["Male"].append(entry)
+    chol = serialized["Male"][0]
+    assert (chol["bmd"], chol["bmdl"]) == ("0.5", "0.2")
+
+    footnotes = [lettered_footnote("data format", "data_format")]
+    footnotes += reviewed_bmd_footnotes(serialized)
+    finalize_footnotes(footnotes, serialized)
+    assert footnotes[-1]["text"] == REVIEWED_BMD_NOTE
+    assert chol["markers"] == {"bmd": "b", "bmdl": "b"}
+    assert all("markers" not in e for e in serialized["Male"][1:])
+
+
+def test_a_table_with_no_rejected_bmd_has_no_note_and_nd_stays_nd():
+    from tables.table_builder_common import mark_reviewed_bmd, reviewed_bmd_footnotes
+
+    row = SimpleNamespace(_urep={"bmd": "0.5", "bmdl": "1"})
+    entry = {"bmd": "ND", "bmdl": "ND"}          # the statistical gate left it ND
+    mark_reviewed_bmd(entry, row)
+    assert entry == {"bmd": "ND", "bmdl": "ND"}
+    assert reviewed_bmd_footnotes({"Male": [entry]}) == []

@@ -1049,6 +1049,42 @@ def build_n_row(
 # BMD/BMDL display helpers
 # ---------------------------------------------------------------------------
 
+# A BMD a reviewer rejected (pipeline.bmd_review: the row is UREP, the reviewed
+# values kept on ``row._urep``).  The data tables print the reviewed BMD and
+# BMDL with this lettered note on both cells; the BMD summary (Table 8) prints
+# UREP.  As NIEHS-07 … 10 print them (e.g. NIEHS-10 Table 5, "0.811^h").
+REVIEWED_BMD_ID = "bmd_reviewed_unreliable"
+REVIEWED_BMD_NOTE = (
+    "BMD values are much lower than would be expected given the "
+    "lowest-observed-effect level and no-observed-effect level values, "
+    "suggesting that the BMD estimates do not accurately reflect the true "
+    "potency of the effect of these endpoints and are likely an anomalous "
+    "product of the BMD modeling approach.")
+
+
+def mark_reviewed_bmd(entry: dict, stat_row) -> None:
+    """When the reviewer rejected ``stat_row``'s BMD, put its reviewed BMD and
+    BMDL in ``entry``'s cells and point both at the reviewed-BMD note
+    (``reviewed_bmd_footnotes`` adds it).  Only a cell that would print UREP:
+    one the builder's own rules leave ND (the statistical gate) stays ND."""
+    urep = (stat_row.get("_urep") if isinstance(stat_row, dict)
+            else getattr(stat_row, "_urep", None))
+    if not urep or entry.get("bmd") != "UREP":
+        return
+    entry["bmd"], entry["bmdl"] = urep.get("bmd") or "—", urep.get("bmdl") or "—"
+    for cell in ("bmd", "bmdl"):
+        add_marker_ref(entry, cell, REVIEWED_BMD_ID)
+
+
+def reviewed_bmd_footnotes(serialized: dict[str, list[dict]]) -> list[dict]:
+    """The reviewed-BMD note, when a row of the table points at it."""
+    for rows in serialized.values():
+        for row in rows:
+            if REVIEWED_BMD_ID in _ids((row.get("marker_refs") or {}).get("bmd")):
+                return [lettered_footnote(REVIEWED_BMD_NOTE, REVIEWED_BMD_ID, target="cells")]
+    return []
+
+
 def bmd_display_from_stats(
     ntp_stats_row,
     responsive: bool | None = None,
