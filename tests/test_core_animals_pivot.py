@@ -71,3 +71,29 @@ def test_xlsx_pivot_is_core_only_too(tmp_path):
     [out] = study_workbook_to_pool_files(str(path), str(tmp_path), "Organ Weight")
     animals, rows = _pivot(out)
     assert animals == ["1", "3"] and rows["Liver"] == ["10.1", "11.2"]
+
+
+OW = "NTP Study Number,Concentration,Animal ID,Sex,Selection,Removal Day,Liver,Terminal Body Weight\n"
+
+
+def test_an_animal_removed_before_the_necropsy_is_kept_out_of_the_organ_weights(tmp_path):
+    # NIEHS-12 mouse 502: weighed at its SD4 removal, organs not weighed; the
+    # book's terminal body weight counts the SD5 necropsy only.
+    [out] = _csv(tmp_path, OW,
+                 "S,0,1,Male,Core Animals,SD5,1.1,20.3\n"
+                 "S,250,2,Male,Core Animals,SD5,1.2,18.9\n"
+                 "S,250,3,Male,Core Animals,SD4,NA,14.9\n"
+                 "S,250,4,Male,Core Animals,,1.0,18.2\n", platform="Organ Weight")
+    animals, rows = _pivot(out)
+    assert animals == ["1", "2", "4"]           # no recorded day: kept
+    assert rows["Terminal Body Weight"] == ["20.3", "18.9", "18.2"]
+    side = json.load(open(out.replace(".txt", ".sidecar.json")))
+    assert "3" in side["animals"]
+
+
+def test_body_weights_keep_every_day(tmp_path):
+    # Only organ weights are limited to the scheduled necropsy.
+    [out] = _csv(tmp_path, BW, "S,0,1,Male,Core Animals,296.5,SD0,\n"
+                               "S,0,2,Male,Core Animals,290.0,SD0,\n"
+                               "S,0,2,Male,Core Animals,280.0,SD3,Yes\n")
+    assert _pivot(out)[0] == ["1", "2"]

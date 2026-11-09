@@ -637,6 +637,57 @@ def _relative_organ_weights(
     return out
 
 
+# Clinical chemistry endpoints the NTP reports derive per animal from measured
+# ones: name -> (the endpoints it is computed from, how).  A derived endpoint
+# already in the data (measured) is never derived again.  Its platform is its
+# first source's (DERIVED_SOURCE).
+GLOBULIN, AG_RATIO = "Globulin", "A/G Ratio"
+DERIVED_SOURCE = {GLOBULIN: "Albumin", AG_RATIO: "Albumin"}
+# The names a method uses for them (build_table_data's derived_endpoints).
+DERIVED_ENDPOINTS = {"globulin": GLOBULIN, "ag_ratio": AG_RATIO}
+
+
+def _is_clinical_chemistry(platform: str | None, exp_name: str) -> bool:
+    if platform:
+        return platform == "Clinical Chemistry"
+    return "chem" in (exp_name or "").lower()
+
+
+def _derived_protein_endpoints(
+    probe_vectors: list[tuple[str, list]],
+    derive=tuple(DERIVED_ENDPOINTS),
+) -> list[tuple[str, list]]:
+    """Globulin (total protein - albumin, g/dL) and the A/G ratio (albumin /
+    globulin) per animal, for one clinical chemistry experiment, as the NTP
+    reports print them: Globulin when the data has albumin and total protein
+    but no globulin; the A/G ratio from albumin and globulin (measured, or
+    derived here) when the data has none.  Missing or non-positive inputs
+    give a missing value.  ``derive``: which of them the method derives
+    (DERIVED_ENDPOINTS keys); a Globulin only computed for the ratio is not
+    returned unless "globulin" is asked for."""
+    import math
+
+    def find(name):
+        return next((v for n, v in probe_vectors if n.strip().lower() == name.lower()), None)
+
+    def ok(*xs):
+        return all(isinstance(x, (int, float)) and math.isfinite(x) for x in xs)
+
+    albumin, protein = find("Albumin"), find("Total protein")
+    globulin = find(GLOBULIN)
+    out = []
+    if globulin is None and albumin is not None and protein is not None:
+        globulin = [p - a if ok(a, p) and p - a > 0 else None
+                    for a, p in zip(albumin, protein)]
+        if "globulin" in derive:
+            out.append((GLOBULIN, globulin))
+    if ("ag_ratio" in derive and find(AG_RATIO) is None and albumin is not None
+            and globulin is not None):
+        out.append((AG_RATIO, [a / g if ok(a, g) and g > 0 else None
+                               for a, g in zip(albumin, globulin)]))
+    return out
+
+
 def build_table_data(
     bm2_json: dict,
     category_lookup: dict,
@@ -644,6 +695,7 @@ def build_table_data(
     bmd_decimals: int | None = None,
     stats_method=None,
     criteria=None,
+    derived_endpoints=None,
 ) -> dict[str, list[TableRow]]:
     """
     Build the table data for all endpoints, organized by sex.
@@ -653,7 +705,9 @@ def build_table_data(
     organ weights, Shirley or Dunn for clinical pathology — and the family
     comes from the experiment's platform.  Organ-weight experiments also get
     relative organ weights (mg organ / g terminal body weight, per animal) as
-    endpoints of their own, with the same statistics and BMD inputs.
+    endpoints of their own, with the same statistics and BMD inputs; clinical
+    chemistry experiments, Globulin and the A/G ratio when the data lacks them
+    (_derived_protein_endpoints).
     BMD lookup uses BMDExpress 3 native bMDResult data (bestBMD/bestBMDL) as
     the primary source, with category_lookup as fallback for genomics
     endpoints.
@@ -672,6 +726,9 @@ def build_table_data(
                          the NTP defaults.
         criteria:        bmd_acceptance.Criteria for classifying BMDs; None ⇒
                          the NIEHS-12/13 filter.
+        derived_endpoints: Which clinical chemistry endpoints are derived per
+                         animal when the data lacks them (DERIVED_ENDPOINTS
+                         keys: globulin, ag_ratio); None ⇒ both.
 
     Returns:
         Dict mapping sex label ("Male" / "Female") → list of TableRow.
@@ -720,6 +777,10 @@ def build_table_data(
                          for pr in exp.get("probeResponses", [])]
         if _is_organ_weight(exp_platform, exp_name):
             probe_vectors += _relative_organ_weights(probe_vectors)
+        elif _is_clinical_chemistry(exp_platform, exp_name):
+            probe_vectors += _derived_protein_endpoints(
+                probe_vectors, tuple(DERIVED_ENDPOINTS) if derived_endpoints is None
+                else tuple(derived_endpoints))
 
         for probe_name, responses in probe_vectors:
             # Group by dose, dropping missing observations (None/NaN).  A dose

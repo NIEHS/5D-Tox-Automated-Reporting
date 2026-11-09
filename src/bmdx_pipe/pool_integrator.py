@@ -311,6 +311,49 @@ def _keep_core_animals(
     return len(dropped)
 
 
+def _removal_day(value) -> int | None:
+    """A removal day ("SD5", "SD 5", "5") as its number; None when absent."""
+    m = re.search(r"(-?\d+)", str(value or ""))
+    return int(m.group(1)) if m else None
+
+
+def _keep_scheduled_removals(
+    data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]],
+    sidecar_animals: dict[str, dict[str, dict]],
+) -> int:
+    """Organ weights: drop from the pivot values every animal removed before
+    the study's scheduled necropsy (found dead, euthanized moribund); returns
+    how many were dropped.
+
+    The scheduled necropsy is the latest removal day of the sex's Core
+    animals.  An animal removed on an earlier day may have been weighed then
+    (NIEHS-12 mouse 502, 250 ppm: 14.9 g on SD4), but every published organ
+    weight table counts the scheduled removals only (NIEHS-12: 18.5 ± 0.4 g
+    over the seven necropsied on SD5), as the report's organ weight table
+    does from the sidecar.  The sidecar keeps every animal.  An animal whose
+    removal day is not recorded is kept."""
+    dropped = set()
+    for sex, animals in sidecar_animals.items():
+        day_of = {aid: _removal_day(next((o["day"] for o in rec.get("observations", [])
+                                          if o.get("day")), None))
+                  for aid, rec in animals.items()}
+        core_days = [d for aid, d in day_of.items() if d is not None
+                     and "core" in str(animals[aid].get("selection", "")).lower()]
+        if not core_days:
+            continue
+        scheduled = max(core_days)
+        early = {aid for aid, d in day_of.items() if d is not None and d != scheduled}
+        for (s, endpoint), vals in list(data_by_sex_endpoint.items()):
+            if s != sex:
+                continue
+            for aid in early & vals.keys():
+                dropped.add((sex, aid))
+                del vals[aid]
+            if not vals:
+                del data_by_sex_endpoint[(s, endpoint)]
+    return len(dropped)
+
+
 def tox_study_csv_to_pivot_txt(
     path: str,
     output_dir: str,
@@ -672,6 +715,13 @@ def long_rows_to_pivot(
                     os.path.basename(path), dropped)
     if not data_by_sex_endpoint:
         return []
+    if platform == "Organ Weight" and removal_day_col is not None:
+        early = _keep_scheduled_removals(data_by_sex_endpoint, sidecar_animals)
+        if early:
+            logger.info("%s: %d animal(s) removed before the scheduled necropsy kept out of "
+                        "the pivot (sidecar keeps them)", os.path.basename(path), early)
+        if not data_by_sex_endpoint:
+            return []
 
     # Body Weight Gain — a derived endpoint NIEHS reports and models (the
     # BMD/LOEL/NOEL summaries; its own BMDExpress input in NIEHS-13): per

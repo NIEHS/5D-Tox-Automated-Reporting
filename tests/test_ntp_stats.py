@@ -110,3 +110,53 @@ def test_single_animal_group_is_left_out_of_the_tests():
     res = ntp_stats.ntp_pairwise(g, ntp_stats.PARAMETRIC)
     assert 30.0 not in res.pairwise_p
     assert res.method == "williams" and res.pairwise_p[10.0] <= 0.01
+
+
+def test_build_table_data_derives_globulin_and_the_ag_ratio():
+    doses = [0.0] * 4 + [10.0] * 4
+    albumin = [3.5, 3.6, 3.4, 3.5, 3.0, 3.1, None, 3.0]
+    protein = [6.4, 6.5, 6.3, 6.4, 6.6, 6.7, 6.6, 6.5]
+    exp = {
+        "name": "clin_chem_truth_male",
+        "experimentDescription": {"platform": "Clinical Chemistry"},
+        "treatments": [{"dose": d} for d in doses],
+        "probeResponses": [{"probe": {"id": "Albumin"}, "responses": albumin},
+                           {"probe": {"id": "Total protein"}, "responses": protein}],
+    }
+    rows = {r.label: r for r in build_table_data({"doseResponseExperiments": [exp]}, {})["Male"]}
+    assert set(rows) == {"Albumin", "Total protein", "Globulin", "A/G Ratio"}
+    glob = [p - a for a, p in zip(albumin, protein) if a is not None]
+    assert rows["Globulin"]._bmds_input["Y"] == pytest.approx(glob)
+    assert rows["A/G Ratio"]._bmds_input["Y"] == pytest.approx(
+        [a / (p - a) for a, p in zip(albumin, protein) if a is not None])
+    assert rows["Globulin"].pairwise_method in ("shirley", "dunn")   # clinical pathology
+
+
+def test_a_measured_globulin_is_not_derived_again():
+    exp = {
+        "name": "clin_chem_truth_female",
+        "experimentDescription": {"platform": "Clinical Chemistry"},
+        "treatments": [{"dose": d} for d in (0.0, 0.0, 10.0, 10.0)],
+        "probeResponses": [{"probe": {"id": "Albumin"}, "responses": [3.5, 3.6, 3.0, 3.1]},
+                           {"probe": {"id": "Globulin"}, "responses": [2.9, 3.0, 3.0, 2.8]},
+                           {"probe": {"id": "Total protein"}, "responses": [6.4, 6.6, 6.0, 5.9]}],
+    }
+    rows = {r.label: r for r in build_table_data({"doseResponseExperiments": [exp]}, {})["Female"]}
+    assert [r for r in rows if r == "Globulin"] == ["Globulin"]
+    assert rows["A/G Ratio"]._bmds_input["Y"] == pytest.approx([3.5 / 2.9, 3.6 / 3.0, 3.0 / 3.0, 3.1 / 2.8])
+
+
+def test_a_method_may_derive_neither():
+    exp = {
+        "name": "clin_chem_truth_male",
+        "experimentDescription": {"platform": "Clinical Chemistry"},
+        "treatments": [{"dose": d} for d in (0.0, 0.0, 10.0, 10.0)],
+        "probeResponses": [{"probe": {"id": "Albumin"}, "responses": [3.5, 3.6, 3.0, 3.1]},
+                           {"probe": {"id": "Total protein"}, "responses": [6.4, 6.6, 6.0, 5.9]}],
+    }
+    data = {"doseResponseExperiments": [exp]}
+    assert {r.label for r in build_table_data(data, {}, derived_endpoints=[])["Male"]} == {
+        "Albumin", "Total protein"}
+    # The ratio alone: the globulin it needs is computed, not reported.
+    assert {r.label for r in build_table_data(data, {}, derived_endpoints=["ag_ratio"])["Male"]} == {
+        "Albumin", "Total protein", "A/G Ratio"}
