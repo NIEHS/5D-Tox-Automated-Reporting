@@ -536,7 +536,8 @@ def _build_bmd_summary(ctx):
         # Built from the FULL superset platform_tables and cached filter-agnostic
         # (the bmd_summary hash is ntp+bmds only — no filters), so the cache
         # serves every version.
-        apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
+        apical_bmd_summary = _build_apical_bmd_summary(
+            platform_tables, tbw_tested=_tbw_tested(ctx))
         apical_bmd_summary_bmds = _build_bmds_bmd_summary(
             platform_tables, bmds_results,
         )
@@ -570,7 +571,7 @@ def _build_bmd_summary(ctx):
     divergences: list[dict] = []
     apical_bmd_summary = _build_apical_bmd_summary(
         _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
-        bmd_decimals=ctx.bmd_decimals,
+        bmd_decimals=ctx.bmd_decimals, tbw_tested=_tbw_tested(ctx),
     )
     if divergences:
         _report_bmd_divergences(ctx.dtxsid, divergences)
@@ -720,7 +721,9 @@ async def _build_ntp_stats(ctx):
         table_data = await loop.run_in_executor(
             None, functools.partial(build_table_data, bmd_decimals=ctx.bmd_decimals,
                                     stats_method=_method(ctx).stats_method(),
-                                    criteria=_method(ctx).acceptance_criteria()),
+                                    criteria=_method(ctx).acceptance_criteria(),
+                                    derived_endpoints=_method(ctx).get(
+                                        "apical.derived_endpoints")),
             apical_integrated, cat_lookup,
         )
 
@@ -1004,6 +1007,12 @@ async def _get_sections(ctx):
     if isinstance(_superset, dict) and "sections" in _superset:
         _superset["unified_narratives"] = unified_narratives
         _save_cache(dtxsid, "sections", sections_hash, _superset)
+
+
+def _tbw_tested(ctx) -> bool:
+    """Whether the study's method tests terminal body weight (its marks, BMD
+    and BMD summary line: apical.terminal_body_weight_tested)."""
+    return _method(ctx).get("apical.terminal_body_weight_tested") is not False
 
 
 async def _get_bmds(ctx):

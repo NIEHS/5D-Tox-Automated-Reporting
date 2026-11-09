@@ -10,12 +10,13 @@ Structure:
     Columns: Endpoint^(a,b) | dose₀ | dose₁ | ... | doseₙ | BMD₁Std (unit) | BMDL₁Std (unit)
     Row groups per sex:
         n                          — sample sizes per dose group
-        Terminal Body Weight (g)   — context row (BMD = ND, always shown)
+        Terminal Body Weight (g)   — always shown; tested and modeled when the
+                                     method says so, else untested, BMD "ND"
         {Organ} Absolute (g)      — absolute organ weight, mean ± SE
         {Organ} Relative (mg/g)   — relative = (absolute / TBW) × 1000, mean ± SE
 
     Only organs with at least one responsive endpoint (absolute or relative)
-    are shown.  Terminal Body Weight is always included as a context row.
+    are shown.  Terminal Body Weight is always included.
 
 Business rules:
     - Relative organ weight = (absolute organ weight / terminal body weight) × 1000
@@ -24,9 +25,10 @@ Business rules:
       (Jonckheere + Williams/Dunnett markers) and BMD as an absolute weight.
       Without that endpoint the row is computed from raw sidecar values for
       display only (no markers, BMD "ND").
-    - Terminal Body Weight row always shows BMD = "ND" (it's context, not an
-      organ endpoint — even though TBW data exists in the pivot, it's not
-      a candidate for BMD modeling in the organ weight context).
+    - Terminal Body Weight is tested and modeled like an organ weight when the
+      method says so (apical.terminal_body_weight_tested: significance markers;
+      the BMD, or NVM, of its modeling; "ND" when not modeled); otherwise it is
+      printed untested with BMD "ND".
     - Only Core Animals contribute to statistics (Biosampling Animals excluded).
     - Organs not in the NTP stats (not modeled) are excluded.
     - All dose groups appear, including those where all animals died.
@@ -456,27 +458,47 @@ def build_organ_weight_table_from_sidecar(
         }
         rows.append(build_n_row(n_animals, sorted_doses))
 
-        # ── Terminal Body Weight row (context) ────────────────────────────
-        # Always shown as context, BMD = ND.  Mean ± SE of terminal body
-        # weights at each dose.
+        # ── Terminal Body Weight row ──────────────────────────────────────
+        # When the method tests it (apical.terminal_body_weight_tested, as
+        # RR-8, NIEHS-02 … 06 and 12 print it): the NTP statistics of
+        # "Terminal Body Weight" (significance markers, the BMD the modeling
+        # gave, NVM included).  Otherwise (NIEHS-07 … 10), or without
+        # statistics: the sidecar's mean ± SE, untested, BMD "ND".  Not
+        # modeled ("—") is printed "ND", the books' word for it on this row.
+        tested = method is None or method.get("apical.terminal_body_weight_tested") is not False
+        tbw_ntp = sex_ntp.get("Terminal Body Weight") if tested else None
+        tbw_vbd = _stat(tbw_ntp, "values_by_dose", {}) if tbw_ntp is not None else {}
+        tbw_mse = (_stat(tbw_ntp, "mean_se_by_dose", None) or {}) if tbw_ntp is not None else {}
         tbw_row_vals: dict[str, str] = {}
         for dose in sorted_doses:
             dk = js_dose_key(dose)
+            val = _dose_value(tbw_vbd, dose)
             dose_tbw_list = tbw_vals_list.get(dose, [])
-            if dose_tbw_list:
+            if val or dose_tbw_list:
                 tbw_row_vals[dk] = format_row_cell(
-                    "", row_decimals("Terminal Body Weight"), values=dose_tbw_list)
+                    val or "", row_decimals("Terminal Body Weight"),
+                    stats=_dose_value(tbw_mse, dose), values=dose_tbw_list)
             else:
                 tbw_row_vals[dk] = "\u2013"
-        rows.append({
+        tbw_bmd = (_stat(tbw_ntp, "bmd_str") if tbw_ntp is not None else None) or "ND"
+        tbw_bmdl = (_stat(tbw_ntp, "bmdl_str") if tbw_ntp is not None else None) or "ND"
+        if tbw_bmd == "\u2014":
+            tbw_bmd = tbw_bmdl = "ND"
+        tbw_responsive = bool(_stat(tbw_ntp, "responsive", False)) if tbw_ntp is not None else False
+        tbw_entry = {
             "label": f"Terminal Body Weight ({units['body']})",
             "decimals": row_decimals("Terminal Body Weight"),
             "doses": sorted_doses,
             "values": tbw_row_vals,
-            "bmd": "ND",
-            "bmdl": "ND",
-            "is_context_row": True,
-        })
+            "bmd": tbw_bmd,
+            "bmdl": tbw_bmdl,
+            "responsive": tbw_responsive,
+            "emphasize": tbw_responsive or is_reportable_bmd(tbw_bmd),
+        }
+        tbw_trend = _stat(tbw_ntp, "trend_marker", "") if tbw_ntp is not None else ""
+        if tbw_trend:
+            tbw_entry["trend_marker"] = tbw_trend
+        rows.append(tbw_entry)
 
         # ── Per-organ rows: Absolute + Relative ──────────────────────────
         # Sort organs alphabetically for consistent output

@@ -28,6 +28,26 @@ def test_a_section_added_later_is_to_confirm_for_the_profiles_before_it():
         {p: v for p, v in new.values.items() if not p.startswith("genomics.efdr")}
 
 
+def test_derived_endpoints_and_tbw_testing_default_on_and_a_study_may_say_otherwise():
+    """The profiles predate apical.derived_endpoints: the default derives
+    Globulin and the A/G ratio (most books print them); NIEHS-08 … 10, whose
+    reports analyzed neither, state [] in their study overlays."""
+    for name in ("ntp-5day-2021.1", "ntp-5day-2025"):
+        m = mp.resolve(name, probe=False)
+        assert m.get("apical.derived_endpoints") == ["globulin", "ag_ratio"]
+        assert m.source("apical.derived_endpoints") == "default"
+        assert m.get("apical.terminal_body_weight_tested") is True
+    for dtxsid in ("DTXSID2029905", "DTXSID1022477", "DTXSID50469320"):
+        m = mp.resolve("ntp-5day-2021.1", overlay=mp.study_overlay(dtxsid), probe=False)
+        assert m.get("apical.derived_endpoints") == []
+    # NIEHS-07 … 10 printed terminal body weight untested.
+    for dtxsid in ("DTXSID00190950", "DTXSID2029905", "DTXSID1022477", "DTXSID50469320"):
+        m = mp.resolve("ntp-5day-2021.1", overlay=mp.study_overlay(dtxsid), probe=False)
+        assert m.get("apical.terminal_body_weight_tested") is False
+    with pytest.raises(mp.MethodProfileError, match="derived_endpoint"):
+        mp.validate({"apical": {"derived_endpoints": ["urea"]}}, partial=True)
+
+
 def test_profile_values_carry_their_source():
     s = mp.resolve("ntp-5day-2025")
     assert s.get("apical.statistics.trend_select_p") == 0.01

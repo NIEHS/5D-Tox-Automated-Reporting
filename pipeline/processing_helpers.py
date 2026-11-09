@@ -270,15 +270,20 @@ def _partition_by_platform(
         sex_probe_platform[(sex, probe_id)] = plat
 
     # Partition: {platform: {sex: [TableRow, ...]}}
-    # A derived relative organ weight ("Liver Relative", built by
-    # build_table_data from the organ-weight experiment) has no probe of its
-    # own in the integrated data; it belongs to its organ's platform.
+    # A derived endpoint has no probe of its own in the integrated data: a
+    # relative organ weight ("Liver Relative", from the organ-weight
+    # experiment) belongs to its organ's platform; a derived clinical
+    # chemistry endpoint (Globulin, A/G Ratio) to its source's
+    # (bmdx_pipe.apical_report.DERIVED_SOURCE).
+    from bmdx_pipe.apical_report import DERIVED_SOURCE
     platform_tables: dict[str, dict[str, list]] = {}
     for sex, rows in table_data.items():
         for row in rows:
             plat = sex_probe_platform.get((sex, row.label))
             if plat is None and row.label.endswith(" Relative"):
                 plat = sex_probe_platform.get((sex, row.label[: -len(" Relative")]))
+            if plat is None and row.label in DERIVED_SOURCE:
+                plat = sex_probe_platform.get((sex, DERIVED_SOURCE[row.label]))
             plat = plat or "unknown"
             platform_tables.setdefault(plat, {}).setdefault(sex, []).append(row)
 
@@ -452,7 +457,7 @@ def apply_section_filters(
                     or assay_allowed(r.get("label", ""), assay_allow)
                 ]
             # organ row filter (Organ Weight only): keep n-rows / Terminal Body
-            # Weight context rows; filter organ rows by their leading token.
+            # Weight rows; filter organ rows by their leading token.
             if is_ow and organ_allowlist:
                 filtered = []
                 for r in kept:
@@ -751,7 +756,7 @@ def _build_section_cards(
         # The organ weight builder computes absolute + relative (per-animal
         # absolute/TBW × 1000) weights from raw sidecar data.  All organs
         # appear; the responsive gate controls BMD column values only.
-        # Terminal Body Weight is always shown as a context row.
+        # Terminal Body Weight is always shown, tested and modeled.
         if platform == "Organ Weight" and dtxsid:
             from tables.table_builder_common import find_sidecar_paths as _find_sidecar
             from tables.organ_weight_table import build_organ_weight_table_from_sidecar
@@ -1582,9 +1587,13 @@ def _build_apical_bmd_summary(
     bmds_results: dict | None = None,
     divergences: list | None = None,
     bmd_decimals: int | None = None,
+    tbw_tested: bool = True,
 ) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
+    ``tbw_tested``: whether the method tests terminal body weight
+    (apical.terminal_body_weight_tested); when it does not, the endpoint is
+    left out, as NIEHS-07 … 10 leave it out.
 
     Collects BMD, BMDL, LOEL, NOEL, direction from ALL platform TableRows into
     a flat list for the separate BMD summary card.  Matches the NIEHS reference
@@ -1628,14 +1637,14 @@ def _build_apical_bmd_summary(
                 reportable_status = row.bmd_status not in (None, "failure")
                 if not row.responsive and not reportable_status:
                     continue
-                # Body-weight endpoints are context only, never apical BMD
-                # candidates — the reference omits Terminal Body Weight and the
-                # per-study-day body-weight rows from Table 8 even though the
-                # terminal-day decrease is statistically responsive.  The one
-                # exception is the derived Body Weight Gain, which the NIEHS
-                # summaries list and model (NIEHS-10 male, NIEHS-13 mouse).
-                if row.label == "Terminal Body Weight" or (
-                        platform == "Body Weight" and row.label != "Body Weight Gain"):
+                # The per-study-day body-weight rows are never apical BMD
+                # candidates; the derived Body Weight Gain is (NIEHS-10 male,
+                # NIEHS-13 mouse).  Terminal Body Weight is when the method tests
+                # it (apical.terminal_body_weight_tested: NIEHS-02 and 12 list
+                # it), not when it does not (NIEHS-07 … 10 leave it out).
+                if row.label == "Terminal Body Weight" and not tbw_tested:
+                    continue
+                if platform == "Body Weight" and row.label != "Body Weight Gain":
                     continue
                 raw_entries.append({
                     "endpoint": _summary_endpoint_label(row.label, platform),

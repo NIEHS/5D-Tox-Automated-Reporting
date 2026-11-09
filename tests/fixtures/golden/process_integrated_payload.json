@@ -108,6 +108,10 @@
         },
         "apical.bmd.eligibility": "trend_and_pairwise",
         "apical.bmd.engine": "toxicr_model_average",
+        "apical.derived_endpoints": [
+          "globulin",
+          "ag_ratio"
+        ],
         "apical.statistics.alpha": 0.05,
         "apical.statistics.alpha_strong": 0.01,
         "apical.statistics.min_group_n": 2,
@@ -120,6 +124,7 @@
         "apical.statistics.pairwise.Urinalysis": "shirley_or_dunn",
         "apical.statistics.trend_select_p": 0.01,
         "apical.statistics.trend_test": "jonckheere",
+        "apical.terminal_body_weight_tested": true,
         "genomics.efdr.distribution": "normal",
         "genomics.efdr.generator": "Synthetic and Null Data Generator",
         "genomics.efdr.generator_abbreviation": "SaNDGen",

@@ -72,6 +72,9 @@ IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
     "above_highest_dose": {"nvm": True, "keep": True},
     "bmr_type": {"sd": True, "rel_dev": True},
     "model_selection": {"model_average": True, "lowest_aic": True},
+    # Clinical chemistry endpoints derived per animal when the data lacks them
+    # (bmdx_pipe.apical_report.DERIVED_ENDPOINTS).
+    "derived_endpoint": {"globulin": True, "ag_ratio": True},
     "bmd_stat": {s: True for s in ("mean", "median", "minimum", "weighted_mean",
                                    "fifth_pct", "tenth_pct", "lower95", "upper95")},
 }
@@ -166,6 +169,18 @@ def _stats_list(path, v):
         _impl("bmd_stat")(f"{path}[{i}]", s)
 
 
+def _flag(path, v):
+    if not isinstance(v, bool):
+        _fail(path, f"expected true or false, got {v!r}")
+
+
+def _derived_list(path, v):
+    if not isinstance(v, list):
+        _fail(path, f"expected a list (empty: derive none), got {v!r}")
+    for i, s in enumerate(v):
+        _impl("derived_endpoint")(f"{path}[{i}]", s)
+
+
 def _go_display(path, v):
     keys = {"pct", "min_genes", "max_genes", "min_bmd"}
     if not isinstance(v, dict) or set(v) != keys:
@@ -200,6 +215,8 @@ SCHEMA: dict = {
             "pairwise": _Map(_impl("pairwise")),
             "outliers": _outliers,
         },
+        "derived_endpoints": _derived_list,
+        "terminal_body_weight_tested": _flag,
         "bmd": {
             "engine": _impl("engine"),
             "eligibility": _impl("eligibility"),
@@ -242,7 +259,8 @@ SCHEMA: dict = {
 # Sections added to the schema after profiles were written.  Profiles are
 # immutable, so one that predates a section does not state it: the section is
 # "to confirm" for it (the default), and a profile written since states it.
-_ADDED_LATER = frozenset({"genomics.efdr"})
+_ADDED_LATER = frozenset({"genomics.efdr", "apical.derived_endpoints",
+                          "apical.terminal_body_weight_tested"})
 
 _IDENTITY_KEYS = ("name", "series", "effective", "reference", "description")
 
@@ -301,6 +319,14 @@ def _builtin_defaults() -> dict:
                 "pairwise": pairwise,
                 "outliers": None,
             },
+            # Globulin (total protein - albumin) and the A/G ratio, derived when
+            # the data lacks them, as RR-8, NIEHS-02 … 07, 12 and 13 print them;
+            # a study whose report analyzed neither states [] in its overlay.
+            "derived_endpoints": ["globulin", "ag_ratio"],
+            # Terminal body weight tested and modeled like any endpoint (marks,
+            # its BMD, a line of the BMD summary), as RR-8, NIEHS-02 … 06 and
+            # NIEHS-12 print it; NIEHS-07 … 10 printed it untested (false).
+            "terminal_body_weight_tested": True,
             "bmd": {
                 "engine": "toxicr_model_average",
                 "eligibility": "trend_and_pairwise",
