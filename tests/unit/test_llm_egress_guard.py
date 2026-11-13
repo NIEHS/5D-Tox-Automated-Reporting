@@ -148,7 +148,11 @@ def test_ollama_endpoint_generate_is_guarded():
 
 _CLIENT_CTORS = {"Anthropic", "AsyncAnthropic", "OpenAI", "AsyncOpenAI",
                  "AnthropicBedrock", "AnthropicVertex", "AzureOpenAI", "AsyncAzureOpenAI"}
-_ALLOWED = {Path("styling_export/llm_endpoints.py")}
+# bmdx-pipe (packages/bmdx-pipe) is a separate layer that must not import the
+# app, so it keeps its own gateway check; the bmdx-pipe tests below hold it to
+# the same hosts and the same fail-closed behaviour as approved_base_url().
+_BMDX_PIPE_LLM = Path("packages/bmdx-pipe/src/bmdx_pipe/file_integrator.py")
+_ALLOWED = {Path("styling_export/llm_endpoints.py"), _BMDX_PIPE_LLM}
 _SKIP_DIRS = {"tests", "node_modules", "__pycache__"}
 
 
@@ -181,3 +185,38 @@ def test_no_llm_client_constructed_outside_llm_endpoints():
         "(build_anthropic_client / build_async_anthropic_client) so the egress "
         "guard applies:\n  " + "\n  ".join(offenders)
     )
+
+
+# ---------------------------------------------------------------------------
+# bmdx-pipe's own gateway check stays in step with the app's
+# ---------------------------------------------------------------------------
+
+def test_bmdx_pipe_approves_the_same_hosts():
+    from bmdx_pipe import file_integrator as fi
+    assert fi._APPROVED_LLM_HOSTS == le.APPROVED_LLM_HOSTS
+
+
+@pytest.mark.parametrize("value", [None, "", "https://api.anthropic.com",
+                                   "http://litellm.toxpipe.niehs.nih.gov",
+                                   "https://litellm.toxpipe.niehs.nih.gov.evil.example"])
+def test_bmdx_pipe_gateway_check_fails_closed(monkeypatch, value):
+    from bmdx_pipe import file_integrator as fi
+    if value is None:
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    else:
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", value)
+    assert fi._approved_llm_base_url() is None
+
+
+def test_bmdx_pipe_gateway_check_passes_the_gateway(monkeypatch):
+    from bmdx_pipe import file_integrator as fi
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", TOXPIPE)
+    assert fi._approved_llm_base_url() == TOXPIPE
+
+
+def test_bmdx_pipe_builds_its_client_only_after_the_check():
+    """The one Anthropic(...) in bmdx-pipe sits behind _approved_llm_base_url()."""
+    src = (REPO_ROOT / _BMDX_PIPE_LLM).read_text(encoding="utf-8")
+    check = src.index("base_url = _approved_llm_base_url()")
+    ctor = src.index("anthropic.Anthropic(base_url=base_url)")
+    assert check < ctor and src.count("anthropic.Anthropic(") == 1

@@ -1,0 +1,839 @@
+"""
+animal_report — Per-animal traceability across file pool tiers.
+
+While file_integrator.py fingerprints files and tracks aggregate counts
+(how many animals per dose), this module goes deeper: it reads individual
+animal IDs from every file in the pool and cross-references them across
+tiers (xlsx → txt/csv → bm2) and domains (body_weight, hematology, etc.).
+
+This solves the problem discovered in the PFHxSAm study (C20022-01):
+  - "Selection" column in xlsx separates Core Animals (110) from
+    Biosampling Animals (12 PK animals, 500-series IDs)
+  - Systematic attrition across tiers is structurally explainable
+    (dose group exclusion, biosampling exclusion, QC removal)
+  - Without this module, the user can't see *which* animals dropped
+    or *why* — only that counts differ
+
+The report consists of five subsections:
+  A. Study Design Summary — dose × sex × selection breakdown
+  B. Animal Roster — every animal with per-domain tier presence flags
+  C. Domain Coverage Matrix — counts per domain per tier
+  D. Attrition Analysis — who dropped, why, per domain
+  E. Consistency Checks — sex/dose mismatches across domains
+
+Usage:
+    from animal_report import build_animal_report, report_to_dict
+
+    report = build_animal_report(session_dir, fingerprints)
+    data = report_to_dict(report)   # DATA only; rendering lives in rlm-bmdx
+"""
+
+# ---------------------------------------------------------------------------
+# Imports
+# ---------------------------------------------------------------------------
+
+import logging
+import os
+from dataclasses import dataclass, field, asdict
+
+# file_integrator provides sex detection helpers that we reuse here
+# to avoid duplicating pattern matching logic.
+# base_domain and detect_domain are no longer needed — platform strings
+# are read directly from fingerprints.
+from .file_integrator import (
+    _detect_sex_from_filename,
+    _BM2_SEX_PATTERN,
+)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
+
+# Platform column order for the compact animal roster table columns.
+# Order matches the DOCX table column order (left to right).
+# Uses platform strings directly (human-readable names).
+PLATFORM_COLUMN_ORDER = [
+    "Body Weight",
+    "Organ Weights",
+    "Clinical Chemistry",
+    "Hematology",
+    "Hormones",
+    "Tissue Concentration",
+    "Clinical",
+    "Gene Expression",
+]
+
+# Abbreviations for platform column headers in the roster.
+# Keep to 2-3 characters to fit in compact table cells.
+PLATFORM_SHORT_LABELS = {
+    "Body Weight": "BW",
+    "Organ Weights": "OW",
+    "Clinical Chemistry": "CC",
+    "Hematology": "Hem",
+    "Hormones": "Horm",
+    "Tissue Concentration": "TC",
+    "Clinical": "CO",
+    "Gene Expression": "GE",
+}
+
+# Full names for platform rows in the coverage matrix.
+# Since platform strings are already human-readable, this is
+# largely identity — but kept for consistency with DOCX rendering
+# which may need slightly different formatting.
+PLATFORM_FULL_LABELS = {
+    "Body Weight": "Body Weight",
+    "Organ Weights": "Organ Weights",
+    "Clinical Chemistry": "Clinical Chemistry",
+    "Hematology": "Hematology",
+    "Hormones": "Hormones",
+    "Tissue Concentration": "Tissue Concentration",
+    "Clinical": "Clinical",
+    "Gene Expression": "Gene Expression",
+}
+
+# Tier key names used in domain_presence dicts and coverage matrices.
+# These match the file type groupings: xlsx is tier 1, txt/csv is tier 2,
+# bm2 is tier 3 (same precedence as file_integrator).
+TIER_XLSX = "xlsx"
+TIER_TXT_CSV = "txt_csv"
+TIER_BM2 = "bm2"
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AnimalRecord:
+    """
+    One animal's complete profile across all domains and tiers.
+
+    The animal_id is the NTP animal identifier (e.g., "101", "503").
+    Sex and dose come from the most authoritative source (xlsx > txt/csv > bm2).
+    Selection distinguishes "Core Animals" from "Biosampling Animals" —
+    only present in xlsx files that have a Selection column.
+
+    domain_presence tracks where this animal appears:
+      {"Body Weight": {"xlsx": True, "txt_csv": True, "bm2": True},
+       "Hematology": {"xlsx": True, "txt_csv": False, "bm2": False}}
+    """
+    animal_id: str
+    sex: str | None = None
+    dose: float | None = None
+    selection: str | None = None
+    # domain → {tier_key: bool} — which tiers include this animal
+    domain_presence: dict[str, dict[str, bool]] = field(default_factory=dict)
+
+
+@dataclass
+class DomainAttrition:
+    """
+    Per-domain tracking of animal dropout between tiers.
+
+    For each domain (body_weight, hematology, etc.), tracks the set of
+    animal IDs present at each tier and the animals excluded between tiers.
+    Exclusion reasons are classified as:
+      - dose_exclusion: animal's entire dose group is absent from the target tier
+      - biosampling_exclusion: animal's selection is "Biosampling Animals"
+      - qc_exclusion: individual animal removed (not explained by dose or selection)
+    """
+    domain: str
+    xlsx_ids: set[str] = field(default_factory=set)
+    txt_csv_ids: set[str] = field(default_factory=set)
+    bm2_ids: set[str] = field(default_factory=set)
+    excluded_xlsx_to_txt: set[str] = field(default_factory=set)
+    excluded_txt_to_bm2: set[str] = field(default_factory=set)
+    # reason → [animal_ids] — why each animal was excluded
+    exclusion_reasons: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass
+class AnimalReport:
+    """
+    Complete animal report for a session.
+
+    This is the top-level data structure returned by build_animal_report()
+    and consumed by rlm-bmdx's renderers for DOCX / HTML output.
+
+    Fields are grouped by report subsection:
+      A. animals — the full roster keyed by animal_id
+      B. study_* / dose_* — study design summary
+      C. domain_coverage — counts per domain per tier
+      D. attrition / completeness — per-domain dropout analysis
+      E. consistency_issues — cross-domain mismatches
+    """
+    # A. Roster — every animal in the study
+    animals: dict[str, AnimalRecord] = field(default_factory=dict)
+
+    # B. Study Design — overall structure
+    study_number: str | None = None
+    total_animals: int = 0
+    core_count: int = 0
+    biosampling_count: int = 0
+    dose_groups: list[float] = field(default_factory=list)
+    # dose → {"Male": n, "Female": n} — design matrix
+    dose_design: dict[float, dict[str, int]] = field(default_factory=dict)
+
+    # C. Coverage — domain → tier → animal count
+    domain_coverage: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    # D. Attrition — domain → DomainAttrition
+    attrition: dict[str, DomainAttrition] = field(default_factory=dict)
+    # domain → fraction of xlsx animals retained in bm2 (0.0–1.0)
+    completeness: dict[str, float] = field(default_factory=dict)
+
+    # E. Consistency — list of {type, animal_id, details} dicts
+    consistency_issues: list[dict] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Extraction functions — one per file type
+# ---------------------------------------------------------------------------
+# These read individual animal records from each file type.  They're
+# separate from file_integrator's fingerprint functions because they
+# extract *per-animal detail* (animal_id → dose, sex, selection) rather
+# than just aggregates (n_animals_by_dose).
+
+
+def _extract_animals_from_xlsx(path: str) -> dict[str, dict]:
+    """
+    Extract per-animal records from an NTP study workbook (study_workbook).
+
+    Returns a dict of {animal_id: {dose, sex, selection}}, one entry per animal
+    (each animal has a row per endpoint per study day; the first row counts).
+
+    Args:
+        path: Absolute path to the xlsx file on disk.
+
+    Returns:
+        Dict mapping animal_id strings to metadata dicts.
+        Each metadata dict has keys: dose (float|None), sex (str|None),
+        selection (str|None).
+    """
+    from .study_workbook import read_study_workbook
+
+    animals = {}
+    for ob in read_study_workbook(path).observations():
+        if ob.animal_id in animals:
+            continue
+        animals[ob.animal_id] = {
+            "dose": ob.dose,
+            "sex": ob.sex or None,
+            "selection": ob.selection or None,
+        }
+    return animals
+
+
+def _extract_animals_from_txt_csv(
+    path: str,
+    filename: str,
+    file_type: str,
+) -> dict[str, dict]:
+    """
+    Extract per-animal records from a BMDExpress-importable txt/csv file.
+
+    NTP txt/csv files are transposed tables:
+      Row 1: Animal IDs (tab or comma separated), first cell is a label
+      Row 2: Dose concentrations per animal (same column order)
+      Row 3+: Endpoint measurements
+
+    Sex comes from the filename (e.g., "male_body_weight.txt") via
+    file_integrator's _detect_sex_from_filename().
+
+    Args:
+        path:      Absolute path to the txt/csv file on disk.
+        filename:  Original filename (needed for sex detection).
+        file_type: "txt" or "csv" (determines separator character).
+
+    Returns:
+        Dict mapping animal_id strings to metadata dicts.
+        Each metadata dict has keys: dose (float|None), sex (str|None).
+    """
+    animals = {}
+
+    # Detect sex from filename — NTP convention: "male_body_weight.txt"
+    sexes = _detect_sex_from_filename(filename)
+    sex = sexes[0] if sexes else None
+
+    separator = "," if file_type == "csv" else "\t"
+
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as e:
+        logger.warning("Could not read %s: %s", filename, e)
+        return animals
+
+    # Strip trailing whitespace, skip empty lines and comment lines
+    # (comment lines start with # and are written by the metadata
+    # confirmation step: "# Provider:", "# Platform:", "# Data Type:")
+    lines = [ln.rstrip("\n\r") for ln in lines
+             if ln.strip() and not ln.lstrip().startswith("#")]
+    if len(lines) < 2:
+        return animals
+
+    # Row 1: animal IDs (first cell is a label like "Something" or blank)
+    row1_cells = lines[0].split(separator)
+    animal_ids = [c.strip() for c in row1_cells[1:] if c.strip()]
+
+    # Row 2: dose concentrations per animal (same column order)
+    row2_cells = lines[1].split(separator)
+    doses_raw = row2_cells[1:]
+
+    for i, aid in enumerate(animal_ids):
+        dose = None
+        if i < len(doses_raw):
+            try:
+                dose = float(doses_raw[i].strip())
+            except (ValueError, TypeError):
+                pass
+        animals[aid] = {"dose": dose, "sex": sex}
+
+    return animals
+
+
+def _extract_animals_from_bm2(
+    path: str,
+    bm2_json: dict | None = None,
+) -> dict[str, dict]:
+    """
+    Extract per-animal records from a BMDExpress 3 .bm2 JSON.
+
+    Iterates ALL experiments' treatments[] — not just the first experiment.
+    Each experiment contributes animal_ids with dose from treatment.dose
+    and sex inferred from the experiment name (e.g., "BodyWeightMale").
+
+    If bm2_json is not provided, tries to load from the LMDB cache.
+    Returns an empty dict if the JSON is unavailable.
+
+    Args:
+        path:     Absolute path to the .bm2 file on disk.
+        bm2_json: Pre-loaded BMDProject dict (optional — avoids cache lookup).
+
+    Returns:
+        Dict mapping animal_id strings to metadata dicts.
+        Each metadata dict has keys: dose (float|None), sex (str|None).
+    """
+    animals = {}
+
+    # Try loading from LMDB cache if not provided
+    if bm2_json is None:
+        try:
+            from . import bm2_cache  # package-relative; a bare import always failed
+            bm2_json = bm2_cache.get_json(path)
+        except Exception:
+            pass
+
+    if bm2_json is None:
+        logger.debug("No cached JSON for %s — cannot extract animals", path)
+        return animals
+
+    experiments = bm2_json.get("doseResponseExperiments", [])
+
+    for exp in experiments:
+        # Infer sex from experiment name (e.g., "BodyWeightMale" → "Male")
+        exp_name = exp.get("name", "")
+        sex_matches = _BM2_SEX_PATTERN.findall(exp_name)
+        sex = sex_matches[0].title() if sex_matches else None
+
+        for treatment in exp.get("treatments", []):
+            animal_name = treatment.get("name", "")
+            if not animal_name:
+                continue
+
+            dose = None
+            raw_dose = treatment.get("dose")
+            if raw_dose is not None:
+                try:
+                    dose = float(raw_dose)
+                except (ValueError, TypeError):
+                    pass
+
+            # Don't overwrite if already seen — earlier experiments
+            # may have more authoritative metadata.
+            if animal_name not in animals:
+                animals[animal_name] = {"dose": dose, "sex": sex}
+
+    return animals
+
+
+# ---------------------------------------------------------------------------
+# Study number extraction helper
+# ---------------------------------------------------------------------------
+
+
+def _extract_study_number_from_xlsx(path: str) -> str | None:
+    """
+    The study number an NTP study workbook gives: its Key sheet's (column D),
+    else the one its Data sheet's rows carry (study_workbook).
+
+    Args:
+        path: Absolute path to the xlsx file.
+
+    Returns:
+        Study number string (e.g., "C20022-01") or None.
+    """
+    from .study_workbook import read_study_workbook
+
+    return read_study_workbook(path).study_number
+
+
+# ---------------------------------------------------------------------------
+# Main orchestrator
+# ---------------------------------------------------------------------------
+
+
+def build_animal_report(
+    session_dir: str,
+    fingerprints: dict,
+) -> AnimalReport:
+    """
+    Build a complete animal report by reading all files in the session.
+
+    This is the main entry point.  For each fingerprinted file, it calls
+    the appropriate _extract_animals_from_* function to get per-animal
+    detail, then builds a unified roster, computes study design summary,
+    domain coverage, attrition analysis, and consistency checks.
+
+    The fingerprints dict maps file_id → FileFingerprint (from
+    file_integrator.fingerprint_file).  Only the domain and file_type
+    fields are needed to route extraction; the actual animal data is
+    read fresh from the files on disk.
+
+    Args:
+        session_dir:   Path to the session directory (e.g., sessions/DTXSID50469320).
+        fingerprints:  Dict of file_id → FileFingerprint from _pool_fingerprints.
+
+    Returns:
+        AnimalReport with all five subsections populated.
+    """
+    report = AnimalReport()
+    files_dir = os.path.join(session_dir, "files")
+
+    # --- Phase 1: Extract per-animal data from every file ---
+    # We organize extractions by (domain, tier) so we can build the
+    # domain_presence map and attrition analysis.
+
+    # domain → tier → {animal_id: {dose, sex, selection?}}
+    domain_tier_animals: dict[str, dict[str, dict[str, dict]]] = {}
+
+    study_number = None
+
+    for file_id, fp in fingerprints.items():
+        # fp can be a FileFingerprint dataclass or a dict (from JSON restore).
+        # Normalize to dict access for compatibility.
+        if hasattr(fp, "filename"):
+            filename = fp.filename
+            file_type = fp.file_type
+            platform = fp.platform
+            data_type = getattr(fp, "data_type", None)
+        else:
+            filename = fp.get("filename", "")
+            file_type = fp.get("file_type", "")
+            platform = fp.get("platform")
+            data_type = fp.get("data_type")
+
+        # Use platform as the grouping key.  Gene expression files have
+        # platform=None but data_type="gene_expression" — use the label
+        # "Gene Expression" for those.
+        domain = platform
+        if not domain and data_type == "gene_expression":
+            domain = "Gene Expression"
+        if not domain:
+            continue  # skip files with no detected platform
+
+        # Clinical Observations (platform="Clinical") use a tall/long CSV
+        # format with categorical incidence data — NOT the pivot format
+        # that _extract_animals_from_txt_csv expects.  Parsing them as
+        # pivots would misread column headers ("Concentration", "Animal ID",
+        # "Observation", etc.) as animal IDs.  Skip them here; clinical
+        # obs animal data comes from the animal_id column in the CSV,
+        # which needs its own extraction logic (not yet implemented).
+        if platform == "Clinical" and file_type in ("csv", "txt"):
+            continue
+
+        path = os.path.join(files_dir, filename)
+        if not os.path.exists(path):
+            continue
+
+        # Determine tier from file_type
+        if file_type == "xlsx":
+            tier = TIER_XLSX
+        elif file_type in ("txt", "csv"):
+            tier = TIER_TXT_CSV
+        elif file_type == "bm2":
+            tier = TIER_BM2
+        else:
+            continue
+
+        # Extract animals from this file
+        if file_type == "xlsx":
+            file_animals = _extract_animals_from_xlsx(path)
+            # Also extract study number from xlsx (most authoritative source)
+            if study_number is None:
+                study_number = _extract_study_number_from_xlsx(path)
+        elif file_type in ("txt", "csv"):
+            file_animals = _extract_animals_from_txt_csv(path, filename, file_type)
+        elif file_type == "bm2":
+            # Try to get bm2_json from LMDB cache
+            file_animals = _extract_animals_from_bm2(path)
+        else:
+            continue
+
+        if not file_animals:
+            continue
+
+        # Store in domain_tier_animals structure
+        if domain not in domain_tier_animals:
+            domain_tier_animals[domain] = {}
+
+        if tier not in domain_tier_animals[domain]:
+            domain_tier_animals[domain][tier] = {}
+
+        # Merge animals from this file into the domain×tier bucket.
+        # Multiple files can contribute to the same domain×tier
+        # (e.g., male_body_weight.txt + female_body_weight.txt).
+        domain_tier_animals[domain][tier].update(file_animals)
+
+    report.study_number = study_number
+
+    # --- Phase 2: Build unified animal roster ---
+    # Merge all extracted animals into a single roster.  xlsx is
+    # authoritative for dose/sex/selection; txt/csv and bm2 fill gaps.
+
+    all_animals: dict[str, AnimalRecord] = {}
+
+    for domain, tiers in domain_tier_animals.items():
+        for tier, animals_dict in tiers.items():
+            for aid, meta in animals_dict.items():
+                if aid not in all_animals:
+                    all_animals[aid] = AnimalRecord(animal_id=aid)
+
+                record = all_animals[aid]
+
+                # Update sex/dose/selection from most authoritative source.
+                # xlsx > txt_csv > bm2 (check if current value is None
+                # before overwriting with a less authoritative source).
+                if tier == TIER_XLSX:
+                    # xlsx is always authoritative — overwrite
+                    if meta.get("sex"):
+                        record.sex = meta["sex"]
+                    if meta.get("dose") is not None:
+                        record.dose = meta["dose"]
+                    if meta.get("selection"):
+                        record.selection = meta["selection"]
+                elif tier == TIER_TXT_CSV:
+                    # txt/csv fills in if xlsx didn't provide
+                    if record.sex is None and meta.get("sex"):
+                        record.sex = meta["sex"]
+                    if record.dose is None and meta.get("dose") is not None:
+                        record.dose = meta["dose"]
+                elif tier == TIER_BM2:
+                    # bm2 is least authoritative
+                    if record.sex is None and meta.get("sex"):
+                        record.sex = meta["sex"]
+                    if record.dose is None and meta.get("dose") is not None:
+                        record.dose = meta["dose"]
+
+                # Track domain presence for this animal
+                if domain not in record.domain_presence:
+                    record.domain_presence[domain] = {
+                        TIER_XLSX: False,
+                        TIER_TXT_CSV: False,
+                        TIER_BM2: False,
+                    }
+                record.domain_presence[domain][tier] = True
+
+    report.animals = all_animals
+    report.total_animals = len(all_animals)
+
+    # --- Phase 3: Study design summary ---
+    # Count core vs biosampling animals and build dose × sex design matrix.
+
+    core_ids = set()
+    biosamp_ids = set()
+    dose_design: dict[float, dict[str, int]] = {}
+
+    for aid, record in all_animals.items():
+        sel = record.selection
+        if sel and "biosamp" in sel.lower():
+            biosamp_ids.add(aid)
+        else:
+            core_ids.add(aid)
+
+        if record.dose is not None and record.sex:
+            dose = record.dose
+            if dose not in dose_design:
+                dose_design[dose] = {}
+            sex = record.sex
+            dose_design[dose][sex] = dose_design[dose].get(sex, 0) + 1
+
+    report.core_count = len(core_ids)
+    report.biosampling_count = len(biosamp_ids)
+    report.dose_groups = sorted(dose_design.keys())
+    report.dose_design = {dose: dose_design[dose] for dose in sorted(dose_design.keys())}
+
+    # --- Phase 4: Domain coverage matrix ---
+    # For each domain, count how many animals appear at each tier.
+
+    for domain in sorted(domain_tier_animals.keys()):
+        tiers = domain_tier_animals[domain]
+        report.domain_coverage[domain] = {
+            TIER_XLSX: len(tiers.get(TIER_XLSX, {})),
+            TIER_TXT_CSV: len(tiers.get(TIER_TXT_CSV, {})),
+            TIER_BM2: len(tiers.get(TIER_BM2, {})),
+        }
+
+    # --- Phase 5: Attrition analysis ---
+    # For each domain, compute who dropped between tiers and classify why.
+
+    # Build lookup tables for exclusion reason classification:
+    # - animal_id → dose (for dose exclusion detection)
+    # - animal_id → selection (for biosampling exclusion detection)
+    animal_doses = {aid: rec.dose for aid, rec in all_animals.items()}
+    animal_selections = {aid: rec.selection for aid, rec in all_animals.items()}
+
+    for domain, tiers in domain_tier_animals.items():
+        xlsx_ids = set(tiers.get(TIER_XLSX, {}).keys())
+        txt_csv_ids = set(tiers.get(TIER_TXT_CSV, {}).keys())
+        bm2_ids = set(tiers.get(TIER_BM2, {}).keys())
+
+        attrition = DomainAttrition(
+            domain=domain,
+            xlsx_ids=xlsx_ids,
+            txt_csv_ids=txt_csv_ids,
+            bm2_ids=bm2_ids,
+        )
+
+        # Compute excluded sets between tiers
+        attrition.excluded_xlsx_to_txt = xlsx_ids - txt_csv_ids if xlsx_ids and txt_csv_ids else set()
+        attrition.excluded_txt_to_bm2 = txt_csv_ids - bm2_ids if txt_csv_ids and bm2_ids else set()
+
+        # Classify exclusion reasons for xlsx→txt drops
+        _classify_exclusions(
+            attrition,
+            attrition.excluded_xlsx_to_txt,
+            xlsx_ids,
+            txt_csv_ids,
+            animal_doses,
+            animal_selections,
+            "xlsx_to_txt",
+        )
+
+        # Classify exclusion reasons for txt→bm2 drops
+        _classify_exclusions(
+            attrition,
+            attrition.excluded_txt_to_bm2,
+            txt_csv_ids,
+            bm2_ids,
+            animal_doses,
+            animal_selections,
+            "txt_to_bm2",
+        )
+
+        # Compute completeness — ratio of bm2 animals to xlsx animals.
+        # If a tier is empty, use the next available tier as denominator.
+        denominator = len(xlsx_ids) or len(txt_csv_ids) or 1
+        numerator = len(bm2_ids) or len(txt_csv_ids) or len(xlsx_ids)
+        report.completeness[domain] = round(numerator / denominator, 3) if denominator else 1.0
+
+        report.attrition[domain] = attrition
+
+    # --- Phase 6: Consistency checks ---
+    # Look for animals that have different sex or dose across domains.
+
+    report.consistency_issues = _check_consistency(domain_tier_animals)
+
+    return report
+
+
+def _classify_exclusions(
+    attrition: DomainAttrition,
+    excluded_ids: set[str],
+    source_ids: set[str],
+    target_ids: set[str],
+    animal_doses: dict[str, float | None],
+    animal_selections: dict[str, str | None],
+    transition_label: str,
+) -> None:
+    """
+    Classify why each excluded animal was dropped between tiers.
+
+    Three categories:
+      1. dose_exclusion — the animal's entire dose group is absent from
+         the target tier (e.g., 333/1000 mg/kg groups excluded from txt)
+      2. biosampling_exclusion — the animal's selection is "Biosampling Animals"
+         and the target tier doesn't include biosampling animals
+      3. qc_exclusion — individual animal removed for QC reasons (everything
+         else — the animal's dose group is present, it's a core animal,
+         but it was still excluded individually)
+
+    Results are stored in attrition.exclusion_reasons as a dict mapping
+    "{transition_label}_{reason}" → list of animal_id strings.
+
+    Args:
+        attrition:         DomainAttrition object to update.
+        excluded_ids:      Set of animal IDs that were excluded.
+        source_ids:        Animal IDs in the source tier (for dose group computation).
+        target_ids:        Animal IDs in the target tier (for dose group comparison).
+        animal_doses:      Global animal_id → dose lookup.
+        animal_selections: Global animal_id → selection lookup.
+        transition_label:  "xlsx_to_txt" or "txt_to_bm2" (used in reason keys).
+    """
+    if not excluded_ids:
+        return
+
+    # Find which dose groups are present in the target tier
+    target_doses = {
+        animal_doses.get(aid)
+        for aid in target_ids
+        if animal_doses.get(aid) is not None
+    }
+
+    dose_excluded = []
+    biosamp_excluded = []
+    qc_excluded = []
+
+    for aid in sorted(excluded_ids):
+        dose = animal_doses.get(aid)
+        selection = animal_selections.get(aid) or ""
+
+        if dose is not None and dose not in target_doses:
+            # Entire dose group is missing from target tier
+            dose_excluded.append(aid)
+        elif "biosamp" in selection.lower():
+            # Animal is a biosampling animal not included in downstream analysis
+            biosamp_excluded.append(aid)
+        else:
+            # Individual removal — likely QC (blood sample quality, outlier, etc.)
+            qc_excluded.append(aid)
+
+    if dose_excluded:
+        attrition.exclusion_reasons[f"{transition_label}_dose_exclusion"] = dose_excluded
+    if biosamp_excluded:
+        attrition.exclusion_reasons[f"{transition_label}_biosampling_exclusion"] = biosamp_excluded
+    if qc_excluded:
+        attrition.exclusion_reasons[f"{transition_label}_qc_exclusion"] = qc_excluded
+
+
+def _check_consistency(
+    domain_tier_animals: dict[str, dict[str, dict[str, dict]]],
+) -> list[dict]:
+    """
+    Check for sex/dose mismatches for the same animal across domains.
+
+    An animal should have the same sex and dose regardless of which domain
+    or tier it appears in.  If domain A says animal 101 is Male at dose 4
+    but domain B says it's Female at dose 12, that's a consistency issue.
+
+    Args:
+        domain_tier_animals: The domain → tier → {animal_id: metadata} structure.
+
+    Returns:
+        List of issue dicts with keys: type, animal_id, details.
+    """
+    issues = []
+
+    # Build per-animal: {animal_id: [(domain, tier, sex, dose), ...]}
+    animal_observations: dict[str, list[tuple[str, str, str | None, float | None]]] = {}
+
+    for domain, tiers in domain_tier_animals.items():
+        for tier, animals_dict in tiers.items():
+            for aid, meta in animals_dict.items():
+                if aid not in animal_observations:
+                    animal_observations[aid] = []
+                animal_observations[aid].append((
+                    domain, tier, meta.get("sex"), meta.get("dose"),
+                ))
+
+    for aid, observations in sorted(animal_observations.items()):
+        # Check sex consistency
+        sexes = {obs[2] for obs in observations if obs[2] is not None}
+        if len(sexes) > 1:
+            issues.append({
+                "type": "sex_mismatch",
+                "animal_id": aid,
+                "details": {
+                    "sexes_found": sorted(sexes),
+                    "sources": [
+                        {"domain": obs[0], "tier": obs[1], "sex": obs[2]}
+                        for obs in observations if obs[2] is not None
+                    ],
+                },
+            })
+
+        # Check dose consistency
+        doses = {obs[3] for obs in observations if obs[3] is not None}
+        if len(doses) > 1:
+            issues.append({
+                "type": "dose_mismatch",
+                "animal_id": aid,
+                "details": {
+                    "doses_found": sorted(doses),
+                    "sources": [
+                        {"domain": obs[0], "tier": obs[1], "dose": obs[3]}
+                        for obs in observations if obs[3] is not None
+                    ],
+                },
+            })
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Serialization helpers
+# ---------------------------------------------------------------------------
+
+
+def report_to_dict(report: AnimalReport) -> dict:
+    """
+    Convert an AnimalReport to a JSON-serializable dict.
+
+    Handles the set→list conversion needed for DomainAttrition fields
+    (JSON doesn't support sets).  The animals dict uses AnimalRecord
+    dataclasses which are converted via dataclasses.asdict().
+
+    Args:
+        report: The AnimalReport to serialize.
+
+    Returns:
+        JSON-safe dict suitable for json.dumps().
+    """
+    animals_dict = {}
+    for aid, rec in report.animals.items():
+        animals_dict[aid] = asdict(rec)
+
+    attrition_dict = {}
+    for domain, att in report.attrition.items():
+        attrition_dict[domain] = {
+            "domain": att.domain,
+            "xlsx_ids": sorted(att.xlsx_ids),
+            "txt_csv_ids": sorted(att.txt_csv_ids),
+            "bm2_ids": sorted(att.bm2_ids),
+            "excluded_xlsx_to_txt": sorted(att.excluded_xlsx_to_txt),
+            "excluded_txt_to_bm2": sorted(att.excluded_txt_to_bm2),
+            "exclusion_reasons": att.exclusion_reasons,
+        }
+
+    # Convert dose_design keys from float to string for JSON
+    dose_design_str = {}
+    for dose, sexes in report.dose_design.items():
+        dose_design_str[str(dose)] = sexes
+
+    return {
+        "animals": animals_dict,
+        "study_number": report.study_number,
+        "total_animals": report.total_animals,
+        "core_count": report.core_count,
+        "biosampling_count": report.biosampling_count,
+        "dose_groups": report.dose_groups,
+        "dose_design": dose_design_str,
+        "domain_coverage": report.domain_coverage,
+        "attrition": attrition_dict,
+        "completeness": report.completeness,
+        "consistency_issues": report.consistency_issues,
+    }
+

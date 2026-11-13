@@ -199,4 +199,4 @@ Access control is handled by the `ALLOWED_USERS` environment variable (comma-sep
 - `bmdx-core.jar` + Maven deps (BMDExpress 3 headless library — not open source; contact maintainer)
 
 **Local dependency:**
-- `bmdx-pipe` — editable install from `../bmdx-pipe`; provides `FileFingerprint`, `ValidationReport`, `build_table_data_from_bm2`, and related utilities
+- `bmdx-pipe` — workspace member in `packages/bmdx-pipe` (installed editable by `uv sync`); provides `FileFingerprint`, `ValidationReport`, `build_table_data_from_bm2`, and related utilities
