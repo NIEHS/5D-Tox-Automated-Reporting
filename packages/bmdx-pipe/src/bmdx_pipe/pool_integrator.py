@@ -41,13 +41,10 @@ Usage:
 import csv
 import json
 import logging
-import math
 import os
 import re
 import subprocess
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from .experiment_metadata import (
@@ -751,7 +748,7 @@ def long_rows_to_pivot(
 
         lines = []
         # Metadata headers for ExperimentDescriptionParser
-        lines.append(f"# Provider: Apical")
+        lines.append("# Provider: Apical")
         lines.append(f"# Platform: {platform}")
         lines.append(f"# Data Type: {data_type}")
         # Row 1: header — probe_id + animal IDs

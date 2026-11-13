@@ -32,10 +32,8 @@ Usage:
 # Imports
 # ---------------------------------------------------------------------------
 
-import json
 import logging
 import os
-import re
 from dataclasses import dataclass, field, asdict
 
 # file_integrator provides sex detection helpers that we reuse here
@@ -45,7 +43,6 @@ from dataclasses import dataclass, field, asdict
 from .file_integrator import (
     _detect_sex_from_filename,
     _BM2_SEX_PATTERN,
-    _GENE_EXPR_ORGAN_PATTERN,
 )
 
 # ---------------------------------------------------------------------------

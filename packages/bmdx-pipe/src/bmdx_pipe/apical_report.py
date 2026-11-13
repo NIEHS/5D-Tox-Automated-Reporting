@@ -33,19 +33,15 @@ Per-sex TableRow structure:
     groups with no surviving animals → dash + attrition footnote.
 """
 
-import csv
 import json
 import math
 import os
-import re
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from . import bm2_cache
-from .apical_stats import analyze_endpoint, EndpointStats, run_java_prefilter
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +486,6 @@ def _build_bmd_result_lookup(bm2_json: dict, criteria=None) -> dict[tuple[str, s
             "status": str  # "viable", "NVM", "NR", "failure"
         }.
     """
-    import math
 
     # Resolve Jackson object identity.  Each object is serialized inline the
     # first time it appears, carrying its id as "@ref", and as that bare
@@ -590,7 +585,6 @@ def _stats_family(platform: str | None, exp_name: str, method=None) -> str:
         return ntp_stats.NONPARAMETRIC
     if any(h in lower for h in _PARAMETRIC_NAME_HINTS):
         return ntp_stats.PARAMETRIC
-    import sys
     print(f"  WARNING: no statistics family for experiment {exp_name!r} "
           f"(platform {platform!r}); using the parametric tests "
           f"(Williams/Dunnett)", file=sys.stderr)

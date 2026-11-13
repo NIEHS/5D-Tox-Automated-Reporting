@@ -10,7 +10,9 @@ from bmdx_pipe.experiment_metadata import _SYSTEM_PROMPT, infer_experiment_metad
 
 def _infer(name, organ, data_type="gene_expression"):
     exp = {"name": name, "probeResponses": [{"probe": {"id": "DERA_8462"}, "responses": [1.0]}]}
-    llm = lambda *a, **k: {name: {"organ": organ, "dataType": data_type, "subjectType": "in vivo"}}
+    def llm(*a, **k):
+        return {name: {"organ": organ, "dataType": data_type, "subjectType": "in vivo"}}
+
     return infer_experiment_metadata([exp], {}, {"name": "X"}, llm_generate_json=llm)[name]
 
 

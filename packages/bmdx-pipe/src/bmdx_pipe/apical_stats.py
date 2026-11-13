@@ -38,7 +38,6 @@ import math
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from . import ntp_stats
 

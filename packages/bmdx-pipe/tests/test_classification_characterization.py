@@ -17,7 +17,6 @@ at which point THESE expected values change in a controlled, reviewable way.
 Driven over the given-PFHxSAm regression fixture in the sibling rlm-bmdx repo.
 """
 
-import os
 import uuid
 from pathlib import Path
 
