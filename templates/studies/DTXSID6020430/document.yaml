@@ -1,0 +1,8 @@
+# NIEHS Report 12 (1,2-Dichlorobenzene, NBK621711) — ADR-0029.  Its structure is
+# the 2026 generation's, unaltered.
+extends: eras/niehs-2026
+# Its blood and tissue concentration tables leave out the values the outlier
+# test of Dixon and Massey excluded without noting them (Tables 18/19: n = 3,
+# no outlier note), where NIEHS-13 notes them.
+table_notes:
+  outlier_exclusions: false

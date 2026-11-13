@@ -18,12 +18,11 @@ The dtxsid has no session directory, so the disk-backed genomics-cache reads
 are deterministic no-ops (same rationale as test_marshal_golden.py).
 """
 
-import copy
 
 import pytest
 
-from report_data import marshal_export_data
-from document_tree import DOCUMENT_TREE, walk_tree
+from rendering.report_data import marshal_export_data
+from document_model.document_tree import DOCUMENT_TREE, walk_tree
 
 
 # Positional numbers assigned by compute_table_numbers() on the canonical
@@ -74,6 +73,12 @@ def _apical_body(*platforms: str) -> dict:
             }
             for platform in platforms
         ],
+        # A full study also has transcriptomics, so the Methods sample-counts
+        # table (Table 1) is present and the apical tables number from 2.  (A
+        # study WITHOUT transcriptomics drops it — see the apical-only test.)
+        "genomics_sections": [
+            {"type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [{"rank": 1}]},
+        ],
     }
 
 
@@ -99,10 +104,13 @@ def test_cold_marshal_numbers_and_orders_multiple_sections(cold_tree):
     )
 
     produced = [(s["title"], s["table_number"]) for s in out["apical_sections"]]
+    # The not-collected domains (Clinical Chemistry, Hormones, Tissue Concentration)
+    # are pruned, so the collected tables renumber CONTIGUOUSLY — Hematology is 4,
+    # not 5 (no gap for the absent Clinical Chemistry slot).
     assert produced == [
         ("Body Weight", 2),
         ("Organ Weight", 3),
-        ("Hematology", 5),
+        ("Hematology", 4),
     ], "Apical sections must be numbered from the tree and sorted in document order."
 
 
@@ -122,7 +130,9 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
     summary (Table 8), so genomics gene_set tables get 9.. and gene tables
     follow — assigned in RENDER order (all gene_set first, then all gene),
     NOT the interleaved list order."""
-    body = _apical_body("Body Weight")
+    # All apical platforms present (so nothing is not-collected-pruned) → the BMD
+    # summary is Table 8 and genomics continues at 9, as this test documents.
+    body = _apical_body(*EXPECTED_TABLE_NUMBERS)
     # Interleaved delivery order, two organs, gene_set + gene each.
     body["genomics_sections"] = [
         {"type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [{"rank": 1}]},
@@ -143,7 +153,22 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
         ("gene", "liver"): 11,
         ("gene", "kidney"): 12,
     }
-    # The front-matter Tables list continues the sequence too.
-    table_nums = [e["table_number"] for e in out["table_entries"]]
+    # The front-matter Tables list continues the sequence too.  Only the BODY
+    # scope: appendix tables ("B-1") are numbered per appendix (ADR-0025 §5)
+    # and belong to the appendix's own list.
+    table_nums = [e["table_number"] for e in out["table_entries"] if e.get("scope") is None]
     assert 9 in table_nums and 12 in table_nums
     assert table_nums == sorted(table_nums)
+
+
+def test_study_without_transcriptomics_drops_sample_counts_and_renumbers(cold_tree):
+    """A study that did not collect transcriptomics (no genomics) has no
+    transcriptomics sample-counts table: it is gated out with its Methods
+    section, and the apical tables renumber from Table 1."""
+    body = _apical_body("Body Weight", "Organ Weight")
+    body.pop("genomics_sections")
+    out = marshal_export_data(body)
+    got = {s["title"]: s["table_number"] for s in out["apical_sections"]}
+    assert got == {"Body Weight": 1, "Organ Weight": 2}
+    titles = [e["title"] for e in out["table_entries"]]
+    assert not any("Sample Counts" in t for t in titles)

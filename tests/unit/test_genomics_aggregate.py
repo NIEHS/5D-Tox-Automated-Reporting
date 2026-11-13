@@ -10,7 +10,7 @@ behaviour those three paths rely on: fixed male-then-female ordering, the
 user-override-wins merge.
 """
 
-from genomics_narratives import aggregate_organ_llm_narratives
+from genomics.genomics_narratives import aggregate_organ_llm_narratives
 
 
 def test_male_then_female_ordering_and_labels():

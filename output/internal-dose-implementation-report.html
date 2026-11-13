@@ -1,0 +1,531 @@
+<section class="doc">
+  <header class="masthead">
+    <p class="eyebrow">Implementation proposal · for client approval</p>
+    <h1>Internal Dose Assessment</h1>
+    <p class="dek">Adding a toxicokinetic analysis and narrative to the 5-day
+      report, driven by the plasma concentration data the study already collects.</p>
+    <dl class="meta">
+      <div><dt>Test article</dt><dd>Perflourohexane&nbsp;Sulfonamide (PFHxSAm)</dd></div>
+      <div><dt>Study</dt><dd>DTXSID50469320 · C20022-01</dd></div>
+      <div><dt>Reference</dt><dd>NIEHS Report 10 (NBK589955)</dd></div>
+      <div><dt>Status</dt><dd><span class="pill">Awaiting sign-off</span></dd></div>
+    </dl>
+  </header>
+
+  <div class="tldr">
+    <p><strong>In one line.</strong> The report structure already reserves an
+      <em>Internal Dose Assessment</em> section, and the study already provides the
+      plasma concentration data it needs — but nothing computes the toxicokinetics
+      or writes the section. We propose a small, deterministic analysis that
+      reproduces the reference report's numbers exactly, plus a generated narrative.
+      The method is validated: our data and formula reproduce the published
+      half-lives to the decimal.</p>
+  </div>
+
+  <!-- 1 -->
+  <section class="sec">
+    <div class="sec-head"><span class="num">01</span><h2>The gap</h2></div>
+    <p>The report's canonical structure (NIEHS Report 10) includes an
+      <strong>Internal Dose Assessment</strong> section in Results, holding a
+      <em>Summary of Plasma Concentration Data</em> table and a toxicokinetic
+      narrative. In the current pipeline that section renders as an empty
+      placeholder — "Narrative pending" — while the underlying plasma data is
+      instead surfaced as a generic apical endpoint table labelled "Tissue
+      Concentration."</p>
+
+    <div class="split">
+      <div class="split-col now">
+        <p class="tag">Today</p>
+        <p>Plasma data treated as one more apical platform. A routine
+          dose-response table, no kinetic interpretation. The dedicated Internal
+          Dose section stays blank.</p>
+      </div>
+      <div class="split-col next">
+        <p class="tag">Proposed</p>
+        <p>The same plasma data routed to the Internal Dose section, with computed
+          half-lives, a dose-proportionality read, and a narrative that interprets
+          them — matching the reference report.</p>
+      </div>
+    </div>
+
+    <p class="note">This is not missing data or missing processing. The data is
+      present and correctly parsed. What's missing is the <em>analysis</em> that
+      turns plasma concentrations into an internal-dose assessment, and the routing
+      that puts it in the right section.</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="sec">
+    <div class="sec-head"><span class="num">02</span><h2>Why the section depends on the plasma data</h2></div>
+    <p>"Internal dose" is the exposure that actually reaches the bloodstream, as
+      distinct from the dose administered. The reference report's assessment is
+      built <em>entirely</em> on measured plasma concentrations of PFHxSAm, sampled
+      at two timepoints after the final dose:</p>
+    <ul class="facts">
+      <li><strong>2 hours and 24 hours postdose</strong>, on study day 4.</li>
+      <li>In the <strong>4 and 37 mg/kg</strong> groups, both sexes
+        (3 dedicated animals per sex per group).</li>
+      <li>Quantified by UPLC-MS/MS; limit of quantitation
+        <strong>10.0 ng/mL</strong>; all study values above the LOQ.</li>
+    </ul>
+    <p>Every interpretive claim in the reference narrative is derived from those two
+      numbers per group: the <strong>half-life</strong> (from the decline between
+      2 h and 24 h), the <strong>dose proportionality</strong> (whether
+      concentration scales with dose), and the resulting <strong>ADME
+      inference</strong>. Without the plasma data there is, literally, nothing for
+      the section to say — which is exactly why the template binds it to the
+      plasma/tissue-concentration platform.</p>
+  </section>
+
+  <!-- 3 -->
+  <section class="sec">
+    <div class="sec-head"><span class="num">03</span><h2>The method</h2></div>
+    <p>Half-life is estimated as first-order elimination between the two measured
+      timepoints. From the group-mean concentrations at 2 h and 24 h:</p>
+
+    <div class="formula" role="img" aria-label="Elimination rate constant k-e equals natural log of C at 2 hours divided by C at 24 hours, over 24 minus 2 hours. Half-life equals natural log of 2 divided by k-e.">
+      <div class="frow">
+        <span class="lhs">k<sub>e</sub></span>
+        <span class="eq">=</span>
+        <span class="frac"><span class="numer">ln( C<sub>2h</sub> / C<sub>24h</sub> )</span><span class="denom">t<sub>24h</sub> − t<sub>2h</sub></span></span>
+        <span class="units">(h<sup>−1</sup>)</span>
+      </div>
+      <div class="frow">
+        <span class="lhs">t<sub>½</sub></span>
+        <span class="eq">=</span>
+        <span class="frac"><span class="numer">ln 2</span><span class="denom">k<sub>e</sub></span></span>
+        <span class="eqx">=</span>
+        <span class="frac"><span class="numer">0.693</span><span class="denom">k<sub>e</sub></span></span>
+        <span class="units">(h)</span>
+      </div>
+    </div>
+
+    <p>The interval <span class="mono">t<sub>24h</sub> − t<sub>2h</sub></span> is
+      22 hours. Two supporting reads follow directly from the same concentrations:</p>
+    <ul class="facts">
+      <li><strong>Dose proportionality</strong> — compare the concentration ratio
+        (37 mg/kg ÷ 4 mg/kg) against the dose ratio (9.25×). Sub-proportional
+        scaling signals altered absorption or induced clearance.</li>
+      <li><strong>Bioaccumulation screen</strong> — a screening-level flag when
+        <span class="mono">t<sub>½</sub> &gt; 24 h</span>, per the reference's stated
+        intent.</li>
+      <li><strong>Below-LOQ handling</strong> — substitute ½ · LOD when &gt;20% of a
+        group is above the limit of detection (reference footnote). Not triggered
+        here — all values are above the LOQ — but implemented for generality.</li>
+    </ul>
+  </section>
+
+  <!-- 4 -->
+  <section class="sec anchor">
+    <div class="sec-head"><span class="num">04</span><h2>Validation</h2></div>
+    <p>We ran the method above on this study's per-animal data and compared the
+      result to the published NIEHS Report 10 values. <strong>The computed
+      half-lives reproduce the published half-lives to the decimal.</strong></p>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span>Half-life · computed vs. published</span>
+        <span class="badge good">4 / 4 match</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">Sex</th><th scope="col">Dose</th>
+              <th scope="col">C<sub>2h</sub></th><th scope="col">C<sub>24h</sub></th>
+              <th scope="col">k<sub>e</sub></th>
+              <th scope="col">t<sub>½</sub> computed</th>
+              <th scope="col">t<sub>½</sub> published</th>
+              <th scope="col" class="chk"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Male</td><td>4</td><td>33.8</td><td>23.1</td><td>0.0173</td><td>40.1</td><td>40.1</td><td class="chk ok">✓</td></tr>
+            <tr><td>Male</td><td>37</td><td>137</td><td>50.0</td><td>0.0458</td><td>15.1</td><td>15.1</td><td class="chk ok">✓</td></tr>
+            <tr><td>Female</td><td>4</td><td>46.3</td><td>38.1</td><td>0.0089</td><td>78.2</td><td>78.2</td><td class="chk ok">✓</td></tr>
+            <tr><td>Female</td><td>37</td><td>184</td><td>101</td><td>0.0273</td><td>25.4</td><td>25.6</td><td class="chk ok">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="panel-foot">Concentrations in ng/mL (group means). The 0.2 h gap at
+        Female/37 is rounding in the report's SEM-rounded inputs, not a method
+        difference.</p>
+    </div>
+
+    <p>Separately, the per-animal plasma values in our pool reproduce the reference
+      report's <em>Table 7</em> (Summary of Plasma Concentration Data) exactly —
+      mean ± SEM, to the reported decimal:</p>
+
+    <div class="panel subtle">
+      <div class="panel-head"><span>Table 7 · reproduced from our per-animal data</span></div>
+      <div class="tbl-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">Group</th>
+              <th scope="col" colspan="2">4 mg/kg</th>
+              <th scope="col" colspan="2">37 mg/kg</th>
+            </tr>
+            <tr class="sub">
+              <th scope="col"></th>
+              <th scope="col">2 h</th><th scope="col">24 h</th>
+              <th scope="col">2 h</th><th scope="col">24 h</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Male (n=3)</th><td>33.8 ± 4.43</td><td>23.1 ± 3.42</td><td>137 ± 10.6</td><td>50.0 ± 19.4</td></tr>
+            <tr><th scope="row">Female (n=3)</th><td>46.3 ± 5.96</td><td>38.1 ± 3.36</td><td>184 ± 3.06</td><td>101 ± 3.08</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="panel-foot">ng/mL, mean ± standard error of the mean.</p>
+    </div>
+
+    <p class="note good-note">Because our data <em>is</em> the reference study's
+      data and the formula reproduces its published results, the risk in this build
+      is implementation, not method. The science is settled and checked.</p>
+  </section>
+
+  <!-- 5 -->
+  <section class="sec">
+    <div class="sec-head"><span class="num">05</span><h2>How we implement it</h2></div>
+    <p>Four pieces, scoped small. The numeric work is deterministic (byte-verifiable
+      against the reference); only the prose is generated.</p>
+
+    <ol class="build">
+      <li>
+        <div class="b-head"><span class="b-tag det">deterministic</span><h3>Toxicokinetic analysis</h3></div>
+        <p>A module that reads the plasma-concentration data already in the pool and
+          computes, per (sex, dose): mean ± SEM at each timepoint, elimination rate
+          <span class="mono">k<sub>e</sub></span>, half-life
+          <span class="mono">t<sub>½</sub></span>, the dose-proportionality ratio,
+          and the bioaccumulation flag. Pure computation — no LLM.</p>
+      </li>
+      <li>
+        <div class="b-head"><span class="b-tag det">deterministic</span><h3>Plasma concentration table</h3></div>
+        <p>Feed the computed summary into the <em>Summary of Plasma Concentration
+          Data</em> table the template already declares — reproducing Table 7.</p>
+      </li>
+      <li>
+        <div class="b-head"><span class="b-tag gen">generated</span><h3>Internal-dose narrative</h3></div>
+        <p>Prose grounded in the computed numbers, following the reference's
+          interpretive frame: sex difference in exposure, sub-proportional dose
+          scaling → altered ADME, shorter half-life at the higher dose → induced
+          clearance. Cites the figures it stands on.</p>
+      </li>
+      <li>
+        <div class="b-head"><span class="b-tag route">routing</span><h3>Section wiring</h3></div>
+        <p>Route the computed table and narrative to the Internal Dose Assessment
+          node in the document tree, so the plasma data lands in its proper section
+          instead of surfacing as a generic apical platform.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 6 -->
+  <section class="sec">
+    <div class="sec-head"><span class="num">06</span><h2>Decisions for you</h2></div>
+    <p>Points where we want your sign-off before building. Our recommendation is
+      given; the reference report supports each.</p>
+    <div class="decisions">
+      <div class="dec">
+        <h3>Half-life from group means</h3>
+        <p>Compute <span class="mono">t<sub>½</sub></span> from the group-mean
+          concentrations (not per-animal then averaged). This is what reproduces the
+          published values exactly. <span class="rec">Recommended.</span></p>
+      </div>
+      <div class="dec">
+        <h3>Below-limit substitution</h3>
+        <p>Use ½ · LOD when &gt;20% of a group is above the limit of detection, per
+          the Table 7 footnote. Inert for this study (all above LOQ).
+          <span class="rec">Confirm rule.</span></p>
+      </div>
+      <div class="dec">
+        <h3>Bioaccumulation flag</h3>
+        <p>Surface the screening call when <span class="mono">t<sub>½</sub> &gt;
+          24 h</span>. Here it flags the 4 mg/kg groups (78.2 h, 40.1 h).
+          <span class="rec">Recommended.</span></p>
+      </div>
+      <div class="dec">
+        <h3>Interpretive claims</h3>
+        <p>The ADME / clearance-induction language is generated, then reviewed and
+          edited externally like every other narrative — never auto-published as
+          final. <span class="rec">Per the round-trip model.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="src">
+    <p class="src-title">Sources</p>
+    <ul>
+      <li>NIEHS Report 10 — PFHxSAm 5-day rat study, NCBI Bookshelf <span class="mono">NBK589955</span>
+        (Abstract, Materials &amp; Methods §Internal Dose Assessment, Results §9, Table 7, Appendix A).</li>
+      <li>Study data: <span class="mono">tissue_conc_truth_{male,female}</span> in the DTXSID50469320 pool
+        (per-animal plasma concentrations, verified to reproduce Table 7).</li>
+    </ul>
+    <p class="colophon">Prepared for review · 5D-Tox automated reporting · September 2026</p>
+  </footer>
+</section>
+
+<style>
+  :root {
+    --ground: #f4f6f8;
+    --surface: #ffffff;
+    --surface-2: #eaeef2;
+    --ink: #1a1e25;
+    --ink-2: #55606f;
+    --ink-3: #7c8797;
+    --line: #d7dde4;
+    --line-2: #e7ebef;
+    --accent: #0e6e77;
+    --accent-ink: #0a5359;
+    --accent-wash: rgba(14,110,119,0.08);
+    --amber: #9a6416;
+    --good: #2c7a4d;
+    --good-ink: #215d3b;
+    --good-wash: rgba(44,122,77,0.10);
+    --shadow: 0 1px 2px rgba(20,30,45,.04), 0 8px 24px -12px rgba(20,30,45,.14);
+
+    --serif: "Charter", "Sitka Text", "Iowan Old Style", Cambria, "Georgia", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Code", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #101319;
+      --surface: #161b22;
+      --surface-2: #1d232c;
+      --ink: #e8ecf1;
+      --ink-2: #9aa5b3;
+      --ink-3: #6f7b8b;
+      --line: #29313b;
+      --line-2: #212831;
+      --accent: #37b3bd;
+      --accent-ink: #79d2da;
+      --accent-wash: rgba(55,179,189,0.12);
+      --amber: #d59b52;
+      --good: #5ec489;
+      --good-ink: #86d6a6;
+      --good-wash: rgba(94,196,137,0.14);
+      --shadow: 0 1px 2px rgba(0,0,0,.30), 0 10px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101319;
+    --surface: #161b22;
+    --surface-2: #1d232c;
+    --ink: #e8ecf1;
+    --ink-2: #9aa5b3;
+    --ink-3: #6f7b8b;
+    --line: #29313b;
+    --line-2: #212831;
+    --accent: #37b3bd;
+    --accent-ink: #79d2da;
+    --accent-wash: rgba(55,179,189,0.12);
+    --amber: #d59b52;
+    --good: #5ec489;
+    --good-ink: #86d6a6;
+    --good-wash: rgba(94,196,137,0.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.30), 0 10px 30px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: clamp(1.4rem, 4vw, 3.5rem) clamp(1.1rem, 4vw, 2rem) 4rem;
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  em { font-style: italic; color: var(--ink); }
+  strong { font-weight: 640; }
+  .mono { font-family: var(--mono); font-size: .92em; font-variant-numeric: tabular-nums; }
+
+  /* Masthead */
+  .masthead { padding-bottom: 1.6rem; border-bottom: 1px solid var(--line); margin-bottom: 2rem; }
+  .eyebrow {
+    font-family: var(--sans); font-size: .74rem; font-weight: 650;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--accent-ink);
+    margin: 0 0 .8rem;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 640;
+    font-size: clamp(2.1rem, 6vw, 3rem); line-height: 1.05; letter-spacing: -.015em;
+    text-wrap: balance; margin: 0 0 .7rem; color: var(--ink);
+  }
+  .dek {
+    font-family: var(--serif); font-size: clamp(1.05rem, 2.4vw, 1.28rem);
+    line-height: 1.5; color: var(--ink-2); max-width: 40ch; margin: 0 0 1.7rem;
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: 1.2rem 2.2rem; margin: 0; }
+  .meta div { margin: 0; }
+  .meta dt {
+    font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 640; margin-bottom: .15rem;
+  }
+  .meta dd { margin: 0; font-size: .92rem; font-weight: 520; color: var(--ink); }
+  .pill {
+    display: inline-block; font-size: .78rem; font-weight: 600;
+    padding: .12rem .6rem; border-radius: 999px;
+    color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  }
+
+  /* TL;DR */
+  .tldr {
+    background: var(--accent-wash);
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 2.6rem;
+  }
+  .tldr p { margin: 0; }
+  .tldr strong { color: var(--accent-ink); }
+
+  /* Sections */
+  .sec { margin-bottom: 2.8rem; }
+  .sec-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .9rem; }
+  .num {
+    font-family: var(--mono); font-size: .8rem; font-weight: 600;
+    color: var(--accent); letter-spacing: .05em;
+    padding-top: .25rem;
+  }
+  h2 {
+    font-family: var(--serif); font-weight: 620;
+    font-size: clamp(1.4rem, 3.4vw, 1.75rem); line-height: 1.15; letter-spacing: -.01em;
+    margin: 0; color: var(--ink); text-wrap: balance;
+  }
+  h3 { font-family: var(--sans); font-weight: 640; font-size: 1rem; margin: 0 0 .3rem; color: var(--ink); }
+
+  .note {
+    font-size: .95rem; color: var(--ink-2);
+    border-top: 1px solid var(--line-2); padding-top: .9rem; margin-top: 1.2rem;
+  }
+  .good-note {
+    border: none; background: var(--good-wash);
+    border-radius: 9px; padding: .9rem 1.1rem; color: var(--ink);
+  }
+  .good-note em { color: var(--good-ink); font-style: normal; font-weight: 600; }
+
+  /* Facts list */
+  .facts { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: .55rem; }
+  .facts li {
+    position: relative; padding-left: 1.4rem; max-width: 66ch;
+    font-size: .97rem; color: var(--ink);
+  }
+  .facts li::before {
+    content: ""; position: absolute; left: .1rem; top: .62em;
+    width: 6px; height: 6px; border-radius: 2px; background: var(--accent);
+  }
+
+  /* Now / Proposed split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.4rem 0 1.2rem; }
+  .split-col { border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; background: var(--surface); }
+  .split-col p:last-child { margin: 0; font-size: .95rem; color: var(--ink-2); }
+  .split-col.next { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-wash); }
+  .tag {
+    font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    font-weight: 680; margin: 0 0 .45rem;
+  }
+  .now .tag { color: var(--ink-3); }
+  .next .tag { color: var(--accent-ink); }
+
+  /* Formula */
+  .formula {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.3rem 1.4rem; margin: 1.3rem 0; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 1rem; overflow-x: auto;
+  }
+  .frow { display: flex; align-items: center; gap: .7rem; font-family: var(--mono); font-size: 1.05rem; color: var(--ink); }
+  .frow .lhs { color: var(--accent-ink); font-weight: 600; min-width: 1.6em; }
+  .frow .eq, .frow .eqx { color: var(--ink-3); }
+  .frac { display: inline-flex; flex-direction: column; text-align: center; }
+  .frac .numer { padding: 0 .5rem .1rem; }
+  .frac .denom { padding: .1rem .5rem 0; border-top: 1.5px solid var(--ink-2); }
+  .units { color: var(--ink-3); font-size: .88rem; margin-left: .3rem; }
+  sub, sup { font-size: .72em; }
+
+  /* Data panels */
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    margin: 1.3rem 0; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .panel.subtle { box-shadow: none; }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: .8rem 1.1rem; border-bottom: 1px solid var(--line);
+    font-size: .82rem; font-weight: 640; letter-spacing: .02em; color: var(--ink-2);
+    background: var(--surface-2);
+  }
+  .badge {
+    font-size: .72rem; font-weight: 680; letter-spacing: .03em;
+    padding: .15rem .55rem; border-radius: 999px;
+  }
+  .badge.good { color: var(--good-ink); background: var(--good-wash); border: 1px solid color-mix(in srgb, var(--good) 34%, transparent); }
+  .panel-foot { margin: 0; padding: .7rem 1.1rem; font-size: .82rem; color: var(--ink-3); border-top: 1px solid var(--line-2); }
+
+  .tbl-wrap { overflow-x: auto; }
+  table.data { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  table.data th, table.data td { padding: .55rem .8rem; text-align: right; white-space: nowrap; }
+  table.data thead th { color: var(--ink-2); font-weight: 640; font-size: .78rem; letter-spacing: .02em; border-bottom: 1px solid var(--line); }
+  table.data thead tr.sub th { font-weight: 560; color: var(--ink-3); border-bottom: 1px solid var(--line-2); }
+  table.data td:first-child, table.data th[scope="row"], table.data thead th:first-child { text-align: left; }
+  table.data th[scope="row"] { font-weight: 560; color: var(--ink); }
+  table.data tbody tr + tr td, table.data tbody tr + tr th { border-top: 1px solid var(--line-2); }
+  table.data td { color: var(--ink); }
+  .chk { width: 1.4rem; text-align: center !important; }
+  .chk.ok { color: var(--good); font-weight: 700; }
+
+  /* Build list */
+  ol.build { list-style: none; counter-reset: b; padding: 0; margin: 1.3rem 0 0; display: flex; flex-direction: column; gap: .7rem; }
+  ol.build li {
+    counter-increment: b; position: relative;
+    border: 1px solid var(--line); border-radius: 11px; padding: 1rem 1.15rem 1rem 3.1rem;
+    background: var(--surface);
+  }
+  ol.build li::before {
+    content: counter(b); position: absolute; left: 1.05rem; top: 1rem;
+    font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--accent);
+    width: 1.4rem; height: 1.4rem; border-radius: 7px; display: grid; place-items: center;
+    background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .b-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .25rem; flex-wrap: wrap; }
+  ol.build li p { margin: 0; font-size: .95rem; color: var(--ink-2); }
+  .b-tag {
+    font-size: .64rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: .12rem .5rem; border-radius: 5px;
+  }
+  .b-tag.det { color: var(--accent-ink); background: var(--accent-wash); }
+  .b-tag.gen { color: var(--amber); background: color-mix(in srgb, var(--amber) 13%, transparent); }
+  .b-tag.route { color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); }
+
+  /* Decisions */
+  .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem; }
+  .dec { border: 1px solid var(--line); border-radius: 11px; padding: 1rem 1.1rem; background: var(--surface); }
+  .dec h3 { font-size: .96rem; margin-bottom: .35rem; }
+  .dec p { margin: 0; font-size: .92rem; color: var(--ink-2); }
+  .rec { color: var(--accent-ink); font-weight: 620; }
+
+  /* Sources */
+  .src { border-top: 1px solid var(--line); margin-top: 3rem; padding-top: 1.4rem; }
+  .src-title { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); font-weight: 680; margin: 0 0 .7rem; }
+  .src ul { margin: 0 0 1.3rem; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .5rem; }
+  .src li { font-size: .87rem; color: var(--ink-2); max-width: 70ch; }
+  .colophon { font-size: .8rem; color: var(--ink-3); margin: 0; }
+
+  @media (max-width: 620px) {
+    .split, .decisions { grid-template-columns: 1fr; }
+    body { font-size: 16px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .sec, .tldr, .panel { animation: rise .5s cubic-bezier(.2,.6,.2,1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>

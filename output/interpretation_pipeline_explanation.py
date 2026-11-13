@@ -7,8 +7,7 @@ paragraphs, tables, and styled text that mirrors the original markdown response.
 """
 
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
 import os
 
@@ -135,7 +134,7 @@ def build_document():
     # -------------------------------------------------------------------
     # Knowledge Base
     # -------------------------------------------------------------------
-    doc.add_heading('Knowledge Base (bmdx.duckdb)', level=2)
+    doc.add_heading('Knowledge Base (knowledge_bases/<name>/kb.duckdb)', level=2)
     doc.add_paragraph(
         'The pipeline queries a DuckDB database with 9 normalized tables built from:'
     )
@@ -189,7 +188,7 @@ def build_document():
     table_data = [
         ('Script', 'Role'),
         ('interpret.py', 'Main interpretation engine'),
-        ('build_db.py', 'Builds bmdx.duckdb from crawl data'),
+        ('build_db.py', 'Builds a knowledge base database from its crawl'),
         ('citegraph.py', 'Citation graph crawler'),
         ('extract.py', 'LLM extraction from abstracts (genes, organs, claims)'),
         ('go_gene_map.py', 'GO-gene cross-reference mapping'),

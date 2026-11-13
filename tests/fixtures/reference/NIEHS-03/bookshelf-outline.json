@@ -1,0 +1,730 @@
+[
+ {
+  "depth": 0,
+  "kind": "book-title",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of tert-Butylphenyl Diphenyl Phosphate (CASRN 56803-37-3) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)"
+ },
+ {
+  "depth": 0,
+  "kind": "subtitle",
+  "part_type": "",
+  "label": "",
+  "title": "NIEHS Report 03"
+ },
+ {
+  "depth": 0,
+  "kind": "contrib-group",
+  "part_type": "authors",
+  "label": "",
+  "title": "12 contrib"
+ },
+ {
+  "depth": 0,
+  "kind": "abstract",
+  "part_type": "",
+  "label": "",
+  "title": "Abstract"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "foreword",
+  "part_type": "",
+  "label": "",
+  "title": "Foreword"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "authors",
+  "label": "",
+  "title": "Authors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "contributors",
+  "label": "",
+  "title": "Contributors"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "peer-review",
+  "label": "",
+  "title": "Peer Review"
+ },
+ {
+  "depth": 0,
+  "kind": "front-matter-part",
+  "part_type": "",
+  "label": "",
+  "title": "Publication Details"
+ },
+ {
+  "depth": 0,
+  "kind": "ack",
+  "part_type": "",
+  "label": "",
+  "title": "Acknowledgments"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Background"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Materials and Methods"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Study Design"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Dose Selection Rationale"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Chemistry"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Examinations and Sample Collection"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Observations"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Body and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Pathology"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Sample Collection for Transcriptomics"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "RNA Isolation and cDNA Synthesis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Analysis of GeneChip Data Quality"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Benchmark Dose Analysis of Transcriptomics Data"
+ },
+ {
+  "depth": 2,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Data Accessibility"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Results"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Animal Condition, Body Weights, and Organ Weights"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 1",
+  "title": "Body Weight Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 2",
+  "title": "Organ Weights Summarya"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Clinical Chemistry"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 3",
+  "title": "Clinical Chemistry Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Hormones and Enzymes"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 4",
+  "title": "Hormones and Enzymes Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Apical Endpoint Benchmark Dose Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 5",
+  "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Set Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 6",
+  "title": "Top 10 Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table 7",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Mediana"
+ },
+ {
+  "depth": 0,
+  "kind": "sec",
+  "part_type": "",
+  "label": "",
+  "title": "Summary"
+ },
+ {
+  "depth": 0,
+  "kind": "ref-list",
+  "part_type": "",
+  "label": "",
+  "title": "References"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix A",
+  "title": "Animal Identifiers"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table A-1",
+  "title": "Animal Numbers and Microarray Data File Names"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix B",
+  "title": "Toxicology Data Tables"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-1",
+  "title": "I04: Body Weight Summarya,b"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-2",
+  "title": "PA06: Organ Weights Summarya,b,c"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-3",
+  "title": "PA41: Clinical Chemistry Summarya,b"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table B-4",
+  "title": "R07: Hormones and Enzymes Summarya,b"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix C",
+  "title": "Transcriptomic Quality Control and Additional Data Analysis"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.1",
+  "title": "Gene Expression Quality Control"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "",
+  "title": "Figure C-1. A Principal Component Analysis of the Robust Multi-array Average-normalized Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "C.2",
+  "title": "Additional Data Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "fig",
+  "part_type": "",
+  "label": "",
+  "title": "Figure C-2. An Alternative View of the Principal Component Analysis of the Robust Multi-array Average-normalized Data"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix D",
+  "title": "Benchmark Dose Model Recommendation and Selection Methodologies"
+ },
+ {
+  "depth": 1,
+  "kind": "table-wrap",
+  "part_type": "",
+  "label": "Table D-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-1",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose Execution of Apical Endpoints"
+ },
+ {
+  "depth": 1,
+  "kind": "fig",
+  "part_type": "",
+  "label": "Figure D-2",
+  "title": "Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution of Gene Sets with Expression Changes Enacted by Chemical Exposure"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix E",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "E.1",
+  "title": "Organ Weight Descriptions"
+ },
+ {
+  "depth": 0,
+  "kind": "app",
+  "part_type": "",
+  "label": "Appendix F",
+  "title": "Supplemental Data"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.1",
+  "title": "Apical Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD Apical Endpoints Model Fits"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMD Model Recommendation Selection Rules"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Read Me"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Model Parameters"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDs Code Package"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.2",
+  "title": "Genomic Benchmark Dose Analysis"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File (bm2 format)"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Gene Description"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 GO Biological Process Gene Sets"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Top 10 Genes Ranked by Potency of Perturbation"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Project File (JSON format)"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "GO Biological Process Description"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Expression Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress GO Biological Process Deduplicated BMD Results"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Probe Set BMD Results"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Individual Gene BMD Results"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Prefilter Results"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Animal and Microarray Metadata"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Array Platform Gene and GO Term Annotation File"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "BMDExpress Software"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Batch Correction Documentation"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Gene BMD Analysis Results File"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Principal Components Analysis Files"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Raw Data CEL Files"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.3",
+  "title": "Study Tables"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I04 – Mean Body Weight Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "I05 – Clinical Observations Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA06 – Organ Weights Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "PA41 – Clinical Chemistry Summary"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "R07 – Hormone Summary"
+ },
+ {
+  "depth": 1,
+  "kind": "sec",
+  "part_type": "",
+  "label": "F.4",
+  "title": "Individual Animal Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Body Weight Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Chemistry Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Clinical Observations Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Hormone Data"
+ },
+ {
+  "depth": 2,
+  "kind": "media",
+  "part_type": "",
+  "label": "",
+  "title": "Individual Animal Organ Weight Data"
+ }
+]

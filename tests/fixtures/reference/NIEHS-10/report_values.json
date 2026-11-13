@@ -1,0 +1,7 @@
+{
+  "_source": "NIEHS Report 10 (NBK589955, PDF dated 2023-03-20), Results — Internal Dose Assessment, p. 30 (also the Abstract, p. 11). Values the report states that no CEBS table carries.",
+  "plasma_half_life_hours": {
+    "Male":   {"4": 40.1, "37": 15.1},
+    "Female": {"4": 78.2, "37": 25.6}
+  }
+}

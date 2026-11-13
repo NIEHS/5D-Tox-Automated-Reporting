@@ -3,10 +3,19 @@
 # Top-level is THREE region containers (ADR-0004 amendment d) that project
 # directly to BITS <front-matter> / <book-body> / <book-back>:
 #
-#   - region: front   — cover, title page, ToC, foreword, ..., abstract
-#   - region: body    — background, methods, results, summary
-#   - region: back    — references + appendices A–F
+#   - region: front   — title page, foreword, ToC, authors, ..., abstract
+#   - region: body    — background, methods, results, summary, references
+#   - region: back    — appendices A–F
 #
+# ADR-0028: the structure corresponds one-to-one with the published BITS book.
+# Each top-level node names the BITS part it becomes — `element` (book-meta,
+# abstract, foreword, front-matter-part, book-part, book-app) and
+# `book_part_type` (the @book-part-type) — so this file reads like the book's
+# part list.  Print-only nodes (toc, tables-list) name no element: Bookshelf
+# generates its own table of contents.  Nested nodes project by their role
+# (sec, table-wrap, fig); flow content (tables, figures) must come before a
+# section's sub-sections, and section labels inside appendices ("C.1") are
+# computed, never written into titles.
 # Each region's `children` are the node entries; the instantiator inherits
 # `region` from the container onto every descendant (so any node knows its
 # region without a separate type lookup).  The page-numbering switch
@@ -14,15 +23,19 @@
 #
 # Node-entry fields (everything else is computed):
 #   id, type, title, data_key, platform, narrative_key, ready_key,
-#   methods_key, orientation, caption, children.
+#   methods_key, orientation, caption, children, element, book_part_type, parts.
 # Computed: level (depth or 0 if headingless), table_number/figure_number
-# (positional), region (inherited from the container).
+# (positional), sec_label (appendix sections), region (inherited from the
+# container).
 #
 # The golden-tree test (tests/unit/test_document_template.py) asserts that
 # instantiating this file reproduces the frozen DOCUMENT_TREE byte-for-byte.
 #
-# This file is a MAPPING with three top-level keys:
+# This file is a MAPPING whose top-level keys are:
 #   document:    the region containers + node entries (the document structure);
+#   book_meta:   the report SERIES facts BITS writes into <collection-meta> /
+#                <book-meta> (ADR-0028 §6) — collection, series + ISSN,
+#                publisher, permissions; study facts come from the data;
 #   chart_style: optional per-instance chart styling (see chart_style.py);
 #   chart_types: optional data-driven chart-type declarations (chart_registry).
 # load_template() returns the `document` list unchanged, so the golden tree is
@@ -40,6 +53,7 @@ document:
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
+    element: book-meta        # the book title + subtitle (ADR-0028 §6)
   # Page breaks are NOT structural nodes — they are declared in the `styles`
   # block below as `break_before: page` on the node that should start a new page
   # (see the header note there).  This keeps pagination a single surface-agnostic
@@ -48,42 +62,69 @@ document:
     type: front-matter
     title: Foreword
     data_key: foreword
+    element: foreword
+    book_part_type: foreword
   - id: toc
     type: toc
     title: Table of Contents
   - id: tables-list
     type: tables-list
     title: Tables
-  - id: about
+  # Authors and Contributors are two front-matter parts in the published book
+  # (fm-authors / fm-contribs), filled from the session's front_matter.json.
+  - id: authors
     type: front-matter
-    title: About This Report
-    data_key: about_report
+    title: Authors
+    data_key: authors
+    element: front-matter-part
+    book_part_type: authors
+  - id: contributors
+    type: front-matter
+    title: Contributors
+    data_key: contributors
+    element: front-matter-part
+    book_part_type: contributors
   - id: peer-review
     type: front-matter
     title: Peer Review
     data_key: peer_review
+    element: front-matter-part
+    book_part_type: peer-review
   - id: publication
     type: front-matter
     title: Publication Details
     data_key: publication_details
+    element: front-matter-part
+    book_part_type: section
   - id: acknowledgments
     type: front-matter
     title: Acknowledgments
     data_key: acknowledgments
+    element: front-matter-part
+    book_part_type: acknowledgments
+  # The abstract lives in <book-meta>; its four parts are declared, so a part
+  # with no text yet shows as pending instead of silently vanishing.
   - id: abstract
     type: front-matter
     title: Abstract
     data_key: abstract
+    element: abstract
+    parts: [Background, Methods, Results, Summary]
 - region: body
   children:
   - id: background
     type: narrative
     title: Background
     data_key: background
+    element: book-part
+    book_part_type: section
   - id: methods
     type: heading-only
     title: Materials and Methods
     data_key: methods
+    element: book-part
+    book_part_type: section
+    binding: llm   # the section's prose (its subsections) is LLM-generated (ADR-0025)
     children:
     - id: mm-study-design
       type: narrative
@@ -111,26 +152,36 @@ document:
         title: Clinical Observations
         data_key: methods
         methods_key: clinical_obs
+        requires_platform: Clinical Observations
+        not_collected_text: "Clinical observations were not evaluated in this study."
       - id: mm-body-organ-wt
         type: narrative
         title: Body and Organ Weights
         data_key: methods
         methods_key: body_organ_weights
+        requires_platform: [Body Weight, Organ Weight]
+        not_collected_text: "Body and organ weights were not evaluated in this study."
       - id: mm-clin-path
         type: narrative
         title: Clinical Pathology
         data_key: methods
         methods_key: clinical_pathology
+        requires_platform: [Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Clinical pathology was not evaluated in this study."
       - id: mm-internal-dose
         type: narrative
         title: Internal Dose Assessment
         data_key: methods
         methods_key: internal_dose
+        requires_platform: Tissue Concentration
+        not_collected_text: "Internal dose was not assessed in this study."
     - id: mm-transcriptomics
       type: heading-only
       title: Transcriptomics
       data_key: methods
       methods_key: transcriptomics
+      requires_platform: gene_expression
+      not_collected_text: "Transcriptomic analyses were not performed in this study."
       children:
       - id: mm-tx-sample
         type: narrative
@@ -152,11 +203,14 @@ document:
         title: Sequencing Quality Checks and Outlier Removal
         data_key: methods
         methods_key: txomics_qc
-      - id: table-sample-counts
-        type: sample-counts-table
-        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
-        data_key: sample_counts
-        caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        children:
+        # Table 1 sits inside the section that reports the sample QC, as in
+        # the published book (a table may not follow a sibling sub-section).
+        - id: table-sample-counts
+          type: sample-counts-table
+          title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+          data_key: sample_counts
+          caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
       - id: mm-tx-norm
         type: narrative
         title: Data Normalization
@@ -173,21 +227,29 @@ document:
         title: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
         data_key: methods
         methods_key: stat_analysis
+        requires_platform: [Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Apical endpoints were not evaluated in this study."
       - id: mm-bmd-apical
         type: narrative
         title: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
         data_key: methods
         methods_key: bmd_apical
+        requires_platform: [Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Apical endpoints were not evaluated in this study."
       - id: mm-bmd-tx
         type: narrative
         title: Benchmark Dose Analysis of Transcriptomics Data
         data_key: methods
         methods_key: bmd_genomics
+        requires_platform: gene_expression
+        not_collected_text: "Transcriptomic analyses were not performed in this study."
       - id: mm-fdr
         type: narrative
         title: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
         data_key: methods
         methods_key: efdr
+        requires_platform: gene_expression
+        not_collected_text: "Transcriptomic analyses were not performed in this study."
       - id: mm-data-access
         type: narrative
         title: Data Accessibility
@@ -196,12 +258,17 @@ document:
   - id: results
     type: heading-only
     title: Results
+    element: book-part
+    book_part_type: section
     children:
     - id: animal-condition
       type: narrative+tables
       title: Animal Condition, Body Weights, and Organ Weights
       narrative_key: animal_condition
       ready_key: animalCondition
+      # Clinical observations alone still give it its Animal Condition prose.
+      requires_platform: [Body Weight, Organ Weight, Clinical Observations]
+      not_collected_text: "Body and organ weights were not evaluated in this study."
       children:
       - id: table-body-weight
         type: table
@@ -220,6 +287,8 @@ document:
       title: Clinical Pathology
       narrative_key: clinical_pathology
       ready_key: clinicalPath
+      requires_platform: [Clinical Chemistry, Hematology, Hormones]
+      not_collected_text: "Clinical pathology (clinical chemistry, hematology, and hormone analyses) was not evaluated in this study."
       children:
       - id: table-clin-chem
         type: table
@@ -242,7 +311,10 @@ document:
     - id: internal-dose
       type: narrative+tables
       title: Internal Dose Assessment
+      narrative_key: internal_dose
       ready_key: internalDose
+      requires_platform: Tissue Concentration
+      not_collected_text: "Internal dose was not assessed in this study."
       children:
       - id: table-tissue-conc
         type: table
@@ -271,41 +343,102 @@ document:
     type: narrative
     title: Summary
     data_key: summary
-- region: back
-  children:
+    element: book-part
+    book_part_type: section
+  # References is the last BODY part in the published book: a book-part whose
+  # <back> holds the numbered <ref-list> (ADR-0028 §5).
   - id: references
-    type: narrative
+    type: reference-list
     title: References
     data_key: references
-  # Appendices A/D/E/F carry AUTHORED static content (the reference's plasma
-  # method, BMD rules table, organ descriptions, supplemental manifest) as a
-  # freeform-block child — dual-surface, one .tex + one .html per appendix
-  # under templates/freeform/.  Appendix B renders the data-derived animal
-  # roster (no child).  Appendix C stays a pending stub (its QC/eFDR figures
-  # need transcriptomics data the pipeline does not retain).
+    element: book-part
+    book_part_type: section
+- region: back
+  children:
+  # Appendices D/E carry AUTHORED static content shared by every study (BMD
+  # rules table, organ descriptions) as a freeform-block child — dual-surface,
+  # one .tex + one .html per appendix under templates/freeform/.  Appendices A/F
+  # are STUDY-SPECIFIC (a chemical's plasma method, its supplemental files):
+  # `session_content` resolves them per study, never from the shared template.  Appendix B renders the data-derived animal
+  # roster (no child).  Appendix C carries the PCA figure (computed from the
+  # integrated expression data) and a pending eFDR figure (not ingested yet).
   # Appendix titles carry ONLY the descriptive name — the "Appendix A." letter
   # prefix is assigned positionally by compute_appendix_letters() and composed by
   # the renderers (and drives docx chapter-relative page numbering).  Do NOT bake
   # the letter into the title.
   - id: appendix-a
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Internal Dose Assessment
     children:
     - id: appendix-a-body
       type: freeform-block
       title: ""
-      content_file:
-        latex: freeform/appendix-a.tex
-        html: freeform/appendix-a.html
+      # The plasma analytical method is study-specific: supplied per study
+      # (sessions/<dtxsid>/authored/ or templates/studies/<dtxsid>/), never shared.
+      session_content: appendix-a
+      requires_platform: Tissue Concentration
+      not_collected_text: "Internal dose was not assessed in this study."
   - id: appendix-b
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Animal Identifiers
+    children:
+    # The animal roster is an ordinary programmatic matrix table (ADR-0025):
+    # its "Table B-1" label comes from the appendix-scoped numbering pass, its
+    # rows from data[appendix_animals_matrix] (built from animal_report.json).
+    - id: table-b-1
+      type: data-table
+      title: Animal Numbers and FASTQ Data File Names
+      data_key: appendix_animals_matrix
   - id: appendix-c
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Transcriptomic Quality Control and Empirical False Discovery Rate
+    children:
+    # C.1: PCA of the modeled expression matrix, computed from the integrated
+    # gene-expression experiments (genomics/pca_figure.py) — one figure, a row
+    # of three panels per tissue x sex.
+    - id: appendix-c-qc
+      type: heading-only
+      title: Gene Expression Quality Control
+      children:
+      - id: appendix-c-qc-text
+        type: freeform-block
+        title: ""
+        content_file:
+          latex: freeform/appendix-c.tex
+          html: freeform/appendix-c.html
+      - id: figure-c-pca
+        type: figure
+        subtype: chart
+        title: Principal Component Analysis of the Normalized Transcriptomic Data
+        data_key: appendix_pca_figure
+    # C.2: the empirical FDR comes from a synthetic-null BMDExpress analysis
+    # supplied with the study (e.g. NIEHS-13's *_eFDR_Synthetic_Null_Analysis);
+    # the pipeline does not ingest it yet, so the figure shows its pending note.
+    - id: appendix-c-efdr
+      type: heading-only
+      title: Empirical False Discovery Rate
+      children:
+      - id: figure-c-efdr
+        type: figure
+        subtype: chart
+        title: Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination
+        data_key: appendix_efdr_figure
+  # Appendix D: how apical BMDs are accepted. D-1 is built from the classifier's
+  # own thresholds (bmdx_pipe.bmd_acceptance via rendering/bmd_appendix.py), D-2
+  # from each bMDResult.analysisInfo — so neither can describe a method other
+  # than the one the tables were produced with.  (NIEHS Report 10 printed the
+  # BMDS 2.7 model-selection rules here; this pipeline never runs BMDS 2.7.)
   - id: appendix-d
     type: appendix
-    title: Benchmark Dose Model Recommendation and Selection Methodologies
+    element: book-app
+    book_part_type: appendix
+    title: Benchmark Dose Modeling and Acceptance Criteria
     children:
     - id: appendix-d-body
       type: freeform-block
@@ -313,26 +446,49 @@ document:
       content_file:
         latex: freeform/appendix-d.tex
         html: freeform/appendix-d.html
+    - id: table-d-1
+      type: data-table
+      title: Benchmark Dose Acceptance Criteria for Apical Endpoints
+      data_key: appendix_bmd_acceptance_matrix
+    - id: table-d-2
+      type: data-table
+      title: BMDExpress/ToxicR Analysis Configuration
+      data_key: appendix_bmd_config_matrix
   - id: appendix-e
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Organ Weight Descriptions
+    # The organ weight table's note (a) points here: "Descriptions of organ
+    # weight endpoints and changes are provided in Appendix E."
+    cited_as: organ-weight-descriptions
     children:
-    - id: appendix-e-body
-      type: freeform-block
-      title: ""
-      content_file:
-        latex: freeform/appendix-e.tex
-        html: freeform/appendix-e.html
+    - id: appendix-e-descriptions
+      type: heading-only
+      title: Organ Weight Descriptions
+      children:
+      # One paragraph per organ the study weighed or sequenced, in the
+      # definition's words (organ_descriptions below; rendering.organ_descriptions).
+      - id: appendix-e-body
+        type: narrative
+        title: ""
+        data_key: organ_weight_descriptions
   - id: appendix-f
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Supplemental Data
     children:
     - id: appendix-f-body
       type: freeform-block
       title: ""
-      content_file:
-        latex: freeform/appendix-f.tex
-        html: freeform/appendix-f.html
+      # The appendix's opening: the study's own authored text (appendix-f.html/
+      # .tex), else, when its data deposit has a DOI (pipeline.deposit), where
+      # the files listed below are, as every NIEHS book opens it; else that there
+      # are none.
+      session_content: appendix-f
+      deposit_text: "The following supplemental files are available at {doi}."
+      missing_content_text: "Supplemental data files are not available for this study."
   # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
   # freeform-page / freeform-block carry content authored HERE (or in an
   # external file), not read from the pipeline.  Uncomment + adapt to insert a
@@ -407,9 +563,13 @@ document:
 # organs:
 #   genomics: [kidney]
 #   organ-weight: [liver, kidney]
-organs:
-  genomics: [liver, kidney]
-  organ-weight: [liver]
+#
+# The shared template selects NOTHING here or in the sibling blocks below: a
+# study is reported in full — every organ, sex and endpoint its data has —
+# unless it declares its own selections.  A study's selections live in its
+# overlay, templates/studies/<dtxsid>/view.yaml (ADR-0027 §1; resolution in
+# document_model/view_config.py), e.g. NIEHS-10's liver-only, male-only Table 3
+# and hand-curated "Select" endpoints in templates/studies/DTXSID50469320/.
 
 
 # ---------------------------------------------------------------------------
@@ -418,8 +578,8 @@ organs:
 # Four more limiting factors, each a sibling of `document` and built on the same
 # rail as `organs` (document_template.load_report_{sex,assays,genes,gene_sets} +
 # the table_builder_common matchers).  Every block is OPTIONAL; an omitted block
-# (or empty list) ⇒ no filtering for that axis.  All ship omitted here (the
-# default filters nothing beyond `organs` above).
+# (or empty list) ⇒ no filtering for that axis.  All ship omitted here (a
+# study's own selections go in its overlay — see `organs` above).
 #
 #   sex          — per-area MAPPING, areas {apical, genomics}.  EXACT match
 #                  (male|female).  `apical` narrows the columns of every apical
@@ -451,41 +611,7 @@ organs:
 # genes: [egr1, ddit4]
 # gene_sets: ["GO:1902893", "cell division"]
 
-# assays — restrict the Clinical Chemistry (Table 4), Hematology (Table 5) and
-# Hormone (Table 6) tables to the reference's "Select" endpoints.  These are
-# PER-SEX: the NIEHS reference shows different endpoints for males vs females
-# (and the apical BMD summary, Table 8, lists the same per-sex set).  The
-# reference's "Select" is a HAND-CURATED subset that a data-driven
-# responsiveness gate does NOT reproduce (e.g. male Cholesterol is the only male
-# clin-chem row but is not NTP-responsive), so each panel is an explicit
-# allowlist.  An area value may be a flat list (both sexes) OR this
-# {male:/female:} mapping.  Tokens are matched component-aware, so multi-word
-# tokens ("manual hematocrit", "total thyroxine") are used where a single word
-# would over-match (bare "thyroxine" would also keep "Free Thyroxine"; bare
-# "count" spans every differential row).
-assays:
-  clinical-chemistry:
-    male: [cholesterol]
-    female: ["aspartate aminotransferase", "sorbitol dehydrogenase"]
-  hematology:
-    male: ["neutrophil count"]
-    female: ["manual hematocrit"]
-  hormones:
-    # Our row labels are "Triiodothyronine" / "Total Thyroxine" (the reference
-    # prints them "Total T3" / "Total T4").  Token "triiodothyronine" keeps the
-    # T3 row; "total thyroxine" keeps Total Thyroxine but NOT "Free Thyroxine".
-    male: ["triiodothyronine", "total thyroxine"]
-    female: ["total thyroxine"]
 
-# sex — the "organ-weight" area narrows ONLY the Organ Weight table (Table 3) to
-# the sex(es) that had a responsive organ, matching the reference (its Table 3
-# is "Summary of Liver Weights of MALE Rats" — female liver was not responsive,
-# so female is dropped from that ONE table while every other apical table keeps
-# both sexes).  Combined with `organs.organ-weight: [liver]` above, this yields
-# the single-organ / single-sex table; organ_weight_table then titles it
-# dynamically from what's shown.  Exact match (male|female).
-sex:
-  organ-weight: [male]
 
 
 # ---------------------------------------------------------------------------
@@ -503,9 +629,61 @@ sex:
 #   - key PRESENT  ⇒ only the listed types render; `[]` renders NONE.
 #
 # The NIEHS reference report carries NO main-body genomics figures (its only
-# figures are Appendix C PCA/boxplots and Appendix D flowcharts, none of which
-# we generate) — so we ship `charts: []` to suppress the UMAP semantic maps and
+# figures are the Appendix C PCA/boxplots, which are appendix nodes, and the
+# Appendix D BMDS flowcharts, which belong to a method this pipeline does not
+# run) — so we ship `charts: []` to suppress the UMAP semantic maps and
 # BMD/cluster scatters.  Set to `[umap, cluster]` to bring them back.
+# ADR-0028 §6: facts of the report SERIES (not the study), written into the BITS
+# <collection-meta> and <book-meta>.  Study facts — the report number (subtitle),
+# DOI, publication date and authors — come from the session's front matter.
+book_meta:
+  collection:
+    title: NIEHS Report Series
+  series:
+    title: NIEHS Report
+    issn: 2768-5632
+  publisher:
+    name: National Institute of Environmental Health Sciences
+    loc: Research Triangle Park (NC)
+  permissions:
+    license_href: https://creativecommons.org/publicdomain/zero/1.0/
+    statement: This is a work of the US government and distributed under the terms of the Public Domain
+
+# ADR-0029: the appendix "Organ Weight Descriptions" — one paragraph per organ
+# the study weighed or sequenced (rendering.organ_descriptions), "Organ:" in
+# bold then its text, in organ_description_order and then alphabetically.  The
+# texts are the published books', identical in every book that prints them
+# (Brain: NIEHS-02 … 06; Kidney, Heart: NIEHS-07 … 13; Lung, Ovary: NIEHS-12,
+# 13; Liver: all).  An organ with no text here prints a placeholder.
+organ_description_order: [Brain, Liver, Kidney, Heart]
+organ_descriptions:
+  Brain: "As the principal organ responsible for cognition and control of organ systems and bodily functions, the brain is largely shielded from toxic insults sufficiently severe to affect its weight. Because of this resistance to change, brain weight is often used as a denominator in determinations of other organ weight ratio changes. Other than in cases of grossly observable effects in the brain at necropsy, significant differences in brain weight in subacute toxicity studies are unlikely an effect of chemical exposure. More likely, changes in brain weight are the result of randomization (i.e., sorting of animals into groups for which the mean and standard deviation are significantly different at the outset of study, making it appear that there is an exposure-related difference when it is rather a byproduct of natural variation and chance)."
+  Liver: "The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+  Kidney: "The kidneys remove waste products and xenobiotics from the body, balance blood electrolytes, regulate blood pressure through the release of hormones, synthesize the active form of vitamin D, and control the production of erythropoiesis. In subacute studies, changes in kidney weight may reflect renal toxicity (particularly if accompanied by increases in other markers of kidney toxicity, e.g., increased Kim-1) and/or tubular hypertrophy. Decreased kidney weights in subacute studies are typically of unknown toxicological significance."
+  Heart: "The heart drives the circulatory system, supplying oxygen and essential macro- and micronutrients to the tissues. Increased heart weight in subacute studies would indicate severe cardiotoxicity, compensatory myocardial hypertrophy, and/or pulmonary injury. Decreased heart weight in subacute studies is often of unknown toxicological significance; however, it may be caused by decreased load on the heart from dehydration or modulation of contractility."
+  Lung: "The lung is the main respiratory organ and is primarily responsible for gas exchange but also aids in regulating blood pH and protecting the body from pathogens. An increase in lung weight following short-term exposure is a sensitive indicator of direct pulmonary toxicity. This change is typically driven by an acute inflammatory response, characterized by edema (fluid accumulation) and the infiltration of immune cells like neutrophils and macrophages. It is considered an adverse finding that signals local irritation and cellular injury. While the magnitude of the weight increase often correlates with the dose, a definitive interpretation of the nature and severity of the damage requires correlation with histopathological examination of the lung tissue. Conversely, a decrease in absolute lung weight is less common and usually points to significant systemic toxicity rather than a direct lung effect. The primary cause is often severe body weight loss (inanition), which leads to a proportional, catabolic reduction in the mass of most organs. In this scenario, the toxicological interpretation hinges on the relative lung-to-body-weight ratio, as an increase in this ratio can unmask a direct pulmonary effect that is otherwise obscured by the animal’s poor overall condition."
+  Ovary: "The ovary is the female gamete-producing organ and produces and releases essential sex hormones. Changes in ovarian weight are a key indicator of reproductive toxicity, often resulting from hormonal disruption. A decrease in weight is the more frequent and concerning finding, typically signaling an adverse impact on fertility. This can be caused by a direct toxic effect on ovarian cells, leading to follicular atresia, or by disruption of the Hypothalamic-Pituitary-Gonadal (HPG) axis. It may also occur as a secondary consequence of severe systemic toxicity and body weight loss, which suppresses reproductive function. An increase in ovarian weight is less common but also indicates significant reproductive perturbation, possibly from hormonal overstimulation, inflammation, or cysts. For any change in weight, the interpretation is critically dependent on context. The animal’s estrous cycle stage must be considered, as weight fluctuates naturally. Ultimately, a definitive conclusion about the cause and severity of the effect (either increased or decreased weight) is not possible without histopathological correlation to examine the underlying microscopic structure of the ovary."
+
+# ADR-0029: the series' Foreword, as NIEHS-05 … 10 print it (NIEHS-02 … 04
+# link the DTT pages at their earlier dntp addresses).  Each paragraph is
+# text; [text](url) is a link (document_template.load_foreword).  An era that
+# words it otherwise states its own.
+foreword:
+- "The [National Institute of Environmental Health Sciences (NIEHS)](https://www.niehs.nih.gov/) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+- "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the [Division of Translational Toxicology (DTT)](https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
+- "NIEHS reports are available free of charge on the [NIEHS/DTT website](https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm) and cataloged in [PubMed](https://pubmed.ncbi.nlm.nih.gov/), a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+
+# ADR-0029: how the BITS is packaged and where tables/figures sit.  The body's
+# float (Bookshelf shows a card that opens the object); the appendices' are
+# anchored in the text (shown in full) — as NIEHS-07 … 10 have them.
+packaging: chunked
+# The order of the genomic analyses' tissues (tables and per-tissue sections):
+# these first, the rest alphabetically — Liver then Kidney, as NIEHS-07 … 10.
+tissue_order: [liver, kidney]
+object_position:
+  body: float
+  back: anchor
+
 charts: []
 
 
@@ -627,7 +805,7 @@ styles:
   instances:
     # Front matter — new page before each of these sections.
     toc: { break_before: page }
-    about: { break_before: page }
+    authors: { break_before: page }
     peer-review: { break_before: page }
     publication: { break_before: page }
     abstract: { break_before: page }

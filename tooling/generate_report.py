@@ -1,0 +1,845 @@
+#!/usr/bin/env python3
+"""tooling/generate_report.py — generate a report end-to-end without the web UI.
+
+One command that drives the SAME UI-agnostic workflow core the browser drives
+(ADR-0014: `workflow.steps` over a `DiskPoolStore`), then renders the
+deliverables from the session on disk:
+
+    import files → validate → confirm metadata → integrate → animal report
+      → process → materialize result sections → [background] → summary → render
+
+Every step reads and writes `sessions/<DTXSID>/`, so a session produced here is
+indistinguishable from one produced in the browser — you can open it in the web
+UI afterwards, or re-run this command and the cache-keyed steps finish in seconds.
+
+The env the Java + LLM layers need (JDK 21 first on PATH, BMDX_PROJECT_ROOT,
+SSL_CERT_FILE for the NIEHS LiteLLM proxy) is defaulted here the same way
+run-server.sh does it, BEFORE any first-party import (bmdx_pipe.java_bridge
+reads BMDX_PROJECT_ROOT at import time). Shell-set values win.
+
+Usage (from the repo root):
+    python -m tooling.generate_report DTXSID50469320 \
+        --files /data/pfhxsam/*.bm2 /data/pfhxsam/*.txt \
+        --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 --dose-unit mg/kg
+
+    # re-render an already-processed session, no pipeline work
+    python -m tooling.generate_report DTXSID50469320 --render-only --surfaces docx,pdf
+
+See docs/headless-report-generation.md for the full manual.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Render surfaces this script can write, mapped to their output filename suffix.
+#   docx/html/jats/bookshelf/bits — rendering.preview_surface (the Preview step's emitters;
+#                                   bits = the chunked Bookshelf bundle, zipped)
+#   latex — the Overleaf bundle zip (same as POST /api/export-overleaf-bundle)
+#   pdf   — that bundle compiled locally with `tect` (same as POST /api/compile-pdf)
+SURFACE_SUFFIX = {
+    "docx": ".docx",
+    "html": ".html",
+    "jats": ".xml",
+    "bookshelf": ".bookshelf.html",
+    "bits": "-bits.zip",
+    "latex": "-overleaf.zip",
+    "pdf": ".pdf",
+}
+STEPS = ("validate", "integrate", "process")
+
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+
+def _bootstrap_env() -> None:
+    """Default the Java + LLM env exactly as run-server.sh does; shell wins."""
+    jdk21 = Path(os.environ.get("BMDX_JDK_HOME", "/opt/liberica-jdk-21"))
+    if (jdk21 / "bin" / "java").exists():
+        # The Java bridge invokes a BARE `java`, so JDK 21 must lead PATH.
+        os.environ["JAVA_HOME"] = str(jdk21)
+        os.environ["PATH"] = f"{jdk21 / 'bin'}:{os.environ.get('PATH', '')}"
+
+    if not os.environ.get("BMDX_PROJECT_ROOT"):
+        for cand in (Path("/workspace/BMDExpress-3"), Path.home() / "Dev/Projects/BMDExpress-3"):
+            if (cand / "target").is_dir():
+                os.environ["BMDX_PROJECT_ROOT"] = str(cand)
+                break
+
+    # The Python SDK honors SSL_CERT_FILE, not Node's NODE_EXTRA_CA_CERTS.
+    ca = os.environ.get("SSL_CERT_FILE") or os.environ.get("NODE_EXTRA_CA_CERTS") \
+        or "/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt"
+    if ca and Path(ca).is_file():
+        os.environ["SSL_CERT_FILE"] = ca
+        # `requests` (the Background gatherer: PubChem, PubMed, …) must trust the
+        # PUBLIC roots too.  A bundle holding only the NIH CA fails every public
+        # site with CERTIFICATE_VERIFY_FAILED, so give requests a bundle with both.
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", _bundle_with_public_roots(ca))
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        _log("WARNING: ANTHROPIC_API_KEY is not set — LLM narratives will fail")
+
+
+def _bundle_with_public_roots(ca: str) -> str:
+    """A CA bundle trusting the public roots AND `ca`: the system bundle when it
+    already contains `ca` (update-ca-certificates), else certifi + `ca` in a temp
+    file."""
+    import tempfile
+
+    extra = Path(ca).read_text(encoding="utf-8", errors="ignore")
+    system = Path("/etc/ssl/certs/ca-certificates.crt")
+    blocks = [b for b in extra.split("-----END CERTIFICATE-----") if "BEGIN CERTIFICATE" in b]
+    if system.is_file():
+        sys_text = system.read_text(encoding="utf-8", errors="ignore")
+        if all(b.split("-----BEGIN CERTIFICATE-----")[-1].strip() in sys_text for b in blocks):
+            return str(system)
+    try:
+        import certifi
+        public = Path(certifi.where()).read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001 — no public roots available; keep the given bundle
+        return ca
+    out = Path(tempfile.gettempdir()) / "rlm-bmdx-ca-bundle.pem"
+    out.write_text(public + "\n" + extra, encoding="utf-8")
+    return str(out)
+
+
+# ---------------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------------
+
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+class _Timer:
+    """`with _Timer("integrate"):` — prints the step name and its wall time."""
+
+    def __init__(self, label: str):
+        self.label = label
+
+    def __enter__(self):
+        self.t0 = time.monotonic()
+        _log(f"▶ {self.label} …")
+        return self
+
+    def __exit__(self, exc_type, *_):
+        if exc_type is None:
+            _log(f"  ✓ {self.label} ({time.monotonic() - self.t0:.1f}s)")
+
+
+def _fp(fp, key: str) -> str:
+    """Read a fingerprint field whether it is a FileFingerprint or a plain dict."""
+    val = getattr(fp, key, None) if hasattr(fp, key) else (fp.get(key) if isinstance(fp, dict) else None)
+    return val or ""
+
+
+def _phase(dtxsid: str, store) -> str:
+    from workflow.engine import WorkflowEngine
+    return WorkflowEngine(dtxsid, store).state().phase.value
+
+
+def _resolve_identity(dtxsid: str, args, store) -> dict:
+    """Identity for integration: CLI flags over identity.json. When neither gives
+    a name, try the network resolver (PubChem/CTX) — best-effort, like the UI."""
+    identity = dict(store.read_json(dtxsid, "identity.json") or {})
+    identity["dtxsid"] = dtxsid
+    if args.name:
+        identity["name"] = args.name
+    if args.casrn:
+        identity["casrn"] = args.casrn
+    if not identity.get("name"):
+        try:
+            from narrative.chem_resolver import resolve_chemical
+            resolved = resolve_chemical(dtxsid, "auto", "").to_dict()
+            identity = {**resolved, **{k: v for k, v in identity.items() if v}}
+            _log(f"  resolved identity from {dtxsid}: {identity.get('name')!r}")
+        except Exception as e:  # network-dependent
+            _log(f"  WARNING: could not resolve a name for {dtxsid} ({e}); "
+                 "pass --name/--casrn")
+    return identity
+
+
+# ---------------------------------------------------------------------------
+# Pipeline steps (each one call into workflow.steps)
+# ---------------------------------------------------------------------------
+
+def import_files(dtxsid: str, paths: list[Path], store) -> None:
+    """Copy input files into sessions/<id>/files/ — the equivalent of the Upload
+    step. Validation's disk scan fingerprints them (and converts long-format NTP
+    CSVs to the wide pivot + sidecar), so no upload registry is needed. Adding
+    files to a pool that has already progressed invalidates its downstream
+    artifacts, exactly as an upload through the API does."""
+    from pipeline.pool_state import invalidate_pool_artifacts, pool_has_progressed
+
+    files_dir = store.session_dir(dtxsid) / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    progressed = pool_has_progressed(dtxsid)
+    for p in paths:
+        if not p.is_file():
+            raise SystemExit(f"input file not found: {p}")
+        shutil.copy2(p, files_dir / p.name)
+        _log(f"  + {p.name}")
+    if progressed:
+        summary = invalidate_pool_artifacts(dtxsid)
+        _log(f"  pool had progressed — invalidated {len(summary.get('deleted', []))} artifact(s)")
+
+
+def validate(dtxsid: str, store) -> dict:
+    from workflow.steps import validate_step
+
+    report = validate_step(dtxsid, store)
+    issues = report.get("issues", [])
+    errors = [i for i in issues if (i or {}).get("severity") == "error"]
+    _log(f"  {report.get('file_count')} files, {len(issues)} issue(s) "
+         f"({len(errors)} error), platforms: {sorted(report.get('coverage_matrix', {}))}")
+    for i in issues:
+        _log(f"    [{i.get('severity')}] {i.get('issue_type', '')}: {i.get('message', '')}")
+    if errors:
+        raise SystemExit("validation found errors — fix the input files and re-run")
+    return report
+
+
+def _stated(value: Path | dict | None):
+    """A stated input given as a JSON file (the command line) or as the object
+    itself (a notebook or script)."""
+    if value is None or isinstance(value, dict):
+        return value
+    return json.loads(Path(value).read_text())
+
+
+def confirm_metadata(dtxsid: str, corrections_path: Path | dict | None, store) -> None:
+    """Apply (platform, data_type) overrides, keyed by FILENAME (file ids are
+    minted per scan, so they are not stable across runs): a JSON file or the
+    {filename: {platform, data_type}} object itself."""
+    from workflow.steps import confirm_metadata_step
+
+    fps = store.get_fingerprints(dtxsid)
+    by_name = {_fp(fp, "filename"): fid for fid, fp in fps.items()}
+    corrections: dict = {}
+    if corrections_path:
+        for fname, fix in _stated(corrections_path).items():
+            if fname not in by_name:
+                raise SystemExit(f"--metadata names an unknown file: {fname!r}")
+            corrections[by_name[fname]] = fix
+    for fp in sorted(fps.values(), key=lambda fp: _fp(fp, "filename")):
+        _log(f"    {_fp(fp, 'filename'):<50.50} {_fp(fp, 'platform'):<22} {_fp(fp, 'data_type')}")
+    result = confirm_metadata_step(dtxsid, corrections, store)
+    _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
+
+
+def apply_design(dtxsid: str, design_path: Path | dict, store, *, guarded: bool = False) -> None:
+    """Record study-design facts the data does not carry (route, vehicle,
+    strain, …): kept in the session's study_design.json, which every later
+    integration re-applies, and put on every experiment now.  A JSON file or
+    the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless the study has a dataset and every field and value is the
+    controlled vocabulary's (safeguards.inputs); a notebook writes as given."""
+    from workflow.steps import record_study_design
+
+    fields = _stated(design_path)
+    if guarded:
+        from safeguards.guarded import record_study_design
+    count = record_study_design(dtxsid, fields, store)
+    _log(f"  study design recorded on {count} experiment(s): {fields}")
+
+
+def apply_experiment_metadata(dtxsid: str, path: Path | dict, *, guarded: bool = False) -> None:
+    """Record stated experiment metadata ({experiment name: {organ, sex, …}})
+    the data does not carry — e.g. the tissue of a project whose experiment is
+    named "EDHP mg_kg".  Laid over each named experiment's description and kept
+    as the approval (metadata_approved.json), which every later integration
+    re-applies — the same record the browser's approval writes.  A JSON file
+    or the object itself.  ``guarded`` (the command line): refused, nothing
+    written, unless every experiment is the dataset's and every value the
+    vocabulary's (safeguards.inputs)."""
+    from pipeline.metadata_approval import approve_experiment_metadata
+
+    given = _stated(path)
+    if guarded:
+        from safeguards.guarded import approve_experiment_metadata
+    result = approve_experiment_metadata(dtxsid, given, merge=True)
+    _log(f"  experiment metadata recorded on {result['updated']} experiment(s): {given}")
+
+
+def apply_front_matter(dtxsid: str, path: Path | dict, store) -> None:
+    """Merge human-set front matter (authors, contributors, publication details,
+    the title's strain designation) into the session's front_matter.json, as the
+    Configure screen saves it; keys the file gives replace the saved ones.  A
+    JSON file or the object itself."""
+    from rendering.front_matter import clean_front_matter
+
+    given = _stated(path)
+    if not isinstance(given, dict):
+        raise SystemExit("--front-matter: the file must be a JSON object")
+    saved = store.read_json(dtxsid, "front_matter.json")
+    merged = {**(saved if isinstance(saved, dict) else {}), **given}
+    store.write_json(dtxsid, "front_matter.json", clean_front_matter(merged))
+    _log(f"  front matter recorded: {sorted(given)}")
+
+
+def record_studies(dtxsid: str, studies: list[str], args, store) -> None:
+    """Record a report's member studies (studies.json, rendering.report_compose)
+    and the test article it names (identity.json, from --name / --casrn)."""
+    from common.dtxsid import validate_dtxsid
+    from rendering.report_compose import STUDIES_FILE
+
+    members = {}
+    for item in studies:
+        key, sep, member = item.partition("=")
+        if not sep or not key or not member:
+            raise SystemExit(f"--studies: expected KEY=SESSION, got {item!r}")
+        member = validate_dtxsid(member)
+        if not store.artifact_exists(member, "integrated.json"):
+            raise SystemExit(f"--studies: {member} has no integrated study — build it first")
+        members[key] = member
+    store.write_json(dtxsid, STUDIES_FILE, members)
+    identity = {k: v for k, v in (("name", args.name), ("casrn", args.casrn)) if v}
+    if identity:
+        store.write_json(dtxsid, "identity.json", identity)
+    _log(f"  studies: {', '.join(f'{k}={v}' for k, v in members.items())}")
+
+
+def record_abbreviation(dtxsid: str, short: str, store) -> None:
+    """The test article's short name in prose ("1,4-DCB", --compound-name),
+    recorded with its identity (identity.json ``abbreviation``) for the
+    sentences the report writes from its data (rendering.genomics_results)."""
+    identity = dict(store.read_json(dtxsid, "identity.json") or {})
+    if identity.get("abbreviation") != short:
+        identity["abbreviation"] = short
+        store.write_json(dtxsid, "identity.json", identity)
+
+
+def integrate(dtxsid: str, identity: dict, store) -> None:
+    from workflow.steps import integrate_step
+
+    summary = integrate_step(dtxsid, identity, store)
+    _log(f"  {summary.get('experiment_count')} experiments, "
+         f"{summary.get('bmd_result_count')} BMD results")
+
+
+def document_definition(dtxsid: str, mode: str | None) -> None:
+    """Pin the document definition in ``mode`` when given, then say which
+    definition the report renders from and whether the files moved on."""
+    from document_model.definition_pin import drift, ensure_pin, pin_definition
+
+    pin = pin_definition(dtxsid, mode, by="user") if mode else ensure_pin(dtxsid)
+    _log(f"  document definition: {pin['name']} {pin['hash']} ({pin['mode']}; pinned by "
+         f"{pin['pinned_by']}, {pin['pinned_at']})")
+    if (moved := drift(dtxsid)):
+        _log(f"  NOTE: {moved}")
+
+
+def method_profile(dtxsid: str, name: str | None) -> None:
+    """Pin `name` when given (a re-pin is logged and recomputes), then say which
+    method the study runs under and anything it cannot do as stated.  (That a
+    person must have chosen it before Process is the safeguards': main.)"""
+    from pipeline.integrated_io import load_integrated
+    from pipeline.method_profile import (TRACK, ensure_pin, pin_mode, pin_profile,
+                                         recorded_mismatches, session_method)
+
+    pin = pin_profile(dtxsid, name, by="user") if name else ensure_pin(dtxsid)
+    method = session_method(dtxsid)
+    how = ("tracks the newest" if pin_mode(pin) == TRACK else "fixed")
+    _log(f"  method profile: {pin['name']} ({how}; pinned by {pin['pinned_by']}, "
+         f"{pin['pinned_at']})")
+    for deviation in method.deviations:
+        _log(f"  NOTE: {deviation}")
+    for mismatch in recorded_mismatches(load_integrated(dtxsid) or {}, method):
+        _log(f"  WARNING: {mismatch['message']}")
+
+
+def _require_method_choice(dtxsid: str) -> None:
+    """The command line's form of the safeguard "Process only under a method a
+    person chose" (C1 D1): without --method-profile, a study whose method no
+    person chose stops here, with the profile it suggests."""
+    from pipeline.method_profile import chosen_by_person, read_pin, suggest_profile
+
+    if chosen_by_person(read_pin(dtxsid)):
+        return
+    suggestion = suggest_profile(dtxsid)
+    raise SystemExit(
+        f"--method-profile is needed: no one has chosen the analysis method for "
+        f"{dtxsid} yet{' (its current one was set by default)' if read_pin(dtxsid) else ''}, "
+        f"and it is never chosen for you. Suggested: --method-profile "
+        f"{suggestion['name']} ({suggestion['why']}), or 'newest' to track the newest "
+        f"profile.")
+
+
+def animal_report(dtxsid: str, store) -> None:
+    from workflow.steps import generate_animal_report_step
+
+    ar = generate_animal_report_step(dtxsid, store)
+    _log(f"  {ar.get('total_animals')} animals "
+         f"(core {ar.get('core_count')} / biosampling {ar.get('biosampling_count')})")
+
+
+def process(dtxsid: str, params: dict, store, *, policy=None) -> dict:
+    """Process, then materialize the result sections; returns the payload.
+    ``policy``: the section write policy (safeguards.sections.ownership_policy
+    from the command line; none from the notebook)."""
+    return asyncio.run(process_async(dtxsid, params, store, policy=policy))
+
+
+async def process_async(dtxsid: str, params: dict, store, *, policy=None) -> dict:
+    """`process` for a caller already inside an event loop (a notebook cell
+    awaits it: asyncio.run cannot start a loop there)."""
+    from workflow.steps import materialize_result_sections, process_step
+
+    payload = await process_step(dtxsid, params, store)
+    _log(f"  {len(payload.get('sections') or [])} apical section(s), "
+         f"{len(payload.get('genomics_sections') or [])} genomics section(s), "
+         f"methods={'yes' if payload.get('methods') else 'no'}")
+    ctx = (payload.get("methods") or {}).get("context") or {}
+    if ctx:
+        _log(f"  dose unit: {ctx.get('dose_unit')} ({ctx.get('dose_unit_source', '?')})")
+        if ctx.get("design_fallback"):
+            fb = ", ".join(f"{k}={ctx.get(k)}" for k in ctx["design_fallback"])
+            _log(f"  NOTE: not recorded in the data, standard design used: {fb} "
+                 "(record the real values with --design)")
+    mat = materialize_result_sections(dtxsid, store, policy=policy)
+    _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
+    log_bmd_flags(dtxsid, store)
+    return payload
+
+
+def apply_bmd_review(dtxsid: str, path: Path, store) -> bool:
+    """Record the reviewer's decisions in ``path`` on the flags this run's
+    Process wrote (safeguards.guarded.review_bmds: each must be flagged, a
+    known decision, with a reason).  True when one is not yet applied, so
+    Process must run again."""
+    from pipeline.bmd_review import FLAGS_FILE, REVIEWS_FILE, unsettled
+    from safeguards.guarded import review_bmds
+
+    review_bmds(dtxsid, json.loads(Path(path).read_text()), store)
+    flags = (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []
+    todo = [u for u in unsettled(flags, store.read_json(dtxsid, REVIEWS_FILE))
+            if u["reason"] == "bmd_review_not_applied"]
+    _log(f"  BMD review recorded from {path}"
+         + (f"; {len(todo)} decision(s) to apply" if todo else "; nothing new to apply"))
+    return bool(todo)
+
+
+def log_bmd_flags(dtxsid: str, store) -> None:
+    """The apical BMDs the review screen flagged (pipeline.bmd_review), each
+    with its decision; an undecided one closes the publish gate."""
+    from pipeline.bmd_review import FLAGS_FILE
+
+    for f in (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []:
+        fold = "- to ".join(f"{x:g}" for x in f["fold"] if x is not None)
+        state = (f"{f['decision']} ({f['reason']})" if f.get("decision")
+                 else "PENDING — decide it with --bmd-review")
+        _log(f"  BMD review: {f['key']}: BMD {f['bmd']} vs NOEL {f['noel']} / LOEL "
+             f"{f['loel']} ({fold}-fold below): {state}")
+
+
+def summary(dtxsid: str, store, *, policy=None) -> None:
+    """Write the Summary section from the session's results (deterministic; never
+    replaces a summary the LLM route or a person wrote, nor, under the
+    ownership ``policy``, one a person approved)."""
+    from workflow.steps import materialize_summary
+
+    res = materialize_summary(dtxsid, store, policy=policy)
+    _log(f"  {res['paragraphs']} paragraph(s)" if res["written"]
+         else "  kept the existing summary.json (approved or not generated here)"
+         if (store.session_dir(dtxsid) / "summary.json").exists()
+         else "  nothing to summarize")
+
+
+def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = False,
+               reason: str | None = None, policy=None, guarded: bool = False) -> None:
+    """Generate + save the Background section (LLM over ATSDR/IRIS/PubChem data),
+    UNAPPROVED, through the section write gate: the operator asked, so it is a
+    person's act. Under the ownership ``policy`` (the command line's) a
+    Background a person approved or edited is never replaced: the refusal is
+    printed and nothing is saved, unless --force with a --reason (the prior text
+    is then archived).  ``guarded`` (the command line): refused when ATSDR or
+    IRIS could not be reached, or the text cites nothing (safeguards.sources);
+    a notebook may draft one without them."""
+    from workflow.section_writes import read_prior, is_locked
+    if policy is not None and is_locked(read_prior(dtxsid, "background", store)) and not force:
+        # Refuse before the LLM runs: its answer could not be saved.
+        _log("  REFUSED: 'background' is approved or protected; generating it again would "
+             "replace its text. Release it first, with a reason (or pass --force --reason).")
+        return
+    from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
+    from narrative.chem_resolver import ChemicalIdentity
+    from narrative.data_gatherer import gather_all
+
+    if not identity.get("pubchem_cid"):
+        # The gatherer keys PubChem (the main source) on the CID; identity.json
+        # usually holds only name/CASRN.  Resolve once, keeping the given fields.
+        try:
+            from narrative.chem_resolver import resolve_chemical
+            resolved = resolve_chemical(identity.get("casrn") or identity.get("name") or dtxsid,
+                                        "auto", "").to_dict()
+            identity = {**resolved, **{k: v for k, v in identity.items() if v}}
+            _log(f"    resolved PubChem CID {identity.get('pubchem_cid')}")
+        except Exception as e:  # noqa: BLE001 — best-effort, like the UI
+            _log(f"    WARNING: could not resolve {dtxsid} ({e}); PubChem data will be missing")
+    from workflow.errors import StepError
+    bg_data = gather_all(ChemicalIdentity.from_dict(identity), lambda m: _log(f"    {m}"))
+    try:
+        if guarded:
+            from safeguards.sources import require_sources
+            require_sources(dtxsid, bg_data)
+        result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL)
+        if guarded:
+            from safeguards.sources import require_references
+            require_references(dtxsid, result)
+    except StepError as e:
+        _log(f"  REFUSED ({e.code}): {e.message}")
+        return
+    paragraphs = result.get("paragraphs") or []
+    if not paragraphs:
+        _log("  WARNING: background generation returned no paragraphs — not saved")
+        return
+    from workflow.section_writes import write_section
+    try:
+        out = write_section(dtxsid, "background", {
+            "paragraphs": paragraphs,
+            "references": result.get("references", []),
+            "citation_report": result.get("citation_report"),
+            "abstract_background": result.get("abstract_background", ""),
+            "model_used": result.get("model_used", model),
+            "approved": False,
+        }, store, act="background", actor="person", author="model", force=force,
+            reason=reason, extra_event={"model": result.get("model_used", model)},
+            policy=policy)
+    except StepError as e:
+        _log(f"  REFUSED ({getattr(e, 'code', e.status_code)}): {e.message} — nothing saved")
+        return
+    _log(f"  {len(paragraphs)} paragraph(s), {len(result.get('references', []))} reference(s)"
+         f" — {out['outcome']}, version {out['version']}")
+
+
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+
+def render(dtxsid: str, surfaces: list[str], out_dir: Path, view: str | None,
+           strict: bool) -> list[Path]:
+    """Write each requested surface to out_dir as <DTXSID><suffix>."""
+    from rendering.preview_surface import _identity, render_preview
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for surface in surfaces:
+        out = out_dir / f"{dtxsid}{SURFACE_SUFFIX[surface]}"
+        if surface in ("latex", "pdf"):
+            chemical_name, casrn = _identity(dtxsid)
+            _render_latex(dtxsid, chemical_name, casrn, view, out, pdf=(surface == "pdf"),
+                          strict=strict)
+        else:
+            content = render_preview(dtxsid, surface=surface, view=view)
+            if isinstance(content, bytes):
+                out.write_bytes(content)
+            else:
+                out.write_text(content, encoding="utf-8")
+        _log(f"  → {out} ({out.stat().st_size / 1024:.0f} KB)")
+        written.append(out)
+    return written
+
+
+def _render_latex(dtxsid: str, chemical_name: str, casrn: str, view: str | None,
+                  out: Path, *, pdf: bool, strict: bool) -> None:
+    from document_model.view_config import DEFAULT_VIEW, build_view_tree
+    from rendering.latex_export import (
+        _assemble_bundle_files, _write_files_to_dir, build_overleaf_bundle, load_session_data,
+    )
+
+    view = view or DEFAULT_VIEW
+    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, view=view)
+    tree = build_view_tree(dtxsid, view)
+    if not pdf:
+        build_overleaf_bundle(data, out, strict=strict, tree=tree)
+        return
+
+    tect = os.environ.get("TECT_CMD", "tect")
+    if shutil.which(tect) is None:
+        raise SystemExit(f"pdf surface needs the offline LaTeX engine {tect!r} on PATH")
+    files = _assemble_bundle_files(data, strict=strict, tree=tree)
+    with tempfile.TemporaryDirectory(prefix="5dtox_compile_") as tmp:
+        tmp_path = Path(tmp)
+        _write_files_to_dir(files, tmp_path)
+        (tmp_path / "out").mkdir()
+        proc = subprocess.run([tect, "main.tex", "--outdir", str(tmp_path / "out")],
+                              cwd=tmp_path, capture_output=True, text=True)
+        built = tmp_path / "out" / "main.pdf"
+        if proc.returncode != 0 or not built.exists():
+            tail = "\n".join(((proc.stdout or "") + (proc.stderr or "")).splitlines()[-40:])
+            raise SystemExit(f"LaTeX compilation failed:\n{tail}")
+        shutil.copy2(built, out)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="python -m tooling.generate_report",
+        description="Generate a 5-day report end-to-end without the web UI.",
+    )
+    ap.add_argument("dtxsid", help="session id (folder under sessions/)")
+    ap.add_argument("--files", nargs="+", type=Path, default=[],
+                    help="input files to import into sessions/<id>/files/ first "
+                         "(.bm2, .txt/.csv, .xlsx — the study workbooks and a sample sheet "
+                         "— .sidecar.json, and a truth CSV's .units.json companion from "
+                         "tooling.cebs_to_pool --csv)")
+    ap.add_argument("--name", help="test-article name (else identity.json, else resolved)")
+    ap.add_argument("--casrn", help="test-article CASRN")
+    ap.add_argument("--compound-name",
+                    help="short name used in captions/narratives (default: the recorded "
+                         "abbreviation, else the identity name)")
+    ap.add_argument("--dose-unit", default=None,
+                    help="dose unit, e.g. mg/kg or ppm (default: the unit the data records, "
+                         "else mg/kg — state it explicitly).  A ppm unit also makes the "
+                         "route fallback inhalation instead of gavage in corn oil")
+    ap.add_argument("--metadata", type=Path,
+                    help="JSON {filename: {platform, data_type}} classification overrides")
+    ap.add_argument("--design", type=Path,
+                    help="JSON of study-design facts the data does not record, kept with the "
+                         "session and applied to every experiment's metadata at each "
+                         "integration: species, strain, articleRoute, "
+                         "administrationMeans, articleVehicle, studyDuration "
+                         "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
+    ap.add_argument("--experiment-metadata", type=Path,
+                    help="JSON {experiment name: {organ, sex, …}} of experiment metadata the "
+                         "data does not record (e.g. the tissue of a genomic experiment named "
+                         "\"EDHP mg_kg\"); laid over each named experiment and kept as the "
+                         "metadata approval, re-applied at every integration")
+    ap.add_argument("--bmd-review", type=Path,
+                    help="JSON {\"<sex>|<platform>|<endpoint>\": {\"decision\": \"unreliable\" | "
+                         "\"reliable\", \"reason\": \"…\"}}: a reviewer's decisions on the apical "
+                         "BMDs Process flags as far below their NOEL/LOEL (listed as 'BMD "
+                         "review:' lines); 'unreliable' prints UREP. Recorded after this run's "
+                         "Process, which then runs again to apply them")
+    ap.add_argument("--deposit", type=Path,
+                    help="directory of the study's data deposit (the supplemental files "
+                         "deposited with the report); recorded as the session's "
+                         "deposit.json, which the Supplemental Data appendix lists")
+    ap.add_argument("--deposit-exclude", nargs="+", default=[], metavar="GLOB",
+                    help="names in --deposit that are not deposited files (e.g. a "
+                         "Bookshelf package's own '*.nxml' '*.jpg' TOC.pdf license.txt "
+                         "SOURCE.txt)")
+    ap.add_argument("--front-matter", type=Path,
+                    help="JSON of front matter, as the Configure screen saves it: authors, "
+                         "contributors, publication {report_number, doi, report_date}, "
+                         "strain_designation (the title's, e.g. \"(Hsd:Sprague Dawley® SD®)\")")
+    ap.add_argument("--method-profile",
+                    help="fix the study on this analysis method profile (profiles/<name>.yaml, "
+                         "ADR-0027), or 'newest' to track the newest profile as profiles are "
+                         "added.  Default: the study's pin, when a person chose it; a study "
+                         "with none (or one set by default) needs this, and the run says which "
+                         "profile it suggests.  A change of profile recomputes")
+    ap.add_argument("--document-definition", choices=("fixed", "track"),
+                    help="fix the report on its document definition as it is now (it then "
+                         "renders from that snapshot whatever the templates say later), or "
+                         "track the current definition (the default; ADR-0029 §12)")
+    ap.add_argument("--bmd-stats", default=None,
+                    help="comma list of BMD statistics for the GO tables, overriding the "
+                         "method profile's GO ranking for this run")
+    ap.add_argument("--go-pct", type=float, default=None,
+                    help="GO display cutoffs, overriding the method profile's for this run")
+    ap.add_argument("--go-min-genes", type=int, default=None)
+    ap.add_argument("--go-max-genes", type=int, default=None)
+    ap.add_argument("--go-min-bmd", type=float, default=None)
+    ap.add_argument("--reintegrate", action="store_true",
+                    help="re-run integration even if integrated.json exists "
+                         "(wipes process caches → full recompute)")
+    ap.add_argument("--background", action="store_true",
+                    help="also generate the Background section (LLM + external lookups)")
+    ap.add_argument("--model", default="", help="LLM model for --background")
+    ap.add_argument("--force", action="store_true",
+                    help="--background: replace a Background a person approved or edited "
+                         "(its text is archived first); needs --reason")
+    ap.add_argument("--reason", default=None,
+                    help="why --force replaces a person's Background (kept in its history)")
+    ap.add_argument("--stop-after", choices=STEPS,
+                    help="stop after this pipeline step (no render)")
+    ap.add_argument("--render-only", action="store_true",
+                    help="skip the pipeline; just render the session as it is on disk")
+    ap.add_argument("--studies", nargs="+", metavar="KEY=SESSION",
+                    help="a report over several studies (ADR-0029 §9): its member study "
+                         "sessions in the report's order, e.g. rat=DTXSID1020431_rat "
+                         "mouse=DTXSID1020431_mouse, each built on its own first.  Recorded "
+                         "as the session's studies.json; the report renders from them "
+                         "(implies --render-only)")
+    ap.add_argument("--surfaces", default="docx,html",
+                    help=f"comma list from {','.join(SURFACE_SUFFIX)} (default: docx,html)")
+    ap.add_argument("--view", help="report view to render (default: the default view)")
+    ap.add_argument("--out", type=Path, help="output directory (default: output/<DTXSID>/)")
+    ap.add_argument("--strict", action="store_true",
+                    help="latex/pdf: refuse to build while any '[... pending]' marker remains")
+    ap.add_argument("--draft", action="store_true",
+                    help="render even if the publish gate is closed (stale sections)")
+    ap.add_argument("-v", "--verbose", action="store_true",
+                    help="show pipeline logging (incl. per-cache provenance events)")
+    return ap.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    surfaces = [s.strip() for s in args.surfaces.split(",") if s.strip()]
+    unknown = [s for s in surfaces if s not in SURFACE_SUFFIX]
+    if unknown:
+        raise SystemExit(f"unknown surface(s): {unknown}; choose from {list(SURFACE_SUFFIX)}")
+    # Resolve user paths BEFORE chdir: the app is cwd-relative (templates).
+    files = [p.resolve() for p in args.files]
+    metadata = args.metadata.resolve() if args.metadata else None
+    design = args.design.resolve() if args.design else None
+    front_matter = args.front_matter.resolve() if args.front_matter else None
+    deposit = args.deposit.resolve() if args.deposit else None
+    out_dir = args.out.resolve() if args.out else None
+    os.chdir(REPO_ROOT)
+    sys.path.insert(0, str(REPO_ROOT))
+    import common.paths
+    out_dir = out_dir or common.paths.OUTPUT_DIR / args.dtxsid
+
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
+                        format="%(levelname)s %(name)s: %(message)s")
+    _bootstrap_env()
+    if not args.verbose:
+        # common.provenance pins its own logger to INFO at import; quiet it after.
+        from common import provenance
+        provenance.logger.setLevel(logging.WARNING)
+
+    from common.dtxsid import validate_dtxsid
+    from rendering.render_common import PendingContentError
+    from safeguards.acts import require
+    from safeguards.publish import require_publishable
+    from safeguards.sections import ownership_policy
+    from workflow.errors import StepError
+    from workflow.phases import Action
+    from workflow.store import DiskPoolStore
+
+    dtxsid = validate_dtxsid(args.dtxsid)
+    store = DiskPoolStore()
+    _log(f"session: {store.session_dir(dtxsid)}")
+    if front_matter:
+        apply_front_matter(dtxsid, front_matter, store)
+    if args.studies:
+        record_studies(dtxsid, args.studies, args, store)
+        args.render_only = True
+    if args.compound_name:
+        record_abbreviation(dtxsid, args.compound_name, store)
+    if deposit:
+        from pipeline.deposit import record_deposit
+        manifest = record_deposit(dtxsid, deposit, tuple(args.deposit_exclude))
+        _log(f"deposit: {len(manifest['files'])} file(s) from {deposit}"
+             + (f", species {[s['key'] for s in manifest['species']]}" if manifest["species"] else ""))
+        # The deposit's synthetic-null analyses give the eFDR (genomics.efdr).
+        from genomics.efdr import ZIP_PATTERN, record_efdr
+        nulls = sorted(deposit.glob(ZIP_PATTERN))
+        if nulls:
+            efdr = record_efdr(dtxsid, nulls)
+            _log(f"eFDR: {len(efdr['tissues'])} species-tissue(s) from {len(nulls)} "
+                 f"synthetic-null analysis file(s)")
+
+    try:
+        if not args.render_only:
+            # The command line is guarded like the browser (safeguards): each
+            # act is checked before it runs; the bypasses are named flags.
+            if files:
+                with _Timer(f"import {len(files)} file(s)"):
+                    require(dtxsid, Action.ADD_FILES, store)
+                    import_files(dtxsid, files, store)
+            if not store.has_files(dtxsid):
+                raise SystemExit(f"sessions/{dtxsid}/files/ is empty — pass --files")
+
+            with _Timer("validate"):
+                require(dtxsid, Action.VALIDATE, store)
+                validate(dtxsid, store)
+            with _Timer("confirm metadata"):
+                require(dtxsid, Action.CONFIRM_CLASSIFICATION, store)
+                confirm_metadata(dtxsid, metadata, store)
+            if args.stop_after == "validate":
+                return 0
+
+            identity = _resolve_identity(dtxsid, args, store)
+            if args.reintegrate or not store.artifact_exists(dtxsid, "integrated.json"):
+                with _Timer("integrate (Java)"):
+                    require(dtxsid, Action.INTEGRATE, store)
+                    integrate(dtxsid, identity, store)
+            else:
+                store.write_json(dtxsid, "identity.json", identity)
+                _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
+            if design:
+                with _Timer("study design"):
+                    apply_design(dtxsid, design, store, guarded=True)
+            if args.experiment_metadata:
+                with _Timer("experiment metadata"):
+                    apply_experiment_metadata(dtxsid, args.experiment_metadata, guarded=True)
+            if not args.method_profile:
+                _require_method_choice(dtxsid)
+            method_profile(dtxsid, args.method_profile)
+            document_definition(dtxsid, args.document_definition)
+            with _Timer("animal report"):
+                require(dtxsid, Action.APPROVE, store)
+                animal_report(dtxsid, store)
+            if args.stop_after == "integrate":
+                return 0
+
+            if not args.dose_unit:
+                _log("  NOTE: no --dose-unit — using the unit the data records, else mg/kg")
+            # The GO ranking and cutoffs are the method profile's; only what
+            # the command line states overrides it (source "request").
+            params = {
+                "compound_name": (args.compound_name or identity.get("abbreviation")
+                                  or identity.get("name") or dtxsid),
+                "dose_unit": args.dose_unit,
+                **({"bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()]}
+                   if args.bmd_stats else {}),
+                **{k: getattr(args, k) for k in ("go_pct", "go_min_genes", "go_max_genes",
+                                                 "go_min_bmd") if getattr(args, k) is not None},
+            }
+            with _Timer("process (stats + BMDS + genomics + narratives; minutes when cold)"):
+                require(dtxsid, Action.PROCESS, store, method=True)
+                process(dtxsid, params, store, policy=ownership_policy)
+            if args.bmd_review and apply_bmd_review(dtxsid, args.bmd_review, store):
+                with _Timer("process again (the BMD review)"):
+                    process(dtxsid, params, store, policy=ownership_policy)
+            if args.background:
+                with _Timer("background (LLM)"):
+                    background(dtxsid, identity, args.model, store, force=args.force,
+                               reason=args.reason, policy=ownership_policy, guarded=True)
+            with _Timer("summary"):
+                summary(dtxsid, store, policy=ownership_policy)
+            if args.stop_after == "process":
+                return 0
+
+        _log(f"phase: {_phase(dtxsid, store)}")
+        # The publish gate; --draft is its named override (logged).
+        readiness = require_publishable(dtxsid, store, draft=args.draft)
+        if not readiness.get("can_publish", True):
+            keys = ", ".join(b["section_key"] for b in readiness.get("blocking", []))
+            _log(f"  WARNING: publish gate closed — {keys} (rendering anyway: --draft)")
+
+        with _Timer(f"render {', '.join(surfaces)}"):
+            render(dtxsid, surfaces, out_dir, args.view, args.strict)
+    except StepError as e:
+        from safeguards.refusals import explain
+        hint = (" (or pass --draft)"
+                if getattr(e, "code", None) in ("publish_blocked", "bmd_review_required") else "")
+        raise SystemExit(f"step failed ({e.status_code}): {e.message}{hint}\n"
+                         f"  {explain(e)['error']['say']}")
+    except PendingContentError as e:
+        raise SystemExit(f"--strict: report still has pending sections: {e.markers}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

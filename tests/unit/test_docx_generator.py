@@ -28,10 +28,10 @@ import pytest
 from docx import Document
 from docx.shared import Inches, Pt
 
-from docx_generator import _DISPATCH, generate_docx
-from latex_export import load_session_data
-from render_common import RENDERABLE_NODE_TYPES
-from report_data import scaffold_report_data
+from rendering.docx_generator import _DISPATCH, generate_docx
+from rendering.latex_export import load_session_data
+from rendering.render_common import RENDERABLE_NODE_TYPES
+from rendering.report_data import scaffold_report_data
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,8 +61,10 @@ def rich() -> dict:
     a valid render INPUT (unlike the marshal_rich fixture, which is a marshal
     OUTPUT and not shaped for the renderers).
     """
-    if not SESSION_DIR.exists():
-        pytest.skip(f"session {SESSION_DTXSID} not present")
+    # The directory can exist but be empty (unmounted GCS); require the
+    # processed session's integrated.json, not just the folder.
+    if not (SESSION_DIR / "integrated.json").exists():
+        pytest.skip(f"processed session {SESSION_DTXSID} not present")
     return load_session_data(
         SESSION_DTXSID,
         chemical_name="Perfluorohexanesulfonamide",
@@ -188,14 +190,14 @@ def test_title_page_empty_config_unchanged(scaffold):
 
 def test_front_matter_headings_match_reference_body_left(scaffold):
     """Every front-matter section header (Foreword, Table of Contents, Tables,
-    About, Peer Review, etc.) gets the SAME reference front-matter heading look —
+    Authors, Contributors, Peer Review, etc.) gets the SAME reference front-matter heading look —
     Arial 16pt bold, CENTERED, 12pt after (1-23_FrontMatter_Head1) — so they are
     uniform (no one header bigger/tighter than the rest).  Body section headings
     (Background, Summary, References — `narrative` nodes routing through the same
     renderer) stay as the left-aligned built-in Heading 1, matching the NTP
     reference's left body heads."""
     doc = _open(generate_docx(scaffold))
-    front = {"Foreword", "About This Report", "Peer Review",
+    front = {"Foreword", "Authors", "Contributors", "Peer Review",
              "Publication Details", "Acknowledgments", "Abstract"}
     body = {"Background", "Materials and Methods", "Results", "Summary", "References"}
     for p in doc.paragraphs:
@@ -560,7 +562,6 @@ def test_break_before_and_after_apply_once_at_node_boundary(scaffold):
     """break_before sets pageBreakBefore on the node's FIRST paragraph; break_after
     appends a page-break run on its LAST — once each, not per paragraph (parity
     with HTML's one wrapping div and LaTeX's one \\clearpage)."""
-    from docx.enum.text import WD_BREAK
     from docx.oxml.ns import qn
 
     data = dict(scaffold)
@@ -814,7 +815,7 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     `pageBreakBefore` on each target node's first paragraph — the reference's
     mechanism, which composes idempotently with the dotx's own style breaks.
 
-    Targets whose STYLE does not auto-break rely on this entirely (TOC, About,
+    Targets whose STYLE does not auto-break rely on this entirely (TOC, Authors,
     Publication, Tables 3/5/6, appendices); the style-covered ones (Peer Review,
     Abstract, Results, Summary, References) also carry it for cross-surface
     parity.  Tables the reference lets flow (2/4/7/8) must NOT break."""
@@ -822,9 +823,12 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     broken = {p.text.strip() for p in doc.paragraphs
               if p.paragraph_format.page_break_before}
     # Must start a new page.
-    for t in ("Table of Contents", "About This Report", "Publication Details",
+    # (ADR-0028: the book's "About This Report" is two parts, Authors and
+    # Contributors; Authors starts the page, Contributors follows on it.)
+    for t in ("Table of Contents", "Authors", "Publication Details",
               "Peer Review", "Abstract", "Results", "Summary", "References"):
         assert t in broken, f"{t!r} should carry pageBreakBefore"
+    assert "Contributors" not in broken
     # Body apical tables 3/5/6 break; 4 flows.
     assert any(s.startswith("Table") and "Liver Weights" in s for s in broken)      # T3
     assert any(s.startswith("Table") and "Hematology" in s for s in broken)         # T5
@@ -990,7 +994,7 @@ def test_body_headings_are_collectable_by_the_field(scaffold):
 def test_no_field_no_dirty_flag():
     """A document with no field must NOT set updateFields (the flag is scoped to
     the field's presence, detected from the body, not always-on)."""
-    from docx_generator import _build_style_skeleton
+    from rendering.docx_generator import _build_style_skeleton
     from docx import Document as _Doc
     # A hand-built doc with a paragraph but no field: _mark_fields_dirty is only
     # called by generate_docx when a fldChar exists, so exercise that guard.

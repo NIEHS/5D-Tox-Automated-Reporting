@@ -1,0 +1,12 @@
+# Study overlay for NIEHS Report 08 (1,1,2,2-Tetrahydroperfluoro-1-dodecanol), DTXSID2029905 — ADR-0027 §1.
+
+# methods — what the report's analysis did that the pinned profile does not say
+# (pipeline.method_profile.study_overlay).  This report derived neither Globulin
+# nor the A/G ratio: neither is printed in it, though its data has albumin and
+# globulin (the profile's default derives both, as most of the books do); and
+# it printed terminal body weight untested (no marks, BMD "ND", not in the BMD
+# summary).
+methods:
+  apical:
+    derived_endpoints: []
+    terminal_body_weight_tested: false

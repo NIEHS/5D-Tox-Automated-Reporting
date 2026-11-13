@@ -1,0 +1,451 @@
+# eras/niehs-2026 — the NIEHS Report as published in 2026 (NIEHS-12, 13: whole-
+# body inhalation studies, NBK621711 / NBK621744).  ADR-0029: the 2023
+# generation (eras/niehs-2023, chunked) plus what these books do differently.
+# A published study of this generation extends this file.
+#
+# These books report a rat study and a mouse study together (ADR-0029 §9,
+# rendering.report_compose).  Their per-study and per-tissue sections are
+# repeats (document_tree.repeat_items): one Study Design per study; the
+# combined tables of each apical result with the result for each study under
+# it; each study's internal concentrations; and Heart … Ovary under the gene
+# set and gene analyses, each with its studies.  Which studies and tissues
+# there are is the report's data; that they are written this way is this file.
+#
+# This generation is also the definition of a NEW study, one without a
+# definition of its own (document_definition.DEFAULT_DEFINITION).  So what the
+# two books state only because they are inhalation studies is gated on the
+# route (`requires_route: inhaled`: the vapor and chamber sections, the
+# theoretical inhaled dose), and a single study's
+# per-study sections are no sub-sections (`study_title`: "Study Design", the
+# prose straight under "Animal Condition …", as single-study books print it).
+# A study with no internal dose data (no Tissue Concentration) has no Internal
+# Dose sections at all — the Methods subsection, the Results section and the
+# appendix — as the books without it have none (NIEHS-02 … 06), rather than
+# sections saying it was not assessed; the later appendices letter up.  The
+# user's decision (2026-10-20).
+# The headings name the dose by the study's route (dose_terms below): an
+# inhaled study's "Exposure Concentration Selection Rationale" and "Internal
+# Concentration Assessment" (NIEHS-12, 13), a gavage study's "Dose Selection
+# Rationale" and "Internal Dose Assessment" (NIEHS-07 … 10) — the user's
+# decision (2026-10-19), superseding "concentration whatever the route"
+# (2026-10-12).
+extends: eras/niehs-2023
+# The words the headings name the dose by, per route (${dose_term},
+# ${internal_dose_term}; document_tree.dose_term_values).  A route with no
+# words here (dermal, feed …) prints a placeholder until a book or the user
+# names them.
+dose_terms:
+  gavage: {dose: Dose, internal_dose: Internal Dose}
+  inhaled: {dose: Exposure Concentration, internal_dose: Internal Concentration}
+# The 2026 books describe the organs alphabetically (Heart, Kidney, Liver,
+# Lung, Ovary), where the 2023 books put the liver first.
+organ_description_order: []
+# The 2026 books' Foreword (NIEHS-12, 13): reworded, without "The NIEHS Report
+# series began in 2022", and "This report" on "the NIEHS website".
+foreword:
+- "The [National Institute of Environmental Health Sciences (NIEHS)](https://www.niehs.nih.gov/) is one of 27 institutes and centers of the National Institutes of Health, part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures, developing the next generation of environmental health scientists, and providing critical research, knowledge, and information to citizens and policymakers to help in their efforts to prevent hazardous exposures and reduce the risk of preventable disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+- "The environmental health sciences research described in this series is conducted primarily by the [Division of Translational Toxicology (DTT)](https://www.niehs.nih.gov/research/atniehs/dtt) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
+- "This report is available free of charge on the [NIEHS website](https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports) and cataloged in [PubMed](https://pubmed.ncbi.nlm.nih.gov/), a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+# The tissues alphabetically: Heart, Kidney, Liver, Lung, Ovary.
+tissue_order: []
+# The abstract names gene sets, not individual genes (NIEHS-12, 13).
+abstract_genes: false
+
+# The wording of the prose the report writes from its data (ADR-0029 §11,
+# document_model.phrasing): the gene set and gene results
+# (rendering.genomics_results) and the eFDR and definitions appendices
+# (rendering.genomics_appendix).  Which gene sets and genes are named, and in
+# which form, is the rule's; the words are these, `{fields}` filled by the
+# rule.  *x* prints in italics, BMD_L with its L subscript.  These are the
+# 2026 books' sentences (NIEHS-12, 13; NIEHS-10 words its results the same).
+phrasing:
+  words:
+    numbers: ["no", one, two, three, four, five, six, seven, eight, nine, ten]
+    statistic: {fifth_pct: 5th percentile, median: median}
+    score: {fifth_pct: 5th percentile of transcript BMDs, median: median transcript BMD}
+    direction: {up: upregulated, down: downregulated}
+    all_of: {2: both, 3: all three, 4: all four, 5: all five}
+    species: {rat: Rat, mouse: Mouse}
+    bmd: [BMD, BMDs]
+    gene_set: [gene set, gene sets]
+    gene: [gene, genes]
+    study: [study, studies]
+  values:
+    pair: "{bmd} ({bmdl})"
+    not_calculated: NC
+    # Two or more gene sets or genes with the same values, or each its own.
+    same: ", {all} with a {measure} (BMD_L) of {pair} {unit}"
+    each: " with {measures} (BMD_Ls) of {pairs} {unit}, respectively"
+  animals:
+    in_group: "In {animals}, {sentence}"
+    exposed: "{animals} {exposed} {chemical}"
+  term: "{go_term} ({go_id})"
+  gene: "*{symbol}* ({name})"
+  tables:
+    cite: " (Table {number})"
+    tissue: "{organ} (Table {number})"
+    where: "the {tissues}"
+    span_none: these tables
+    span_one: "Table {first}"
+    span_two: "Table {first} and Table {last}"
+    span_many: "Table {first} to Table {last}"
+  # The gene sets or genes below the lower limit of extrapolation.
+  limit:
+    below: " No {nouns} had estimated {measure} values <{lle} {unit}{exceptions}."
+    exceptions: " with the exception of {items}"
+    exception: "{count} {organ} {noun} in {animals}"
+  gene_sets:
+    none: "In {animals}, there were no active GO terms (i.e., no gene expression response at the gene set level)."
+    one: "The most sensitive GO biological process for which a BMD value could be reliably calculated was {term} with a {measure} (BMD_L) of {pair} {unit}{table}."
+    several: "The most sensitive GO biological processes for which a BMD value could be reliably calculated were {terms}{values}{table}."
+    full_list: "The full list of affected gene sets in the {organ} of {animals} can be found in Appendix {appendix}."
+    intro_examined: "Chemical-induced alterations in {tissues} gene transcript expression were examined to determine those gene sets most sensitive to {chemical} exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology [GO] biological process) was conducted to determine the potency of the chemical to elicit gene expression changes in the {tissues}. This analysis used transcript-level BMD data to assess an aggregate score of gene set potency ({score}) and enrichment."
+    intro_summary: ", with a summary of the top gene set per tissue based on lowest BMD {statistic} provided in Table {table}"
+    intro_shown: "The “active” gene sets with the lowest {statistic} BMD values are shown in {where}{summary}.{below} The gene sets shown in {span} should be interpreted with caution from the standpoint of the underlying biological mechanism and any relationship to toxicity or toxic agents referenced in the GO term definitions. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes (i.e., a concerted biological change) that could serve as a surrogate of estimated biological potency and, by extension, toxicological potency when more definitive toxicological data are unavailable."
+    summary_lead: "A summary of the most potent gene set per tissue is provided in Table {table}."
+    # The same tissue the most potent in both groups (NIEHS-12: the liver).
+    summary_both: "In both {first} and {second} {exposed} {chemical}, the {organ} had the gene set with the lowest BMD {statistic} value, corresponding to {term1} and {term2}, respectively. The BMDs (BMD_Ls) were {pair1} and {pair2} {unit}, respectively."
+    summary_each: "In {animals}, the {organ} had the gene set with the lowest BMD {statistic} value, corresponding to {term} with a BMD (BMD_L) of {pair} {unit}."
+  genes:
+    none: "No {organ} genes in {animals} met the criteria."
+    below_one: "The most sensitive {organ} gene in {animals}{exhibiting} was {genes} with an estimated median BMD <{lle} {unit}."
+    below_many: "The most sensitive {organ} genes in {animals}{exhibiting} were {genes} with estimated median BMDs <{lle} {unit}."
+    exhibiting_up: ", exhibiting an increase in expression,"
+    exhibiting_down: ", exhibiting a decrease in expression,"
+    few: "Only {count} genes met the criteria."
+    few_lead: "Of these {count} genes, {sentence}"
+    half: "Half of the top {count} most sensitive {organ} genes were upregulated and the other half were downregulated."
+    half_up: "The upregulated genes with a calculated BMD were {genes}{values}."
+    half_down: "The downregulated genes with a calculated BMD were {genes}{values}."
+    all_one_way: "All {count} of the most sensitive {organ} genes were {direction}."
+    all_list: "These genes were {genes}{values}."
+    one: "One gene, {gene}, was {direction} with a BMD (BMD_L) of {pair} {unit}."
+    most_up: "The most sensitive upregulated genes with a calculated BMD were {genes}{values}."
+    most_down: "The most sensitive genes exhibiting a decrease in expression were {genes}{values}."
+    intro: "The top 10 genes ranked by BMD potency are shown in {where}.{below} As with the GO analysis, the biological or toxicological significance of the changes in gene expression shown in {span} should be interpreted with caution. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes that could serve as a conservative surrogate of estimated biological potency, and by extension toxicological potency, when more definitive toxicological data are unavailable."
+  # D.2 Empirical False Discovery Rate.  The method's facts (the generator,
+  # the distribution, the values per probe) are the method profile's
+  # (genomics.efdr), the experiments and groups the null analyses'.
+  efdr:
+    bound_pct: 1
+    majority_below_pct: 0.5
+    bound_below: "<{limit}%"
+    bound_at_most: "at most {max}%"
+    gene_range: "In all species-tissue combinations, the gene-level eFDR was {bound}, with a range of {min}% to {max}%{table}."
+    gene_majority: "Most gene-level eFDR values were below {limit}%."
+    go_none: "In all cases, the eFDR for GO biological processes was 0% across all species-tissue combinations."
+    go_active: "GO biological processes were active in the synthetic null data of {found}; in all other species-tissue combinations the eFDR for GO biological processes was 0%."
+    go_active_item: "the {species} {tissue} ({active} in {experiments_with} of {experiments} synthetic null experiments)"
+    methods: "Synthetic null data were generated using the probe-filtered (i.e., “no 0”) {control} data from each tissue in {whose}. The synthetic null data were generated using the {generator} ({generator_abbreviation}; {generator_url}), which employed the {distribution} distribution method previously described for generating synthetic data. In short, for each set of tissue/species, {control} data were used to generate a distribution for each probe. This distribution was resampled to generate {resamples} values for each probe. These values were distributed into synthetic samples, which were then organized into {count} different experiments paralleling the distribution of samples in the experimental study, {groups}. Each of the {count} synthetic null experiments was processed through BMDExpress using the identical parameters used to analyze the experimental data. The resultant data were then used to determine the empirical false discovery rates (eFDR), which are reported as percentages of possible genes and Gene Ontology (GO) biological processes.{appendix}"
+    methods_groups: "i.e., {control_n} samples in the {control} group and {treated_n} for each nonzero exposure concentration"
+    methods_whose: "the {chemical} {species} {studies}"
+    methods_appendix: " The associated bm2 analysis files that are the basis of the empirical false discovery rate can be found in Appendix {appendix}."
+    table:
+      caption: Empirical False Discovery Results
+      headers: [Species, Tissue, Gene eFDR (%) Mean, Gene eFDR (%) Range,
+                GO Biological Process eFDR (%) Mean, GO Biological Process eFDR (%) Range]
+      footnote: "eFDR = empirical false discovery rate; GO = Gene Ontology."
+  # E: the top gene sets' genes with their GO definitions; each study's genes.
+  gene_set_definitions:
+    caption: "Active Genes and Definitions within {table}"
+    headers: [Category Name, "Input Genes/Platform Genes in Gene Set (% Coverage)", Active Genes,
+              "BMD{tag} {statistic} of Gene Set Transcripts (BMDL{tag}–BMDU{tag}) ({unit})",
+              Definition]
+    go_source: "Definitions of GO terms are the Gene Ontology Resource's (go-basic.obo{release})."
+    go_release: ", {release}"
+    fifth_pct: "5th percentile = the value below which 5% of transcript benchmark dose values fall."
+  gene_identifiers:
+    headers: [Gene Symbol, Entrez Gene IDs, Probe IDs, Definition]
+    footnote: "In some cases, a probe may map to more than one gene, resulting in duplicate reporting of that probe mapped to different genes."
+
+changes:
+  # ── Materials and Methods: Chemistry first, with the test article's
+  # procurement and the vapor generation, monitoring and chamber atmosphere.
+  # Chemistry is a bare heading; what the data say of the test article (the
+  # data-built `chemistry` text) is its procurement and characterization.
+  - move: mm-chemistry
+    before: mm-study-design
+  - set: mm-chemistry
+    type: heading-only
+    data_key: null
+    methods_key: null
+  - insert:
+    - {id: mm-chem-procurement, type: narrative, data_key: methods,
+       title: "Procurement and Characterization of ${chemical_name}",
+       methods_key: chemistry}
+    - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
+       title: Vapor Generation and Exposure System, methods_key: vapor_generation,
+       requires_route: inhaled}
+    - {id: mm-chem-vapor-monitoring, type: narrative, data_key: methods,
+       title: Vapor Concentration Monitoring, methods_key: vapor_monitoring,
+       requires_route: inhaled}
+    - {id: mm-chem-chamber, type: narrative, data_key: methods,
+       title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere,
+       requires_route: inhaled}
+    into: mm-chemistry
+  - set: mm-study-design
+    study_title: "Study Design for ${species}"
+    repeat: study_species
+  - set: mm-dose-rationale
+    title: "${dose_term} Selection Rationale"
+  - set: mm-internal-dose
+    title: "${internal_dose_term} Assessment"
+    drop_when_uncollected: true
+
+  # ── Results: the apical results grouped; a summary closing the gene set
+  # analysis; the theoretical inhaled dose, then the internal concentrations.
+  - insert:
+    - {id: apical-analysis, type: heading-only, title: Apical Endpoint Analysis}
+    into: results
+    at: first
+  - move: animal-condition
+    into: apical-analysis
+  - move: clinical-path
+    into: apical-analysis
+  - move: bmd-summary
+    into: apical-analysis
+  # The 2026 captions name the animals and their treatment (", for Female Rats
+  # and Mice Exposed to 1,4-Dichlorobenzene for Five Days"), each table those
+  # it has data for.
+  - set: bmd-summary
+    caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High, for ${subject} ${treatment}"
+  # The analyses open with what was examined and where the tables are; each
+  # tissue's results stand under its own heading after the tables (below) —
+  # the books' sentences, built from the tables (rendering.genomics_results).
+  - set: gene-sets
+    caption_suffix: ", for ${subject} ${treatment}"
+    entry_narrative: false
+    intro_key: gene_set_intro
+  - set: gene-bmd
+    caption_suffix: ", for ${subject} ${treatment}"
+    entry_narrative: false
+    intro_key: gene_intro
+  - insert:
+    - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
+       data_key: gene_set_summary}
+    into: gene-sets
+  # The most potent gene set of each tissue, after the per-tissue tables
+  # (NIEHS-12 Table 11, NIEHS-13 Table 12).
+  - insert:
+    - {id: table-most-potent-gene-sets, type: data-table,
+       title: "Most Potent Gene Ontology Biological Process Gene Set per Tissue",
+       data_key: most_potent_gene_sets_matrix, cited_as: gene-set-summary-table}
+    into: gene-sets
+    at: first
+  - insert:
+    - {id: theoretical-inhaled-dose, type: narrative+tables, title: Theoretical Inhaled Dose,
+       narrative_key: theoretical_inhaled_dose, requires_route: inhaled}
+    after: gene-bmd
+  - move: internal-dose
+    after: theoretical-inhaled-dose
+  - set: internal-dose
+    title: "${internal_dose_term} Assessment"
+
+  # ── Each study's results under the tables the studies share; each study's
+  # internal concentrations (its own table); each tissue's gene set and gene
+  # results per study.
+  - set: animal-condition
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: animal-condition-study, type: narrative+tables, title: "", study_title: "${species}",
+       narrative_key: animal_condition, repeat: study_species}
+    into: animal-condition
+  # The tables the studies share stand under the first study's heading, after
+  # its prose (NIEHS-13 Tables 2 and 3 under "Rats").
+  - move: table-body-weight
+    into: animal-condition-study
+  - move: table-organ-weight
+    into: animal-condition-study
+  - set: table-body-weight
+    first_copy: true
+  - set: table-organ-weight
+    first_copy: true
+  - move: table-hematology          # hematology before clinical chemistry (NIEHS-13)
+    before: table-clin-chem
+  - set: clinical-path
+    type: heading-only
+    narrative_key: null
+  - insert:
+    - {id: clinical-path-study, type: narrative+tables, title: "", study_title: "${species}",
+       narrative_key: clinical_pathology, repeat: study_species}
+    into: clinical-path
+  - move: table-hematology
+    into: clinical-path-study
+  - move: table-clin-chem
+    into: clinical-path-study
+  - move: table-hormones            # none in these books; after clinical chemistry, as in the base
+    into: clinical-path-study
+  - set: table-hematology
+    first_copy: true
+  - set: table-clin-chem
+    first_copy: true
+  - set: table-hormones
+    first_copy: true
+  - set: internal-dose
+    type: heading-only
+    narrative_key: null
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
+  - insert:
+    - {id: internal-dose-study, type: narrative+tables, title: "", study_title: "${species}",
+       narrative_key: internal_dose, repeat: study_species}
+    into: internal-dose
+  - move: table-tissue-conc
+    into: internal-dose-study
+  - insert:
+    - id: gene-set-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-set-tissue-study, type: narrative, title: "", study_title: "${species}",
+         data_key: gene_set_results, repeat: study_species}
+    before: gene-set-summary
+  - insert:
+    - id: gene-tissue
+      type: heading-only
+      title: "${organ}"
+      repeat: genomic_organs
+      children:
+      - {id: gene-tissue-study, type: narrative, title: "", study_title: "${species}",
+         data_key: gene_results, repeat: study_species}
+    into: gene-bmd
+
+  # ── Appendices A–G ───────────────────────────────────────────────────────
+  # A: how the chamber concentrations were generated (the study's own text).
+  - insert:
+    - id: appendix-chamber
+      type: appendix
+      requires_route: inhaled
+      element: book-app
+      book_part_type: appendix
+      title: Chemical Characterization and Generation of Chamber Concentrations
+      children:
+      - id: appendix-chamber-procurement
+        type: heading-only
+        title: "Procurement and Characterization of ${chemical_name}"
+        children:
+        - {id: appendix-chamber-procurement-text, type: freeform-block, title: "",
+           session_content: chamber-procurement,
+           missing_content_text: "The test article's procurement and characterization are not supplied for this study."}
+      - id: appendix-chamber-vapor-generation
+        type: heading-only
+        title: Vapor Generation and Exposure System
+        children:
+        - {id: appendix-chamber-vapor-generation-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-generation,
+           missing_content_text: "The vapor generation and exposure system are not supplied for this study."}
+      - id: appendix-chamber-vapor-monitoring
+        type: heading-only
+        title: Vapor Concentration Monitoring
+        children:
+        - {id: appendix-chamber-vapor-monitoring-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-monitoring,
+           missing_content_text: "The vapor concentration monitoring is not supplied for this study."}
+      - id: appendix-chamber-atmosphere
+        type: heading-only
+        title: Chamber Atmosphere Characterization
+        children:
+        - {id: appendix-chamber-atmosphere-text, type: freeform-block, title: "",
+           session_content: chamber-atmosphere,
+           missing_content_text: "The chamber atmosphere characterization is not supplied for this study."}
+    before: appendix-a
+  # B: the internal concentration method (the study's appendix-a content, with
+  # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
+  - set: appendix-a
+    title: "${internal_dose_term} Assessment"
+    requires_platform: Tissue Concentration
+    drop_when_uncollected: true
+  - move: appendix-a-body
+    into: appendix-a
+  - remove: appendix-a-quantitation
+  # D.2 Empirical False Discovery Rate: the method and the results table, from
+  # the study's synthetic-null analysis (rendering.genomics_appendix) — no
+  # boxplots in these books.
+  - set: appendix-c-efdr-methods
+    type: narrative
+    data_key: efdr_methods
+  - remove: figure-c-efdr
+  - set: appendix-c-efdr-results
+    type: narrative
+    data_key: efdr_results
+  - insert:
+    - {id: table-c-efdr, type: data-table, title: Empirical False Discovery Results,
+       data_key: appendix_efdr_matrix, cited_as: efdr-table}
+    into: appendix-c-efdr-results
+  # C: each study's animals and their sequencing files, one table per study.
+  - set: table-b-1
+    title: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
+    caption: "Animal Numbers and FASTQ Data File Names for ${subject} ${treatment}"
+    repeat: study_species
+  # No BMDS model-selection appendix; E defines the top gene sets' genes.
+  - remove: appendix-d
+  - insert:
+    - id: appendix-gene-definitions
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Gene Set and Gene Definitions
+      # Each tissue's top gene sets with their GO definitions, then each
+      # study's genes (NIEHS-13 Tables E-1 … E-5, E-6 and E-7).
+      children:
+      - {id: table-gene-set-definitions, type: data-table, repeat: genomic_organs,
+         title: "Active Genes and Definitions within Top 10 ${organ} Gene Ontology Biological Process Gene Sets",
+         data_key: appendix_gene_set_definitions}
+      - {id: table-gene-identifiers, type: data-table, repeat: study_species,
+         title: "Gene Identifiers and Definitions for ${subject} ${treatment}",
+         caption: "Gene Identifiers and Definitions for ${subject} ${treatment}",
+         data_key: appendix_gene_identifiers}
+    after: appendix-c
+  # G: Supplemental Data opens with the materials and methods and the
+  # theoretical inhaled dose, lists each species' files in its own section
+  # ("G.3 Rats", "G.4 Mice": one per species of the deposit), and closes with
+  # the software.  The lists are derived from the study's data deposit.
+  # The appendix a tissue's gene set results send the reader to ("The full
+  # list … can be found in Appendix G").
+  - set: appendix-f
+    cited_as: supplemental-data
+  - insert:
+    - id: appendix-f-methods
+      type: heading-only
+      title: Materials and Methods
+      children:
+      - {id: appendix-f-methods-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: methods}
+    - id: appendix-f-inhaled-dose
+      type: heading-only
+      requires_route: inhaled
+      title: Theoretical Inhaled Dose
+      children:
+      - {id: appendix-f-inhaled-dose-files, type: supplementary-material, binding: derived,
+         title: "", deposit_group: inhaled-dose}
+    - {id: appendix-f-species, type: heading-only, title: Species, repeat: deposit_species}
+    after: appendix-f-body
+  - move: appendix-f-apical
+    into: appendix-f-species
+  - move: appendix-f-genomic
+    into: appendix-f-species
+  - move: appendix-f-tables
+    into: appendix-f-species
+  - move: appendix-f-animals
+    into: appendix-f-species
+  - insert:
+    - id: appendix-f-software
+      type: heading-only
+      title: Software
+      children:
+      - id: appendix-f-pipeline-evaluation
+        type: heading-only
+        title: Analysis Pipeline Evaluation
+        children:
+        - {id: appendix-f-pipeline-evaluation-files, type: supplementary-material,
+           binding: derived, title: "", deposit_group: software}
+      - id: appendix-f-bmdexpress-preview
+        type: heading-only
+        title: BMDExpress Preview Software
+        children:
+        - {id: appendix-f-bmdexpress-preview-text, type: freeform-block, title: "",
+           session_content: supplemental-bmdexpress-preview,
+           missing_content_text: "The BMDExpress preview software is not supplied for this study."}
+    into: appendix-f

@@ -1,0 +1,5 @@
+# NIEHS Report 08 (1,1,2,2-Tetrahydroperfluoro-1-dodecanol, NBK589991) — ADR-0029.  Its structure is the March 2023
+# generation's, unaltered.
+extends: eras/niehs-2023
+book_meta:
+  series: {issn: 2473-4756}     # the series' first ISSN, as this book carries it

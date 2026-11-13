@@ -148,14 +148,16 @@ class TestProcessIntegrated:
 
     def _setup_session(self, sessions_dir, dtxsid="DTXSID_TEST"):
         """Write integrated.json to a session dir and return the path."""
+        from tests.integration.test_process_integrated_golden import seed_processable
+
         session = sessions_dir / dtxsid
         session.mkdir(parents=True, exist_ok=True)
-        (session / "files").mkdir(exist_ok=True)
 
         integrated = _make_integrated_data()
         (session / "integrated.json").write_text(
             json.dumps(integrated, indent=2),
         )
+        seed_processable(session, dtxsid)
         return session
 
     def test_returns_sections(self, sessions_dir, mock_bmdx_pipe):
@@ -163,7 +165,7 @@ class TestProcessIntegrated:
         Process-integrated should return a JSON with 'sections' array.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -186,7 +188,7 @@ class TestProcessIntegrated:
         new domain model values (not old monolithic strings).
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -217,7 +219,7 @@ class TestProcessIntegrated:
     def test_sections_have_tables_json(self, sessions_dir, mock_bmdx_pipe):
         """Each section should have tables_json with sex keys."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -243,7 +245,7 @@ class TestProcessIntegrated:
     def test_has_bmd_summary(self, sessions_dir, mock_bmdx_pipe):
         """Response should include apical_bmd_summary."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -260,7 +262,7 @@ class TestProcessIntegrated:
     def test_has_unified_narratives(self, sessions_dir, mock_bmdx_pipe):
         """Response should include unified_narratives dict."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -275,17 +277,52 @@ class TestProcessIntegrated:
         assert "unified_narratives" in data
         assert isinstance(data["unified_narratives"], dict)
 
-    def test_no_integrated_data_returns_400(self, sessions_dir):
-        """Processing without integrated data should return 400."""
+    def test_no_integrated_data_returns_409_and_writes_nothing(self, sessions_dir):
+        """Processing a study that is not integrated is refused by the phase
+        guard (C1), before anything is pinned or rescanned."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_NODATA"
-        (sessions_dir / dtxsid / "files").mkdir(parents=True)
+        session = sessions_dir / dtxsid
+        (session / "files").mkdir(parents=True)
+        (session / "files" / "bw.csv").write_text("x")
+        (session / "validation_report.json").write_text('{"issues": [], "coverage_matrix": {}}')
+        before = sorted(p.name for p in session.iterdir())
 
         resp = client.post(
             f"/api/process-integrated/{dtxsid}",
             json={"compound_name": "Test", "dose_unit": "mg/kg"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 409
+        assert "PROCESS refused" in resp.json()["error"]
+        assert "phase VALIDATED" in resp.json()["error"]
+        assert sorted(p.name for p in session.iterdir()) == before
+        for name in ("method_profile.json", "document_definition.json",
+                     "document_definition.yaml", "_fingerprints.json"):
+            assert not (session / name).exists(), name
+
+    def test_no_chosen_method_returns_409_method_not_chosen(self, sessions_dir):
+        """D1 = B: an integrated study whose method profile no person chose is
+        refused, before anything is written; a default pin is not a choice."""
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        dtxsid = "DTXSID_NOPIN"
+        session = self._setup_session(sessions_dir, dtxsid)
+        (session / "method_profile.json").unlink()
+        client = TestClient(app)
+        resp = client.post(f"/api/process-integrated/{dtxsid}", json={})
+        assert resp.status_code == 409
+        assert resp.json()["error"] == (
+            f"PROCESS refused for {dtxsid}: no method profile has been chosen "
+            "(method_profile.json is absent). Pin one, then process.")
+        for name in ("method_profile.json", "document_definition.json", "_fingerprints.json"):
+            assert not (session / name).exists(), name
+
+        from pipeline.method_profile import newest_profile, pin_profile
+        pin_profile(dtxsid, newest_profile(), by="default")
+        resp = client.post(f"/api/process-integrated/{dtxsid}", json={})
+        assert resp.status_code == 409
+        assert "(method_profile.json is pinned by default)" in resp.json()["error"]

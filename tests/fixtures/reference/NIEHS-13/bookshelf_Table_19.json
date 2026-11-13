@@ -1,0 +1,342 @@
+{
+ "report": "NIEHS-13",
+ "id": "t-2-19",
+ "label": "Table 19",
+ "title": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,4-Dichlorobenzene for Five Days",
+ "caption": [],
+ "part": "Results",
+ "section": [
+  "Internal Concentration Assessment",
+  "Rats"
+ ],
+ "source": "bp3.nxml",
+ "columns": 8,
+ "header": [
+  [
+   "Endpoint<sup>a,b</sup>",
+   "0 ppm",
+   "1 ppm",
+   "10 ppm",
+   "50 ppm",
+   "150 ppm",
+   "400 ppm",
+   "800 ppm"
+  ]
+ ],
+ "rows": [
+  [
+   "Study Day 4",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "n",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "2"
+  ],
+  [
+   "Blood",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Blood concentration (ng/mL)<sup>c</sup>",
+   "0.398 ± 0.0127**",
+   "152 ± 11.0*",
+   "1,400 ± 70.2**",
+   "8,140 ± 690**",
+   "17,700 ± 2,370**",
+   "99,100 ± 5,000**",
+   "178,000 ± 52,500**"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/(mg/kg/day)]<sup>d,e</sup>",
+   "−<sup>f</sup>",
+   "92.8 ± 6.70",
+   "85.6 ± 4.29",
+   "99.8 ± 8.45",
+   "72.1 ± 9.66",
+   "152 ± 7.65",
+   "136 ± 40.2"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/ppm]<sup>e</sup>",
+   "−",
+   "152 ± 11.0",
+   "140 ± 7.02",
+   "163 ± 13.8",
+   "118 ± 15.8",
+   "248 ± 12.5",
+   "222 ± 65.6"
+  ],
+  [
+   "Liver",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Liver concentration (ng/g)",
+   "0.873 ± 0.0422**",
+   "208 ± 11.1*",
+   "1,680 ± 185**",
+   "8,270 ± 771**",
+   "37,900 ± 5,060**",
+   "151,000 ± 12,700**",
+   "207,000 ± 89,000**"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/(mg/kg/day)]<sup>d,e</sup>",
+   "−",
+   "127 ± 6.80",
+   "103 ± 11.3",
+   "101 ± 9.45",
+   "155 ± 20.7",
+   "231 ± 19.5",
+   "159 ± 68.1"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/ppm]<sup>e</sup>",
+   "−",
+   "208 ± 11.1",
+   "168 ± 18.5",
+   "165 ± 15.4",
+   "253 ± 33.8",
+   "378 ± 31.9",
+   "259 ± 111"
+  ],
+  [
+   "Lung",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Lung concentration (ng/g)",
+   "0.408 ± 0.0132**",
+   "120 ± 36.5*",
+   "595 ± 158**",
+   "3,830 ± 1,390**",
+   "7,410 ± 305**",
+   "37,800 ± 2,580**",
+   "242,000 ± 134,000**"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/(mg/kg/day)]<sup>d,e</sup>",
+   "−",
+   "73.4 ± 22.3",
+   "36.4 ± 9.65",
+   "47.0 ± 17.1",
+   "30.2 ± 1.24",
+   "57.8 ± 3.95",
+   "185 ± 103"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/ppm]<sup>e</sup>",
+   "−",
+   "120 ± 36.5",
+   "59.5 ± 15.8",
+   "76.7 ± 27.9",
+   "49.4 ± 2.03",
+   "94.4 ± 6.46",
+   "303 ± 168"
+  ],
+  [
+   "Study Day 5",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "n",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3"
+  ],
+  [
+   "Blood",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Blood concentration (ng/mL)",
+   "0.477 ± 0.0264**",
+   "4.69 ± 0.736*",
+   "36.3 ± 4.94**",
+   "250 ± 27.6**",
+   "1,180 ± 165**",
+   "2,610 ± 636**",
+   "4,430 ± 537**"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/(mg/kg/day)]",
+   "−",
+   "2.87 ± 0.450",
+   "2.22 ± 0.302",
+   "3.07 ± 0.338",
+   "4.82 ± 0.673",
+   "4.00 ± 0.973",
+   "3.39 ± 0.411"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/ppm]",
+   "−",
+   "4.69 ± 0.736",
+   "3.63 ± 0.494",
+   "5.01 ± 0.551",
+   "7.88 ± 1.10",
+   "6.53 ± 1.59",
+   "5.54 ± 0.671"
+  ],
+  [
+   "Liver",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Liver concentration (ng/g)",
+   "0.760 ± 0.0563**",
+   "7.13 ± 1.29*",
+   "69.2 ± 24.2**",
+   "158 ± 13.5**",
+   "1,300 ± 225**",
+   "2,480 ± 413**",
+   "3,810 ± 665**"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/(mg/kg/day)]",
+   "−",
+   "4.35 ± 0.787",
+   "4.23 ± 1.48",
+   "1.94 ± 0.166",
+   "5.31 ± 0.919",
+   "3.80 ± 0.632",
+   "2.92 ± 0.509"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/ppm]",
+   "−",
+   "7.13 ± 1.29",
+   "6.92 ± 2.42",
+   "3.17 ± 0.271",
+   "8.68 ± 1.50",
+   "6.21 ± 1.03",
+   "4.77 ± 0.831"
+  ],
+  [
+   "Lung",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Lung concentration (ng/g)",
+   "0.482 ± 0.0559**",
+   "4.31 ± 1.03*",
+   "22.3 ± 3.66**",
+   "352 ± 51.9**",
+   "446 ± 42.1**",
+   "1,660 ± 810**",
+   "1,970 ± 381**"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/(mg/kg/day)]",
+   "−",
+   "2.63 ± 0.631",
+   "1.37 ± 0.224",
+   "4.32 ± 0.636",
+   "1.82 ± 0.172",
+   "2.53 ± 1.24",
+   "1.51 ± 0.292"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/ppm]",
+   "−",
+   "4.31 ± 1.03",
+   "2.23 ± 0.366",
+   "7.05 ± 1.04",
+   "2.97 ± 0.281",
+   "4.14 ± 2.03",
+   "2.46 ± 0.477"
+  ]
+ ],
+ "footnotes": [
+  {
+   "label": "",
+   "text": "Statistical significance for an exposed group indicates a significant pairwise test compared to the 0 ppm group. Statistical significance for the 0 ppm group indicates a significant trend test."
+  },
+  {
+   "label": "*",
+   "text": "Statistically significant at p ≤ 0.05; **p ≤ 0.01."
+  },
+  {
+   "label": "<sup>a</sup>",
+   "text": "Data are presented as mean ± standard error."
+  },
+  {
+   "label": "<sup>b</sup>",
+   "text": "If over 20% of the animals in a group were above the limit of detection (LOD), one-half of the LOD was substituted for values below the LOD. LOD for blood = 0.0960 ng/mL; LOD for liver = 0.288 ng/g; LOD for lung = 0.288 ng/g."
+  },
+  {
+   "label": "<sup>c</sup>",
+   "text": "Statistical analysis performed by the Jonckheere (trend) and the Shirley or Dunn (pairwise) tests."
+  },
+  {
+   "label": "<sup>d</sup>",
+   "text": "Theoretical inhaled doses estimated for the 1, 10, 50, 150, 400 and 800 ppm groups are 1.64, 16.36, 81.58, 245.18, 653.76 and 1,305.97 mg/kg/day, respectively."
+  },
+  {
+   "label": "<sup>e</sup>",
+   "text": "Normalized concentrations were calculated by dividing the measured concentration in either ng/mL for blood or ng/g for tissues by either the theoretical inhaled dose (mg/kg/day) or nominal exposure concentration (ppm). No statistical analysis was performed on normalized endpoints."
+  },
+  {
+   "label": "<sup>f</sup>",
+   "text": "Not applicable."
+  }
+ ]
+}

@@ -1,12 +1,4 @@
 {
-  "about_report": {
-    "authors": {
-      "paragraphs": []
-    },
-    "contributors": {
-      "paragraphs": []
-    }
-  },
   "abstract": {
     "sections": [
       {
@@ -52,7 +44,64 @@
       "title": "Clinical Pathology"
     }
   ],
+  "appendix_bmd_acceptance_matrix": {
+    "caption": "Benchmark Dose Acceptance Criteria for Apical Endpoints",
+    "col_widths": [
+      0.18,
+      0.4,
+      0.12,
+      0.2
+    ],
+    "footnotes": [
+      {
+        "kind": "definition",
+        "text": "BMD = benchmark dose; BMDL = benchmark dose lower confidence limit; R² = coefficient of determination, one minus the residual sum of squares of the fitted curve at the dose-group means over their total sum of squares; NA = not applicable; NVM = no viable model."
+      }
+    ],
+    "headers": [
+      "Criterion",
+      "Requirement for a Reported BMD",
+      "Numerical Threshold (N)",
+      "Result When Not Met"
+    ],
+    "rows": [
+      [
+        "BMD existence",
+        "The model average yields a BMD.",
+        "NA",
+        "NVM"
+      ],
+      [
+        "Goodness of fit",
+        "The R² of the model-averaged curve against the dose-group means is at least N.",
+        "0.6",
+        "NVM"
+      ],
+      [
+        "BMD-to-BMDL ratio",
+        "BMD/BMDL is no greater than N.",
+        "10",
+        "NVM"
+      ],
+      [
+        "High BMD",
+        "The BMD is no higher than the highest dose tested.",
+        "NA",
+        "NVM"
+      ],
+      [
+        "Low BMD",
+        "The BMD is no more than N times lower than the lowest nonzero dose.",
+        "3",
+        "Reported as <(lowest nonzero dose)/3, without a BMDL"
+      ]
+    ]
+  },
   "author": "5dToxReport",
+  "authored": {},
+  "authors": {
+    "paragraphs": []
+  },
   "background": {
     "paragraphs": []
   },
@@ -63,15 +112,20 @@
         "bmdl": null,
         "direction": "—",
         "endpoint": "—",
-        "loel": null,
-        "noel": null,
+        "loel": "—",
+        "noel": "—",
         "sex": "Male"
       }
     ],
     "paragraphs": []
   },
+  "breaks": {},
   "casrn": "1-1-1",
   "chemical_name": "Test Article",
+  "contributors": {
+    "paragraphs": []
+  },
+  "deposit": null,
   "document_tree": [
     {
       "id": "title-page",
@@ -103,11 +157,19 @@
       "type": "tables-list"
     },
     {
-      "data_key": "about_report",
-      "id": "about",
+      "data_key": "authors",
+      "id": "authors",
       "level": 1,
       "region": "front",
-      "title": "About This Report",
+      "title": "Authors",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "contributors",
+      "id": "contributors",
+      "level": 1,
+      "region": "front",
+      "title": "Contributors",
       "type": "front-matter"
     },
     {
@@ -245,22 +307,25 @@
               "type": "narrative"
             },
             {
+              "children": [
+                {
+                  "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                  "data_key": "sample_counts",
+                  "id": "table-sample-counts",
+                  "level": 0,
+                  "region": "body",
+                  "table_label": "1",
+                  "table_number": 1,
+                  "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                  "type": "sample-counts-table"
+                }
+              ],
               "data_key": "methods",
               "id": "mm-tx-qc",
               "level": 3,
               "region": "body",
               "title": "Sequencing Quality Checks and Outlier Removal",
               "type": "narrative"
-            },
-            {
-              "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-              "data_key": "sample_counts",
-              "id": "table-sample-counts",
-              "level": 0,
-              "region": "body",
-              "table_number": 1,
-              "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-              "type": "sample-counts-table"
             },
             {
               "data_key": "methods",
@@ -347,6 +412,7 @@
               "platform": "Body Weight",
               "ready_key": "animalCondition",
               "region": "body",
+              "table_label": "2",
               "table_number": 2,
               "title": "Summary of Body Weights",
               "type": "table"
@@ -358,6 +424,7 @@
               "platform": "Organ Weight",
               "ready_key": "animalCondition",
               "region": "body",
+              "table_label": "3",
               "table_number": 3,
               "title": "Summary of Organ Weights",
               "type": "table"
@@ -380,6 +447,7 @@
               "platform": "Clinical Chemistry",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "4",
               "table_number": 4,
               "title": "Summary of Select Clinical Chemistry Data",
               "type": "table"
@@ -391,6 +459,7 @@
               "platform": "Hematology",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "5",
               "table_number": 5,
               "title": "Summary of Select Hematology Data",
               "type": "table"
@@ -402,6 +471,7 @@
               "platform": "Hormones",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "6",
               "table_number": 6,
               "title": "Summary of Select Hormone Data",
               "type": "table"
@@ -423,6 +493,7 @@
               "platform": "Tissue Concentration",
               "ready_key": "internalDose",
               "region": "body",
+              "table_label": "7",
               "table_number": 7,
               "title": "Summary of Plasma Concentration Data",
               "type": "table"
@@ -430,6 +501,7 @@
           ],
           "id": "internal-dose",
           "level": 2,
+          "narrative_key": "internal_dose",
           "ready_key": "internalDose",
           "region": "body",
           "title": "Internal Dose Assessment",
@@ -442,6 +514,7 @@
           "level": 2,
           "ready_key": "bmdSummary",
           "region": "body",
+          "table_label": "8",
           "table_number": 8,
           "title": "Apical Endpoint Benchmark Dose Summary",
           "type": "bmd-summary"
@@ -485,9 +558,9 @@
       "data_key": "references",
       "id": "references",
       "level": 1,
-      "region": "back",
+      "region": "body",
       "title": "References",
-      "type": "narrative"
+      "type": "reference-list"
     },
     {
       "appendix_letter": "A",
@@ -508,6 +581,18 @@
     },
     {
       "appendix_letter": "B",
+      "children": [
+        {
+          "data_key": "appendix_animals_matrix",
+          "id": "table-b-1",
+          "level": 0,
+          "region": "back",
+          "table_label": "B-1",
+          "table_number": 1,
+          "title": "Animal Numbers and FASTQ Data File Names",
+          "type": "data-table"
+        }
+      ],
       "id": "appendix-b",
       "level": 1,
       "region": "back",
@@ -516,6 +601,53 @@
     },
     {
       "appendix_letter": "C",
+      "children": [
+        {
+          "children": [
+            {
+              "id": "appendix-c-qc-text",
+              "level": 3,
+              "region": "back",
+              "title": "",
+              "type": "freeform-block"
+            },
+            {
+              "data_key": "appendix_pca_figure",
+              "figure_label": "C-1",
+              "figure_number": 1,
+              "id": "figure-c-pca",
+              "level": 0,
+              "region": "back",
+              "title": "Principal Component Analysis of the Normalized Transcriptomic Data",
+              "type": "figure"
+            }
+          ],
+          "id": "appendix-c-qc",
+          "level": 2,
+          "region": "back",
+          "title": "Gene Expression Quality Control",
+          "type": "heading-only"
+        },
+        {
+          "children": [
+            {
+              "data_key": "appendix_efdr_figure",
+              "figure_label": "C-2",
+              "figure_number": 2,
+              "id": "figure-c-efdr",
+              "level": 0,
+              "region": "back",
+              "title": "Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination",
+              "type": "figure"
+            }
+          ],
+          "id": "appendix-c-efdr",
+          "level": 2,
+          "region": "back",
+          "title": "Empirical False Discovery Rate",
+          "type": "heading-only"
+        }
+      ],
       "id": "appendix-c",
       "level": 1,
       "region": "back",
@@ -531,23 +663,53 @@
           "region": "back",
           "title": "",
           "type": "freeform-block"
+        },
+        {
+          "data_key": "appendix_bmd_acceptance_matrix",
+          "id": "table-d-1",
+          "level": 0,
+          "region": "back",
+          "table_label": "D-1",
+          "table_number": 1,
+          "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints",
+          "type": "data-table"
+        },
+        {
+          "data_key": "appendix_bmd_config_matrix",
+          "id": "table-d-2",
+          "level": 0,
+          "region": "back",
+          "table_label": "D-2",
+          "table_number": 2,
+          "title": "BMDExpress/ToxicR Analysis Configuration",
+          "type": "data-table"
         }
       ],
       "id": "appendix-d",
       "level": 1,
       "region": "back",
-      "title": "Benchmark Dose Model Recommendation and Selection Methodologies",
+      "title": "Benchmark Dose Modeling and Acceptance Criteria",
       "type": "appendix"
     },
     {
       "appendix_letter": "E",
       "children": [
         {
-          "id": "appendix-e-body",
+          "children": [
+            {
+              "data_key": "organ_weight_descriptions",
+              "id": "appendix-e-body",
+              "level": 3,
+              "region": "back",
+              "title": "",
+              "type": "narrative"
+            }
+          ],
+          "id": "appendix-e-descriptions",
           "level": 2,
           "region": "back",
-          "title": "",
-          "type": "freeform-block"
+          "title": "Organ Weight Descriptions",
+          "type": "heading-only"
         }
       ],
       "id": "appendix-e",
@@ -574,7 +736,33 @@
       "type": "appendix"
     }
   ],
+  "dose_terms": {
+    "gavage": {
+      "dose": "Dose",
+      "internal_dose": "Internal Dose"
+    },
+    "inhaled": {
+      "dose": "Exposure Concentration",
+      "internal_dose": "Internal Concentration"
+    }
+  },
   "dtxsid": "DTXSID_TEST_NO_SESSION",
+  "figure_entries": [
+    {
+      "figure_number": 1,
+      "label": "C-1",
+      "ready": false,
+      "scope": "C",
+      "title": "Principal Component Analysis of the Normalized Transcriptomic Data"
+    },
+    {
+      "figure_number": 2,
+      "label": "C-2",
+      "ready": false,
+      "scope": "C",
+      "title": "Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination"
+    }
+  ],
   "foreword": {
     "paragraphs": [
       [
@@ -584,22 +772,22 @@
           "text": "National Institute of Environmental Health Sciences (NIEHS)",
           "type": "ext-link"
         },
-        " is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+        " is one of 27 institutes and centers of the National Institutes of Health, part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures, developing the next generation of environmental health scientists, and providing critical research, knowledge, and information to citizens and policymakers to help in their efforts to prevent hazardous exposures and reduce the risk of preventable disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
       ],
       [
-        "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the ",
+        "The environmental health sciences research described in this series is conducted primarily by the ",
         {
-          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm",
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt",
           "text": "Division of Translational Toxicology (DTT)",
           "type": "ext-link"
         },
         " at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
       ],
       [
-        "NIEHS reports are available free of charge on the ",
+        "This report is available free of charge on the ",
         {
-          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm",
-          "text": "NIEHS/DTT website",
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports",
+          "text": "NIEHS website",
           "type": "ext-link"
         },
         " and cataloged in ",
@@ -612,10 +800,30 @@
       ]
     ]
   },
+  "gene_intro": {
+    "paragraphs": [
+      [
+        "The top 10 genes ranked by BMD potency are shown in the liver (Table 11) and kidney (Table 12). As with the GO analysis, the biological or toxicological significance of the changes in gene expression shown in Table 11 and Table 12 should be interpreted with caution. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes that could serve as a conservative surrogate of estimated biological potency, and by extension toxicological potency, when more definitive toxicological data are unavailable."
+      ]
+    ]
+  },
   "gene_narrative": {
     "paragraphs": []
   },
+  "gene_set_intro": {
+    "paragraphs": [
+      [
+        "Chemical-induced alterations in liver and kidney gene transcript expression were examined to determine those gene sets most sensitive to test article exposure. To that end, BMD analysis of transcripts and gene sets (Gene Ontology [GO] biological process) was conducted to determine the potency of the chemical to elicit gene expression changes in the liver and kidney. This analysis used transcript-level BMD data to assess an aggregate score of gene set potency (median transcript BMD) and enrichment."
+      ],
+      [
+        "The “active” gene sets with the lowest median BMD values are shown in the liver (Table 9) and kidney (Table 10). The gene sets shown in Table 9 and Table 10 should be interpreted with caution from the standpoint of the underlying biological mechanism and any relationship to toxicity or toxic agents referenced in the GO term definitions. The data primarily should be considered as a metric of potency for chemical-induced transcriptional changes (i.e., a concerted biological change) that could serve as a surrogate of estimated biological potency and, by extension, toxicological potency when more definitive toxicological data are unavailable."
+      ]
+    ]
+  },
   "gene_set_narrative": {
+    "paragraphs": []
+  },
+  "gene_set_summary": {
     "paragraphs": []
   },
   "genomics_sections": [
@@ -623,6 +831,7 @@
       "caption": "",
       "go_descriptions": [],
       "organ": "liver",
+      "results": {},
       "sexes": [],
       "table_number": 9,
       "type": "gene_set"
@@ -631,6 +840,7 @@
       "caption": "",
       "go_descriptions": [],
       "organ": "kidney",
+      "results": {},
       "sexes": [],
       "table_number": 10,
       "type": "gene_set"
@@ -639,6 +849,7 @@
       "caption": "",
       "gene_descriptions": [],
       "organ": "liver",
+      "results": {},
       "sexes": [],
       "table_number": 11,
       "type": "gene"
@@ -647,6 +858,7 @@
       "caption": "",
       "gene_descriptions": [],
       "organ": "kidney",
+      "results": {},
       "sexes": [],
       "table_number": 12,
       "type": "gene"
@@ -658,9 +870,6 @@
   "issn": "2768-5632",
   "layout_style": {
     "instances": {
-      "about": {
-        "break_before": "page"
-      },
       "abstract": {
         "break_before": "page"
       },
@@ -680,6 +889,9 @@
         "break_before": "page"
       },
       "appendix-f": {
+        "break_before": "page"
+      },
+      "authors": {
         "break_before": "page"
       },
       "peer-review": {
@@ -835,11 +1047,30 @@
       }
     ]
   },
+  "most_potent_gene_sets_matrix": null,
+  "organ_weight_descriptions": {
+    "paragraphs": [
+      [
+        {
+          "text": "Kidney:",
+          "type": "bold"
+        },
+        " The kidneys remove waste products and xenobiotics from the body, balance blood electrolytes, regulate blood pressure through the release of hormones, synthesize the active form of vitamin D, and control the production of erythropoiesis. In subacute studies, changes in kidney weight may reflect renal toxicity (particularly if accompanied by increases in other markers of kidney toxicity, e.g., increased Kim-1) and/or tubular hypertrophy. Decreased kidney weights in subacute studies are typically of unknown toxicological significance."
+      ],
+      [
+        {
+          "text": "Liver:",
+          "type": "bold"
+        },
+        " The liver carries out biotransformation and excretion of endogenous and xenobiotic substances, regulation of blood sugar, enzymatic transformation of essential nutrients, generation of blood proteins involved in fluid balance and clotting, and bile production for digestion and absorption of fats. Liver weight changes can be an indication of chemical-induced stress. Specifically, in subacute studies, increases in liver weight in response to low doses of toxicants typically stem from increases in xenobiotic metabolizing enzymes and associated hepatocyte hypertrophy or peroxisome proliferation. Increased liver weight, particularly when accompanied by evidence of leakage of liver-specific enzymes into blood, likely reflects hemodynamic changes related to severe hepatotoxicity. Higher liver weight relative to body weight may also occur at any dose level that causes a slowed rate of body growth and does not necessarily indicate liver toxicity. Decreased liver weight in subacute studies is typically of unknown toxicological significance but in rare cases may be related to glycogen depletion."
+      ]
+    ]
+  },
   "orientations": {},
   "overrides": {},
   "peer_review": {
     "paragraphs": [
-      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats was not subjected to further external peer review."
+      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Test Article (CASRN 1-1-1) in Animals was not subjected to further external peer review."
     ]
   },
   "publication_details": {
@@ -856,71 +1087,116 @@
   "report_date": "«Month Year»",
   "report_number": "«NIEHS Report XX»",
   "report_series": "NIEHS Report Series",
-  "running_header": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
-  "strain": "(Hsd:Sprague Dawley® SD®)",
+  "running_header": "In Vivo Repeat Dose Biological Potency Study of Test Article in Animals",
+  "strain": "",
   "summary": {
     "paragraphs": []
   },
   "table_entries": [
     {
+      "label": "1",
       "ready": false,
+      "scope": null,
       "table_number": 1,
       "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data"
     },
     {
+      "label": "2",
       "ready": false,
+      "scope": null,
       "table_number": 2,
       "title": "Summary of Body Weights"
     },
     {
+      "label": "3",
       "ready": false,
+      "scope": null,
       "table_number": 3,
       "title": "Summary of Organ Weights"
     },
     {
+      "label": "4",
       "ready": false,
+      "scope": null,
       "table_number": 4,
       "title": "Summary of Select Clinical Chemistry Data"
     },
     {
+      "label": "5",
       "ready": false,
+      "scope": null,
       "table_number": 5,
       "title": "Summary of Select Hematology Data"
     },
     {
+      "label": "6",
       "ready": false,
+      "scope": null,
       "table_number": 6,
       "title": "Summary of Select Hormone Data"
     },
     {
+      "label": "7",
       "ready": false,
+      "scope": null,
       "table_number": 7,
       "title": "Summary of Plasma Concentration Data"
     },
     {
+      "label": "8",
       "ready": false,
+      "scope": null,
       "table_number": 8,
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
+      "label": "9",
       "ready": false,
+      "scope": null,
       "table_number": 9,
       "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
+      "label": "10",
       "ready": false,
+      "scope": null,
       "table_number": 10,
       "title": "Top Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
+      "label": "11",
       "ready": false,
+      "scope": null,
       "table_number": 11,
       "title": "Top Liver Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
+      "label": "12",
       "ready": false,
+      "scope": null,
       "table_number": 12,
       "title": "Top Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
+    },
+    {
+      "label": "B-1",
+      "ready": false,
+      "scope": "B",
+      "table_number": 1,
+      "title": "Animal Numbers and FASTQ Data File Names"
+    },
+    {
+      "label": "D-1",
+      "ready": true,
+      "scope": "D",
+      "table_number": 1,
+      "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints"
+    },
+    {
+      "label": "D-2",
+      "ready": false,
+      "scope": "D",
+      "table_number": 2,
+      "title": "BMDExpress/ToxicR Analysis Configuration"
     }
   ],
   "test_article": {
@@ -985,264 +1261,335 @@
     "name": "Test Article",
     "pubchem_cid": ""
   },
-  "title": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
+  "title": "In Vivo Repeat Dose Biological Potency Study of Test Article in Animals",
   "toc_entries": [
     {
       "id": "foreword",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Foreword"
     },
     {
-      "id": "about",
+      "id": "authors",
       "level": 1,
       "ready": true,
-      "title": "About This Report"
+      "scope": null,
+      "title": "Authors"
+    },
+    {
+      "id": "contributors",
+      "level": 1,
+      "ready": true,
+      "scope": null,
+      "title": "Contributors"
     },
     {
       "id": "peer-review",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Peer Review"
     },
     {
       "id": "publication",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Publication Details"
     },
     {
       "id": "acknowledgments",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Acknowledgments"
     },
     {
       "id": "abstract",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Abstract"
     },
     {
       "id": "background",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Background"
     },
     {
       "id": "methods",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Materials and Methods"
     },
     {
       "id": "mm-study-design",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Study Design"
     },
     {
       "id": "mm-dose-rationale",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Dose Selection Rationale"
     },
     {
       "id": "mm-chemistry",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Chemistry"
     },
     {
       "id": "mm-clin-exam",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Clinical Examinations and Sample Collection"
     },
     {
       "id": "mm-clin-obs",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Clinical Observations"
     },
     {
       "id": "mm-body-organ-wt",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Body and Organ Weights"
     },
     {
       "id": "mm-clin-path",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "mm-internal-dose",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Internal Dose Assessment"
     },
     {
       "id": "mm-transcriptomics",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Transcriptomics"
     },
     {
       "id": "mm-tx-sample",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sample Collection for Transcriptomics"
     },
     {
       "id": "mm-tx-rna",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "RNA Isolation, Library Creation, and Sequencing"
     },
     {
       "id": "mm-tx-processing",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sequence Data Processing"
     },
     {
       "id": "mm-tx-qc",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sequencing Quality Checks and Outlier Removal"
     },
     {
       "id": "mm-tx-norm",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Data Normalization"
     },
     {
       "id": "mm-data-analysis",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Data Analysis"
     },
     {
       "id": "mm-stat-apical",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
     },
     {
       "id": "mm-bmd-apical",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
     },
     {
       "id": "mm-bmd-tx",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Benchmark Dose Analysis of Transcriptomics Data"
     },
     {
       "id": "mm-fdr",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
     },
     {
       "id": "mm-data-access",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Data Accessibility"
     },
     {
       "id": "results",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Results"
     },
     {
       "id": "animal-condition",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Animal Condition, Body Weights, and Organ Weights"
     },
     {
       "id": "clinical-path",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "internal-dose",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Internal Dose Assessment"
     },
     {
       "id": "bmd-summary",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Apical Endpoint Benchmark Dose Summary"
     },
     {
       "id": "gene-sets",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Gene Set Benchmark Dose Analysis"
     },
     {
       "id": "gene-bmd",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Gene Benchmark Dose Analysis"
     },
     {
       "id": "summary",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Summary"
     },
     {
       "id": "references",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "References"
     },
     {
       "id": "appendix-a",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix A. Internal Dose Assessment"
     },
     {
       "id": "appendix-b",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix B. Animal Identifiers"
     },
     {
       "id": "appendix-c",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate"
+    },
+    {
+      "id": "appendix-c-qc",
+      "level": 2,
+      "ready": false,
+      "scope": "C",
+      "title": "C.1. Gene Expression Quality Control"
+    },
+    {
+      "id": "appendix-c-efdr",
+      "level": 2,
+      "ready": false,
+      "scope": "C",
+      "title": "C.2. Empirical False Discovery Rate"
     },
     {
       "id": "appendix-d",
       "level": 1,
       "ready": false,
-      "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies"
+      "scope": null,
+      "title": "Appendix D. Benchmark Dose Modeling and Acceptance Criteria"
     },
     {
       "id": "appendix-e",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix E. Organ Weight Descriptions"
+    },
+    {
+      "id": "appendix-e-descriptions",
+      "level": 2,
+      "ready": false,
+      "scope": "E",
+      "title": "E.1. Organ Weight Descriptions"
     },
     {
       "id": "appendix-f",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix F. Supplemental Data"
     }
   ]

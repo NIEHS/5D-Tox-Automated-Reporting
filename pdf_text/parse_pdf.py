@@ -33,7 +33,7 @@ import re
 import zlib
 import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -2149,7 +2149,7 @@ def main():
 
     # Print summary.
     print(f"\n{'=' * 60}")
-    print(f"DOCUMENT SUMMARY")
+    print("DOCUMENT SUMMARY")
     print(f"{'=' * 60}")
 
     # Count by type.
@@ -2157,7 +2157,7 @@ def main():
     for c in chunks:
         t = c['type']
         type_counts[t] = type_counts.get(t, 0) + 1
-    print(f"\nChunk types:")
+    print("\nChunk types:")
     for t, count in sorted(type_counts.items(), key=lambda x: -x[1]):
         print(f"  {t:20s}: {count}")
 
@@ -2168,7 +2168,7 @@ def main():
 
     # Show first few chunks of each type.
     print(f"\n{'=' * 60}")
-    print(f"SAMPLE CHUNKS BY TYPE")
+    print("SAMPLE CHUNKS BY TYPE")
     print(f"{'=' * 60}")
     seen_types = set()
     for c in chunks:

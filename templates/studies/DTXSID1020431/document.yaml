@@ -1,0 +1,7 @@
+# NIEHS Report 13 (1,4-Dichlorobenzene, NBK621744) — ADR-0029.  The 2026
+# generation's structure, but Appendix A describes the vapor concentration
+# monitoring before the vapor generation and exposure system.
+extends: eras/niehs-2026
+changes:
+  - move: appendix-chamber-vapor-monitoring
+    before: appendix-chamber-vapor-generation

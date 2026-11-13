@@ -1,0 +1,182 @@
+{
+  "dtxsid": "DTXSID50469320",
+  "process_layer": {
+    "cache_units": [
+      "bmd_summary",
+      "bmds",
+      "charts",
+      "genomics",
+      "methods",
+      "ntp",
+      "sections"
+    ],
+    "payload_keys": [
+      "apical_bmd_summary",
+      "apical_bmd_summary_bmds",
+      "bmd_stat_labels",
+      "bmd_stats",
+      "chart_images",
+      "genomics_sections",
+      "methods",
+      "sections",
+      "unified_narratives"
+    ]
+  },
+  "render_layer": {
+    "animal_condition": {
+      "node_ids": [
+        "animal-condition"
+      ],
+      "bindings": [
+        "animal_condition"
+      ],
+      "data_keys_read": [
+        "unified_narratives"
+      ]
+    },
+    "background": {
+      "node_ids": [
+        "background"
+      ],
+      "bindings": [
+        "background"
+      ],
+      "data_keys_read": [
+        "background"
+      ]
+    },
+    "bm2": {
+      "node_ids": [
+        "max-incidence-clin-obs",
+        "table-body-weight",
+        "table-clin-chem",
+        "table-hematology",
+        "table-hormones",
+        "table-organ-weight",
+        "table-tissue-conc"
+      ],
+      "bindings": [
+        "Body Weight",
+        "Clinical Chemistry",
+        "Clinical Observations",
+        "Hematology",
+        "Hormones",
+        "Organ Weight",
+        "Tissue Concentration"
+      ],
+      "data_keys_read": [
+        "apical_sections"
+      ]
+    },
+    "bmd_summary": {
+      "node_ids": [
+        "bmd-summary"
+      ],
+      "bindings": [
+        "bmd_summary"
+      ],
+      "data_keys_read": [
+        "bmd_summary"
+      ]
+    },
+    "clinical_pathology": {
+      "node_ids": [
+        "clinical-path"
+      ],
+      "bindings": [
+        "clinical_pathology"
+      ],
+      "data_keys_read": [
+        "unified_narratives"
+      ]
+    },
+    "genomics": {
+      "node_ids": [
+        "gene-bmd",
+        "gene-sets"
+      ],
+      "bindings": [
+        "gene_narrative",
+        "gene_set_narrative",
+        "genomics_sections"
+      ],
+      "data_keys_read": [
+        "breaks",
+        "gene_narrative",
+        "gene_set_narrative",
+        "genomics_sections",
+        "orientations",
+        "overrides"
+      ]
+    },
+    "internal_dose": {
+      "node_ids": [
+        "internal-dose"
+      ],
+      "bindings": [
+        "internal_dose"
+      ],
+      "data_keys_read": [
+        "unified_narratives"
+      ]
+    },
+    "methods": {
+      "node_ids": [
+        "methods",
+        "mm-bmd-apical",
+        "mm-bmd-tx",
+        "mm-body-organ-wt",
+        "mm-chemistry",
+        "mm-clin-exam",
+        "mm-clin-obs",
+        "mm-clin-path",
+        "mm-data-access",
+        "mm-data-analysis",
+        "mm-dose-rationale",
+        "mm-fdr",
+        "mm-internal-dose",
+        "mm-stat-apical",
+        "mm-study-design",
+        "mm-transcriptomics",
+        "mm-tx-norm",
+        "mm-tx-processing",
+        "mm-tx-qc",
+        "mm-tx-rna",
+        "mm-tx-sample"
+      ],
+      "bindings": [
+        "methods"
+      ],
+      "data_keys_read": [
+        "methods"
+      ]
+    },
+    "summary": {
+      "node_ids": [
+        "summary"
+      ],
+      "bindings": [
+        "summary"
+      ],
+      "data_keys_read": [
+        "summary"
+      ]
+    }
+  },
+  "load_session_overlay_reads": [
+    "_cache_bmd_summary_294246dae8895ca6.json",
+    "_cache_charts_69db70f086c842b7.json",
+    "_cache_genomics_8fca1f67d3e4861f.json",
+    "_cache_interpretation_kidney_female_9f596c1a3abb99b7.json",
+    "_cache_interpretation_kidney_male_a8216d4180ea4328.json",
+    "_cache_interpretation_liver_female_7a851e5019e814d3.json",
+    "_cache_interpretation_liver_male_b392a8a5b45ccd94.json",
+    "_cache_methods_14b956f5c613f4bb.json",
+    "_cache_sections_4ae42fbf70316d45.json",
+    "_cache_summary_generated.json",
+    "animal_report.json",
+    "background.json",
+    "front_matter.json",
+    "identity.json"
+  ]
+}

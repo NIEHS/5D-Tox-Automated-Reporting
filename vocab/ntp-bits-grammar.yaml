@@ -1,0 +1,78 @@
+# The NTP report grammar: the structural paragraph styles of the NTP Word
+# template ("NTP Template 11-04-21.dot", assets/templates/NIEHS-report-style-*.dotx,
+# whose package names Inera Inc., the maker of the eXtyles Word-to-BITS
+# converter) and the BITS construct each becomes in a published book.
+#
+# All 12 published books (RR-8 2018 … NIEHS-13 2026) are written in this one
+# vocabulary; the generations differ in which styles a report uses and in how
+# the book is packaged (ADR-0029), not in the vocabulary.  The two packagings
+# turn the same heading into a different part element: a chapter heading
+# (3-02_Head1) is a <book-part> in a chunked book and a top-level <sec> in a
+# single-file one.
+#
+# Read by document_model/ntp_grammar.py:
+#   - the part elements each packaging holds (render_capabilities);
+#   - the parts a document definition may declare (document_template);
+#   - the roster parts and their paragraph content-types (rendering/bits_book).
+# tests/unit/test_ntp_grammar.py checks that every style named here is in the
+# template, and that every part and roster paragraph of every published book is
+# one this grammar produces.
+
+# Part headings → [element, book-part-type] per packaging (no type: [element]).
+parts:
+  1-03_Report_Title:               {chunked: [book-meta],                    single-file: [book-meta]}
+  1-15_Abstract_Head:              {chunked: [abstract],                     single-file: [abstract]}
+  1-21_Foreword_Title:             {chunked: [foreword, foreword],           single-file: [foreword]}
+  1-10a_Author_Head:               {chunked: [front-matter-part, authors],   single-file: [front-matter-part, authors]}
+  1-10_Contrib_Head:               {chunked: [front-matter-part, contributors], single-file: [front-matter-part, contributors]}
+  1-14d_Collaborator_Head:         {chunked: [front-matter-part, collaborators], single-file: [front-matter-part, collaborators]}
+  1-14h_Peer_Review_Desc_Head:     {chunked: [front-matter-part, peer-review], single-file: [front-matter-part, peer-review]}
+  1-23_FrontMatter_Head1:          {chunked: [front-matter-part, section],   single-file: [front-matter-part]}
+  4-10a_Acknowledgement_HeadFront: {chunked: [front-matter-part, acknowledgments], single-file: [ack]}
+  3-02_Head1:                      {chunked: [book-part, section],           single-file: [sec]}
+  4-12_Reference_Head:             {chunked: [book-part, section],           single-file: [ref-list]}
+  4-04_Appendix_Title:             {chunked: [book-app, appendix],           single-file: [app]}
+
+# Roster parts (by book-part-type): the paragraph styles of a person, an
+# affiliation and a contribution line inside them.
+rosters:
+  authors:       {person: 1-10b_Author, affiliation: 1-10c_Author_Affiliation,
+                  contributions: 1-10e_Author_Contributions}
+  contributors:  {person: 1-11_Contributor, affiliation: 1-13_Contrib_Affiliation,
+                  contributions: 1-12_Contributor_Contributions}
+  collaborators: {person: 1-14e_Collaborator, affiliation: 1-14f_Collaborator_Aff,
+                  contributions: 1-14g_Collaborator_Contributions}
+  peer-review:   {person: 1-14b_Peer-Reviewer, affiliation: 1-14c_Peer-Reviewer_Aff}
+
+# Paragraph styles → the <p content-type> they become.
+paragraphs:
+  1-10b_Author:                     author
+  1-10c_Author_Affiliation:         author-affiliation
+  1-10e_Author_Contributions:       author-contributions
+  1-11_Contributor:                 contributor
+  1-13_Contrib_Affiliation:         contrib-affiliation
+  1-12_Contributor_Contributions:   contrib-contributions
+  1-14e_Collaborator:               collaborator
+  1-14f_Collaborator_Aff:           collab-affiliation
+  1-14g_Collaborator_Contributions: collab-contributions
+  1-14b_Peer-Reviewer:              peer-reviewer
+  1-14c_Peer-Reviewer_Aff:          peer-affiliation
+
+# Other structural styles → the element they become inside a part.
+blocks:
+  1-16_Abstract_Head2:                sec
+  1-14a_Peer-Reviewer-Head:           sec
+  3-03_Head2:                         sec
+  3-04_Head3:                         sec
+  3-05_Head4:                         sec
+  3-06_Head5:                         sec
+  3-07_Head6:                         sec
+  4-05_Appendix_Head_1:               sec
+  4-06_Appendix_Head_2:               sec
+  4-07_Appendix_Head_3:               sec
+  4-08_Appendix_Head_4:               sec
+  0-25_Table_Title:                   table-wrap
+  0-32_Fig_Caption:                   fig
+  3-09_Equation:                      disp-formula
+  4-09a_Supplementary_Material_Title: media
+  4-13_References:                    ref

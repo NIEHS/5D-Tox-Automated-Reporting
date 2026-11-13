@@ -26,6 +26,7 @@ dependencies = [
     "plotly>=6.6.0",
     "kaleido>=1.2.0",
     "pyyaml>=6.0.3",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ markers = [
     "unit: Pure function tests, no I/O",
     "integration: TestClient tests with mocked externals",
     "e2e: Full pipeline smoke tests",
+    "wine: runs EPA BMDS 2.7 executables under Wine (skipped without Wine)",
 ]
 # Exclude e2e tests from default runs.  The e2e suite's `_step_impl`
 # helper (tests/e2e/conftest.py) calls page.pause() between every step
@@ -44,7 +46,8 @@ markers = [
 # unattended invocation of `pytest tests/`.  Opt in explicitly with
 # `pytest -m e2e` or `pytest tests/e2e/ -m e2e`.  See the todo.md entry
 # "E2e test default: skip interactive pauses" for the deeper fix.
-addopts = "--tb=short -q -m 'not e2e'"
+# `wine` (BMDS 2.7 under Wine, minutes) is opt-in too: `pytest -m wine`.
+addopts = "--tb=short -q -m 'not e2e and not wine'"
 
 [tool.uv.sources]
 bmdx-pipe = { path = "../bmdx-pipe", editable = true }
@@ -56,4 +59,49 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-playwright>=0.7.2",
+    "ipykernel>=6.29",
+    "jupyterlab>=4.2",
+    "nbformat>=5.10",
+    "nbconvert>=7.16",
+    "ruff>=0.16",
 ]
+
+# ---------------------------------------------------------------------------
+# Lint gate (CI). Deliberately narrow baseline: pyflakes (real bugs: undefined
+# names, unused imports) + the syntax/import/statement subset of pycodestyle.
+# Style rules (line length, naming, docstrings) are NOT enforced. Widen this
+# incrementally; every rule added should be fixed across the tree in the same
+# commit so the gate stays green.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+# pipeline/bmds27/ntp_bmds is NTP's vendored bmds 0.11.0, kept byte-identical to
+# the CEBS deposit (PROVENANCE.md; tests/unit/test_bmds27_vendored.py) — never lint-fix it.
+# output/ holds generated deliverables, not source.
+extend-exclude = ["notebooks", "web_wizard", "wizard-ui", "citegraph_output*", "java", "latex",
+                  "output", "pipeline/bmds27/ntp_bmds"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# E402: several modules deliberately import after side-effectful setup
+#       (FastAPI app construction, sys.path/env handling).
+# E702: semicolon-joined statements are used as a compact style in the docx
+#       emitter's OOXML plumbing; cosmetic, not a bug class.
+# E741: ambiguous single-letter names — cosmetic.
+# F841: unused local variables — real but low-value; tighten later.
+ignore = ["E402", "E702", "E741", "F841"]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-export facades: imports ARE the public API (ADR-0013 backward-compat).
+"__init__.py" = ["F401"]
+"pipeline/pool_orchestrator.py" = ["F401"]
+"narrative/methods_report.py" = ["F401"]
+"narrative/interpret.py" = ["F401"]
+# Accessor facade: other modules import these names FROM server_state.
+"web_routes/server_state.py" = ["F401"]
+# `find_sidecar_paths` is imported from here by sibling table builders.
+"tables/body_weight_table.py" = ["F401"]
+# One-off CEBS characterization scripts written in a compact one-statement-per-
+# line style (assets/cebs/CHRONOLOGY.md is their output); cosmetic only.
+"assets/cebs/*.py" = ["E401", "E701"]

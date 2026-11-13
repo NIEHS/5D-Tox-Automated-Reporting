@@ -1,0 +1,694 @@
+"""
+organ_weight_table.py — Build NIEHS Table 3 (Organ Weights) from sidecar data.
+
+Produces the exact structure of NIEHS Report 10 Table 3:
+
+    Table 3. Summary of Select Organ Weights of Male and Female Rats
+    Administered {compound} for Five Days
+
+Structure:
+    Columns: Endpoint^(a,b) | dose₀ | dose₁ | ... | doseₙ | BMD₁Std (unit) | BMDL₁Std (unit)
+    Row groups per sex:
+        n                          — sample sizes per dose group
+        Terminal Body Weight (g)   — always shown; tested and modeled when the
+                                     method says so, else untested, BMD "ND"
+        {Organ} Absolute (g)      — absolute organ weight, mean ± SE
+        {Organ} Relative (mg/g)   — relative = (absolute / TBW) × 1000, mean ± SE
+
+    Only organs with at least one responsive endpoint (absolute or relative)
+    are shown.  Terminal Body Weight is always included.
+
+Business rules:
+    - Relative organ weight = (absolute organ weight / terminal body weight) × 1000
+      per animal.  bmdx-pipe's build_table_data derives it as an endpoint of
+      its own ("<organ> Relative"), so the row carries the same statistics
+      (Jonckheere + Williams/Dunnett markers) and BMD as an absolute weight.
+      Without that endpoint the row is computed from raw sidecar values for
+      display only (no markers, BMD "ND").
+    - Terminal Body Weight is tested and modeled like an organ weight when the
+      method says so (apical.terminal_body_weight_tested: significance markers;
+      the BMD, or NVM, of its modeling; "ND" when not modeled); otherwise it is
+      printed untested with BMD "ND".
+    - Only Core Animals contribute to statistics (Biosampling Animals excluded).
+    - Organs not in the NTP stats (not modeled) are excluded.
+    - All dose groups appear, including those where all animals died.
+
+Footnotes:
+    BMD definition line (always present)
+    (a) Data format description
+    (b) Statistical method
+    (c,d,...) Attrition notes (if applicable)
+"""
+
+from __future__ import annotations
+
+from common.animal_selection import is_biosampling
+
+
+from tables.display_precision import row_decimals
+from tables.table_builder_common import (
+    apical_caption,
+    js_dose_key,
+    format_row_cell,
+    load_sidecar,
+    build_n_row,
+    lettered_footnote,
+    finalize_footnotes,
+    detect_core_animal_availability,
+    is_reportable_bmd,
+    collect_table_doses,
+    standard_apical_footnotes,
+    availability_footnotes,
+    attach_n_row_marker_refs,
+    roster_sidecars,
+    add_marker_ref,
+    mark_reviewed_bmd,
+    reviewed_bmd_footnotes,
+)
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Generic caption — used when the table spans more than one organ or both sexes
+# (a broad organ-weight panel).  When the report is narrowed to a single organ
+# and a single sex (the reference's Table 3), _organ_weight_caption swaps in the
+# specific "Summary of {Organ} Weights of {Sex} Rats …" form instead.
+# The published wording (NIEHS-07: "Summary of Select Organ Weights of Male and
+# Female Rats Administered …"; NIEHS-12, 13: "… of Female Rats and Mice
+# Exposed to …").
+CAPTION_TEMPLATE = (
+    "Summary of Select Organ Weights of {subject} {treatment}"
+)
+
+
+def _organ_weight_caption(serialized: dict, compound_name: str,
+                          design: dict | None = None) -> str:
+    """Build the organ-weight table caption from what is actually rendered.
+
+    Mirrors the reference NIEHS-10: when the table shows exactly ONE organ for
+    ONE sex it reads "Summary of {Organ} Weights of {Sex} Rats Administered
+    {compound} for Five Days" (e.g. "Summary of Liver Weights of Male Rats…").
+    Otherwise it falls back to the generic multi-organ / multi-sex phrasing so a
+    broader panel (or another chemical) still reads sensibly."""
+    sexes = [s for s in ("Male", "Female") if serialized.get(s)]
+    # Distinct organ tokens across the rendered rows (labels look like
+    # "Liver Absolute (g)" / "Liver Relative (mg/g)"; the leading word before
+    # " Absolute"/" Relative" is the organ).  Terminal Body Weight is context.
+    organs: list[str] = []
+    for rows in serialized.values():
+        for r in rows:
+            label = r.get("label", "")
+            if r.get("is_n_row") or label.startswith("Terminal Body Weight"):
+                continue
+            token = label.split(" Absolute")[0].split(" Relative")[0].strip()
+            if token and token not in organs:
+                organs.append(token)
+
+    if len(organs) == 1 and len(sexes) == 1:
+        return apical_caption(f"Summary of {organs[0]} Weights of {{subject}} {{treatment}}",
+                              serialized, compound_name, design)
+    return apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design)
+
+# Additional organ-weight-specific footnotes from the NIEHS reference:
+FOOTNOTE_RELATIVE_WEIGHT = (
+    "Relative organ weights (organ weight-to-body weight ratios) "
+    "are given as {organ} organ weight/{body} body weight."
+)
+
+
+def weight_units(sidecars) -> dict[str, str]:
+    """The units the organ weight rows print, from the sidecars' Key-sheet
+    units: ``absolute`` (the organs' "g"), ``body`` (terminal body weight's),
+    ``relative`` ("mg/g": the organ unit's thousandth per body weight unit,
+    relative weights being ×1000) and ``relative_organ`` ("mg").  A unit the
+    data don't record (or record inconsistently) is a Placeholder."""
+    from tables.units import UNIT_NOT_RECORDED, mass_unit, thousandth
+    is_tbw = lambda ep: "terminal body weight" in ep.lower()  # noqa: E731
+    organ = mass_unit(sidecars, lambda ep: not is_tbw(ep))
+    body = mass_unit(sidecars, is_tbw)
+    missing = UNIT_NOT_RECORDED.format(what="organ weight")
+    milli = thousandth(organ)
+    return {"absolute": organ or missing,
+            "body": body or UNIT_NOT_RECORDED.format(what="terminal body weight"),
+            "relative": f"{milli}/{body}" if milli and body else missing,
+            "relative_organ": milli or missing}
+
+# The significance-marker text (SIGNIFICANCE_EXPLANATION + the */** legend)
+# is shared across every apical table and lives in table_builder_common -
+# imported above rather than re-declared here.  The reference organ-weight
+# tables emphasize ** (p <= 0.01); the shared legend also names * for
+# uniformity across the apical table set.
+
+
+# ---------------------------------------------------------------------------
+# Terminal-day filtering
+# ---------------------------------------------------------------------------
+# Organ weights are recorded at scheduled terminal necropsy (study day 5 here).
+# Animals that died or were euthanized moribund before that day carry earlier
+# observation days ("SD0"/"SD1") — those are NOT terminal-sacrifice weights and
+# must NOT enter the organ-weight means (the reference renders "-" for whole
+# dose groups whose animals all died early; see the attrition footnote).  The
+# pivot discards observation day, so we recover it here from the sidecar's raw
+# per-observation `day` and keep only the study's terminal day.
+
+def _parse_study_day(day: str | None) -> int | None:
+    """Parse a study-day token ("SD5", "SD 5", "5") into its integer day, or
+    None when unparseable/absent."""
+    if not day:
+        return None
+    import re as _re
+    m = _re.search(r"(-?\d+)", str(day))
+    return int(m.group(1)) if m else None
+
+
+def _study_terminal_day(sc: dict) -> int | None:
+    """The study's scheduled terminal-necropsy day = the LATEST study day
+    present across all Core-Animal observations in the sidecar.  Moribund
+    early-death observations sit on earlier days and are excluded relative to
+    this.  Returns None when no observation carries a parseable day (older
+    sidecars) — callers then skip day-filtering (backward-compatible)."""
+    latest: int | None = None
+    for rec in sc.get("animals", {}).values():
+        if is_biosampling(rec.get("selection", "")):
+            continue
+        for obs in rec.get("observations", []):
+            d = _parse_study_day(obs.get("day"))
+            if d is not None and (latest is None or d > latest):
+                latest = d
+    return latest
+
+
+def _is_terminal_obs(obs: dict, terminal_day: int | None) -> bool:
+    """True when this observation should count toward organ-weight statistics:
+    it was taken on the study's terminal day.  When terminal_day is None (no day
+    metadata) or the observation has no parseable day, default to True so we
+    never silently drop data we can't classify."""
+    if terminal_day is None:
+        return True
+    d = _parse_study_day(obs.get("day"))
+    return d is None or d == terminal_day
+
+
+# ---------------------------------------------------------------------------
+# Main builder
+# ---------------------------------------------------------------------------
+
+def _stat(row, name: str, default=None):
+    """A field of an NTP stats row — a cached dict or a live TableRow."""
+    if isinstance(row, dict):
+        return row.get(name, default)
+    return getattr(row, name, default)
+
+
+def _dose_value(vbd: dict, dose: float):
+    """values_by_dose lookup by float key (live TableRow) or string key (cache)."""
+    val = vbd.get(dose)
+    if val is None:
+        val = vbd.get(str(dose), vbd.get(str(float(dose))))
+    return val
+
+
+def build_organ_weight_table_from_sidecar(
+    sidecar_paths: dict[str, str],
+    ntp_stats: dict[str, list],
+    compound_name: str = "Chemical",
+    dose_unit: str = "mg/kg",
+    design: dict | None = None,
+    organ_allowlist: list[str] | None = None,
+    sex_allow: list[str] | None = None,
+    method=None,
+) -> dict:
+    """
+    Build NIEHS Table 3 (Organ Weights) from sidecar + NTP stats.
+
+    Computes absolute and relative organ weights from raw animal-level data
+    in the sidecar JSON.  Only organs that have at least one responsive
+    endpoint in the NTP stats are included.  Terminal Body Weight is shown
+    as a context row (always ND for BMD).
+
+    The sidecar provides raw per-animal organ weights and terminal body
+    weights.  Relative weight is computed per-animal as:
+        relative = (absolute_organ_weight / terminal_body_weight) × 1000
+
+    Then mean ± SE is computed across animals at each dose.
+
+    Args:
+        sidecar_paths:  {"Male": "/path/to/male.sidecar.json", ...}.
+        ntp_stats:      {sex: [TableRow-like dicts]} from NTP stats cache.
+                        Each has: label, values_by_dose, bmd_str, bmdl_str,
+                        responsive, trend_marker.
+        compound_name:  Full chemical name for the caption.
+        dose_unit:      Dose unit string (default "mg/kg").
+        design:         Study design facts (pipeline.study_design) for the caption's
+                        species, verb and duration; None ⇒ the standard design.
+
+    Returns:
+        Dict matching the Typst apical_sections schema, or empty dict if
+        no responsive organ endpoints exist.
+    """
+    # ── Load sidecars and extract per-animal organ data ───────────────────
+    sidecar_data: dict[str, dict] = {}
+    for sex, sc_path in sidecar_paths.items():
+        sidecar_data[sex] = load_sidecar(sc_path)
+    units = weight_units(sidecar_data.values())
+
+    # ── Detect Core Animal availability per dose (shared helper) ──────────
+    # Splits each dose group's Core Animals into "has usable data" vs
+    # "all-NA" (organ not weighed — animal died before terminal sacrifice,
+    # tissue not collected, etc.).  Shared with clinical_pathology_table.py;
+    # see table_builder_common.  Feeds the sample-availability and attrition
+    # footnotes built near the end of this function.
+    # Organ weights count the scheduled necropsy only: an animal weighed at
+    # death is in its group's total, not its n (as integration counts it).
+    availability = detect_core_animal_availability(sidecar_data, scheduled_only=True)
+    core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
+
+    # Every dose (sidecars + NTP stats) for a column set shared by both sexes
+    sorted_doses = collect_table_doses(sidecar_data, ntp_stats)
+
+    # ── Collect all organ endpoints ───────────────────────────────────────
+    # ALL organs in the data appear in the table (not just responsive ones).
+    # The responsive gate controls BMD column values (ND vs numeric), not
+    # row inclusion — matching the body weight and clinical pathology pattern.
+    # Terminal Body Weight is excluded from the organ list — it's a context
+    # row shown separately.
+    # Report-level organ allowlist: keep only labels whose parsed organ token is
+    # allowed (empty/None ⇒ everything, the pre-feature behaviour).  Labels are
+    # full endpoint strings ("Liver Absolute"); _parse_organ_label extracts the
+    # organ token ("Liver") that organ_allowed matches component-wise (so
+    # "kidney" covers the "Kidney-Left"/"Kidney-Right" laterality labels).
+    from document_model.filters import organ_allowed
+    from narrative.unified_narrative import _parse_organ_label
+
+    all_organs: set[str] = set()
+    ntp_by_sex_label: dict[str, dict[str, dict]] = {}
+    for sex, sex_stats in ntp_stats.items():
+        ntp_by_sex_label.setdefault(sex, {})
+        for stat_row in sex_stats:
+            label = stat_row.get("label") if isinstance(stat_row, dict) else stat_row.label
+            ntp_by_sex_label[sex][label] = stat_row
+            if label != "Terminal Body Weight":
+                organ_token, wtype = _parse_organ_label(label)
+                # "<organ> Relative" rows are the relative-weight statistics of
+                # an organ listed by its absolute label; they fill that organ's
+                # relative row below rather than becoming an organ of their own.
+                if wtype == "relative":
+                    continue
+                if organ_allowed(organ_token, organ_allowlist):
+                    all_organs.add(label)
+
+    if not all_organs:
+        return {}
+
+    # ── Extract raw values from sidecar ───────────────────────────────────
+    # For each sex and dose, collect per-animal values for each endpoint.
+    # Also collect Terminal Body Weight for relative weight computation.
+    #
+    # Structure: {sex: {endpoint: {dose: [value, ...]}}}
+    raw_by_sex: dict[str, dict[str, dict[float, list[float]]]] = {}
+    # TBW separately: {sex: {dose: {animal_id: tbw}}}
+    tbw_by_sex: dict[str, dict[float, dict[str, float]]] = {}
+
+    for sex, sc in sidecar_data.items():
+        endpoint_vals: dict[str, dict[float, list[float]]] = {}
+        tbw_vals: dict[float, dict[str, float]] = {}
+        terminal_day = _study_terminal_day(sc)
+
+        for aid, rec in sc.get("animals", {}).items():
+            selection = rec.get("selection", "Unknown")
+            # Only Core Animals contribute to organ weight stats
+            if is_biosampling(selection):
+                continue
+
+            dose = rec["dose"]
+
+            # Parse observations into endpoint values for this animal.
+            # Each observation has: day, endpoint, value.
+            # For organ weights, each animal has ONE observation per endpoint
+            # (all at the same Removal Day, typically SD5).  Skip observations
+            # NOT taken on the study's terminal day — those come from animals
+            # that died/were euthanized moribund before scheduled necropsy and
+            # would otherwise contaminate the dose-group means (the reference
+            # renders "-" for such whole dose groups).
+            for obs in rec.get("observations", []):
+                if not _is_terminal_obs(obs, terminal_day):
+                    continue
+                ep_name = obs.get("endpoint", "")
+                val_str = obs.get("value")
+                if not ep_name or not val_str:
+                    continue
+                try:
+                    fval = float(val_str)
+                except (ValueError, TypeError):
+                    continue
+
+                if ep_name == "Terminal Body Weight":
+                    tbw_vals.setdefault(dose, {})[aid] = fval
+                endpoint_vals.setdefault(ep_name, {}).setdefault(dose, []).append(fval)
+
+        raw_by_sex[sex] = endpoint_vals
+        tbw_by_sex[sex] = tbw_vals
+
+    # ── Compute relative weights per animal ───────────────────────────────
+    # For each responsive organ, compute relative weight = (absolute / TBW) × 1000
+    # per animal, then compute mean ± SE of the relative values.
+    #
+    # Structure: {sex: {organ: {dose: [relative_value, ...]}}}
+    relative_by_sex: dict[str, dict[str, dict[float, list[float]]]] = {}
+
+    for sex in ("Male", "Female"):
+        ep_vals = raw_by_sex.get(sex, {})
+        tbw = tbw_by_sex.get(sex, {})
+        relatives: dict[str, dict[float, list[float]]] = {}
+
+        for organ in all_organs:
+            organ_vals = ep_vals.get(organ, {})
+            for dose, abs_vals in organ_vals.items():
+                tbw_at_dose = tbw.get(dose, {})
+                # Match by position — animals at a dose appear in the same
+                # order in both organ and TBW observations.  Since sidecar
+                # observations are per-animal, we need animal IDs.
+                # Re-extract animal-level data for matching.
+                pass  # handled below with a different approach
+
+        relative_by_sex[sex] = relatives
+
+    # Re-extract with animal IDs for proper matching
+    # Structure: {sex: {organ: {dose: [(aid, abs_val), ...]}}}
+    raw_by_animal: dict[str, dict[str, dict[float, list[tuple[str, float]]]]] = {}
+    for sex, sc in sidecar_data.items():
+        organ_animal_vals: dict[str, dict[float, list[tuple[str, float]]]] = {}
+        terminal_day = _study_terminal_day(sc)
+        for aid, rec in sc.get("animals", {}).items():
+            selection = rec.get("selection", "Unknown")
+            if is_biosampling(selection):
+                continue
+            dose = rec["dose"]
+            for obs in rec.get("observations", []):
+                if not _is_terminal_obs(obs, terminal_day):
+                    continue
+                ep_name = obs.get("endpoint", "")
+                val_str = obs.get("value")
+                if not ep_name or not val_str:
+                    continue
+                try:
+                    fval = float(val_str)
+                except (ValueError, TypeError):
+                    continue
+                organ_animal_vals.setdefault(ep_name, {}).setdefault(dose, []).append((aid, fval))
+        raw_by_animal[sex] = organ_animal_vals
+
+    # Now compute relative weights with proper animal matching
+    relative_by_sex = {}
+    for sex in ("Male", "Female"):
+        organ_data = raw_by_animal.get(sex, {})
+        tbw_data = tbw_by_sex.get(sex, {})
+        rel_sex: dict[str, dict[float, list[float]]] = {}
+
+        for organ in all_organs:
+            organ_at_dose = organ_data.get(organ, {})
+            rel_organ: dict[float, list[float]] = {}
+
+            for dose, animal_vals in organ_at_dose.items():
+                tbw_at_dose = tbw_data.get(dose, {})
+                rel_vals = []
+                for aid, abs_val in animal_vals:
+                    animal_tbw = tbw_at_dose.get(aid)
+                    if animal_tbw and animal_tbw > 0:
+                        rel_vals.append((abs_val / animal_tbw) * 1000)
+                if rel_vals:
+                    rel_organ[dose] = rel_vals
+
+            if rel_organ:
+                rel_sex[organ] = rel_organ
+
+        relative_by_sex[sex] = rel_sex
+
+    # ── Build the table rows ──────────────────────────────────────────────
+    serialized: dict[str, list[dict]] = {}
+
+    from document_model.filters import sex_allowed
+    for sex in ("Male", "Female"):
+        # Report-level sex allowlist for the ORGAN-WEIGHT area only.  The
+        # reference's Table 3 shows just the sex that had a responsive organ
+        # (e.g. "Liver Weights of Male Rats"); this is how the default template
+        # drops female from the organ-weight table while keeping both sexes in
+        # every other apical table.  Empty/None ⇒ both sexes.
+        if not sex_allowed(sex, sex_allow):
+            continue
+        ep_vals = raw_by_sex.get(sex, {})
+        tbw = tbw_by_sex.get(sex, {})
+        rel_data = relative_by_sex.get(sex, {})
+        sex_ntp = ntp_by_sex_label.get(sex, {})
+
+        # Check if this sex has any responsive organ data
+        has_responsive = any(
+            organ in ep_vals or organ in rel_data
+            for organ in all_organs
+        )
+        if not has_responsive and not ep_vals:
+            continue
+
+        rows: list[dict] = []
+
+        # ── n-row ─────────────────────────────────────────────────────────
+        # N = number of Core Animals per dose with Terminal Body Weight data
+        # (proxy for "animals that survived to terminal sacrifice").
+        tbw_vals_list = ep_vals.get("Terminal Body Weight", {})
+        n_animals = {
+            dose: tbw_vals_list.get(dose, [])
+            for dose in sorted_doses
+        }
+        rows.append(build_n_row(n_animals, sorted_doses))
+
+        # ── Terminal Body Weight row ──────────────────────────────────────
+        # When the method tests it (apical.terminal_body_weight_tested, as
+        # RR-8, NIEHS-02 … 06 and 12 print it): the NTP statistics of
+        # "Terminal Body Weight" (significance markers, the BMD the modeling
+        # gave, NVM included).  Otherwise (NIEHS-07 … 10), or without
+        # statistics: the sidecar's mean ± SE, untested, BMD "ND".  Not
+        # modeled ("—") is printed "ND", the books' word for it on this row.
+        tested = method is None or method.get("apical.terminal_body_weight_tested") is not False
+        tbw_ntp = sex_ntp.get("Terminal Body Weight") if tested else None
+        tbw_vbd = _stat(tbw_ntp, "values_by_dose", {}) if tbw_ntp is not None else {}
+        tbw_mse = (_stat(tbw_ntp, "mean_se_by_dose", None) or {}) if tbw_ntp is not None else {}
+        tbw_row_vals: dict[str, str] = {}
+        for dose in sorted_doses:
+            dk = js_dose_key(dose)
+            val = _dose_value(tbw_vbd, dose)
+            dose_tbw_list = tbw_vals_list.get(dose, [])
+            if val or dose_tbw_list:
+                tbw_row_vals[dk] = format_row_cell(
+                    val or "", row_decimals("Terminal Body Weight"),
+                    stats=_dose_value(tbw_mse, dose), values=dose_tbw_list)
+            else:
+                tbw_row_vals[dk] = "\u2013"
+        tbw_bmd = (_stat(tbw_ntp, "bmd_str") if tbw_ntp is not None else None) or "ND"
+        tbw_bmdl = (_stat(tbw_ntp, "bmdl_str") if tbw_ntp is not None else None) or "ND"
+        if tbw_bmd == "\u2014":
+            tbw_bmd = tbw_bmdl = "ND"
+        tbw_responsive = bool(_stat(tbw_ntp, "responsive", False)) if tbw_ntp is not None else False
+        tbw_entry = {
+            "label": f"Terminal Body Weight ({units['body']})",
+            "decimals": row_decimals("Terminal Body Weight"),
+            "doses": sorted_doses,
+            "values": tbw_row_vals,
+            "bmd": tbw_bmd,
+            "bmdl": tbw_bmdl,
+            "responsive": tbw_responsive,
+            "emphasize": tbw_responsive or is_reportable_bmd(tbw_bmd),
+        }
+        tbw_trend = _stat(tbw_ntp, "trend_marker", "") if tbw_ntp is not None else ""
+        if tbw_trend:
+            tbw_entry["trend_marker"] = tbw_trend
+        if tbw_ntp is not None:
+            mark_reviewed_bmd(tbw_entry, tbw_ntp)
+        rows.append(tbw_entry)
+
+        # ── Per-organ rows: Absolute + Relative ──────────────────────────
+        # Sort organs alphabetically for consistent output
+        for organ in sorted(all_organs):
+            abs_at_dose = ep_vals.get(organ, {})
+            rel_at_dose = rel_data.get(organ, {})
+
+            # Get NTP stats for BMD/BMDL (on the absolute weight endpoint).
+            # `responsive` is the NTP statistical gate \u2014 carried onto the
+            # absolute row so the row-emphasis rule can use it.
+            organ_ntp = sex_ntp.get(organ, {})
+            if isinstance(organ_ntp, dict):
+                organ_bmd = organ_ntp.get("bmd_str", "\u2014")
+                organ_bmdl = organ_ntp.get("bmdl_str", "\u2014")
+                organ_vbd = organ_ntp.get("values_by_dose", {})
+                organ_mse = organ_ntp.get("mean_se_by_dose") or {}
+                organ_trend = organ_ntp.get("trend_marker", "")
+                organ_responsive = organ_ntp.get("responsive", False)
+            else:
+                organ_bmd = getattr(organ_ntp, "bmd_str", "\u2014")
+                organ_bmdl = getattr(organ_ntp, "bmdl_str", "\u2014")
+                organ_vbd = getattr(organ_ntp, "values_by_dose", {})
+                organ_mse = getattr(organ_ntp, "mean_se_by_dose", None) or {}
+                organ_trend = getattr(organ_ntp, "trend_marker", "")
+                organ_responsive = getattr(organ_ntp, "responsive", False)
+
+            # Absolute weight row — use NTP stats values (includes significance markers)
+            abs_values: dict[str, str] = {}
+            for dose in sorted_doses:
+                dk = js_dose_key(dose)
+                # Try float key (live TableRow), then string key (cached dict)
+                val = organ_vbd.get(dose)
+                if val is None:
+                    val = organ_vbd.get(str(dose), organ_vbd.get(str(float(dose))))
+                # Organ weights print at one precision per row (the
+                # published convention, tables.display_precision): from the
+                # unrounded statistics, else the sidecar values, keeping the
+                # NTP string's significance marker.
+                if val or abs_at_dose.get(dose):
+                    abs_values[dk] = format_row_cell(
+                        val or "", row_decimals(f"{organ} Absolute"),
+                        stats=_dose_value(organ_mse, dose), values=abs_at_dose.get(dose))
+                else:
+                    abs_values[dk] = "\u2013"
+
+            # BMD/BMDL: pass through .bm2-sourced values directly.
+            # BMDExpress modeling is independent of NTP responsiveness.
+            bmd_text = organ_bmd if organ_bmd else "\u2014"
+            bmdl_text = organ_bmdl if organ_bmdl else "\u2014"
+
+            # Row emphasis (bold) — same union rule as clinical pathology:
+            # the absolute-weight row is emphasized when it passed the NTP
+            # responsive gate OR BMDExpress produced a reportable BMD.
+            abs_entry = {
+                "label": f"{organ} Absolute ({units['absolute']})",
+                "decimals": row_decimals(f"{organ} Absolute"),
+                "doses": sorted_doses,
+                "values": abs_values,
+                "bmd": bmd_text,
+                "bmdl": bmdl_text,
+                "responsive": bool(organ_responsive),
+                "emphasize": (
+                    bool(organ_responsive) or is_reportable_bmd(bmd_text)
+                ),
+            }
+            if organ_trend:
+                abs_entry["trend_marker"] = organ_trend
+            mark_reviewed_bmd(abs_entry, organ_ntp)
+            rows.append(abs_entry)
+
+            # Relative weight row — the NTP statistics of "<organ> Relative"
+            # (relative weight per animal, tested like the absolute weight,
+            # with its own BMD inputs) when present; otherwise computed from
+            # the sidecar for display only, with BMD "ND".
+            rel_ntp = sex_ntp.get(f"{organ} Relative")
+            rel_vbd = _stat(rel_ntp, "values_by_dose", {}) if rel_ntp is not None else {}
+            rel_mse = (_stat(rel_ntp, "mean_se_by_dose", None) or {}) if rel_ntp is not None else {}
+            rel_values: dict[str, str] = {}
+            for dose in sorted_doses:
+                dk = js_dose_key(dose)
+                val = _dose_value(rel_vbd, dose)
+                dose_rel = rel_at_dose.get(dose, [])
+                if val or dose_rel:
+                    rel_values[dk] = format_row_cell(
+                        val or "", row_decimals(f"{organ} Relative"),
+                        stats=_dose_value(rel_mse, dose), values=dose_rel)
+                else:
+                    rel_values[dk] = "\u2013"
+
+            if rel_ntp is not None:
+                rel_bmd = _stat(rel_ntp, "bmd_str") or "\u2014"
+                rel_bmdl = _stat(rel_ntp, "bmdl_str") or "\u2014"
+                rel_responsive = bool(_stat(rel_ntp, "responsive", False))
+            else:
+                rel_bmd = rel_bmdl = "ND"
+                rel_responsive = False
+            rel_entry = {
+                "label": f"{organ} Relative ({units['relative']})",
+                "decimals": row_decimals(f"{organ} Relative"),
+                "doses": sorted_doses,
+                "values": rel_values,
+                "bmd": rel_bmd,
+                "bmdl": rel_bmdl,
+                "responsive": rel_responsive,
+                "emphasize": rel_responsive or is_reportable_bmd(rel_bmd),
+            }
+            rel_trend = _stat(rel_ntp, "trend_marker", "") if rel_ntp is not None else ""
+            if rel_trend:
+                rel_entry["trend_marker"] = rel_trend
+            if rel_ntp is not None:
+                mark_reviewed_bmd(rel_entry, rel_ntp)
+            rows.append(rel_entry)
+
+        serialized[sex] = rows
+
+    if not serialized:
+        return {}
+
+    # ── Footnotes (typed model — see table_builder_common) ────────────────
+    # Order in the list IS the render order; finalize_footnotes assigns the
+    # a/b/c... letters to the `lettered` records (legend/definition skipped):
+    #
+    #   legend      — significance explanation               [Canonical]
+    #   legend      — */** marker key                        [Canonical]
+    #   definition  — BMD/BMDL abbreviation paragraph         [Canonical]
+    #   (a)         — data format                            [Canonical]
+    #   (b)         — statistical method (Williams/Dunnett)   [Canonical]
+    #   (c,d,...)   — sample-availability (organ not weighed) [Canonical]
+    #   (next)      — attrition (whole dose group, no data)   [Canonical]
+    #   (next)      — relative-weight definition              [Canonical]
+    #
+    # The sample-availability and attrition footnotes are dynamic — they
+    # only appear when an organ-weight sidecar actually has Core Animals
+    # with no usable data — and are built by the shared helpers in
+    # table_builder_common, identical to clinical pathology.
+    #
+    # Provenance: every organ-weight footnote is Canonical — anchored in
+    # NIEHS Report 10 Table 3, with the reference PDF as the authority.
+    # The marker legend and the statistical-method footnote are written from
+    # the study's method profile — the tests that ran for organ weights.
+    footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight")
+    footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT.format(
+        organ=units["relative_organ"], body=units["body"]), "relative_weight", target="cells"))
+    # The books mark the note on the table's first relative weight
+    # ("Relative (mg/g)^e", NIEHS-07 … 13).
+    first_relative = next((r for rows in serialized.values() for r in rows
+                           if " Relative (" in r.get("label", "")), None)
+    if first_relative is not None:
+        add_marker_ref(first_relative, "label", "relative_weight")
+
+    # ── Sample-availability + attrition footnotes (shared helpers) ────────
+    # Same detection and footnote-building as clinical pathology; see
+    # table_builder_common.  For most organ-weight sessions these produce
+    # nothing (terminal organ weights are recorded for every Core Animal),
+    # but they fire correctly when an animal's tissue was not collected.
+    avail_records, n_row_marker_refs = availability_footnotes(
+        sidecar_data, availability, sorted_doses, dose_unit, design,
+        roster=roster_sidecars(sidecar_paths),
+    )
+    # Before the relative-weight note, as NIEHS-07 and 10 print them ("–^d",
+    # then "^e Relative organ weights ...").
+    at = next((i for i, f in enumerate(footnotes) if f.get("id") == "relative_weight"),
+              len(footnotes))
+    footnotes[at:at] = avail_records
+
+    # Attach the marker refs to each sex's n-row (built earlier in this
+    # function), then finalize_footnotes assigns letters and derives the
+    # rows' `markers` dicts from `marker_refs`.
+    attach_n_row_marker_refs(serialized, n_row_marker_refs)
+
+    # A BMD the reviewer rejected prints with its note (mark_reviewed_bmd).
+    footnotes.extend(reviewed_bmd_footnotes(serialized))
+    finalize_footnotes(footnotes, serialized)
+
+    return {
+        "title": "Organ Weight",
+        "caption": _organ_weight_caption(serialized, compound_name, design),
+        "compound": compound_name,
+        "dose_unit": dose_unit,
+        "first_col_header": "Endpoint",
+        "table_data": serialized,
+        # Typed footnote list: legend + definition + lettered records, with
+        # letters already assigned by finalize_footnotes.  The old separate
+        # bmd_definition / significance_* keys are folded in as records.
+        "footnotes": footnotes,
+    }

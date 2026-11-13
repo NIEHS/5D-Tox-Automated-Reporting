@@ -19,9 +19,9 @@ decoupling contract).
 
 from dataclasses import fields
 
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE
-from render_capabilities import (
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE
+from document_model.render_capabilities import (
     COMPONENT_CATALOG,
     CONTENT_KINDS,
     is_allowed_child,
@@ -89,20 +89,56 @@ def test_content_kinds_use_known_vocabulary():
             )
 
 
-def test_allowed_children_reference_real_types():
-    """allowed_children may only name types that exist in the catalog."""
+def test_every_type_has_a_profile_role_and_real_bindings():
+    """ADR-0025: each preset names a role from the BITS profile and a non-empty
+    list of bindings from the closed vocabulary."""
+    from document_model.render_capabilities import BINDINGS, ROLE_PROFILE
     for node_type, spec in COMPONENT_CATALOG.items():
-        for child_type in spec.allowed_children:
-            assert child_type in COMPONENT_CATALOG, (
-                f"{node_type!r} allows unknown child type {child_type!r}"
-            )
+        assert spec.role in ROLE_PROFILE, f"{node_type!r} has unknown role {spec.role!r}"
+        assert spec.bindings, f"{node_type!r} lists no bindings"
+        for b in spec.bindings:
+            assert b in BINDINGS, f"{node_type!r} lists unknown binding {b!r}"
+
+
+def test_role_profile_children_are_roles():
+    """The containment grammar is written once, per role, in terms of roles."""
+    from document_model.render_capabilities import ROLE_PROFILE
+    for role, spec in ROLE_PROFILE.items():
+        for child in spec.allowed_children:
+            assert child in ROLE_PROFILE, f"role {role!r} allows unknown child role {child!r}"
+
+
+def test_allowed_children_are_derived_from_roles():
+    """allowed_children_for(type) is exactly the catalog types whose role the
+    parent's role admits — nothing per-type."""
+    from document_model.render_capabilities import ROLE_PROFILE, allowed_children_for
+    for node_type, spec in COMPONENT_CATALOG.items():
+        child_roles = ROLE_PROFILE[spec.role].allowed_children
+        expected = tuple(n for n, c in COMPONENT_CATALOG.items() if c.role in child_roles)
+        assert allowed_children_for(node_type) == expected
+        for child in allowed_children_for(node_type):
+            assert is_allowed_child(node_type, child)
+
+
+# Presets whose `caption` belongs to the ONE table-wrap they contain rather than
+# to the section itself (ADR-0025 §4: bmd-summary is a <sec> with a single
+# table-wrap content item; the caption moves onto that item in migration phase 4).
+_CAPTION_ON_INNER_TABLE = {"bmd-summary"}
+
+
+def test_captionable_implies_table_wrap_or_fig_role():
+    """Only BITS <table-wrap> / <fig> carry <caption>; a captionable section
+    would be a grammar error (modulo the documented inner-table exception)."""
+    for node_type, spec in COMPONENT_CATALOG.items():
+        if spec.captionable and node_type not in _CAPTION_ON_INNER_TABLE:
+            assert spec.role in ("table-wrap", "fig"), node_type
 
 
 def test_emits_roles_resolve_in_the_shipped_vocabulary():
     """Every vocabulary role a catalog type `emits` must exist in the shipped
     ntp-report vocabulary — the crosswalk from node_type to paragraph-granular
     semantic roles must not name a role the vocabulary can't resolve (ADR-0010)."""
-    import vocabulary as V
+    import document_model.vocabulary as V
 
     vocab = V.load_vocabulary("ntp-report")
     for node_type, spec in COMPONENT_CATALOG.items():
@@ -116,8 +152,8 @@ def test_front_matter_data_key_roles_resolve_in_the_vocabulary():
     """Every (heading, body) role a front-matter data_key derives must resolve in
     the shipped vocabulary — so an Abstract/Foreword/Peer-Review/... section styles
     its head+body by its own NTP role, not the generic pair (ADR-0010)."""
-    import vocabulary as V
-    import render_capabilities as rc
+    import document_model.vocabulary as V
+    import document_model.render_capabilities as rc
 
     vocab = V.load_vocabulary("ntp-report")
     for data_key, (head, body) in rc.FRONT_MATTER_ROLES_BY_DATA_KEY.items():
@@ -126,7 +162,7 @@ def test_front_matter_data_key_roles_resolve_in_the_vocabulary():
 
 
 def test_front_matter_roles_for_falls_back_to_generic():
-    import render_capabilities as rc
+    import document_model.render_capabilities as rc
     assert rc.front_matter_roles_for("abstract") == ("abstract_head", "abstract")
     assert rc.front_matter_roles_for("unmapped") == ("section_heading", "body_para")
     assert rc.front_matter_roles_for(None) == ("section_heading", "body_para")
@@ -146,7 +182,7 @@ def test_landscape_requested_merges_default_and_override():
     Effective orientation = override if present, else template default, gated
     on the type capability (ADR-0003 Amendment 1).
     """
-    from render_capabilities import landscape_requested
+    from document_model.render_capabilities import landscape_requested
     # override wins over the template default, both directions
     assert landscape_requested("table", "n", {"n": "landscape"}, default="portrait") is True
     assert landscape_requested("table", "n", {"n": "portrait"}, default="landscape") is False

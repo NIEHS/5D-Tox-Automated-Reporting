@@ -4,8 +4,8 @@ test_session_lifecycle.py — Integration tests for session load/approve/unappro
 Uses the golden DTXSID70191136 session (with approved background + 2 bm2 sections)
 to verify:
   - Session load returns existing approved sections
-  - Approve creates section files on disk
-  - Unapprove removes them
+  - Approve accepts a section file as it is (fenced, C2 D5)
+  - Unapprove reopens it, keeping its content
   - Version history is maintained
   - Non-existent session returns exists=False
 """
@@ -26,7 +26,7 @@ class TestSessionLoad:
     def test_nonexistent_session(self, sessions_dir):
         """A DTXSID with no session directory returns exists=False."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get("/api/session/DTXSID_NONEXISTENT")
@@ -41,7 +41,7 @@ class TestSessionLoad:
         two approved bm2 sections.  Session load should return them.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -62,7 +62,7 @@ class TestSessionLoad:
     def test_identity_loaded(self, golden_70191136, mock_bmdx_pipe):
         """Session load should include the chemical identity."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -78,7 +78,7 @@ class TestSessionLoad:
         either as approved sections or pending files.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -92,17 +92,28 @@ class TestSessionLoad:
         assert total_files > 0, "No files found in session"
 
 
+def _seed(sessions_dir, dtxsid, key, content):
+    """A section file as Process or generation leaves it (C2 D5: the approve
+    route accepts a file; it no longer creates one from the posted content)."""
+    d = sessions_dir / dtxsid
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{key}.json").write_text(json.dumps({"version": 1, **content}))
+    return d / f"{key}.json"
+
+
 @pytest.mark.integration
 class TestSessionApproveUnapprove:
     """POST /api/session/approve and /api/session/unapprove cycle."""
 
-    def test_approve_creates_file(self, sessions_dir):
-        """Approving a background section writes it to disk."""
+    def test_approve_accepts_the_file(self, sessions_dir):
+        """Approving a background section accepts its file as it is."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
+        path = _seed(sessions_dir, dtxsid, "background",
+                     {"paragraphs": ["Test paragraph."], "references": []})
         resp = client.post("/api/session/approve", json={
             "dtxsid": dtxsid,
             "section_type": "background",
@@ -113,12 +124,9 @@ class TestSessionApproveUnapprove:
         })
         assert resp.status_code == 200
 
-        # File should exist on disk
-        path = sessions_dir / dtxsid / "background.json"
-        assert path.exists()
-
         data = json.loads(path.read_text())
         assert data["paragraphs"] == ["Test paragraph."]
+        assert data["approved"] is True
         assert "approved_at" in data
         assert data["version"] == 1
 
@@ -128,14 +136,15 @@ class TestSessionApproveUnapprove:
         Per commit 8a20a9f ("Decouple disk persistence from approval"),
         unapprove is a UI lock-state flip — it keeps the on-disk content so
         the user can re-approve without regenerating.  Deletion is the
-        separate /api/session/discard-section endpoint.
+        separate /api/session/discard-section endpoint. Since C2 (D3) the
+        reason is required.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
-        path = sessions_dir / dtxsid / "background.json"
+        path = _seed(sessions_dir, dtxsid, "background", {"paragraphs": ["Test."]})
 
         # First approve
         client.post("/api/session/approve", json={
@@ -143,13 +152,13 @@ class TestSessionApproveUnapprove:
             "section_type": "background",
             "data": {"paragraphs": ["Test."]},
         })
-        assert path.exists()
         assert json.loads(path.read_text())["approved"] is True
 
         # Then unapprove — content stays, flag flips to False
         resp = client.post("/api/session/unapprove", json={
             "dtxsid": dtxsid,
             "section_type": "background",
+            "reason": "check the references",
         })
         assert resp.status_code == 200
         assert path.exists()
@@ -160,24 +169,57 @@ class TestSessionApproveUnapprove:
     def test_approve_methods_section(self, sessions_dir):
         """Approve a methods section — verifies non-background section types work."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
+        content = {"sections": [{"heading": "Study Design", "paragraphs": ["..."]}]}
+        path = _seed(sessions_dir, dtxsid, "methods", content)
         resp = client.post("/api/session/approve", json={
             "dtxsid": dtxsid,
             "section_type": "methods",
-            "data": {
-                "sections": [{"heading": "Study Design", "paragraphs": ["..."]}],
-            },
+            "data": content,
         })
         assert resp.status_code == 200
-        assert (sessions_dir / dtxsid / "methods.json").exists()
+        assert json.loads(path.read_text())["approved"] is True
+
+    def test_approve_materialized_bm2_section_by_slug(self, sessions_dir):
+        """A materialized apical section (bm2_<slug>.json, no .bm2 filename) is
+        approvable via bm2_slug — the body the Sections screen sends."""
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        client = TestClient(app)
+        path = _seed(sessions_dir, "DTXSID_TEST", "bm2_body-weight",
+                     {"title": "Body Weight", "narrative": ["Text."], "approved": False})
+        resp = client.post("/api/session/approve", json={
+            "dtxsid": "DTXSID_TEST",
+            "section_type": "bm2",
+            "bm2_slug": "body-weight",
+            "data": {"title": "Body Weight", "narrative": ["Text."], "approved": False},
+        })
+        assert resp.status_code == 200, resp.text
+        data = json.loads(path.read_text())
+        assert data["approved"] is True
+        assert data["narrative"] == ["Text."]
+
+    def test_approve_bm2_rejects_unsafe_slug(self, sessions_dir):
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        client = TestClient(app)
+        resp = client.post("/api/session/approve", json={
+            "dtxsid": "DTXSID_TEST",
+            "section_type": "bm2",
+            "bm2_slug": "../escape",
+            "data": {"narrative": ["x"]},
+        })
+        assert resp.status_code == 400
 
     def test_approve_requires_dtxsid(self, sessions_dir):
         """Missing dtxsid returns 400."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/session/approve", json={
@@ -189,7 +231,7 @@ class TestSessionApproveUnapprove:
     def test_approve_invalid_section_type(self, sessions_dir):
         """Invalid section_type returns 400."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/session/approve", json={
@@ -204,30 +246,28 @@ class TestSessionApproveUnapprove:
 class TestSessionHistory:
     """GET /api/session/{dtxsid}/history/{section_key} — version history."""
 
-    def test_two_approvals_produce_history(self, sessions_dir):
+    @staticmethod
+    def _two_versions(dtxsid, first, second):
+        """Two versions of a background, as generation writes them (through the
+        section write gate), the second one accepted."""
+        from workflow.section_writes import write_section
+        from workflow.steps import accept_section_step
+        from workflow.store import DiskPoolStore
+        for text in (first, second):
+            write_section(dtxsid, "background", {"paragraphs": [text], "source": "model"},
+                          DiskPoolStore(), act="save", actor="person", author="model")
+        accept_section_step(dtxsid, "background", DiskPoolStore())
+
+    def test_two_versions_produce_history(self, sessions_dir):
         """
-        Approving a section twice should create version history:
-        v1 in history/, v2 as current.
+        Two versions of a section: v1 in history/, v2 as current.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
-
-        # Approve v1
-        client.post("/api/session/approve", json={
-            "dtxsid": dtxsid,
-            "section_type": "background",
-            "data": {"paragraphs": ["Version 1"]},
-        })
-
-        # Approve v2
-        client.post("/api/session/approve", json={
-            "dtxsid": dtxsid,
-            "section_type": "background",
-            "data": {"paragraphs": ["Version 2"]},
-        })
+        self._two_versions(dtxsid, "Version 1", "Version 2")
 
         # Check history
         resp = client.get(f"/api/session/{dtxsid}/history/background")
@@ -240,26 +280,16 @@ class TestSessionHistory:
         # The last version should be current
         assert history["versions"][-1]["is_current"] is True
         assert history["versions"][0]["is_current"] is False
+        assert history["versions"][-1]["approved_at"]
 
     def test_history_returns_specific_version(self, sessions_dir):
         """Requesting a specific version returns its full content."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
-
-        # Approve twice
-        client.post("/api/session/approve", json={
-            "dtxsid": dtxsid,
-            "section_type": "background",
-            "data": {"paragraphs": ["V1 text"]},
-        })
-        client.post("/api/session/approve", json={
-            "dtxsid": dtxsid,
-            "section_type": "background",
-            "data": {"paragraphs": ["V2 text"]},
-        })
+        self._two_versions(dtxsid, "V1 text", "V2 text")
 
         # Fetch v1 content
         resp = client.get(f"/api/session/{dtxsid}/history/background?version=1")
@@ -276,7 +306,7 @@ class TestSessionHistory:
     def test_history_nonexistent_section_returns_404(self, sessions_dir):
         """Requesting history for a section that doesn't exist returns 404."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         # Create the session dir so it exists

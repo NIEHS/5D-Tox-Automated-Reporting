@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NIEHS 5-day biological potency reports: evolution of data packages and analysis methods</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2530; --muted: #5b6573; --line: #dde2e8; --head: #f3f5f8;
+    --accent: #1f5f8b; --mark: #fff4d6;
+    --g0: #8a6fb0; --g1: #3f7fb8; --g2: #2e9a78; --g3: #d0832b; --dtt: #c2464f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #2c333c; --head: #1c2229;
+      --accent: #7fb6de; --mark: #3a3220;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Liberation Sans", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
+  h1 { font-size: 1.65rem; line-height: 1.25; margin: 0 0 6px; }
+  h2 { font-size: 1.2rem; margin: 40px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  p.lede { color: var(--muted); margin: 0 0 18px; max-width: 80ch; }
+  a { color: var(--accent); }
+  code { font: 0.86em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         background: var(--head); padding: 1px 4px; border-radius: 3px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; }
+  .callout { border-left: 4px solid var(--dtt); background: var(--head); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 18px 0; max-width: 90ch; }
+  .callout b { color: var(--fg); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  thead th { background: var(--head); font-weight: 600; position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.rowhead { font-weight: 600; white-space: nowrap; background: var(--head); }
+  td.date { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .chip { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600;
+          color: #fff; white-space: nowrap; }
+  .c-g0 { background: var(--g0); } .c-g1 { background: var(--g1); } .c-g2 { background: var(--g2); }
+  .c-g3 { background: var(--g3); } .c-dtt { background: var(--dtt); } .c-given { background: #6b7280; }
+  mark { background: var(--mark); color: inherit; padding: 0 2px; border-radius: 2px; }
+  /* era strip */
+  .strip { position: relative; margin: 14px 0 6px; }
+  .strip svg { width: 100%; height: auto; display: block; }
+  .strip text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .strip .lane { fill: var(--fg); font-size: 12px; }
+  .strip .axis { stroke: var(--line); stroke-dasharray: 2 3; }
+  ol.impl li { margin-bottom: 10px; max-width: 95ch; }
+  ul.defects li { margin-bottom: 6px; }
+  footer { margin-top: 48px; font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>NIEHS 5-day biological potency reports: evolution of data packages and analysis methods</h1>
+<div class="meta">
+  <span>Built 2026-10-01 from the CEBS data pages of all 12 reports</span>
+  <span>635 files, all downloaded</span>
+  <span>Source list: <a href="https://cebs.niehs.nih.gov/cebs/paper/16195">cebs.niehs.nih.gov/cebs/paper/16195</a></span>
+</div>
+<p class="lede">
+  Every statement comes from the files themselves: BMDExpress analysis timestamps and settings, Office/PDF
+  metadata, zip entry times. The only exception is report publication dates, because the niehs.nih.gov report
+  pages are firewalled. Per-package details are in each report's <code>MANIFEST.md</code> (linked in the index below).
+  The PFHxSAm package originally supplied to this project is characterised in <code>../given-2026/</code>.
+</p>
+
+<div class="callout">
+  <b>Headline.</b> The PFHxSAm package supplied to this project is the <b>February 2026 DTT method</b> applied to the
+  2021-era NIEHS-10 study. That method is published only as the "Analysis Pipeline Evaluation" bundled with NIEHS-12/13.
+  It explains every discrepancy found against the published NIEHS-10 report: the PCA, the gene-expression BMDs and the apical BMDs.
+</div>
+
+<!-- Era strip: lanes = activity span of each era (analysis runs through table/package production) -->
+<div class="strip" aria-label="Analysis eras, 2017 to 2026">
+<svg viewBox="0 0 1160 180" role="img">
+<line class="axis" x1="270" y1="6" x2="270" y2="162"/>
+<text x="270" y="178" text-anchor="middle">2017</text>
+<line class="axis" x1="358" y1="6" x2="358" y2="162"/>
+<text x="358" y="178" text-anchor="middle">2018</text>
+<line class="axis" x1="446" y1="6" x2="446" y2="162"/>
+<text x="446" y="178" text-anchor="middle">2019</text>
+<line class="axis" x1="534" y1="6" x2="534" y2="162"/>
+<text x="534" y="178" text-anchor="middle">2020</text>
+<line class="axis" x1="622" y1="6" x2="622" y2="162"/>
+<text x="622" y="178" text-anchor="middle">2021</text>
+<line class="axis" x1="710" y1="6" x2="710" y2="162"/>
+<text x="710" y="178" text-anchor="middle">2022</text>
+<line class="axis" x1="798" y1="6" x2="798" y2="162"/>
+<text x="798" y="178" text-anchor="middle">2023</text>
+<line class="axis" x1="886" y1="6" x2="886" y2="162"/>
+<text x="886" y="178" text-anchor="middle">2024</text>
+<line class="axis" x1="974" y1="6" x2="974" y2="162"/>
+<text x="974" y="178" text-anchor="middle">2025</text>
+<line class="axis" x1="1062" y1="6" x2="1062" y2="162"/>
+<text x="1062" y="178" text-anchor="middle">2026</text>
+<text class="lane" x="260" y="22" text-anchor="end">G0 · RR-8 (microarray)</text>
+<rect x="353" y="10" width="88" height="16" rx="3" fill="var(--g0)"/>
+<text class="lane" x="260" y="48" text-anchor="end">G1 · NIEHS-02…06 (microarray)</text>
+<rect x="387" y="36" width="314" height="16" rx="3" fill="var(--g1)"/>
+<text class="lane" x="260" y="74" text-anchor="end">G2 · NIEHS-07…10 (TempO-Seq PFAS)</text>
+<rect x="609" y="62" width="211" height="16" rx="3" fill="var(--g2)"/>
+<text class="lane" x="260" y="100" text-anchor="end">G3 · NIEHS-12/13 (DCB, inhalation)</text>
+<rect x="1001" y="88" width="75" height="16" rx="3" fill="var(--g3)"/>
+<text class="lane" x="260" y="126" text-anchor="end">DTT method · pipeline evaluation</text>
+<rect x="1051" y="114" width="24" height="16" rx="3" fill="var(--dtt)"/>
+<text class="lane" x="260" y="152" text-anchor="end">supplied PFHxSAm package</text>
+<circle cx="1077" cy="148" r="6" fill="#6b7280"/>
+</svg>
+</div>
+
+<h2>Report index</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>report</th><th>era</th><th>test article</th><th>study</th><th>design</th><th>gene-expression analysis</th><th>apical BMD</th><th>files</th></tr></thead>
+<tbody>
+<tr><td><a href="RR-8/MANIFEST.md">NTP RR-8</a></td><td><span class="chip c-g0">G0</span></td><td>Triphenyl phosphate</td><td>C11042</td><td>male SD rat, gavage, 0–881 mg/kg</td><td>Affymetrix; BMDExpress 2.20.0148, 2018-04-12</td><td>BMDS 2.7</td><td>22</td></tr>
+<tr><td><a href="NIEHS-02/MANIFEST.md">NIEHS-02</a></td><td><span class="chip c-g1">G1</span></td><td>2-Ethylhexyl diphenyl phosphate</td><td>C10674</td><td>male SD rat, gavage, 0–978.5 mg/kg</td><td>Affymetrix; 2.30.0507, 2021-11-04 re-run (.bm2 is the 2018 run)</td><td>BMDS 2.7</td><td>33</td></tr>
+<tr><td><a href="NIEHS-03/MANIFEST.md">NIEHS-03</a></td><td><span class="chip c-g1">G1</span></td><td>tert-Butylphenyl diphenyl phosphate</td><td>C10978</td><td>male SD rat, gavage, 0–1032.5 mg/kg</td><td>Affymetrix; 2.30.0507, 2021-11-04</td><td>BMDS 2.7</td><td>33</td></tr>
+<tr><td><a href="NIEHS-04/MANIFEST.md">NIEHS-04</a></td><td><span class="chip c-g1">G1</span></td><td>Isodecyl diphenyl phosphate</td><td>C20299</td><td>male SD rat, gavage, 0–1054.2 mg/kg</td><td>Affymetrix; 2.20.0151, 2018-05-01</td><td>BMDS 2.7</td><td>33</td></tr>
+<tr><td><a href="NIEHS-05/MANIFEST.md">NIEHS-05</a></td><td><span class="chip c-g1">G1</span></td><td>Isopropylated phenol phosphate</td><td>C10866B</td><td>male SD rat, gavage, 0–611 mg/kg</td><td>Affymetrix; 2.20.0151, 2018-05-02</td><td>BMDS 2.7</td><td>33</td></tr>
+<tr><td><a href="NIEHS-06/MANIFEST.md">NIEHS-06</a></td><td><span class="chip c-g1">G1</span></td><td>Tricresyl phosphate</td><td>C10277</td><td>male SD rat, gavage, 0–994.6 mg/kg</td><td>Affymetrix; 2.20.0151, 2018-05-01</td><td>BMDS 2.7</td><td>33</td></tr>
+<tr><td><a href="NIEHS-07/MANIFEST.md">NIEHS-07</a></td><td><span class="chip c-g2">G2</span></td><td>6:1 Fluorotelomer alcohol</td><td>C20027-01</td><td>M+F SD rat, gavage, 0–1000 mg/kg; liver, kidney</td><td>TempO-Seq S1500+; 2.30.0507, 2021-02-12 (shared PFAS project)</td><td>BMDS 2.7</td><td>55</td></tr>
+<tr><td><a href="NIEHS-08/MANIFEST.md">NIEHS-08</a></td><td><span class="chip c-g2">G2</span></td><td>10:2 Fluorotelomer alcohol</td><td>C04051-01</td><td>M+F SD rat, gavage, 0–475 mg/kg; liver, kidney</td><td>same shared PFAS project</td><td>BMDS 2.7</td><td>55</td></tr>
+<tr><td><a href="NIEHS-09/MANIFEST.md">NIEHS-09</a></td><td><span class="chip c-g2">G2</span></td><td>2,3-Benzofluorene</td><td>C20042-01</td><td>M+F SD rat, gavage, 0–1000 mg/kg; liver, kidney</td><td>same shared PFAS project</td><td>BMDS 2.7</td><td>55</td></tr>
+<tr><td><a href="NIEHS-10/MANIFEST.md"><b>NIEHS-10</b></a></td><td><span class="chip c-g2">G2</span></td><td><b>Perfluorohexanesulfonamide</b> (reference)</td><td>C20022-01</td><td>M+F SD rat, gavage, 0–111 mg/kg; liver, kidney</td><td>same shared PFAS project</td><td>BMDS 2.7</td><td>55</td></tr>
+<tr><td><a href="NIEHS-12/MANIFEST.md">NIEHS-12</a></td><td><span class="chip c-g3">G3</span></td><td>1,2-Dichlorobenzene</td><td>108020006 / 007</td><td>female SD rat 0–500 ppm + B6D2F1 mouse 0–250 ppm, inhalation; 5 tissues</td><td>TempO-Seq; 3.20.0119, 2025-04/05; + DTT/EPA pipeline evaluation</td><td>BMDExpress MA</td><td>141</td></tr>
+<tr><td><a href="NIEHS-13/MANIFEST.md">NIEHS-13</a></td><td><span class="chip c-g3">G3</span></td><td>1,4-Dichlorobenzene</td><td>108020004 / 005</td><td>female SD rat 0–800 ppm + B6D2F1 mouse 0–400 ppm, inhalation; 5 tissues</td><td>TempO-Seq; 3.20.0119, 2025-04/05; same pipeline evaluation</td><td>BMDExpress MA</td><td>142</td></tr>
+<tr><td><a href="../given-2026/MANIFEST.md">supplied package</a></td><td><span class="chip c-given">given</span></td><td>Perfluorohexanesulfonamide</td><td>C20022-01</td><td>NIEHS-10 study, re-analysed</td><td>DTT method; 3.20.0156, 2026-03-02</td><td>BMDExpress MA</td><td>21</td></tr>
+</tbody></table></div>
+
+<h2>Timeline</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>date</th><th>event</th><th>evidence</th></tr></thead>
+<tbody>
+<tr><td class="date">2014-05</td><td>TPHP microarray CEL files scanned</td><td>zip entry times (RR-8)</td></tr>
+<tr><td class="date">2017-12</td><td>First BMDS 2.7 apical fit report (TPHP)</td><td>RR-8 appendix metadata</td></tr>
+<tr><td class="date">2018-03-09</td><td>GO annotation file for Affymetrix GPL1355 created</td><td>category-analysis notes</td></tr>
+<tr><td class="date">2018-04-12</td><td><b>TPHP genomics</b> analysed in <b>BMDExpress 2.20.0148</b></td><td>RR-8 project timestamps</td></tr>
+<tr><td class="date">2018-05-01/02</td><td>Aromatic-phosphate genomics analysed in <b>BMDExpress 2.20.0151</b> (EHDP, IDDP, IPP, TCP)</td><td>.bm2/JSON timestamps (NIEHS-02 .bm2, 04, 05, 06)</td></tr>
+<tr><td class="date">2018-11/12</td><td>RR-8 summary tables produced (Table 1–6 PDFs)</td><td>PDF metadata</td></tr>
+<tr><td class="date">2020-11 → 2021-02</td><td>PFAS study tables generated; TempO-Seq expression files built (BMDExpress 2.30.0485, 2020-11-18)</td><td>PDF metadata; expression-file headers</td></tr>
+<tr><td class="date">2021-02-12</td><td><b>Shared PFAS project</b> analysed in <b>BMDExpress 2.30.0507</b> (4 chemicals × liver/kidney × sex)</td><td>project timestamps (NIEHS-07…10)</td></tr>
+<tr><td class="date">2021-04 → 2021-08</td><td>PFAS report tables and BMDS appendices produced (Parameter workbooks dated 2021-07-28)</td><td>docx/xlsx metadata</td></tr>
+<tr><td class="date">2021-08-19/24</td><td>Aromatic-phosphate study-table PDFs generated</td><td>PDF metadata</td></tr>
+<tr><td class="date">2021-11-04</td><td><b>EHDP and BPDP genomics re-run</b> in BMDExpress 2.30.0507 (10,000 permutations, 19 animals); IDDP/IPP/TCP keep their 2018 analyses</td><td>NIEHS-02/03 JSON + exports</td></tr>
+<tr><td class="date">2022</td><td>Aromatic-phosphate (NIEHS-02…06) and PFAS (NIEHS-07…10) packages assembled; PFAS JSON export dated 2022-11-16</td><td>zip entry times</td></tr>
+<tr><td class="date">2023-03</td><td>NIEHS-10 PDF on Bookshelf (copy in the supplied package is dated 2023-03-20)</td><td>PDF metadata</td></tr>
+<tr><td class="date">2024-10-31</td><td>S1500 annotation for BMDExpress 3 created</td><td>2025/2026 experiment notes</td></tr>
+<tr><td class="date">2025-04 → 2025-08</td><td><b>1,2-DCB and 1,4-DCB</b> (NIEHS-12/13) analysed in <b>BMDExpress 3.20.0119–0132</b> (curve-fit BMR 2 SD); eFDR null runs</td><td>project timestamps</td></tr>
+<tr><td class="date">2025-11-21/22</td><td>Pipeline evaluation: <b>EPA ETAP method</b> run on 20 gavage chemicals in BMDExpress 2.30.0516</td><td><code>EPA_tBMD_pipeline.bm2</code></td></tr>
+<tr><td class="date">2025-12-11</td><td>Pipeline evaluation: <b>DTT method</b> run on the same data in <b>BMDExpress 3.20.0141</b>, curve-fit BMR <b>1.581 SD</b></td><td><code>DTT_tBMD_pipeline.bm2</code></td></tr>
+<tr><td class="date">2026-01-15</td><td>DTT-method synthetic-null (eFDR) runs on kidney and liver</td><td><code>SyntheticKidney/Liver.bm2</code></td></tr>
+<tr><td class="date">2026-02</td><td>Pipeline evaluation updated: the 1.25 fold filter after Williams removed ("consistent with what was applied to the DCB data"); NIEHS-12/13 tables finalised</td><td>Read Me.docx; PDF metadata</td></tr>
+<tr><td class="date">2026-03-02</td><td><b>PFHxSAm re-analysed</b> with the February 2026 DTT method in BMDExpress 3.20.0156 → the package given to this project</td><td><code>../given-2026/</code></td></tr>
+</tbody></table></div>
+
+<h2>Package generations</h2>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th><span class="chip c-g0">G0</span> RR-8</th><th><span class="chip c-g1">G1</span> NIEHS-02…06</th><th><span class="chip c-g2">G2</span> NIEHS-07…10</th><th><span class="chip c-g3">G3</span> NIEHS-12/13</th></tr></thead>
+<tbody>
+<tr><td class="rowhead">chemicals</td><td>triphenyl phosphate</td><td>aromatic phosphates</td><td>PFAS + 2,3-benzofluorene</td><td>dichlorobenzenes</td></tr>
+<tr><td class="rowhead">design</td><td>male SD rats, gavage</td><td>male SD rats, gavage, 5–6 groups</td><td>M+F SD rats, gavage, 8–10 groups, liver + kidney</td><td>female SD rats + B6D2F1 mice, <b>inhalation</b> (ppm), 6–7 groups, 5 tissues</td></tr>
+<tr><td class="rowhead">transcriptomics</td><td>Affymetrix Rat 230 2.0, CEL files, Partek batch correction</td><td>Affymetrix Rat 230 2.0 (31,099 probe sets), CEL files, Partek batch correction</td><td><b>TempO-Seq S1500+</b> (2,654 probes), FASTQ in GEO</td><td>TempO-Seq S1500 v1.2, <b>raw (attenuation-adjusted) counts published</b></td></tr>
+<tr><td class="rowhead">apical BMD</td><td>modified BMDS 2.7.0, high-dose dropping</td><td><b>modified EPA BMDS 2.7.0</b> (python bmds 0.11), 16 rules, high-dose dropping</td><td>modified BMDS 2.7.0, high-dose dropping up to 5 doses</td><td><b>BMDExpress 3</b> (ToxicR model averaging)</td></tr>
+<tr><td class="rowhead">BMDExpress project</td><td>one project</td><td>one per chemical</td><td><b>one shared 16-experiment project</b> for all four reports</td><td>per species: genomic + non-genomic (apical) projects, plus eFDR null projects</td></tr>
+<tr><td class="rowhead">study tables</td><td>"Table 1–6" PDFs</td><td>NTP I04/I05/PA06/PA41/R07 PDFs</td><td>+ PA43 hematology, PA48 tissue concentration</td><td>+ I01/I02 removals, I04G weight gain; "-BMD" summary PDFs</td></tr>
+<tr><td class="rowhead">report tables</td><td>Top 20 GO (PDF)</td><td>Top 10 genes/GO (docx)</td><td>Top 10 genes/GO per organ × sex (docx), summary docx</td><td>Top 10 per tissue + most-potent GO per tissue (PDF)</td></tr>
+<tr><td class="rowhead">QC / provenance</td><td>batch-correction docs, sample list</td><td>animal↔CEL table, batch-annotated sample list, PCA</td><td>animal↔FASTQ table, TempO-Seq sample sheet, per-sample QC <b>with removal reasons</b>, 2D/3D PCA</td><td>QC report, removal-reason workbooks, <b>eFDR synthetic null</b>, probe manifests, <b>Materials and Methods PDF</b>, DTT vs EPA pipeline evaluation</td></tr>
+<tr><td class="rowhead">file naming</td><td><code>C11042_…</code></td><td>generic names (<code>Model_Parameters.xlsx</code>)</td><td>study-number prefix (<code>C20022-01_…</code>)</td><td>DTT study numbers (<code>108020006_…</code>)</td></tr>
+</tbody></table></div>
+
+<h2>Gene-expression analysis method by era</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>setting</th><th>2018<br><small>BMDExpress 2.20</small></th><th>2021<br><small>BMDExpress 2.30</small></th><th>2025<br><small>BMDExpress 3.20, NIEHS-12/13</small></th><th><span class="chip c-dtt">DTT</span> Dec 2025 / Feb 2026<br><small>pipeline evaluation; supplied PFHxSAm</small></th></tr></thead>
+<tbody>
+<tr><td class="rowhead">probe filter</td><td>none</td><td>none</td><td><b>drop probes with any zero count ("No0")</b></td><td>No0</td></tr>
+<tr><td class="rowhead">prefilter</td><td>Williams p&lt;0.05, <b>100 permutations</b>, no MTC, fold ≥1.5</td><td>Williams p&lt;0.05, <b>10,000 permutations</b>, no MTC, fold ≥1.5, t-test NOTEL/LOTEL</td><td>Williams p&lt;0.05 (10,000) → <b>curve-fit prefilter</b> (BMR 2 SD), no fold filter</td><td>Williams (no fold filter since Feb 2026) → curve-fit prefilter at <mark><b>1.581 SD</b></mark></td></tr>
+<tr><td class="rowhead">BMD models</td><td>Hill, Power, Linear, Poly2, Exp2–5 (8)</td><td>same 8</td><td><b>ToxicR Laplace model averaging</b> of Hill, Power, Exp3, Exp5</td><td>same as 2025</td></tr>
+<tr><td class="rowhead">selection</td><td>lowest AIC</td><td>lowest AIC, BMDL/BMDU used in selection</td><td>model average</td><td>model average</td></tr>
+<tr><td class="rowhead">BMR</td><td>factor 1.0 (type not recorded by 2.20; 1 SD by convention)</td><td>1 SD</td><td><b>25% relative deviation</b>, step-function threshold 0.5</td><td>25% RD</td></tr>
+<tr><td class="rowhead">category filters</td><td>BMD p ≥0.1, BMDU/BMDL ≤40, GO BP plain + deduplicated, gene-level defined categories</td><td>same; GO deduplicated; gene level adds fold change ≥2</td><td><b>R² ≥0.6, BMD/BMDL ≤10, gene sets 40–500 genes</b>, drop step-function &lt; first dose</td><td>same; GO BP BMD = 5th-percentile gene BMD; tBMD = lowest GO BP across liver + kidney (supplied PFHxSAm adds S1500 adversity signatures)</td></tr>
+<tr><td class="rowhead">reports using it</td><td>RR-8, NIEHS-04, 05, 06 (and NIEHS-02's .bm2)</td><td>NIEHS-02, 03, 07–10</td><td>NIEHS-12, 13</td><td>no report yet; published as the "Analysis Pipeline Evaluation" in NIEHS-12/13</td></tr>
+</tbody></table></div>
+
+<h2>Apical BMD method by era</h2>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>2018–2021 (G0–G2)</th><th>2025 (G3)</th><th>2026 supplied PFHxSAm</th></tr></thead>
+<tbody>
+<tr><td class="rowhead">engine</td><td>modified EPA BMDS 2.7.0 via python bmds 0.11 (Windows executables)</td><td>BMDExpress 3.20, ToxicR</td><td>BMDExpress 3.20.0156, ToxicR</td></tr>
+<tr><td class="rowhead">models / selection</td><td>continuous models (Hill, Power, Polynomial, Exponential), 16 recommendation rules (BMD ≤ max dose added; 10× low-dose rules removed)</td><td>Laplace model averaging of Hill, Power, Exp3, Exp5</td><td>same as 2025</td></tr>
+<tr><td class="rowhead">BMR</td><td>1 SD</td><td>1 SD</td><td>1 SD, <mark><b>except clinical chemistry at 25% RD</b></mark></td></tr>
+<tr><td class="rowhead">endpoint screen</td><td>all endpoints modelled</td><td>only endpoints with a significant trend <b>and</b> ≥1 significant pairwise difference</td><td>Williams prefilter</td></tr>
+<tr><td class="rowhead">high-dose dropping</td><td>yes in every BMDS package: endpoints refit with the top 1–5 doses removed (more doses dropped when there are more dose groups)</td><td>no</td><td>no</td></tr>
+</tbody></table></div>
+
+<h2>Packaging defects found</h2>
+<ul class="defects">
+  <li><b>RR-8:</b> <code>C11042_Appendix.doc</code> is actually a .docx.</li>
+  <li><b>NIEHS-02:</b> the <code>.bm2</code> (2018, 21 animals, 100 permutations) and the JSON (2021, 19 animals, 10,000 permutations) are different analyses; the exported result files match the JSON.</li>
+  <li><b>NIEHS-03:</b> the "JSON format" project file is actually a Java-serialised <code>.bm2</code>.</li>
+  <li><b>NIEHS-05:</b> <code>BMDs_code_package.docx</code> is a zip and <code>Model_Parameters.docx</code> is an Excel workbook.</li>
+  <li><b>NIEHS-07…10:</b> the GO annotation zips are labelled Affymetrix GPL1355 (left over from G1) and contain no S1500 probe IDs. The genomics project contains three other chemicals. NIEHS-08 also includes a stray Word lock file.</li>
+  <li><b>NIEHS-12:</b> the rat genomic project's top-level curve-fit prefilter list holds the <b>mouse</b> results; the rat BMD results point to their own embedded rat prefilters.</li>
+  <li><b>NIEHS-13:</b> the rat raw-count archive is named <code>…Rat_Study,zip</code> (comma, no extension).</li>
+</ul>
+
+<h2>What this means for the report tool</h2>
+<ol class="impl">
+  <li><b>"The published method" is not one method.</b> Four distinct gene-expression configurations and two apical engines occur
+    across 12 reports, and the switches happen within report families (NIEHS-02/03 vs 04–06). Validating against a
+    published report means reproducing <i>that report's</i> generation, so validation needs a method profile per report
+    (engine, version, prefilter, BMR, category filters), not one global setting.</li>
+  <li><b>The supplied package is the current DTT method applied to a G2 study.</b> Its settings (No0, Williams with no fold
+    filter, curve-fit 1.581 SD, model averaging at 25% RD, BMDExpress 3.20.0156) match the February 2026 DTT method in the
+    NIEHS-12/13 pipeline evaluation exactly. That explains every PFHxSAm discrepancy found so far: PCA (No0 probe subset),
+    gene-expression BMDs, and apical BMDs (BMDExpress instead of BMDS 2.7). Its one addition is a clinical chemistry apical BMR of 25% RD
+    instead of 1 SD.</li>
+  <li><b>The forward method is the DTT method, and it is still moving.</b> Published DCB reports use curve-fit 2 SD (3.20.0119);
+    the evaluated method uses 1.581 SD (3.20.0141); the supplied package uses 3.20.0156. No published report yet uses the
+    1.581 version, so the pipeline evaluation (20 chemicals, EPA comparison, eFDR) is the closest published reference for it.
+    NIEHS-10 remains the reference for the G2 method, validated with modified BMDS 2.7. The evaluation covers BPAF and
+    triclosan, which this project already holds data for.</li>
+  <li><b>Ingestion must verify by content and provenance, not by filename.</b> Several packages contain mislabelled types,
+    non-matching bm2/JSON pairs, multi-chemical projects and cross-species objects. Analyses should be selected by their
+    recorded settings, version and data source.</li>
+</ol>
+
+<footer>
+  Generated from <code>assets/cebs/</code> (characterisation tooling: <code>characterize.py</code>, <code>facts.py</code>,
+  <code>manifest.py</code>). Raw downloads are gitignored; re-fetch with <code>dl.sh</code>.
+  Markdown version: <code>CHRONOLOGY.md</code>.
+</footer>
+
+</main>
+</body>
+</html>

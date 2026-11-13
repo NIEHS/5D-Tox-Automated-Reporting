@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5dToxReport — Context</title>
+<style>
+:root {
+    --bg: #ffffff; --fg: #1a1a2e; --muted: #6c6c80; --border: #e0e0e8;
+    --accent: #4361ee; --accent-light: #eef0ff; --code-bg: #f5f5fa; --row-hover: #f8f8fc;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1a1a2e; --fg: #e0e0e8; --muted: #9090a0; --border: #2e2e42;
+        --accent: #6b8aff; --accent-light: #252540; --code-bg: #22223a; --row-hover: #22223a;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.6;
+    max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem;
+}
+h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+h2 { font-size: 1.35rem; margin-top: 2.5rem; margin-bottom: 0.8rem;
+     padding-bottom: 0.3rem; border-bottom: 2px solid var(--accent); scroll-margin-top: 1rem; }
+h3 { font-size: 1.1rem; margin-top: 1.6rem; margin-bottom: 0.4rem; }
+p, li { margin-bottom: 0.5rem; }
+ul, ol { padding-left: 1.5rem; margin-bottom: 0.6rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 650; }
+code, .mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 3px;
+}
+table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+tr:hover { background: var(--row-hover); }
+blockquote {
+    padding: 0.7rem 1rem; border-radius: 5px; margin: 0.9rem 0; font-size: 0.93rem;
+    border-left: 3px solid var(--accent); background: var(--accent-light);
+}
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.docnav { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.5rem; }
+.docnav a { margin-right: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="docnav">Docs: <a href="CONTEXT.html">Context</a> · <a href="architecture-map.html">Architecture Map</a> · <a href="code-walkthrough.html">Code Walkthrough</a></div>
+<h1 id="5dtoxreport-context">5dToxReport — Context</h1>
+<p>The single-context domain document for this repository (see <code>docs/agents/domain.md</code>). It explains <strong>what the application is for</strong> and <strong>how that purpose drives the architecture</strong> — the <em>why</em> behind the structure, not a module-by-module catalog (the README has the operational view; <code>docs/adr/</code> has the decision records this document points to).</p>
+<hr>
+<h2 id="purpose">Purpose</h2>
+<p>The U.S. National Toxicology Program (NTP) runs a short, high-information assay called the <strong>5-Day Genomic Dose Response study in Sprague-Dawley rats</strong>: a test chemical is dosed at several levels for five days, and the response is measured two ways at once —</p>
+<ul>
+<li><strong>apical endpoints</strong> — the classic toxicology readouts (body weight, organ</li>
+</ul>
+<p>  weights, clinical chemistry, hematology, hormones, tissue concentration), and</p>
+<ul>
+<li><strong>transcriptomics</strong> — genome-wide gene-expression dose-response, reduced to a</li>
+</ul>
+<p>  <strong>benchmark dose (BMD)</strong> per gene.</p>
+<p>For each study, a toxicologist must turn that data into a <strong>NIEHS biological potency report</strong> — a long, highly conventional document (the gold-standard layout reference is <em>NIEHS Report 10</em>) with NTP-style statistical tables, prose narrative sections (background, methods, per-organ findings, interpretation, summary), and a transcriptomic interpretation that connects the gene-level signals to the apical findings.</p>
+<p>Writing one by hand is slow and error-prone, and the conventions (table formats, footnote schemes, BMD classification rules, naming conventions) are strict. <strong>This application automates that report.</strong> It accepts the raw analysis artifacts — BMDExpress output files (<code>.bm2</code>) for apical endpoints and a gene-level BMD CSV for transcriptomics — and produces a structured, review-and-approve report a human edits and signs off on, section by section.</p>
+<p>The intended user is a <strong>toxicologist/report author</strong>, not a programmer: the system generates a draft, the author reviews/edits/approves each section, and the result is exported for publication.</p>
+<hr>
+<blockquote><p><strong>Module paths (2026-08-12, ADR-0013):</strong> the code is organized into concern packages (<code>web_routes/</code>, <code>pipeline/</code>, <code>document_model/</code>, <code>rendering/</code>, <code>tables/</code>, <code>narrative/</code>, <code>genomics/</code>, <code>knowledge_base/</code>, <code>styling_export/</code>, <code>tooling/</code>). Bare module names below (e.g. <code>render_common.py</code>, <code>document_template.py</code>, <code>html_generator.py</code>) are package-qualified in code — see the package table in <code>CLAUDE.md</code> for which package each lives in. Imports are <code>from &lt;package&gt;.&lt;module&gt; import ...</code>; the app entrypoint is <code>python -m web_routes.background_server</code>.</p></blockquote>
+<h2 id="domain-glossary">Domain glossary</h2>
+<p>Use these terms (and only these) when naming concepts in code, issues, tests, and proposals. If a concept you need isn&#x27;t here, that&#x27;s a signal — either you&#x27;re inventing language the project doesn&#x27;t use, or there&#x27;s a real gap.</p>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>Apical endpoint</strong></td><td>A whole-organism toxicology readout (body/organ weight, clinical chemistry, hematology, hormones, tissue concentration). Distinct from gene-level signals.</td></tr>
+<tr><td><strong>BMD / BMDL</strong></td><td>Benchmark dose / its lower confidence bound — the dose producing a defined effect size. The report&#x27;s central quantity, computed per apical endpoint and per gene.</td></tr>
+<tr><td><strong><code>.bm2</code></strong></td><td>BMDExpress 3&#x27;s Java-serialized project file. Carries apical dose-response results; parsed only through the Java layer.</td></tr>
+<tr><td><strong>integrated.json</strong></td><td>The single, canonical dataset for one session, in BMDProject format. All report content reads from here (plus sidecar JSONs). See invariant 1.</td></tr>
+<tr><td><strong>Sidecar</strong></td><td>A per-session JSON alongside integrated.json preserving per-animal metadata the pivot discards (Selection core-vs-biosampling, Observation Day, Terminal Flag, raw per-animal values).</td></tr>
+<tr><td><strong>Document tree</strong></td><td>The <code>DocNode</code> tree — the single source of truth for report structure: heading hierarchy, section order, positional table/figure numbering, platform→section mapping. See invariant 2.</td></tr>
+<tr><td><strong>Component catalog</strong></td><td>The registry of document-component <em>types</em> (<code>render_capabilities.py</code>) — each type&#x27;s capabilities (orientable, breakable, editable…), allowed children, required bindings, and content kinds.</td></tr>
+<tr><td><strong>Template</strong></td><td>A YAML file in <code>templates/</code> that <em>authors</em> a report: which components, in what order, with what bindings. Instantiated into a <code>DocNode</code> tree at load time.</td></tr>
+<tr><td><strong>Platform</strong></td><td>A data domain within a study (e.g. &quot;Body Weight&quot;, &quot;Clinical Chemistry&quot;, &quot;Tissue Concentration&quot;, &quot;Gene Expression&quot;). Maps to one or more report sections via the tree.</td></tr>
+<tr><td><strong>Apical vs Genomics</strong></td><td>The two halves of the report. Apical = programmatic tables from integrated.json. Genomics = KB-grounded, LLM-written transcriptomic interpretation.</td></tr>
+<tr><td><strong>Knowledge base (KB)</strong></td><td><code>bmdx.duckdb</code> — a toxicogenomics database (genes, GO terms, pathways, papers, claims) that <em>grounds</em> the genomics narrative in literature rather than model training data.</td></tr>
+<tr><td><strong>Pool</strong></td><td>The set of uploaded files for a session as they move through fingerprint → validate → integrate → process. The UI&#x27;s phase is derived from what pool artifacts exist.</td></tr>
+<tr><td><strong>Narrative</strong></td><td>Prose for a section. Some narratives are LLM-generated (background, methods, genomics interpretation), some are programmatic/deterministic. A narrative the user has edited is <strong>user-owned</strong> and never silently recomputed.</td></tr>
+<tr><td><strong>Render surface</strong></td><td>An output projection of the document tree. Four emitters exist, all over the shared IR (<code>render_common</code>): the in-app <strong>HTML preview</strong> and the <strong>Overleaf LaTeX bundle</strong> (both live HTTP endpoints), plus a <strong>Word/OOXML <code>.docx</code></strong> deliverable (ADR-0008) and <strong>BITS/JATS</strong> XML for PMC/Bookshelf submission (ADR-0004); the latter two are built emitters, invoked offline rather than wired to a route.</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="how-purpose-shapes-the-architecture">How purpose shapes the architecture</h2>
+<p>Each architectural choice traces back to a property of the problem.</p>
+<h3 id="the-report-is-conventional-and-structural-the-structure-is-data-not-code">The report is conventional and structural → the structure is data, not code</h3>
+<p>Because the report&#x27;s organization is fixed by NIEHS convention (and must stay faithful to it while we <em>intentionally</em> diverge in places), structure is modeled explicitly as a <strong>document tree</strong> rather than scattered through the renderers. A <strong>template</strong> (YAML) authors the tree against a <strong>component catalog</strong>; an <strong>instantiator</strong> (<code>document_template.py</code>) builds the <code>DocNode</code> tree and validates the template at load time (unknown type, illegal containment, missing required binding → loud failure). Anything structural — heading levels, section order, table/figure numbers — is <em>derived from the tree</em> (numbers are positional, assigned by a tree walk), never hand-coded into a renderer. This is the <strong>document-component model</strong> (ADR-0003).</p>
+<p>Consequence: composing or customizing a report is <strong>editing files</strong> (a YAML template + the catalog), not writing renderer code — there is deliberately no separate admin-authoring tool.</p>
+<h3 id="the-data-has-one-true-form-one-source-of-truth-never-bypassed">The data has one true form → one source of truth, never bypassed</h3>
+<p>A study&#x27;s data arrives in several raw formats (<code>.bm2</code>, CSV, txt, xlsx) with known pitfalls (a pivot that drops per-animal metadata). To keep every report section consistent, all content reads from <strong>integrated.json</strong> (plus sidecars for the metadata the pivot loses). Reading a raw file directly is forbidden; if data is missing, the fix belongs in the integration step, not a bypass. (See ADR-0001: the BMDProject schema acts as a <em>load barrier</em> — bad data fails at the boundary, not deep in a table builder.)</p>
+<h3 id="many-audiences-one-document-n-render-surfaces-over-one-model">Many audiences, one document → N render surfaces over one model</h3>
+<p>Different audiences need the same report in different forms: the author needs a fast in-browser <strong>HTML preview</strong>; the committee-review artifact is an <strong>Overleaf-ready LaTeX bundle</strong> (<code>report.tex</code> + class file + <code>figures/</code>); Word-driven reviewers need a <strong><code>.docx</code></strong> they can track-change; PMC/NCBI Bookshelf needs <strong>BITS/JATS</strong> XML. Every one of these is a <em>projection of the same <code>DocNode</code> tree</em>. The emitters (<code>html_generator.py</code>, <code>latex_generator.py</code>, <code>docx_generator.py</code>, <code>jats_generator.py</code>) are thin <strong>emit</strong> layers over a shared semantic <strong>IR</strong> (<code>render_common.py</code>): one tree walk (<code>walk_tree</code>, owned by <code>document_tree</code>) and a markup-free <em>plan</em> per node type that decides <em>what</em> to render; each emitter decides only <em>how</em> (its markup and escaping). This is the <strong>ADR-0006</strong> thesis, generalized in its Amendment 1: the surfaces are not just deduplicated, they are <em>provably describing the same study</em> because they read one description — drift between them would be a <strong>semantic inconsistency</strong>, not a code smell.</p>
+<p>Parity is enforced structurally, not by convention. A node-type registry (<code>RENDERABLE_NODE_TYPES</code>) fails at <strong>import</strong> if a registered type lacks an emitter on the HTML, LaTeX, or Word surface (<code>assert_dispatch_covers</code>), and a cross-surface semantic-parity test asserts the surfaces <em>and</em> the IR agree on the same facts (table/figure numbers, BMD endpoints). Underneath, assembly parity still holds — content is assembled into the data dict the same way for both the web/preview path (<code>marshal_export_data</code>) and the session-export path (<code>load_session_data</code>).</p>
+<p>The four surfaces differ in <strong>how far into the pipeline they sit</strong>, not in what they read:</p>
+<ul>
+<li><strong>HTML</strong> (<code>html_generator.py</code>) and <strong>LaTeX</strong> (<code>latex_generator.py</code>) are **live</li>
+</ul>
+<p>  HTTP endpoints** — <code>/api/preview-latex-html</code> and <code>/api/export-overleaf-bundle</code>   (plus <code>/api/compile-pdf</code>, which compiles the LaTeX bundle locally with <code>tect</code>   for an in-app truth-check, ADR-0007).</p>
+<ul>
+<li><strong>Word/OOXML</strong> (<code>docx_generator.py</code>, <strong>ADR-0008</strong>) is a native third emitter</li>
+</ul>
+<p>  and a one-way OUTPUT surface — Word is never a source of truth for structure.   It shares the same IR and import-time parity coverage but is invoked offline   (regeneration script + tests), not yet wired to an export route. Its one   deliberate divergence is mechanical, not semantic: Word is an object model, so   handlers <em>mutate</em> a python-docx <code>Document</code> rather than accumulate markup   strings.</p>
+<ul>
+<li><strong>BITS/JATS</strong> XML (<code>jats_generator.py</code>, <strong>ADR-0004</strong>) is the fourth projection,</li>
+</ul>
+<p>  for PMC/Bookshelf submission — a <em>projection only</em>, the model already carries   what it needs. As of 2026-08-10 it targets a <strong>BITS <code>&lt;book&gt;</code></strong> (the reports are   books on NCBI Bookshelf, not journal articles); the article-<code>&lt;article&gt;</code> path is   kept alongside it. Validation is offline — a vendored NLM/PMC <strong>StyleChecker</strong>   transform and a vendored <strong>BITS DTD</strong> gate, run in-process — because a BITS book   goes through NCBI&#x27;s manual Bookshelf QA rather than the article Previewer.</p>
+<h3 id="the-transcriptomic-interpretation-must-be-credible-it-is-kb-grounded">The transcriptomic interpretation must be credible → it is KB-grounded</h3>
+<p>A genomics narrative that hallucinated pathway claims would be worse than useless. So the interpretation step queries the <strong>knowledge base</strong> (<code>bmdx.duckdb</code>) — pathway/GO enrichment, organ signatures, paper-derived claims — and feeds that structured, literature-grounded context to the LLM. The KB schema is a cross-project contract. Apical narratives, by contrast, are largely deterministic; knowing <strong>which sections are LLM vs programmatic</strong> is essential before changing any of them.</p>
+<h3 id="the-author-is-the-authority-generated-content-is-a-draft-edits-are-owned">The author is the authority → generated content is a draft, edits are owned</h3>
+<p>Every section follows <strong>generate → review → edit → approve</strong>. Once a user edits a narrative, it becomes <strong>user-owned</strong>: it is never silently recomputed when upstream inputs drift (e.g. a re-analysis changes a gene hash). Regeneration is an explicit, opt-in action that clears the user&#x27;s override. Approved content is persisted and restored across reloads.</p>
+<h3 id="bm2-is-a-java-format-a-subprocess-boundary-not-a-port"><code>.bm2</code> is a Java format → a subprocess boundary, not a port</h3>
+<p>BMDExpress 3&#x27;s serialization and its Williams/Dunnett statistics live in Java. Rather than reimplement them, the app invokes pre-compiled Java helpers headlessly via subprocess. This boundary has its own traps (serialization ordering, transient vs persisted fields) documented for anyone who crosses it.</p>
+<hr>
+<h2 id="invariants-apply-to-all-work">Invariants (apply to all work)</h2>
+<p>These three rules hold regardless of what you&#x27;re changing. They are the load- bearing version of the sections above.</p>
+<p>1. <strong>integrated.json is the single source of truth.</strong> All report content reads    from integrated.json + sidecars. Never bypass to read raw <code>.bm2</code>/<code>.txt</code>/    <code>.csv</code>/<code>.xlsx</code>. Missing data → fix the integration step.</p>
+<p>2. <strong>The document tree drives all structure.</strong> Heading hierarchy, section order,    table/figure numbering (positional, never user-provided), and platform→    section mapping all come from the <code>DocNode</code> tree. Nothing structural is    hardcoded in a renderer.</p>
+<p>3. <strong>UI phase is derived, never imperatively set.</strong> <code>derivePoolPhase(artifacts)</code>    examines which artifacts exist and returns the phase; code dispatches on its    result. (Transient async phases are the only exception.)</p>
+<hr>
+<h2 id="decision-records">Decision records</h2>
+<p>Read the ADR that touches the area you&#x27;re about to work in. If your change contradicts one, surface it explicitly rather than silently overriding.</p>
+<table>
+<thead><tr><th>ADR</th><th>Decision</th></tr></thead>
+<tbody>
+<tr><td><a href="adr/0001-bmdproject-schema-as-load-barrier.md">0001</a></td><td>The BMDProject schema is a load barrier — validate at the data boundary.</td></tr>
+<tr><td><a href="adr/0002-decompose-api-process-integrated.md">0002</a></td><td>Decompose the <code>api_process_integrated</code> god function into labeled layers.</td></tr>
+<tr><td><a href="adr/0003-document-component-model.md">0003</a></td><td>Composable document-component model — catalog + data-driven template + instantiated tree + sub-addressable content.</td></tr>
+<tr><td><a href="adr/0004-bits-jats-export-surface.md">0004</a></td><td>BITS/JATS as a third export surface for PMC/Bookshelf — a projection of the model, not a parallel one.</td></tr>
+<tr><td><a href="adr/0005-overleaf-round-trip-content-sync.md">0005</a></td><td>Overleaf round-trip: committee edits in Overleaf reconcile back into the content model via stable per-node anchors, with the author in the middle.</td></tr>
+<tr><td><a href="adr/0006-unify-html-latex-renderers.md">0006</a></td><td>Unify the HTML/LaTeX renderers behind one semantic IR (<code>render_common</code>) + a shared <code>walk_tree</code>; both surfaces are thin projections, with parity enforced by a node-type registry and a cross-surface parity test.</td></tr>
+<tr><td><a href="adr/0007-in-app-html-and-pdf-preview.md">0007</a></td><td>In-app preview: a live HTML view + an on-demand PDF view compiled locally from our own LaTeX (<code>tect</code>), side-by-side with a reference PDF — fewer Overleaf round trips, no new renderer.</td></tr>
+<tr><td><a href="adr/0008-docx-render-surface.md">0008</a></td><td>Word/OOXML <code>.docx</code> as a third emitter over the shared IR — a one-way OUTPUT surface (Word is never a source of truth), with import-time parity coverage.</td></tr>
+<tr><td><a href="adr/0009-complete-the-layout-style-vocabulary.md">0009</a></td><td>Complete the shared <code>layout_style</code> vocabulary so a Word/<code>.dotx</code> template can drive per-block typography on every surface. <em>(Proposed.)</em></td></tr>
+<tr><td><a href="adr/0010-semantic-type-vocabulary-system.md">0010</a></td><td>A descriptive semantic-type vocabulary reconciling the component catalog with Word named-styles/<code>basedOn</code>. <em>(Proposed; Phase 0 landed.)</em></td></tr>
+<tr><td><a href="adr/0011-lossless-canonical-dotx-layer.md">0011</a></td><td>A lossless canonical <code>.dotx</code> styling layer — a conservation law with hard-fail, so styling round-trips without silent loss. <em>(Proposed.)</em></td></tr>
+<tr><td><a href="adr/0012-semantic-figure-content-type.md">0012</a></td><td>A first-class semantic <code>figure</code> content type. <em>(Proposed; implemented alongside the vocabulary work.)</em></td></tr>
+</tbody>
+</table>
+<blockquote><p><strong>Note (2026-05):</strong> the report&#x27;s output pivoted from Typst/PDF to <strong>LaTeX/Overleaf</strong> + the HTML preview; Typst/PDF is no longer a surface. A vestigial <code>report.typ</code> remains on disk as a historical artifact but is dead — no live code compiles it.</p>
+<p><strong>Note (2026-08):</strong> there are now <strong>four</strong> render surfaces (HTML, LaTeX, Word, BITS/JATS), all projections of the one <code>DocNode</code> tree via the <code>render_common</code> IR. The BITS surface targets a NCBI Bookshelf <strong><code>&lt;book&gt;</code></strong> (ADR-0004), and the newer ADRs (0007–0012) extend the model with a local-compile preview, the Word surface, and a semantic styling vocabulary.</p></blockquote>
+</body>
+</html>
