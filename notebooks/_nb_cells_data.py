@@ -98,7 +98,7 @@ Read this once. The step explanations below refer back to it.
 | Workflow core | `workflow/steps.py`, `workflow/engine.py`, `workflow/phases.py`, `workflow/store.py` | One function per step. Takes plain Python, returns plain Python, raises `workflow.errors.StepError` (with an HTTP-style status code the routes pass on). All session I/O goes through an injected `PoolStore` (`DiskPoolStore` here). |
 | Pipeline | `pipeline/*`, `tables/*`, `genomics/*`, `narrative/*`, `rendering/*` | The work: fingerprint caching, processing layers, tables, narratives and the four render surfaces. HTTP-free. |
 | Document | `document_model/*`, `templates/`, `profiles/` | The report's declarations: the document tree and its definitions (an era plus a study's alterations, ADR-0029), the wording of the prose written from data (`phrasing:`), the session's definition pin; the analysis method profiles (ADR-0027). Neither `pipeline` nor `document_model` imports the web layer. |
-| Data model | `bmdx_pipe` (the sibling package `/workspace/bmdx-pipe`) | Fingerprinting, pool validation, integration, NTP statistics, BMD acceptance, the animal report. |
+| Data model | `bmdx_pipe` (`packages/bmdx-pipe` in this repo) | Fingerprinting, pool validation, integration, NTP statistics, BMD acceptance, the animal report. |
 | Java | BMDExpress-3 (`$BMDX_PROJECT_ROOT/target/bmdx-core.jar` + `target/deps/*.jar`) and the helper classes in `bmdx_pipe/java/` | `ExportBm2` (`.bm2` → JSON), `IntegrateProject` (the merge), `ExportCategories`, `ExportGenomics`, `RunApicalBmds` (ToxicR model averaging), `SubsetBm2`, `JsonToBm2`. Called as subprocesses (`bmdx_pipe.java_bridge.build_classpath`). |
 
 ### The session directory is the state
