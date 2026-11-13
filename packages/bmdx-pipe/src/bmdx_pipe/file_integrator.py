@@ -276,8 +276,8 @@ _llm_cache: dict[str, dict] = {}
 
 # Egress guard: prompts may only go to the walled NIEHS toxpipe gateway, never a
 # publicly hosted model.  Mirrors APPROVED_LLM_HOSTS in rlm-bmdx's
-# styling_export/llm_endpoints.py (bmdx-pipe can't import rlm-bmdx) — keep the
-# two in step.  Unset ANTHROPIC_BASE_URL is the dangerous case: the Anthropic SDK
+# styling_export/llm_endpoints.py (bmdx-pipe does not import the app); the
+# tests in tests/unit/test_llm_egress_guard.py keep the two in step.  Unset ANTHROPIC_BASE_URL is the dangerous case: the Anthropic SDK
 # then silently falls back to the public api.anthropic.com.
 _APPROVED_LLM_HOSTS = frozenset({"litellm.toxpipe.niehs.nih.gov"})
 
