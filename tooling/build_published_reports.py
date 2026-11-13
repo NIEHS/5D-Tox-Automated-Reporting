@@ -4,9 +4,12 @@ and output/<DTXSID>/, so each one is on the Bookshelf shelf.
 
 Each study goes through the normal headless path:
 
-  1. tooling.cebs_to_pool converts the package's Individual Animal workbooks
-     (and, for NIEHS-12, the Bookshelf bundle's concentration workbook) into
-     pool inputs;
+  1. tooling.cebs_to_pool puts the package's Individual Animal workbooks in
+     the pool as study workbooks, which drive the data (ADR-0032): a standard
+     workbook as published, another layout (the CEBS database export, the
+     NIEHS-12/13 lab concentration workbook from the Bookshelf bundle, molar
+     doses) written as a standard one.  The package's sample sheet, which
+     traces genomic samples to animals, joins them;
   2. the package's genomic BMDExpress project joins them — for NIEHS-07 … 10,
      whose project is shared by four chemicals, only this chemical's
      experiments (bmdx_pipe.subset_bm2);
@@ -32,9 +35,9 @@ is built as its own session (<DTXSID>_rat, <DTXSID>_mouse, MEMBERS) from its
 study-number prefix, its genomic project and its design — with the genomic
 experiments' tissue and species from the package (cebs_to_pool
 --metadata-out) — and the report session lists them (generate_report
---studies) and renders from them.  No method profile describes the 2018 analyses
-(RR-8, NIEHS-02 … 06); they use ntp-5day-2021, the nearest era, whose
-deviations the run log lists.
+--studies) and renders from them.  The 2018 analyses (RR-8, NIEHS-02 … 06)
+use ntp-5day-2018, the later ones ntp-5day-2021.1 or the 2025 profiles; the run
+log lists each profile's deviations.
 
 Usage:
     python -m tooling.build_published_reports [REPORT ...] [--jobs N]
@@ -80,36 +83,36 @@ CRL = "/Crl"                             # "B6D2F1/Crl Mice"
 STUDIES = {
     "RR-8": ("DTXSID1021952", "Triphenyl Phosphate", "115-86-6", "TPHP",
              "C11042_BMDExpressProjectFile.bm2", None, "mg/kg", ORAL, HSD_EARLY,
-             "ntp-5day-2021", []),
+             "ntp-5day-2018", []),
     "NIEHS-02": ("DTXSID1025300", "2-Ethylhexyl Diphenyl Phosphate", "1241-94-7", "EHDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021", []),
+                 "ntp-5day-2018", []),
     "NIEHS-03": ("DTXSID6024701", "tert-Butylphenyl Diphenyl Phosphate", "56803-37-3", "BPDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021", []),
+                 "ntp-5day-2018", []),
     "NIEHS-04": ("DTXSID3025465", "Isodecyl Diphenyl Phosphate", "29761-21-5", "IDDP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021", []),
+                 "ntp-5day-2018", []),
     # "Phenol", as the book names it (the CEBS study page also says "Phenyl").
     "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate", "68937-41-7", "IPP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021", []),
+                 "ntp-5day-2018", []),
     "NIEHS-06": ("DTXSID4021391", "Tricresyl Phosphate", "1330-78-5", "TCP",
                  "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
-                 "ntp-5day-2021", []),
+                 "ntp-5day-2018", []),
     "NIEHS-07": ("DTXSID00190950", "6:1 Fluorotelomer Alcohol", "375-82-6", "6:1 FTOH",
                  "C20027-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
-                 "_6-1 FTOH_", "mg/kg", ORAL, HSD, "ntp-5day-2021", []),
+                 "_6-1 FTOH_", "mg/kg", ORAL, HSD, "ntp-5day-2021.1", []),
     "NIEHS-08": ("DTXSID2029905", "1,1,2,2-Tetrahydroperfluoro-1-dodecanol", "865-86-1",
                  "10:2 FTOH",
                  "C04051-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
-                 "_10-2 FTOH_", "mg/kg", ORAL, HSD, "ntp-5day-2021", []),
+                 "_10-2 FTOH_", "mg/kg", ORAL, HSD, "ntp-5day-2021.1", []),
     "NIEHS-09": ("DTXSID1022477", "2,3-Benzofluorene", "243-17-4", "2,3-BF",
                  "C20042-01_BMDExpress_Project_File_bm2_format.bm2", "_2,3-Benzofluorene_",
-                 "mg/kg", ORAL, HSD, "ntp-5day-2021", []),
+                 "mg/kg", ORAL, HSD, "ntp-5day-2021.1", []),
     "NIEHS-10": ("DTXSID50469320", "Perfluorohexanesulfonamide", "41997-13-1", "PFHxSAm",
                  "C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",
-                 "_PFHxSAm_", "mg/kg", ORAL, HSD, "ntp-5day-2021", []),
+                 "_PFHxSAm_", "mg/kg", ORAL, HSD, "ntp-5day-2021.1", []),
     "NIEHS-12": ("DTXSID6020430", "1,2-Dichlorobenzene", "95-50-1", "1,2-DCB",
                  None, None, "ppm", None, None, "ntp-5day-2025",
                  ["--bundle", str(CEBS / "_bookshelf" / "NIEHS-12")]),
@@ -134,6 +137,13 @@ MEMBERS = {
 _MALE_LIVER = {"organ": "liver", "sex": "male"}
 GENOMIC_STATED = {r: _MALE_LIVER for r in ("RR-8", "NIEHS-02", "NIEHS-03", "NIEHS-04",
                                            "NIEHS-05", "NIEHS-06")}
+
+
+def _review_args(session_id: str) -> list[str]:
+    """``--bmd-review`` with the book's recorded UREP decisions
+    (templates/studies/<session>/bmd_review.json, ADR-0033), when it has any."""
+    path = REPO_ROOT / "templates" / "studies" / session_id / "bmd_review.json"
+    return ["--bmd-review", str(path)] if path.exists() else []
 
 
 def _project_json(report: str) -> Path | None:
@@ -193,7 +203,11 @@ def build(report: str) -> tuple[str, int, str]:
         if token:
             from bmdx_pipe import subset_bm2
             subset = inputs / f"{dtxsid}_genomic.bm2"
-            subset_bm2(str(project), str(subset), token)
+            try:
+                subset_bm2(str(project), str(subset), token)
+            except RuntimeError as e:
+                fh.write(f"subset {project.name} failed: {e}\n")
+                return report, 1, f"subset failed ({log})"
             fh.write(f"subset {project.name} to experiments containing {token!r}\n")
         else:
             subset = inputs / project.name
@@ -211,7 +225,7 @@ def build(report: str) -> tuple[str, int, str]:
                   "--name", name, "--casrn", casrn, "--compound-name", short,
                   "--dose-unit", unit, "--design", str(work / "design.json"),
                   "--front-matter", str(work / "front_matter.json"),
-                  "--method-profile", profile, *stated, "--reintegrate",
+                  "--method-profile", profile, *stated, *_review_args(dtxsid), "--reintegrate",
                   # The data deposit: the Bookshelf package's files, less the
                   # book's own (its XML, figures, TOC.pdf, NCBI's license/source).
                   "--deposit", str(BOOKSHELF / report),
@@ -259,8 +273,8 @@ def build_composed(report: str) -> tuple[str, int, str]:
                       "--name", name, "--casrn", casrn, "--compound-name", short,
                       "--dose-unit", unit, "--design", str(work / "design.json"),
                       "--front-matter", str(work / "front_matter.json"),
-                      "--method-profile", profile, *stated, "--reintegrate",
-                      "--stop-after", "process"])
+                      "--method-profile", profile, *stated, *_review_args(member),
+                      "--reintegrate", "--stop-after", "process"])
             if rc:
                 return report, rc, f"study {key} failed ({log})"
             members.append(f"{key}={member}")
@@ -284,6 +298,10 @@ def main(argv=None) -> int:
         raise SystemExit(f"unknown report(s) {unknown}")
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
+    # The genomic subset runs Java in this process, before generate_report
+    # sets up its env: JDK 21 first on PATH, BMDX_PROJECT_ROOT, the CA bundle.
+    from tooling.generate_report import _bootstrap_env
+    _bootstrap_env()
     failed = 0
     with ThreadPoolExecutor(max_workers=a.jobs) as pool:
         for report, rc, where in pool.map(build, reports):

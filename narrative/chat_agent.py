@@ -48,8 +48,8 @@ S_BRACKET_RE = re.compile(r"\[S\d+(?:\s*,\s*S\d+)*\]")
 S_TOKEN_RE = re.compile(r"S\d+")
 
 SYSTEM_PROMPT = """\
-You are a toxicologist's analysis assistant for ONE NTP 5-day genomic dose-response \
-study on the test article {chemical}. You help interpret \
+You are a toxicologist's analysis assistant for ONE NTP in vivo repeat dose genomic \
+dose-response study on the test article {chemical}. You help interpret \
 the study's data and the report generated from it.
 
 You have tools. Use them; do not answer from memory:

@@ -45,7 +45,6 @@ from narrative.narrative_helpers import (
     _picks_above_lle,
     _join_oxford,
     _is_reliable_bmd,
-    _is_anomalous_bmd,
 )
 from narrative.abstract_apical import build_abstract_results_apical
 from narrative.abstract_pk import build_abstract_results_pk
@@ -186,7 +185,7 @@ def build_abstract_summary(
             e for e in apical_bmd_summary
             if e.get("sex") == label
             and _is_reliable_bmd(e)
-            and not _is_anomalous_bmd(e)
+            and not e.get("anomalous")
             and e.get("direction")
         ]
         if not reliable:

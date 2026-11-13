@@ -690,6 +690,10 @@ class Meta(_BaseModel):
     # Optional because not every session has clinical observations.
     clinical_obs_files: list[str] = []
 
+    # The study the study workbooks describe (bmdx_pipe.study_structure,
+    # ADR-0032): roster, dose groups, sexes, design.  Empty without workbooks.
+    study_structure: dict[str, Any] = {}
+
 
 # ---------------------------------------------------------------------------
 # Top-level BMDProject model

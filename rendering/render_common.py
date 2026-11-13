@@ -701,9 +701,11 @@ class ApicalRow:
     """
     One data row of an apical dose-response table.
 
-    cells:    full cell-string list, already padded to the table's column count
+    cells:    full cell list, already padded to the table's column count
               (mean ± SE values re-rounded via format_mean_se_display, BMD/BMDL
-              appended, short rows filled with "—").
+              appended, short rows filled with "—").  A cell is a str, or
+              inline units when it carries a footnote mark ("4^c":
+              ``["4", {"type": "sup", "text": "c"}]`` — marked()).
     is_n_row: True for the per-dose N-count row.  Only the HTML emitter uses
               this (to tag the <tr> with class="n-row"); the LaTeX emitter
               ignores it — a pre-existing divergence preserved by carrying the
@@ -711,7 +713,7 @@ class ApicalRow:
     is_heading: a label-only sub-heading row ("Study Day 4", "Blood"); cells
               holds just the label and every emitter spans it across the table.
     """
-    cells: list[str]
+    cells: list
     is_n_row: bool
     is_heading: bool = False
 
@@ -738,7 +740,9 @@ class ApicalTablePlan:
     Fields:
         node_id:   stable node id (LaTeX keys its niehstable env on it).
         caption:   plain-text "Table N. ..." caption.
-        first_col: first-column header ("Endpoint" / "Study Day").
+        first_col: first-column header ("Endpoint" / "Study Day"); inline
+                   units when the table's notes are marked on it
+                   ("Endpoint^a,b").
         dose_unit: unit for the dose-column labels and the BMD/BMDL columns.
         doses:     RAW dose values (emitter formats the column labels).
         ncols:     total column count = 1 (label) + len(doses) + 2 (BMD, BMDL);
@@ -748,16 +752,60 @@ class ApicalTablePlan:
                    then counts no BMD columns and rows carry no BMD cells.
         sex_blocks: the present groups (table_groups order; empty ones dropped).
         footnotes: raw footnote dicts; the emitter renders the markup.
+        caption_units: the caption as inline units ("Table N. ", its text, the
+                   mark) when a note is marked on it, else None.
     """
     node_id: str
     caption: str
-    first_col: str
+    first_col: object
     dose_unit: str
     doses: list
     ncols: int
     sex_blocks: list[ApicalSexBlock]
     footnotes: list
     bmd_columns: bool = True
+    caption_units: list | None = None
+
+
+def marked(text: str, letters: str | None):
+    """A table cell, header or caption with its footnote letters
+    superscripted after it, as the published books print them ("4^c",
+    "Endpoint^a,b", "BD^b"): inline units; the bare text when unmarked."""
+    return [text, make_sup(letters)] if letters else text
+
+
+def table_marks(footnotes: list, target: str) -> str:
+    """The letters of the lettered notes marked on ``target`` ("caption",
+    "header"), in footnote order: "a,b"; "" when none."""
+    return ",".join(
+        str(fn["letter"]) for fn in footnotes or []
+        if isinstance(fn, dict) and fn.get("kind") == "lettered" and fn.get("letter")
+        and (fn.get("marker") or {}).get("target") == target)
+
+
+def marked_caption(node: DocNode, caption: str, letters: str) -> list | None:
+    """The caption as inline units with its mark — "Table N. " kept as its own
+    first unit, as matrix_caption gives it — or None when unmarked."""
+    if not letters:
+        return None
+    label = node.table_label if node.table_label is not None else node.table_number
+    prefix = f"Table {label}. " if label is not None else ""
+    if prefix and caption.startswith(prefix):
+        return [prefix, caption[len(prefix):], make_sup(letters)]
+    return [caption, make_sup(letters)]
+
+
+def _row_marks(row: dict) -> tuple[dict, dict]:
+    """A row's footnote letters (finalize_footnotes' ``markers``): by dose
+    (float), and by its other cells ("label", "bmd", "bmdl")."""
+    by_dose: dict[float, str] = {}
+    other: dict[str, str] = {}
+    for key, letters in (row.get("markers") or {}).items():
+        try:
+            by_dose[float(key)] = letters
+        except (TypeError, ValueError):
+            other[str(key)] = letters
+    return by_dose, other
 
 
 _SEX_ORDER = ("Male", "Female")
@@ -838,6 +886,7 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
             values = _on_grid(row, doses)
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
+            by_dose, other = _row_marks(row)
             # Re-round each mean ± SE cell at render time: at the row's own
             # precision when the table builder stamped one (the endpoint's
             # published convention — tables.display_precision; significant
@@ -847,9 +896,12 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
             decimals = row.get("decimals")
             sig_figs = row.get("sig_figs")
             cells = [
-                str(label),
-                *[format_mean_se_display(str(v), decimals, sig_figs) for v in values],
-                *([str(bmd), str(bmdl)] if bmd_columns else []),
+                marked(str(label), other.get("label")),
+                *[marked(format_mean_se_display(str(v), decimals, sig_figs),
+                         by_dose.get(float(doses[i])) if i < len(doses) else None)
+                  for i, v in enumerate(values)],
+                *([marked(str(bmd), other.get("bmd")), marked(str(bmdl), other.get("bmdl"))]
+                  if bmd_columns else []),
             ]
             while len(cells) < ncols:
                 cells.append("—")
@@ -857,9 +909,11 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
         sex_blocks.append(ApicalSexBlock(sex_label=sex_label, rows=built))
 
     caption = table_caption(node, section.get("caption", ""), sexes=_present_sexes(section))
+    footnotes = section.get("footnotes", []) or []
     return ApicalTablePlan(
-        node.id, caption, first_col, dose_unit, doses, ncols, sex_blocks,
-        section.get("footnotes", []) or [], bmd_columns,
+        node.id, caption, marked(first_col, table_marks(footnotes, "header")), dose_unit,
+        doses, ncols, sex_blocks, footnotes, bmd_columns,
+        marked_caption(node, caption, table_marks(footnotes, "caption")),
     )
 
 
@@ -907,9 +961,8 @@ BMD_SUMMARY_LEGEND = (
     "benchmark response set to one standard deviation from the mean; "
     "LOEL = lowest-observed-effect level; "
     "NOEL = no-observed-effect level; "
-    "UREP = unreliable estimate of potency — a label based on review of "
-    "BMD modeling results indicating the curve-fit BMD is implausibly far "
-    "below the statistically observed effect threshold; "
+    "UREP = unreliable estimate of potency is a label based on review by a "
+    "subject matter expert and rejection of BMD modeling results; "
     "NVM = no viable model: the modeled response did not meet the benchmark "
     "dose acceptance criteria."
 )
@@ -987,6 +1040,14 @@ def _finite_float(v) -> float | None:
     return f if math.isfinite(f) else None
 
 
+# Under the table when a reviewer rejected a BMD (UREP, pipeline.bmd_review):
+# the NIEHS reports' footnote (NIEHS-07 … 10, Table 8).
+UREP_NOTE = ("UREP: BMD values are much lower than would be expected given the "
+             "endpoint-specific LOEL and NOEL values, suggesting that the BMD estimates "
+             "do not accurately reflect the true potency of the effect of these endpoints "
+             "and are likely an anomalous product of the BMD modeling approach.")
+
+
 # A LOEL/NOEL that statistics did not determine (no significant dose group;
 # no tested dose below the LOEL) — printed and defined as NIEHS does.
 NOT_DETERMINED = "ND"
@@ -1044,6 +1105,8 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
         note = inferred_bmr_footnote(endpoints)
         if note:
             footnotes.append(note)
+        if any(ep.get("anomalous") for ep in endpoints):
+            footnotes.append({"kind": "definition", "text": UREP_NOTE})
 
     return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows, footnotes)
 
@@ -1714,6 +1777,27 @@ def _bmd_range(lo, hi, decimals: int = _GENOMICS_DECIMALS, nc_upper: bool = Fals
     return f"{lo_s}–{hi_s}"
 
 
+def lle_text(lle: float, decimals: int) -> str:
+    """The lower limit of extrapolation as the books print it: at the table's
+    precision, and at least 3 decimals below 1 ("<20.3", "<0.333", "<0.050",
+    "<0.023")."""
+    return f"{lle:.{decimals if lle >= 1 else max(decimals, 3)}f}"
+
+
+def below_lle(bmd, display: dict | None) -> str | None:
+    """"<limit" when ``bmd`` is below the entry's lower limit of extrapolation
+    (display["lle"]: the lowest non-zero dose / 3), else None.  Its BMDL and
+    BMDU are not reportable (NR), as every NIEHS report prints them."""
+    lle = (display or {}).get("lle")
+    try:
+        b = float(bmd)
+    except (TypeError, ValueError):
+        return None
+    if not lle or math.isnan(b) or b >= lle:
+        return None
+    return f"<{lle_text(lle, (display or {}).get('decimals', _GENOMICS_DECIMALS))}"
+
+
 def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
     """
     Rows for the top-gene-sets table of one PER-ORGAN entry, in
@@ -1747,8 +1831,8 @@ def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
                 f"{n_bmd}/{n_genes}",
                 pct,
                 genes,
-                str(format_display_number(r.get("bmd"), dec)),
-                _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc),
+                below_lle(r.get("bmd"), d) or str(format_display_number(r.get("bmd"), dec)),
+                "NR" if below_lle(r.get("bmd"), d) else _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc),
                 str(r.get("n_up", "")),
                 str(r.get("n_down", "")),
             ])
@@ -1780,6 +1864,8 @@ def gene_table_rows(entry: dict) -> list[list[str]] | None:
             bmd = format_display_number(r.get("bmd"), dec)
             rng = _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc)
             bmd_cell = f"{bmd} ({rng})" if bmd != "—" else "—"
+            if below_lle(r.get("bmd"), d):
+                bmd_cell = f"{below_lle(r.get('bmd'), d)} (NR)"
             # Reference "Maximum Fold Change" is the MAGNITUDE (always positive,
             # 1 decimal); the sign lives in the Direction column instead.
             fc = r.get("fold_change")

@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 9  # bumped: internal-dose (Tissue Concentration) experiments left out. Was 8: NOEL None (ND) when no LOEL or no dose below it. Was 7: rows carry the unrounded mean/SE (mean_se_by_dose)
+_NTP_CACHE_SCHEMA_VERSION = 10  # bumped: Globulin and the A/G ratio derived per animal when the data lacks them (bmdx_pipe.apical_report._derived_protein_endpoints). Was 9: internal-dose (Tissue Concentration) experiments left out. Was 8: NOEL None (ND) when no LOEL or no dose below it. Was 7: rows carry the unrounded mean/SE (mean_se_by_dose)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -205,7 +205,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str, method_sig: str = "") -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 28  # bumped: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 34  # bumped: a concentration n-note naming an outlier carries its words without them (table_notes). Was 33: whole-group attrition on the clinical and organ tables from the study roster; organ weights count the scheduled necropsy only. Was 32: a BMD the reviewer rejected prints its reviewed value with the books' lettered note in the data tables (UREP stays in the BMD summary). Was 31: the organ-weight table's Terminal Body Weight row carries its statistics (markers, BMD/NVM; ND when not modeled). Was 30: footnote marks placed as the books place them (header, caption, row label, a removal's later cells; a cell may carry several); a group of one prints no SE. Was 29: the plasma table applies the BD rule, leaves out unreceived samples, labels rows "2 Hours Postdose (unit)". Was 28: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -265,6 +265,7 @@ def _hash_sections(
     sidecar_hash: str = "",
     imputed_cells=None,
     bmds_hash: str = "",
+    dispositions: dict | None = None,
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -284,6 +285,9 @@ def _hash_sections(
         uses to footnote imputation-backed BMDs.
       - bmds_hash: the ToxicR fits, whose fills (fill_rows_from_toxicr) are in
         the section tables' BMD columns and the narratives' BMD clauses.
+      - dispositions: the Removal Reasons workbook's dispositions
+        (common.dispositions), in the body weight footnotes.  Only when the
+        study has them, so the other studies keep their caches.
 
     A schema_version is folded in so adding/renaming row-dict fields, or the
     filter-agnostic switch itself, forces a miss even when inputs are unchanged.
@@ -298,6 +302,8 @@ def _hash_sections(
     }
     if bmds_hash:
         payload["bmds"] = bmds_hash
+    if dispositions:
+        payload["dispositions"] = dispositions
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
@@ -338,7 +344,7 @@ def _hash_bmds(bmds_inputs: list[dict], method_sig: str = "") -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 8  # bumped: GO active genes in display case (7e6c207 changed the extraction without a bump). Was 7: gene-level fold change = mean over probes (published NIEHS-13); species via chip @ref. Was 6: sections stamped with bmd_decimals. Was 5: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
+_GENOMICS_CACHE_SCHEMA_VERSION = 9  # bumped: gene-level "Individual Gene" analyses read, GO terms once (deduplicated analysis), the method's gene fold floor, each section's lower limit of extrapolation. Was 8: GO active genes in display case (7e6c207 changed the extraction without a bump). Was 7: gene-level fold change = mean over probes (published NIEHS-13); species via chip @ref. Was 6: sections stamped with bmd_decimals. Was 5: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
 
 # Bump when the chart-rendering algorithm changes (jitter formula,
 # axis configuration, etc.) without changing the underlying gene-set
@@ -380,7 +386,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 6  # bumped: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 8  # bumped: Terminal Body Weight listed when the method tests it (apical.terminal_body_weight_tested). Was 7: UREP only by a reviewer's decision (pipeline.bmd_review), never automatic. Was 6: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
@@ -413,7 +419,7 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 #    concentrations, no vehicle or formulations.
 # 4: the biosampling cohort is recognized in either CEBS spelling ("Biosample
 #    Animals" in NIEHS-07/-12/-13), so its doses reach Study Design.
-_METHODS_CACHE_SCHEMA_VERSION = 5  # bumped: group sizes count every animal of a study that marks no Core cohort
+_METHODS_CACHE_SCHEMA_VERSION = 7  # bumped: the Abstract's plasma means follow the table's BD rule. Was 6: the prompt no longer supplies procedures, instruments or a gene-set statistic the data lack
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:

@@ -64,8 +64,9 @@ def _make_enriched_table_data():
     The base _make_table_data() in test_process_integrated leaves bmd_str /
     bmd_status / loel / noel at their defaults, so _build_apical_bmd_summary
     returns []; that exercises the layers' control flow but snapshots nothing.
-    Here we set viable, non-anomalous BMDs (BMD ≥ NOEL/10 so _is_anomalous_bmd
-    does not fire) so the summary and the apical narrative carry real content.
+    Here we set viable BMDs not far below their NOEL (BMD ≥ NOEL/10, so the
+    review screen flags none) so the summary and the apical narrative carry
+    real content.
 
     This is intentionally a *local* fixture, not a change to the shared
     _make_table_data — other tests assert on that helper's exact output.

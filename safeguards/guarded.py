@@ -16,7 +16,10 @@ The notebook calls the core steps directly: the same workflow, unguarded.
 from __future__ import annotations
 
 from safeguards.acts import require
-from safeguards.inputs import require_valid_design, require_valid_experiment_metadata
+from safeguards.inputs import (
+    require_valid_bmd_review, require_valid_design, require_valid_experiment_metadata,
+)
+from safeguards.refusals import Refused
 from safeguards.sections import ownership_policy, owned, require_reason
 from workflow import steps as _steps
 from workflow.phases import Action
@@ -78,6 +81,18 @@ def record_study_design(dtxsid: str, fields: dict, store) -> int:
     require(dtxsid, Action.STATE_DATASET_FACTS, store)
     require_valid_design(dtxsid, fields)
     return _steps.record_study_design(dtxsid, fields, store)
+
+
+def review_bmds(dtxsid: str, decisions: dict, store) -> dict:
+    """A reviewer's decisions on the apical BMDs the last Process flagged
+    (pipeline.bmd_review): each ``{key: {decision, reason}}``, "unreliable"
+    (UREP) or "reliable", with the reviewer's reason.  Recorded only; the next
+    Process applies them (the publish gate waits for it)."""
+    from pipeline.bmd_review import FLAGS_FILE, record_reviews
+    require(dtxsid, Action.PROCESS, store)
+    flags = (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []
+    require_valid_bmd_review(dtxsid, decisions, flags)
+    return record_reviews(store, dtxsid, decisions, flags)
 
 
 def require_state_dataset_facts(dtxsid: str, store=None) -> None:
@@ -172,3 +187,48 @@ def discard_section_step(dtxsid: str, section_key: str, store, *, reason: str = 
         raise owned(key, "discard")
     require_reason(reason, key, "discard")
     return _steps.discard_section_step(dtxsid, key, store, reason=reason)
+
+
+# --- the knowledge bases (safeguards.knowledge) ------------------------------
+
+def assign_knowledge_base(dtxsid: str, name: str | None) -> dict:
+    """Name the knowledge base the report reads (None: the default again)."""
+    from document_model.knowledge_base_assignment import assign
+    from safeguards.knowledge import require_assignable
+    require_assignable(dtxsid, name)
+    return assign(dtxsid, name)
+
+
+def set_default_knowledge_base(name: str) -> None:
+    """Make ``name`` the knowledge base of every report that names none."""
+    from knowledge_base.registry import set_default
+    from safeguards.knowledge import require_serves_genomics
+    require_serves_genomics(name)
+    set_default(name)
+
+
+def save_crawl_query(name: str, text: str) -> dict:
+    """Save a crawl query's text (the old text archived); refused when it ties
+    a test article to genes (safeguards.knowledge)."""
+    from knowledge_base import crawl_queries
+    from safeguards.knowledge import require_query_may_be_saved
+    try:
+        query = crawl_queries.parse(text)
+    except crawl_queries.QueryError as e:
+        raise Refused("crawl_query_invalid", str(e), 422, {"problem": str(e)}) from None
+    require_query_may_be_saved(name, query)
+    return crawl_queries.save(name, text)
+
+
+def require_crawl_run(query_name: str, kb_name: str, resume: bool = False) -> None:
+    """The checks of running a crawl, for a front end that runs it itself (the
+    web route, in the background)."""
+    from safeguards.knowledge import require_crawl_may_run
+    require_crawl_may_run(query_name, kb_name, resume)
+
+
+def run_crawl(query_name: str, kb_name: str, resume: bool = False) -> dict:
+    """Run a crawl query into a named knowledge base (knowledge_base.run_crawl)."""
+    from knowledge_base.run_crawl import run
+    require_crawl_run(query_name, kb_name, resume)
+    return run(query_name, kb_name, resume)

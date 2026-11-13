@@ -58,6 +58,7 @@ import re
 from dataclasses import dataclass
 
 from tables.table_builder_common import (
+    add_marker_ref,
     apical_caption,
     definition_footnote,
     finalize_footnotes,
@@ -102,7 +103,7 @@ class Rules:
     def from_method(cls, method) -> "Rules":
         outliers = method.get("internal_dose.outliers")
         dixon = None
-        if outliers:
+        if outliers and outliers.get("test") != "none":
             dixon = DIXON_R10_CRITICAL.get(outliers["alpha"])
             if dixon is None:
                 from pipeline.method_profile import MethodProfileError
@@ -208,8 +209,35 @@ def _fmt(values: list[float], sig_figs: int) -> str:
     return format_mean_se_sig(m, s, sig_figs)
 
 
-def _dose_label(dose: float, dose_unit: str) -> str:
-    return f"{js_dose_key(dose)} {dose_unit}"
+_COUNT_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{_COUNT_WORDS[n] if n < len(_COUNT_WORDS) else n} {noun}{'' if n == 1 else 's'}"
+
+
+def _short_note(shorts: list[tuple[str, int, int]], n: int, outliers_noted: bool = True) -> str:
+    """The note on a group short of samples for some matrices: per (n, reason),
+    the matrices joined, as NIEHS-12/13 word it.  ``shorts`` is
+    [(matrix, n used, outliers left out)]; ``n`` the animals sampled.
+    ``outliers_noted`` False: only the samples not received ("" when none)."""
+    sentences = []
+    groups: dict[tuple[int, bool], list[str]] = {}
+    for matrix, short, outliers in shorts:
+        if outliers and not outliers_noted:
+            continue
+        groups.setdefault((short, bool(outliers)), []).append(matrix)
+    for (short, outlier), matrices in groups.items():
+        sentences.append(f"n = {short} for {' and '.join(matrices)}.")
+        if outlier and len(matrices) == 1:
+            sentences.append("One animal was identified as an outlier and thus excluded from "
+                             "analysis.")
+        elif outlier:
+            sentences.append(f"{' and '.join(f'one animal for {m}' for m in matrices).capitalize()} "
+                             "were identified as outliers and thus excluded from analysis.")
+        else:
+            sentences.append(f"No samples were received for {_count(n - short, 'animal')}.")
+    return " ".join(sentences)
 
 
 def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
@@ -226,7 +254,16 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
     serialized: dict[str, list[dict]] = {}
     all_matrices: list[str] = []
     limits: dict[str, set[str]] = {}
-    n_notes: list[str] = []
+    n_notes: dict[str, str] = {}      # note text -> footnote id
+    without: dict[str, str] = {}      # note text -> its words without the outliers
+    # A note on a whole kind of cell is marked where it first applies, as the
+    # books mark it: the statistics, the 0-group BD rule, "not applicable".
+    first_marked: set[str] = set()
+
+    def mark_first(row: dict, cell: str, fid: str) -> None:
+        if fid not in first_marked:
+            add_marker_ref(row, cell, fid)
+            first_marked.add(fid)
     any_marker = any_bd = control_bd = any_stats = any_normalized = any_outlier = False
 
     for sex in ("Male", "Female"):
@@ -249,6 +286,8 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
             row(f"Study Day {_day_number(day)}", is_heading=True)
             row("n", {js_dose_key(d): str(n_by_day[day].get(d) or NOT_SAMPLED) for d in doses},
                 is_n_row=True)
+            n_row = rows[-1]
+            short_by_dose: dict[float, list[tuple[str, int, int]]] = {}
             for matrix in sorted(matrices, key=_matrix_order):
                 unit = units.get(endpoint_of[matrix]) or UNIT_NOT_RECORDED.format(what="concentration")
                 values_by_dose = {}
@@ -261,11 +300,8 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                     short = len(samples) - outliers
                     any_outlier = any_outlier or bool(outliers)
                     if short < n_by_day[day].get(d, 0):
-                        why = (" One animal was identified as an outlier and thus excluded from "
-                               "analysis." if outliers else " No sample was received for "
-                               f"{'one animal' if short + 1 == n_by_day[day][d] else 'some animals'}.")
-                        n_notes.append(f"Study Day {_day_number(day)}, {_dose_label(d, dose_unit)}: "
-                                       f"n = {short} for {matrix.lower()}.{why}")
+                        short_by_dose.setdefault(d, []).append(
+                            (matrix.lower(), short, outliers))
 
                 markers: dict[float, str] = {}
                 if family and control is not None and values_by_dose.get(control):
@@ -296,10 +332,30 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                                                                       rules.sig_figs)
                 row(matrix, is_heading=True)
                 row(f"{matrix} concentration ({unit})", cells, sig_figs=rules.sig_figs)
+                # The notes on a row's analysis sit on it (NIEHS-12/13): the
+                # statistics on its label, the 0-group BD rule on that BD.
+                if markers:
+                    mark_first(rows[-1], "label", "stats_method")
+                if control is not None and values_by_dose.get(control) is None:
+                    mark_first(rows[-1], js_dose_key(control), "control_bd")
                 if any(d != control for d in doses):
                     any_normalized = True
                     row(f"Normalized {matrix.lower()} concentration [({unit})/{dose_unit}]",
                         normalized, sig_figs=rules.sig_figs)
+                    add_marker_ref(rows[-1], "label", "normalized")
+                    if control is not None:
+                        mark_first(rows[-1], js_dose_key(control), "not_applicable")
+            # A group short of samples: one note on its n ("3^h"), its
+            # matrices joined ("n = 2 for liver and lung. No samples were
+            # received for one animal.").
+            # A note naming an outlier also carries its words without them
+            # (``without_outliers``, "" when nothing is left), for a book that
+            # does not note outlier exclusions (apply_table_notes).
+            for d, shorts in short_by_dose.items():
+                text = _short_note(shorts, n_by_day[day][d])
+                add_marker_ref(n_row, js_dose_key(d), n_notes.setdefault(text, f"n_{len(n_notes)}"))
+                if any(o for _, _, o in shorts):
+                    without[text] = _short_note(shorts, n_by_day[day][d], outliers_noted=False)
         serialized[sex] = rows
 
     if not serialized:
@@ -317,7 +373,9 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
         footnotes.append(definition_footnote(
             f"BD = below detection; group did not have more than {share} of its values above "
             "the limit of detection (LOD)."))
-    footnotes.append(lettered_footnote("Data are presented as mean ± standard error.", "data_format"))
+    # The notes on the whole table are marked on its header ("Endpoint^a,b").
+    footnotes.append(lettered_footnote("Data are presented as mean ± standard error.",
+                                       "data_format", target="header"))
     lod_text = "; ".join(
         f"LOD for {m.lower()} = {' or '.join(sorted(limits[m]))} "
         f"{units.get(_endpoint_unit_key(sidecar_data, m), '') or ''}".rstrip()
@@ -327,27 +385,30 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                     f"If over {share} of the animals in a group were above the limit of detection "
                     "(LOD), one-half of the LOD was substituted for values below the LOD")
     footnotes.append(lettered_footnote(
-        f"{substitution[0].upper()}{substitution[1:]}. {lod_text}.", "lod_rule"))
+        f"{substitution[0].upper()}{substitution[1:]}. {lod_text}.", "lod_rule", target="header"))
     if any_outlier:
         footnotes.append(lettered_footnote(
             "Values identified by the outlier test of Dixon and Massey were excluded from "
             "analysis.", "outliers"))
     if any_stats:
         footnotes.append(lettered_footnote(statistics_sentence(method, rules.pairwise),
-                                           "stats_method"))
+                                           "stats_method", target="cells"))
     if control_bd:
         footnotes.append(lettered_footnote(
             f"When the 0 {dose_unit} group did not have over {share} of its values above the "
             "LOD, no mean or standard error was calculated, and no statistical analysis was "
-            "performed.", "control_bd"))
+            "performed.", "control_bd", target="cells"))
     if any_normalized:
         footnotes.append(lettered_footnote(
             "Normalized concentrations were calculated by dividing the measured concentration "
             f"by the nominal exposure ({dose_unit}). No statistical analysis was performed on "
-            "normalized endpoints.", "normalized"))
-        footnotes.append(lettered_footnote(f"{NOT_APPLICABLE} = not applicable.", "not_applicable"))
-    for i, text in enumerate(dict.fromkeys(n_notes)):
-        footnotes.append(lettered_footnote(text, f"n_{i}"))
+            "normalized endpoints.", "normalized", target="cells"))
+        # Marked on the cell, so it says only what the cell means.
+        footnotes.append(lettered_footnote("Not applicable.", "not_applicable", target="cells"))
+    for text, fid in n_notes.items():
+        footnotes.append(lettered_footnote(text, fid, target="cells"))
+        if text in without:
+            footnotes[-1]["without_outliers"] = without[text]
     finalize_footnotes(footnotes, serialized)
 
     matrices_phrase = _series([m.title() for m in all_matrices])

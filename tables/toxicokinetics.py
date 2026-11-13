@@ -37,7 +37,7 @@ import math
 
 from tables.table_builder_common import load_sidecar, mean_se
 from tables.units import recorded_units
-from tables.tissue_concentration_table import _find_loq_value, _parse_timepoint
+from tables.tissue_concentration_table import _parse_timepoint
 
 # t_half above this (hours) is flagged as a screening-level bioaccumulation signal.
 BIOACCUM_HALF_LIFE_H = 24.0
@@ -50,38 +50,20 @@ def _timepoint_hours(timepoint: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def _extract_group_conc(sidecar: dict) -> dict[str, dict[float, list[float]]]:
-    """Per-timepoint, per-dose biosampling-animal plasma values from one sidecar.
+def _extract_group_conc(sidecar: dict, method) -> dict[str, dict[float, list[float] | None]]:
+    """Per-timepoint, per-dose biosampling-animal plasma values from one sidecar:
+    {"<hours> Hour": {dose: [value, ...], or None for a BD group}}.  The
+    table's groups and rules (tissue_concentration_table.plasma_groups /
+    group_values: half the limit below it), so the analysis and the table are
+    computed from the SAME numbers."""
+    from tables.tissue_concentration_table import group_values, plasma_groups
 
-    Returns {timepoint_label: {dose: [value, ...]}}. Mirrors the tissue table
-    builder's extraction (biosampling animals only; ½·LOQ substitution when a value
-    is missing but its LOQ is present on the same study day) so the analysis and the
-    table are computed from the SAME numbers.
-    """
     out: dict[str, dict[float, list[float]]] = {}
-    for rec in (sidecar.get("animals") or {}).values():
-        if not is_biosampling(rec.get("selection", "") or ""):
-            continue
-        dose = rec.get("dose")
-        if dose is None:
-            continue
-        observations = rec.get("observations", []) or []
-        for obs in observations:
-            timepoint = _parse_timepoint(obs.get("endpoint", ""))
-            if timepoint is None:
-                continue
-            val_str = obs.get("value")
-            if val_str and str(val_str).strip():
-                try:
-                    out.setdefault(timepoint, {}).setdefault(float(dose), []).append(
-                        float(val_str)
-                    )
-                    continue
-                except (ValueError, TypeError):
-                    pass
-            loq = _find_loq_value(observations, obs.get("endpoint", ""), day=obs.get("day", ""))
-            if loq is not None and loq > 0:
-                out.setdefault(timepoint, {}).setdefault(float(dose), []).append(loq / 2)
+    for hours, by_dose in plasma_groups(sidecar).items():
+        for dose, group in by_dose.items():
+            values, _ = group_values(group, method)
+            if values is None or values:
+                out.setdefault(f"{hours} Hour", {})[dose] = values
     return out
 
 
@@ -98,11 +80,13 @@ def _half_life(c_early: float, c_late: float, dt_hours: float) -> tuple[float, f
     return ke, math.log(2) / ke
 
 
-def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
+def compute_toxicokinetics(sidecar_paths: dict[str, str], method=None) -> dict:
     """Screening-level internal-dose toxicokinetics from the plasma sidecars.
 
     Args:
         sidecar_paths: {"Male": ".../male.sidecar.json", "Female": ...}.
+        method:        The study's resolved method (pipeline.method_profile): its
+                       internal_dose rules decide BD groups; None ⇒ the newest.
 
     Returns a dict:
         {
@@ -134,7 +118,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
         except Exception:
             continue
         units.update(recorded_units([sidecar], lambda ep: _parse_timepoint(ep) is not None).values())
-        conc = _extract_group_conc(sidecar)
+        conc = _extract_group_conc(sidecar, method)
         if not conc:
             continue
 
@@ -147,7 +131,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
                 continue
             tp_hours[tp] = h
             doses.update(dose_vals.keys())
-        if len(tp_hours) < 2 or not doses:
+        if not tp_hours or not doses:
             continue
 
         sorted_tps = sorted(tp_hours.items(), key=lambda kv: kv[1])  # (label, hour)
@@ -156,12 +140,15 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
 
         means: dict[float, dict[float, float]] = {}
         n: dict[float, int] = {}
+        bd: dict[float, list[float]] = {}          # {hour: [doses BD there]}
         for dose in sorted_doses:
             per_hour: dict[float, float] = {}
             n_here = 0
             for tp, h in sorted_tps:
                 vals = conc.get(tp, {}).get(dose, [])
-                if vals:
+                if vals is None:
+                    bd.setdefault(h, []).append(dose)
+                elif vals:
                     m, _ = mean_se(vals)
                     per_hour[h] = m
                     n_here = max(n_here, len(vals))
@@ -194,6 +181,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
             "means": means,
             "n": n,
             "half_life": half_life,
+            "bd": bd,
             "ke": ke_map,
             "bioaccumulative": bioaccum,
         }
@@ -247,7 +235,7 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
     by_sex = tk.get("by_sex") or {}
     if not by_sex:
         return []
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import design_or_standard, internal_assessment, species_plural
 
     facts = design_or_standard(design)
     animals = species_plural(facts)
@@ -264,8 +252,8 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
         hrs = " and ".join(f"{int(h) if float(h).is_integer() else h}" for h in hours)
         dgs = " and ".join(f"{_fmt_dose(d)} {dose_unit}" for d in doses)
         paragraphs.append(
-            f"Plasma concentrations of {compound_name} were measured in biosampling "
-            f"animals at {hrs} hours following the final {final} in the {dgs} "
+            f"Plasma concentrations of {compound_name} were measured in animals "
+            f"dedicated for {internal_assessment(dose_unit)} at {hrs} hours following the final {final} in the {dgs} "
             f"{'exposure' if final == 'exposure' else 'dose'} groups. "
             f"Average plasma concentrations{f' (in {unit})' if unit else ''} are "
             f"summarized in the accompanying table."
@@ -282,6 +270,25 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
                 f"Average plasma concentrations in {higher} {animals} were higher than "
                 f"those in {lower} {animals}, indicating a sex difference in internal exposure."
             )
+
+    # 2b. Timepoints every group of a sex was below detection (NIEHS-07: "At
+    # 24 hours postdose, the concentration fell below the limit of detection …
+    # in both male and female rats, suggesting short plasma half-lives").
+    after = "postexposure" if final == "exposure" else "postdose"
+    for h in hours:
+        gone = [s for s in sexes
+                if set(by_sex[s].get("bd", {}).get(h, [])) >= set(by_sex[s]["doses"])]
+        if not gone:
+            continue
+        who = " and ".join(s.lower() for s in gone)
+        earlier = any(by_sex[s]["means"].get(d, {}).get(e) is not None
+                      for s in gone for d in by_sex[s]["doses"] for e in hours if e < h)
+        sentence = (f"At {int(h) if float(h).is_integer() else h} hours {after}, plasma "
+                    f"concentrations in {who} {animals} were below the limit of detection in "
+                    f"every dose group")
+        if earlier and len(gone) == len(sexes):
+            sentence += ", suggesting short plasma half-lives"
+        paragraphs.append(sentence + ".")
 
     # 3. Dose proportionality → ADME inference.
     dp = tk.get("dose_proportionality") or {}

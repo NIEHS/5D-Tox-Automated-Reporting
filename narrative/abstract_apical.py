@@ -29,7 +29,7 @@ Private helpers (used only by the two builders above):
   _format_bmd_pair           "0.520 (0.160)" — apical-specific BMD/BMDL
                              formatter (genomics uses a different one)
 
-Cross-cutting helpers (_is_reliable_bmd, _is_anomalous_bmd, _join_oxford,
+Cross-cutting helpers (_is_reliable_bmd, _join_oxford,
 _DIRECTION_WORDS) come from narrative_helpers.
 
 methods_report.py re-exports build_apical_bmd_summary_narrative so
@@ -46,7 +46,6 @@ from __future__ import annotations
 from narrative.narrative_helpers import (
     _DIRECTION_WORDS,
     _is_reliable_bmd,
-    _is_anomalous_bmd,
     _join_oxford,
 )
 
@@ -409,13 +408,11 @@ def build_abstract_results_apical(
     # BMD values, dropping the placeholder duplicates.
     reliable = [e for e in apical_bmd_summary if _is_reliable_bmd(e)]
 
-    # --- Anomalous-BMD filter ---
-    # Exclude entries whose curve-fit BMD is implausibly low compared to
-    # the statistically-observed NOEL/LOEL.  These are model artifacts,
-    # not real potency estimates — the reference report excludes them
-    # from the Abstract effects list and instead calls them out as
-    # anomalous in the body Results section.
-    reliable = [e for e in reliable if not _is_anomalous_bmd(e)]
+    # --- Unreliable estimates of potency ---
+    # A BMD a reviewer rejected (UREP, pipeline.bmd_review) is not a potency
+    # estimate: the reference reports leave it out of the Abstract's effects
+    # list and call it out in the body Results.
+    reliable = [e for e in reliable if not e.get("anomalous")]
 
     # --- Lead sentence: which platform categories had findings? ---
     # Group reliable entries by platform → human-readable category name

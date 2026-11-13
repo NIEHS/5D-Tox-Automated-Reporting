@@ -58,6 +58,7 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
+from common.dispositions import dispositions
 from common.session_files import read_session_json
 from pipeline.pool_globals import _session_dir
 from pipeline.session_store import cached_bm2_jsons, read_narrative_overrides
@@ -239,6 +240,10 @@ class ProcessContext:
     # The study's resolved analysis method (pipeline.method_profile, ADR-0027);
     # None only in test scaffolds, which then get the session's (or newest) method.
     method: object | None = None
+    # A reviewer's UREP decisions (bmd_reviews.json) and the screen's flags,
+    # each with its decision or None: pending (pipeline.bmd_review).
+    bmd_reviews: dict | None = None
+    bmd_flags: list | None = None
     # The dose unit as the caller stated it (None ⇒ recorded or fallback).
     dose_unit_stated: str | None = None
     chart_images: list | None = None
@@ -408,7 +413,7 @@ async def _build_genomics_llm_narratives(ctx):
 
     Runs the shared `generate_genomics_narrative_async` once per
     organ × sex, in parallel.  Each call does enrichment against
-    bmdx.duckdb (cached in `_cache_interpretation_*.json`) and
+    the report's knowledge base (cached in `_cache_interpretation_*.json`) and
     then one LLM call for the biology interpretation.  Per-sex
     results are aggregated under each organ into the narrative
     dict's `by_organ_llm` field so both HTML and PDF render
@@ -520,7 +525,8 @@ def _build_bmd_summary(ctx):
     platform_tables = ctx.platform_tables
     bmds_results = ctx.bmds_results
 
-    bmd_summary_hash = _hash_bmd_summary(ctx.ntp_hash, ctx.bmds_hash)
+    from pipeline.bmd_review import with_reviews
+    bmd_summary_hash = _hash_bmd_summary(ctx.ntp_hash, with_reviews(ctx.bmds_hash, ctx.bmd_reviews))
     bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
 
     if bmd_summary_cached:
@@ -530,7 +536,8 @@ def _build_bmd_summary(ctx):
         # Built from the FULL superset platform_tables and cached filter-agnostic
         # (the bmd_summary hash is ntp+bmds only — no filters), so the cache
         # serves every version.
-        apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
+        apical_bmd_summary = _build_apical_bmd_summary(
+            platform_tables, tbw_tested=_tbw_tested(ctx))
         apical_bmd_summary_bmds = _build_bmds_bmd_summary(
             platform_tables, bmds_results,
         )
@@ -564,7 +571,7 @@ def _build_bmd_summary(ctx):
     divergences: list[dict] = []
     apical_bmd_summary = _build_apical_bmd_summary(
         _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
-        bmd_decimals=ctx.bmd_decimals,
+        bmd_decimals=ctx.bmd_decimals, tbw_tested=_tbw_tested(ctx),
     )
     if divergences:
         _report_bmd_divergences(ctx.dtxsid, divergences)
@@ -714,7 +721,9 @@ async def _build_ntp_stats(ctx):
         table_data = await loop.run_in_executor(
             None, functools.partial(build_table_data, bmd_decimals=ctx.bmd_decimals,
                                     stats_method=_method(ctx).stats_method(),
-                                    criteria=_method(ctx).acceptance_criteria()),
+                                    criteria=_method(ctx).acceptance_criteria(),
+                                    derived_endpoints=_method(ctx).get(
+                                        "apical.derived_endpoints")),
             apical_integrated, cat_lookup,
         )
 
@@ -767,7 +776,7 @@ async def _get_sections(ctx):
     apical_sex_allow = (ctx.sex_filters or {}).get("apical")
     # Species, verb and duration for the table captions (the render path
     # recomposes them from the current design, so a cached caption is not stale).
-    from pipeline.study_design import study_design_facts
+    from pipeline.study_design import internal_assessment, study_design_facts
     _design = study_design_facts(integrated, dose_unit)
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
@@ -789,6 +798,7 @@ async def _get_sections(ctx):
                 platform_tables, compound_name, dose_unit,
                 dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
                 method=_method(ctx),
+                dispositions=dispositions(integrated.get("_meta", {}).get("study_structure")),
             ),
         )
         # Clinical obs tables bypass Java integration (categorical data).
@@ -825,8 +835,8 @@ async def _get_sections(ctx):
                     # The builder states what the data hold (matrices and study
                     # days) when it can; the G2 plasma table is biosampling-only.
                     narrative = [tc_result.get("summary") or (
-                        f"Plasma concentrations of {compound_name} were "
-                        f"measured in biosampling animals.")]
+                        f"Plasma concentrations of {compound_name} were measured in "
+                        f"animals dedicated for {internal_assessment(dose_unit)}.")]
                     sections.append({
                         "platform": "Tissue Concentration",
                         "title": "Tissue Concentration",
@@ -902,7 +912,11 @@ async def _get_sections(ctx):
     # 1. Load mortality data from body weight sidecars
     session_dir = str(_session_dir(dtxsid))
     sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
-    sidecar_mortality = extract_mortality(sidecar_paths) if sidecar_paths else None
+    # The Removal Reasons workbook's dispositions, when the study has one, say
+    # how and when each animal left (common.dispositions).
+    sidecar_mortality = (extract_mortality(
+        sidecar_paths, integrated.get("_meta", {}).get("study_structure"))
+        if sidecar_paths else None)
 
     # 2. Load clinical obs incidence for the animal condition paragraph
     meta = integrated.get("_meta", {})
@@ -960,7 +974,7 @@ async def _get_sections(ctx):
             )
             _id_paths = _find_sc(str(_session_dir(dtxsid)), platform="Tissue Concentration")
             if _id_paths:
-                _tk = compute_toxicokinetics(_id_paths)
+                _tk = compute_toxicokinetics(_id_paths, _method(ctx))
                 _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit, _design)
                 if not _id_paras:
                     # No plasma time course to model (the G3 blood/tissue table by
@@ -976,33 +990,9 @@ async def _get_sections(ctx):
         except Exception:
             logger.exception("Internal-dose narrative failed for %s (skipped)", dtxsid)
 
-    # "Not collected" domains: a Results section whose data domains were ALL absent
-    # from the pool gets an explicit, shippable "not evaluated" statement (its table
-    # nodes are pruned at render).  Only for a section that produced no narrative of
-    # its own — a section with real data keeps its findings prose (including the
-    # "no significant effects" wording for collected-but-nonsignificant endpoints).
-    # Gated on the study having SOME collected content (apical platforms or genomics,
-    # read from _meta.source_files — genomics may still be extracting concurrently),
-    # so a pure-empty/scaffold session stays a pending stub rather than asserting
-    # "not evaluated" for everything.
-    _has_content = bool(platform_tables) or (
-        "gene_expression" in integrated.get("_meta", {}).get("source_files", {}))
-    if _has_content:
-        from narrative.unified_narrative import SECTION_DOMAINS, not_evaluated_narrative
-        _collected = set(platform_tables.keys())
-        _section_titles = {
-            "apical": "Animal Condition, Body Weights, and Organ Weights",
-            "clinical_pathology": "Clinical Pathology",
-            "internal_dose": "Internal Dose Assessment",
-        }
-        for _key, _domains in SECTION_DOMAINS.items():
-            if _key in unified_narratives or _collected & _domains:
-                continue
-            _paras = not_evaluated_narrative(_key)
-            if _paras:
-                unified_narratives[_key] = {
-                    "title": _section_titles[_key], "paragraphs": _paras,
-                }
+    # A Results section whose data domains were all absent states so from its
+    # document node's gate (requires_platform / not_collected_text, rendered by
+    # render_common.narrative_plan) — the wording is the document's, not Process's.
 
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives
@@ -1017,6 +1007,12 @@ async def _get_sections(ctx):
     if isinstance(_superset, dict) and "sections" in _superset:
         _superset["unified_narratives"] = unified_narratives
         _save_cache(dtxsid, "sections", sections_hash, _superset)
+
+
+def _tbw_tested(ctx) -> bool:
+    """Whether the study's method tests terminal body weight (its marks, BMD
+    and BMD summary line: apical.terminal_body_weight_tested)."""
+    return _method(ctx).get("apical.terminal_body_weight_tested") is not False
 
 
 async def _get_bmds(ctx):
@@ -1073,13 +1069,31 @@ async def _get_bmds(ctx):
 
 
 async def _bmds_then_sections(ctx):
-    """BMDS, then the ToxicR fills onto the rows, then the section cards."""
+    """BMDS, then the ToxicR fills onto the rows, then the reviewer's UREP
+    decisions on them, then the section cards."""
     await _get_bmds(ctx)
     n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results,
                               bmd_decimals=ctx.bmd_decimals, method=_method(ctx))
     if n:
         logger.info("Filled %d bm2-blank apical BMDs from ToxicR", n)
+    _review_bmds(ctx)
     await _get_sections(ctx)
+
+
+def _review_bmds(ctx) -> None:
+    """Screen every apical BMD and apply the reviewer's decisions to the rows
+    (pipeline.bmd_review), so the tables, narratives and BMD summary agree.
+    The flags are written to bmd_flags.json: what the reviewer decides on, and
+    what the publish gate reads."""
+    from pipeline.bmd_review import FLAGS_FILE, apply_reviews, pending
+
+    ctx.bmd_flags = apply_reviews(ctx.platform_tables, ctx.bmd_reviews)
+    waiting = {f["key"] for f in pending(ctx.bmd_flags)}
+    (_session_dir(ctx.dtxsid) / FLAGS_FILE).write_text(
+        json.dumps({"flags": ctx.bmd_flags}, indent=1), encoding="utf-8")
+    if waiting:
+        logger.warning("%d apical BMD(s) of %s far below the NOEL/LOEL await review: %s",
+                       len(waiting), ctx.dtxsid, ", ".join(sorted(waiting)))
 
 
 async def _get_genomics(ctx):
@@ -1096,6 +1110,7 @@ async def _get_genomics(ctx):
         result = await _extract_genomics(
             dtxsid, ctx.integrated, ctx.bmd_stats,
             **_GO_CUTOFFS_OFF,
+            gene_min_fold_change=_method(ctx).get("genomics.gene_min_fold_change"),
         )
         _save_cache(dtxsid, "genomics", genomics_hash, result)
         ctx.genomics_sections = result
@@ -1288,11 +1303,16 @@ async def run_data(ctx) -> None:
     # Phase 2: filter-agnostic sections cache — no allowlists in the key.
     ctx.bmds_hash = (_hash_bmds(ctx.bmds_inputs, _method(ctx).signature())
                      if ctx.bmds_inputs else "empty")
+    from pipeline.bmd_review import REVIEWS_FILE, with_reviews
+    ctx.bmd_reviews = read_session_json(dtxsid, REVIEWS_FILE) or {}
     ctx.sections_hash = _hash_sections(
         ctx.ntp_hash, compound_name, dose_unit,
         sidecar_hash=sections_sidecar_hash,
         imputed_cells=_meta.get("imputed_cells"),
-        bmds_hash=ctx.bmds_hash,
+        # The reviewer's UREP decisions change the rows the sections are built
+        # from (pipeline.bmd_review), as the ToxicR fills do.
+        bmds_hash=with_reviews(ctx.bmds_hash, ctx.bmd_reviews),
+        dispositions=dispositions(_meta.get("study_structure")),
     )
 
     ge_source = _meta.get("source_files", {}).get("gene_expression")
@@ -1305,7 +1325,10 @@ async def run_data(ctx) -> None:
     from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
     _sidecar = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
     _sidecar_sig = str(_sidecar.stat().st_mtime_ns) if _sidecar.exists() else ""
-    ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename, _sidecar_sig)
+    # The method's gene fold-change floor shapes the cached top genes.
+    ctx.genomics_hash = _hash_genomics(
+        bmd_stats, ge_filename,
+        f"{_sidecar_sig}|fc={_method(ctx).get('genomics.gene_min_fold_change')}")
 
     # --- Materials and Methods (LLM-generated, cached) ---
     # Uses fingerprints + .bm2 metadata + animal report to extract
@@ -1459,7 +1482,9 @@ def _content_fingerprint(ctx) -> str:
     genomics_narrative_overrides.json — so an override edit re-runs content."""
     session = _session_dir(ctx.dtxsid)
     user_files: list[list] = []
-    for name in ("identity.json", "genomics_narrative_overrides.json"):
+    # knowledge_base.json: the knowledge base the genomics prose is grounded in
+    # (pipeline.kb_currency rewrites it when that changes).
+    for name in ("identity.json", "genomics_narrative_overrides.json", "knowledge_base.json"):
         p = session / name
         try:
             st = p.stat()
@@ -1678,6 +1703,11 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     ensure_definition_pin(dtxsid)
     if (moved := drift(dtxsid)):
         logger.warning("Document definition: %s", moved)
+    # The knowledge base the definition (else the default) names: a change
+    # discards the genomics interpretation written from the previous one and
+    # stales its sections (pipeline.kb_currency).
+    from pipeline.kb_currency import reconcile as reconcile_knowledge_base
+    reconcile_knowledge_base(dtxsid)
     bmd_stats = list(method.get("genomics.go_ranking"))
     bmd_stat = bmd_stats[0]  # primary stat for category lookup
     _go = method.get("genomics.go_display")

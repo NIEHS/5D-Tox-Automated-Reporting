@@ -52,7 +52,7 @@ from workflow.content_origin import ContentOrigin, origin_for_section_type
 # the catalog and the readiness engine cannot drift. Group vocabulary:
 #   ()                        always available (front matter / auto-derived)
 #   ("processed",)            unlocked once the session is Processed (resource flag)
-#   ("knowledge_base",)       unlocked once bmdx.duckdb is present (resource flag)
+#   ("knowledge_base",)       unlocked once the report has a usable knowledge base (resource flag)
 #   ("background","results")  unlocked on background approved OR ≥1 result approved
 KIND_UNLOCK: dict[str, tuple[str, ...]] = {
     "background": (),
@@ -363,6 +363,23 @@ def singleton_section_files(tree: list[DocNode] | None = None) -> tuple[str, ...
 # A caller-supplied section-key part (bm2_slug, organ, sex) becomes a filename
 # stem under sessions/<id>/, so it may not carry a path separator or a dot.
 _KEY_PART_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
+
+
+def is_grounded_in_knowledge_base(section_key: str, tree: list[DocNode] | None = None) -> bool:
+    """Whether a section is written from the report's knowledge base: its spec
+    unlocks on the ``knowledge_base`` resource (the genomics interpretation).
+    A change of knowledge base invalidates exactly these (pipeline.kb_currency)."""
+    from document_model.document_tree import DOCUMENT_TREE
+
+    family = (
+        "bm2" if section_key.startswith("bm2_")
+        else "genomics" if section_key.startswith("genomics_")
+        else section_key
+    )
+    for spec in catalog_for_tree(tree if tree is not None else DOCUMENT_TREE):
+        if spec.key == family:
+            return "knowledge_base" in spec.unlock
+    return False
 
 
 def resolve_section_key(

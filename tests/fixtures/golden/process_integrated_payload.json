@@ -108,6 +108,10 @@
         },
         "apical.bmd.eligibility": "trend_and_pairwise",
         "apical.bmd.engine": "toxicr_model_average",
+        "apical.derived_endpoints": [
+          "globulin",
+          "ag_ratio"
+        ],
         "apical.statistics.alpha": 0.05,
         "apical.statistics.alpha_strong": 0.01,
         "apical.statistics.min_group_n": 2,
@@ -120,11 +124,13 @@
         "apical.statistics.pairwise.Urinalysis": "shirley_or_dunn",
         "apical.statistics.trend_select_p": 0.01,
         "apical.statistics.trend_test": "jonckheere",
+        "apical.terminal_body_weight_tested": true,
         "genomics.efdr.distribution": "normal",
         "genomics.efdr.generator": "Synthetic and Null Data Generator",
         "genomics.efdr.generator_abbreviation": "SaNDGen",
         "genomics.efdr.generator_url": "https://rstudio.niehs.nih.gov/sandgen/",
         "genomics.efdr.resamples_per_probe": 1000,
+        "genomics.gene_min_fold_change": null,
         "genomics.go_display": {
           "max_genes": 500,
           "min_bmd": 3,
@@ -342,12 +348,6 @@
         "In male animals, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
       ],
       "title": "Clinical Pathology"
-    },
-    "internal_dose": {
-      "paragraphs": [
-        "The internal dose (plasma concentration) was not assessed in this study."
-      ],
-      "title": "Internal Dose Assessment"
     }
   }
 }

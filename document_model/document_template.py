@@ -107,7 +107,7 @@ _COMPUTED_OR_SPECIAL = frozenset(
 _REPEATS = ("deposit_species", "study_species", "genomic_organs", "genomic_analyses")
 # What generated prose may cite a node as (DocNode.cited_as).
 CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table",
-            "genomic-figures-appendix")
+            "genomic-figures-appendix", "organ-weight-descriptions")
 
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file
@@ -900,6 +900,27 @@ def load_tissue_order(name: str) -> list[str]:
     return [t.strip().lower() for t in order]
 
 
+# Which of the notes a table may carry the report prints (``table_notes:``):
+# a book that makes an exclusion without noting it says so here.
+TABLE_NOTES = {"outlier_exclusions": True}
+
+
+def load_table_notes(name: str) -> dict:
+    """The table notes the report prints: TABLE_NOTES, with the definition's
+    ``table_notes:`` over it.  ``outlier_exclusions: false`` — the tables do
+    not note the values the outlier test excluded (NIEHS-12 excludes them
+    silently; NIEHS-13 notes them)."""
+    raw = _load_raw(name)
+    block = raw.get("table_notes") if isinstance(raw, dict) else None
+    if block is None:
+        return dict(TABLE_NOTES)
+    if not isinstance(block, dict) or set(block) - set(TABLE_NOTES) or not all(
+            isinstance(v, bool) for v in block.values()):
+        raise ValueError(f"template {name!r}: table_notes takes {sorted(TABLE_NOTES)} "
+                         f"as true/false, got {block!r}")
+    return {**TABLE_NOTES, **block}
+
+
 def load_phrasing(name: str) -> dict:
     """The wording of the prose the report writes from its data (ADR-0029 §11,
     document_model.phrasing): the definition's ``phrasing:`` block, checked
@@ -1005,6 +1026,18 @@ def load_dose_terms(name: str) -> dict:
             raise ValueError(f"template {name!r}: dose_terms.{route} states "
                              f"{sorted(_DOSE_TERM_KEYS)}, got {words!r}")
     return terms
+
+
+def load_knowledge_base(name: str) -> str | None:
+    """The literature knowledge base the definition names (knowledge_base.registry);
+    None when it names none (the report reads the default)."""
+    raw = _load_raw(name)
+    kb = raw.get("knowledge_base") if isinstance(raw, dict) else None
+    if kb is None:
+        return None
+    if not isinstance(kb, str) or not kb.strip():
+        raise ValueError(f"template {name!r}: knowledge_base is a knowledge base's name, got {kb!r}")
+    return kb.strip()
 
 
 def load_abstract_genes(name: str) -> bool:

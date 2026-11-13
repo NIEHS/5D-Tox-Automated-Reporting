@@ -4,8 +4,9 @@ interpretation for one organ × sex.
 
 What it does: for a given organ/sex it (1) runs the deterministic knowledge-
 base analysis (narrative.interpret.build_genomics_interpretation → ranked GO
-sets / genes + a [Pn] paper catalogue drawn from bmdx.duckdb), (2) builds the
-prompt that forbids citing anything outside that catalogue, (3) calls the
+sets / genes + a [Pn] paper catalogue drawn from the report's knowledge base,
+knowledge_base.registry.kb_for), (2) builds the prompt that forbids citing
+anything outside that catalogue, (3) calls the
 model through the shared styling_export.llm_helpers chokepoint, and (4)
 caches the organ×sex result under the session directory. That cache doubles
 as the narrative *store*: a user's Lock/Unlock edits persist alongside it and
@@ -37,6 +38,33 @@ from narrative.test_article import naming_rule
 from styling_export.llm_helpers import llm_generate_json_async
 
 logger = logging.getLogger(__name__)
+
+
+def _stored_narrative(dtxsid: str, organ: str, sex: str) -> dict | None:
+    """The narrative already stored for an organ × sex (the most recent
+    ``_cache_interpretation_<organ>_<sex>_*.json`` with both narratives), in
+    the shape generate_genomics_narrative_async returns; None when there is
+    none."""
+    if not dtxsid:
+        return None
+    from genomics.genomics_narratives import interpretation_cache_prefix
+    session_dir = SESSIONS_DIR / validate_dtxsid(dtxsid)
+    prefix = interpretation_cache_prefix(organ, sex)
+    for path in sorted(session_dir.glob(f"{prefix}*.json"),
+                       key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            cached = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if cached.get("gene_set_narrative") and cached.get("gene_narrative") is not None:
+            return {
+                "gene_set_narrative": cached.get("gene_set_narrative") or [],
+                "gene_narrative": cached.get("gene_narrative") or [],
+                "model_used": cached.get("model_used", "claude-sonnet-4-6"),
+                "enrichment_available": bool(cached.get("context_text")),
+                "unresolved_citations": cached.get("unresolved_citations") or [],
+            }
+    return None
 
 
 async def generate_genomics_narrative_async(
@@ -91,7 +119,8 @@ async def generate_genomics_narrative_async(
     chosen_model = model or DEFAULT_CLAUDE_MODEL
 
     # --- Attempt enrichment analysis via interpret.py pipeline ---
-    # The enrichment pipeline queries bmdx.duckdb for pathway/GO/literature
+    # The enrichment pipeline queries the report's knowledge base
+    # (knowledge_base.registry.kb_for: its definition's, else the default) for pathway/GO/literature
     # evidence, producing a ~200-line structured context block that gives the
     # LLM real biological grounding instead of just raw gene/GO tables.
     context_text = ""
@@ -115,10 +144,25 @@ async def generate_genomics_narrative_async(
     # no genes, in which case the prompt carries no catalogue and no [Pn] rules.
     reference_pool: list[dict] = []
 
-    # Only attempt enrichment if we have genes to analyze and the DB exists.
+    # Only attempt enrichment if we have genes to analyze and the report has a
+    # knowledge base that can answer the genomics questions.
+    from knowledge_base.registry import kb_or_none
     has_genes = bool(all_genes or top_genes)
-    db_path = Path("bmdx.duckdb")
-    if has_genes and db_path.exists():
+    kb = kb_or_none(dtxsid)
+    if has_genes and kb is None:
+        # Refused, not degraded (ADR-0034): no interpretation is written without
+        # the literature it is grounded in.  The narrative already stored for
+        # this organ × sex (written from the knowledge base the report read
+        # before) stands; pipeline.kb_currency keeps it while none resolves.
+        stored = None if force else _stored_narrative(dtxsid, organ, sex)
+        if stored is not None:
+            return stored
+        logger.warning("No usable knowledge base for %s: no genomics narrative for %s/%s",
+                       dtxsid, organ, sex)
+        return {"error": "no usable knowledge base: the report's genomics interpretation "
+                         "is written only from one (knowledge_base.registry)"}
+    db_path = kb["path"] if kb else None
+    if has_genes and kb is not None:
         # Responsive gene symbols for the pool — prefer the full all_genes list
         # (same input the enrichment uses), falling back to top_genes.
         _gene_syms = [
@@ -264,6 +308,9 @@ async def generate_genomics_narrative_async(
                 # reference list without re-querying the graph.
                 if reference_pool:
                     interp["reference_pool"] = reference_pool
+                # The knowledge base the context came from (pipeline.kb_currency
+                # discards this store when the report's knowledge base changes).
+                interp["knowledge_base"] = {"name": kb["name"], "sha256": kb["sha256"]}
 
                 # Persist to cache so regenerations are instant.
                 if cache_path and context_text:
@@ -289,7 +336,7 @@ async def generate_genomics_narrative_async(
 
             except Exception:
                 # Enrichment failed — fall back to the basic prompt below.
-                # This keeps the endpoint functional even if bmdx.duckdb has
+                # This keeps the endpoint functional even if the knowledge base has
                 # schema issues or interpret.py raises on unusual data.
                 logger.warning(
                     "Enrichment pipeline failed, falling back to basic prompt",
@@ -323,7 +370,7 @@ in square brackets, e.g. "... consistent with Nrf2 pathway activation [P3]."
 - Cite the papers that genuinely support each claim; you need not cite all of them."""
 
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
-NIEHS/NTP 5-day study technical report on {compound}.
+NIEHS/NTP in vivo repeat dose biological potency study report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.
@@ -348,8 +395,9 @@ Do NOT include table data in the narrative — the tables are presented separate
 
 Return ONLY valid JSON, no markdown formatting."""
     else:
-        # Fallback: basic gene/GO tables (original behavior for sessions
-        # without bmdx.duckdb or with enrichment failures).
+        # Fallback: basic gene/GO tables (a stratum with no genes to enrich,
+        # or an enrichment that failed; without a knowledge base no narrative
+        # is written at all — see above).
         gs_lines = []
         for gs in gene_sets[:10]:
             n_up = gs.get("n_up")
@@ -380,7 +428,7 @@ Return ONLY valid JSON, no markdown formatting."""
         gene_table = "\n".join(gene_lines) if gene_lines else "(no genes)"
 
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
-NIEHS/NTP 5-day study technical report on {compound}.
+NIEHS/NTP in vivo repeat dose biological potency study report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.

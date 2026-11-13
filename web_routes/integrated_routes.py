@@ -8,6 +8,8 @@ Routes (all thin: parse → call the HTTP-free pipeline function → serialize):
   GET  /api/integrated-tree/{dtxsid}        slim structural tree for a viewer
   POST /api/process-integrated/{dtxsid}     run the processing pipeline
   POST /api/generate-animal-report/{dtxsid} per-animal traceability report
+  GET  /api/bmd-review/{dtxsid}             the flagged apical BMDs + decisions
+  POST /api/bmd-review/{dtxsid}             a reviewer's UREP decisions
 
 MOVED 2026-09-18 out of pipeline/integrated_io.py and
 pipeline/process_integrated.py. Those modules registered these handlers on a
@@ -31,7 +33,7 @@ from pipeline.pool_globals import _session_dir
 from safeguards.guarded import run_process
 from web_routes.refusal_response import refusal_response
 from workflow.errors import StepError
-from safeguards.guarded import generate_animal_report_step
+from safeguards.guarded import generate_animal_report_step, review_bmds
 from workflow.store import DiskPoolStore
 
 router = APIRouter()
@@ -237,3 +239,32 @@ async def api_generate_animal_report(dtxsid: Dtxsid):
         content=orjson.dumps(report_dict),
         media_type="application/json",
     )
+
+
+@router.get("/api/bmd-review/{dtxsid}")
+async def api_bmd_review(dtxsid: Dtxsid):
+    """The apical BMDs the last Process flagged as far below their NOEL/LOEL
+    (pipeline.bmd_review), each with its decision (None: pending), and the
+    recorded decisions with their history."""
+    from pipeline.bmd_review import FLAGS_FILE, REVIEWS_FILE
+    store = DiskPoolStore()
+    return JSONResponse({
+        "flags": (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or [],
+        "reviews": store.read_json(dtxsid, REVIEWS_FILE) or {},
+    })
+
+
+@router.post("/api/bmd-review/{dtxsid}")
+async def api_record_bmd_review(dtxsid: Dtxsid, request: Request):
+    """Record a reviewer's decisions, through the safeguards:
+    ``{"decisions": {"<sex>|<platform>|<endpoint>": {"decision": "unreliable" |
+    "reliable", "reason": "…"}}}``.  The next Process applies them."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        reviews = review_bmds(dtxsid, body.get("decisions"), DiskPoolStore())
+    except StepError as e:
+        return refusal_response(e)
+    return JSONResponse(reviews)

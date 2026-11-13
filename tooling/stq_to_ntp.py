@@ -28,6 +28,12 @@ Assumptions (all from the delivered data, flagged deliberately):
   * Organ weights are pivoted to one row per animal (Kidney-Left / Kidney-Right /
     Liver / Terminal Body Weight); the reference's `Heart` column is absent here
     and is simply not emitted (the studies did not weigh heart).
+  * Units are the extract's own: the body-weight extract's `UNIT` column ("g")
+    goes to the CSV's `<stem>.units.json` companion ({column: unit}, as
+    tooling.cebs_to_pool writes from a workbook's Key sheet), which the pool
+    reads into the sidecar.  The organ-weight extract has no unit column, so
+    its CSV has no companion and the tables say the unit is not recorded —
+    a unit is never assumed.
 
 Output: one folder per chemical (both produce the same filenames):
     <out>/<Chem>/body_weight_truth_male.csv
@@ -41,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 from pathlib import Path
 
@@ -109,6 +116,27 @@ def _write_csv(out_path: Path, header: list[str], rows: list[list]) -> None:
             w.writerow([_cell(c) for c in r])
 
 
+def _write_units(csv_path: Path, units: dict[str, str]) -> None:
+    """The CSV's `<stem>.units.json` companion; none when no unit is recorded."""
+    companion = csv_path.with_suffix(".units.json")
+    if units:
+        companion.write_text(json.dumps(units, indent=2) + "\n")
+    elif companion.exists():
+        companion.unlink()
+
+
+def _recorded_unit(rows: list[list], unit_idx: int | None, what: str) -> str | None:
+    """The one unit the extract records for a measurement; None when it has no
+    unit column or the column is empty.  Two units for one measurement is an
+    error: a mean over them would be meaningless."""
+    if unit_idx is None:
+        return None
+    units = {str(r[unit_idx]).strip() for r in rows if r[unit_idx] not in (None, "")}
+    if len(units) > 1:
+        raise ValueError(f"{what} recorded in more than one unit: {sorted(units)}")
+    return units.pop() if units else None
+
+
 def _sex_suffix(rows: list[list], sex_idx: int) -> str:
     sexes = {str(r[sex_idx]).strip().lower() for r in rows if r[sex_idx]}
     return sexes.pop() if len(sexes) == 1 else "all"
@@ -119,6 +147,7 @@ def convert_body_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]:
     idx = {c: header.index(c) for c in (
         "DEPOSITOR_STUDY_NUMBER", "DOSE", "ANMLNUM", "SEX", "SELECTION",
         "WGTVALUE", "OBSDAY", "TERMINAL_FLAG")}
+    unit_idx = header.index("UNIT") if "UNIT" in header else None
     by_study: dict[str, list] = {}
     for r in rows:
         by_study.setdefault(r[idx["DEPOSITOR_STUDY_NUMBER"]], []).append(r)
@@ -137,6 +166,8 @@ def convert_body_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]:
         sex = _sex_suffix(srows, idx["SEX"])
         out = outdir / chem / f"body_weight_truth_{sex}.csv"
         _write_csv(out, out_header, drows)
+        unit = _recorded_unit(srows, unit_idx, f"{study} body weight")
+        _write_units(out, {"Body Weight": unit} if unit else {})
         written.append((out, chem, len(drows)))
     return written
 
@@ -182,6 +213,8 @@ def convert_organ_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]
         sex = sexes.pop() if len(sexes) == 1 else "all"
         out = outdir / chem / f"organ_weights_truth_{sex}.csv"
         _write_csv(out, out_header, drows)
+        # No unit column in the organ-weight extract: no companion.
+        _write_units(out, {})
         written.append((out, chem, len(drows)))
     return written
 

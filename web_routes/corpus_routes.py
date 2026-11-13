@@ -16,6 +16,9 @@ from fastapi.responses import JSONResponse
 from web_routes.dtxsid_param import Dtxsid
 
 from knowledge_base import corpus_curation as cc
+from knowledge_base.registry import KnowledgeBaseError
+from safeguards.refusals import Refused
+from web_routes.refusal_response import refusal_response
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +28,21 @@ router = APIRouter()
 @router.get("/api/corpus/{dtxsid}/organs")
 async def api_corpus_organs(dtxsid: Dtxsid):
     """The organ inventory (term, frequencies, current mapping) + curated flag."""
-    return JSONResponse({
-        "inventory": cc.organ_inventory(dtxsid),
-        "canonical": cc.canonical_organs(),
-        "is_curated": cc.is_curated(dtxsid),
-    })
+    try:
+        return JSONResponse({
+            "inventory": cc.organ_inventory(dtxsid),
+            "canonical": cc.canonical_organs(dtxsid),
+            "is_curated": cc.is_curated(dtxsid),
+        })
+    except KnowledgeBaseError as e:
+        return _unavailable(e)
+
+
+def _unavailable(e: KnowledgeBaseError):
+    """The session's knowledge base cannot answer curation (none resolves, or it
+    holds no genes or organs): explained, not a server error."""
+    return refusal_response(Refused("knowledge_base_unavailable", str(e), 409,
+                                    {"problem": str(e)}))
 
 
 @router.get("/api/corpus/{dtxsid}/history")
@@ -69,6 +82,8 @@ async def api_corpus_materialize(dtxsid: Dtxsid):
     """Build corpus.duckdb by projecting the tweak-log onto the frozen original."""
     try:
         result = cc.materialize(dtxsid)
+    except KnowledgeBaseError as e:
+        return _unavailable(e)
     except Exception as exc:  # materialization touches the filesystem + DuckDB
         logger.exception("corpus materialize failed for %s", dtxsid)
         return JSONResponse({"error": str(exc)}, status_code=500)

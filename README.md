@@ -71,7 +71,7 @@ The approved report projects to four render surfaces from one document tree. Two
 
 ## Architecture
 
-A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a pre-built toxicogenomics knowledge base (`bmdx.duckdb`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
+A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a literature knowledge base (`knowledge_bases/`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
 
 For the *why* behind this structure — the purpose → architecture narrative, the domain glossary, and the decision records this section points to — see [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/).
 
@@ -136,18 +136,30 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 
 ---
 
-## Knowledge Base
+## Knowledge Bases
 
-The genomics interpretation step (Step 5) is grounded in `bmdx.duckdb`, a DuckDB analytical database built from the toxicogenomics literature. It provides the gene-level context — pathway memberships, GO term annotations, organ associations, and paper-derived claims — that the LLM uses to generate credible, citation-grounded narratives rather than relying on training data alone.
+The genomics interpretation step (Step 5) is grounded in a literature **knowledge base**, a DuckDB database built from the toxicogenomics literature. It provides the gene-level context the LLM uses to write citation-grounded narratives instead of relying on its training data: pathway memberships, GO term annotations, organ associations and paper-derived claims.
 
-A committed copy of `bmdx.duckdb` ships with the repo and is ready to use. Rebuild only if you need to expand or update coverage.
+Knowledge bases are named, and each is made by a named crawl query (ADR-0034):
 
-### Schema
+- **A query** is YAML text, `crawl_queries/<name>.yaml`, stating the whole recipe: seed papers and searches, how a paper is judged, what is extracted from each paper and by which model, what is counted, the follow-on crawls, and what is annotated. Edit it directly, or ask the query agent for a proposed edit (`/api/crawl-queries/{name}/propose`); nothing is saved until you save it.
+- **A crawl** runs a query into `knowledge_bases/<crawl name>/` (`kb.duckdb`, `manifest.json`, and the crawl's outputs):
+
+  ```bash
+  uv run python -m tooling.run_crawl <query> --as <crawl name> [--resume]
+  ```
+
+  A stage that cannot run, or that a source answered only in part, leaves the knowledge base unfinished, and an unfinished one is never used. Crawls are broadly scoped: a query never names a test article beside genes. A crawl about a test article is kept separate and names no genes; the safeguards refuse a query that breaks this, at save and at run.
+- **A report** reads the knowledge base its document definition names (`knowledge_base: <name>`), else the one named in `knowledge_bases/DEFAULT`.
+
+The May 2026 database (formerly `bmdx.duckdb`) is `knowledge_bases/baseline-2026-05`, made from `crawl_queries/baseline.yaml`, and is the default.
+
+### Schema (the tables the genomics interpretation reads)
 
 ```
 go_terms        — 2,840 GO Biological Process terms with UMAP coordinates and HDBSCAN clusters
-genes           — ~21,490 gene symbols (161 consensus, 149 moderate, rest from GO annotations)
-papers          — 2,319 deduplicated papers from all crawl directories
+genes           — ~22,190 gene symbols (consensus, moderate, single mentions, rest from GO annotations)
+papers          — 4,961 deduplicated papers from all crawl directories
 gene_go_terms   — 130,250 gene-to-GO-term annotations (rat, human, or both)
 paper_genes     — which genes each paper mentions (normalized)
 paper_organs    — which organs each paper studies (normalized)
@@ -156,33 +168,16 @@ citation_edges  — paper-cites-paper edges
 pathways        — 2,860 gene-pathway associations (KEGG + Reactome)
 ```
 
-Current coverage: 2,315 deduplicated papers across general tox, brain, heart, lung, and gene-function crawls. Top consensus genes by paper count: NFE2L2 (81), TP53 (63), BCL2 (45), BAX (41), SIRT1 (39).
-
-### Rebuilding
-
-```bash
-uv run python citegraph.py --query "your search terms" --output citegraph_output_topic
-uv run python extract.py citegraph_output_topic/papers.json
-uv run python extract.py merge
-uv run python pathway_enrich.py
-uv run python build_db.py
-```
-
-See `README_pipeline.md` for the full pipeline including Phase 2 targeted crawls and full-text extraction.
+Any query also yields `paper_entities(paper_id, field, value)`, one row per value of every extracted list field. A query that does not count genes by organs yields only the generic tables, and cannot ground a report's genomics interpretation.
 
 ---
 
 ## Deployment
 
-The application ships with a `Dockerfile` targeting Google Cloud Run.
-
-```bash
-./deploy.sh
-```
-
-`deploy.sh` stages `bmdx-core.jar`, its Maven dependencies, and `bmdx.duckdb` into `_bmdx_jars/` and `_data/` before the Docker build, so those artifacts never enter version control.
-
-Sessions are persisted to a GCS bucket mounted via GCS FUSE (`gs://rlm-bmdx-sessions/sessions/`) — the container mounts `/app/sessions` to this volume at runtime, so session data survives redeploys.
+The Google Cloud Run deployment is retired (2026-11-06); its files are kept
+in `retired/cloud-run/`. The application runs from the repository
+(`python -m web_routes.background_server`; separate workspaces for other people:
+`tooling/workspace.sh`).
 
 Single uvicorn worker is required because DuckDB is not safe to share across forked processes.
 

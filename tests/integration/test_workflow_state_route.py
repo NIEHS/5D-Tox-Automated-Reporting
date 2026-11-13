@@ -2,7 +2,7 @@
 Integration test for GET /api/workflow/{dtxsid}/state (ADR-0014 step 3).
 
 Drives the REAL route + WorkflowEngine + DiskPoolStore over real session disk
-(the given-PFHxSAm regression fixture), exercising the server-side phase derivation end to end.
+(the NIEHS-10 session), exercising the server-side phase derivation end to end.
 
 The load-bearing assertion is the DE-CONFLATION (ADR-0014 follow-up): with
 integrated.json present but animal_report.json absent, the server reports
@@ -19,12 +19,11 @@ import pytest
 
 @pytest.mark.integration
 class TestWorkflowStateRoute:
-    def test_validated_before_integration(self, given_pfhxsam):
-        # The regression fixture ships a clean validation_report.json (0 errors,
-        # coverage matrix present). We derive phase over THAT persisted report
-        # rather than re-running Java validation — this test pins server-side
-        # phase derivation, not the validator (which is exercised elsewhere and
-        # flags this fixture's clinical-obs CSVs).
+    def test_validated_before_integration(self, niehs10):
+        # The NIEHS-10 session is validated clean (0 errors, coverage matrix
+        # present). We derive phase over THAT persisted report rather than
+        # validating again — this test pins server-side phase derivation, not
+        # the validator (which is exercised elsewhere).
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -39,7 +38,7 @@ class TestWorkflowStateRoute:
         assert state["artifacts"]["hasAnimalReport"] is False
         assert "INTEGRATE" in state["legal_actions"]
 
-    def test_integrated_not_approved_deconfliction(self, given_pfhxsam):
+    def test_integrated_not_approved_deconfliction(self, niehs10):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -47,7 +46,7 @@ class TestWorkflowStateRoute:
         # Simulate a completed integration: integrated.json exists, but the pool
         # has NOT been approved (no animal_report.json). The JS caller could not
         # represent this; the server must.
-        (given_pfhxsam / "integrated.json").write_text(
+        (niehs10 / "integrated.json").write_text(
             json.dumps({"doseResponseExperiments": [], "_meta": {}}), encoding="utf-8"
         )
 
@@ -60,15 +59,15 @@ class TestWorkflowStateRoute:
         assert state["artifacts"]["hasAnimalReport"] is False
         assert "APPROVE" in state["legal_actions"]
 
-    def test_approved_when_animal_report_present(self, given_pfhxsam):
+    def test_approved_when_animal_report_present(self, niehs10):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
         client = TestClient(app)
-        (given_pfhxsam / "integrated.json").write_text(
+        (niehs10 / "integrated.json").write_text(
             json.dumps({"doseResponseExperiments": [], "_meta": {}}), encoding="utf-8"
         )
-        (given_pfhxsam / "animal_report.json").write_text(
+        (niehs10 / "animal_report.json").write_text(
             json.dumps({"animals": []}), encoding="utf-8"
         )
 
@@ -76,18 +75,18 @@ class TestWorkflowStateRoute:
         assert resp.status_code == 200, resp.text
         assert resp.json()["phase"] == "APPROVED"
 
-    def test_publish_readiness_blocks_on_stale_llm(self, given_pfhxsam):
+    def test_publish_readiness_blocks_on_stale_llm(self, niehs10):
         # A stale LLM genomics section (as a reprocess would leave it) blocks
         # publishing; a stale programmatic bm2 section does not.
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
-        (given_pfhxsam / "genomics_liver_male.json").write_text(
+        (niehs10 / "genomics_liver_male.json").write_text(
             json.dumps({"approved": True, "stale": True,
                         "regenerated": {"reason": "data_changed"}}),
             encoding="utf-8",
         )
-        (given_pfhxsam / "bm2_organ.json").write_text(
+        (niehs10 / "bm2_organ.json").write_text(
             json.dumps({"approved": True, "stale": True}), encoding="utf-8",
         )
 

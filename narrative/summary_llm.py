@@ -35,6 +35,7 @@ _NUMBER_RE = re.compile(r"(?<![\w.])\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])\d+(?
 def summary_inputs(session_dir: Path) -> dict:
     """The keyword arguments of report_summary.build_report_summary for a
     session, read from its Process caches — the same inputs as the Abstract."""
+    from document_model.view_config import study_document_facts
     from pipeline.session_db import _latest_cache
     from pipeline.study_design import study_design_facts
     from rendering.render_common import derive_study_sexes
@@ -66,6 +67,7 @@ def summary_inputs(session_dir: Path) -> dict:
         "abstract_background": _read("background.json").get("abstract_background", "") or "",
         "apical_evaluated": bool(sections),
         "design": study_design_facts(integrated, methods.get("dose_unit")),
+        "tissue_order": study_document_facts(session_dir.name)["tissue_order"],
     }
 
 

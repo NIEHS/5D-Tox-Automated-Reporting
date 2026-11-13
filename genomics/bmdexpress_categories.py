@@ -44,21 +44,47 @@ def _owning_experiment(analysis_name: str, exp_names: list[str]) -> str | None:
     return None
 
 
+# A gene-level analysis: BMDExpress 3's GENE categories, or BMDExpress 2's
+# Defined Category Analysis on an individual-gene category file (the 2018-era
+# projects, RR-8 and NIEHS-02 … 06: "…_DEFINED-Category_File_Rat_Individual_
+# Gene_Category_File_…").  Both hold one category per gene, its BMD the median
+# over the gene's probes.
+_GENE_MARKERS = ("_GENE_", "Individual_Gene")
+# The GO analysis with GO terms of identical gene sets filtered out ("GO terms
+# populated with identical sets of differentially expressed genes were filtered
+# to limit redundancy in reporting", NIEHS-02 … 06): its name ends so.
+_DEDUPLICATED = "_deduplicate"
+
+
 def category_analyses_by_experiment(integrated: dict) -> dict[str, dict[str, list[dict]]]:
-    """{experiment name: {"GENE": [result, ...], "GO_BP": [result, ...]}}."""
+    """{experiment name: {"GENE": [result, ...], "GO_BP": [result, ...]}},
+    plus "GO_BP_REPORTED": the deduplicated GO analysis's results when the
+    experiment has one (the GO terms the report may list)."""
     exp_names = [e.get("name", "") for e in integrated.get("doseResponseExperiments", []) or []]
     out: dict[str, dict[str, list[dict]]] = {}
     for ca in integrated.get("categoryAnalysisResults", []) or []:
         if not isinstance(ca, dict):
             continue
         name = ca.get("name", "") or ""
-        kind = "GENE" if "_GENE_" in name else "GO_BP" if "_GO_BP_" in name else None
+        kind = ("GENE" if any(m in name for m in _GENE_MARKERS)
+                else "GO_BP" if "_GO_BP_" in name else None)
         exp = _owning_experiment(name, exp_names) if kind else None
         if exp is None:
             continue
         items = [r for r in ca.get("categoryAnalsyisResults") or [] if isinstance(r, dict)]
         out.setdefault(exp, {}).setdefault(kind, []).extend(items)
+        if kind == "GO_BP" and name.endswith(_DEDUPLICATED):
+            out[exp].setdefault("GO_BP_REPORTED", []).extend(items)
     return out
+
+
+def reported_go_ids(exp_cats: dict[str, list[dict]]) -> set[str] | None:
+    """The GO ids of the experiment's deduplicated GO analysis; None when it has
+    none (every GO term may be listed)."""
+    items = exp_cats.get("GO_BP_REPORTED")
+    if items is None:
+        return None
+    return {i.get("id") for r in items if isinstance(i := r.get("categoryIdentifier"), dict)}
 
 
 # BMD precision.  The 2025 reports (NIEHS-12/13) print every BMD and BMDL to 1
@@ -83,6 +109,19 @@ def report_bmd_decimals(integrated: dict) -> int:
         return BMD_DECIMALS_2025
     gene_level = any("GENE" in kinds for kinds in category_analyses_by_experiment(integrated).values())
     return BMD_DECIMALS_2025 if gene_level else BMD_DECIMALS_NIEHS10
+
+
+def lower_limits_of_extrapolation(integrated: dict) -> dict[str, float]:
+    """{experiment name: its lowest non-zero dose / 3} — the lower limit of
+    extrapolation below which a BMD is reported as "<limit (NR)" (every NTP/
+    NIEHS report's Methods).  From the experiment's own treatments."""
+    out: dict[str, float] = {}
+    for e in integrated.get("doseResponseExperiments", []) or []:
+        doses = [d for t in e.get("treatments") or [] if isinstance(t, dict)
+                 and (d := _float(t.get("dose"))) is not None and d > 0]
+        if doses:
+            out[e.get("name", "")] = min(doses) / 3
+    return out
 
 
 def go_direction_counts(go_items: list[dict]) -> dict[str, tuple[int, int]]:
@@ -206,11 +245,17 @@ def probe_gene_annotations(integrated: dict) -> dict[str, dict[str, tuple[str, s
     return out
 
 
+def _title(r: dict) -> str:
+    ident = r.get("categoryIdentifier")
+    return str(ident.get("title") or "") if isinstance(ident, dict) else ""
+
+
 def gene_level_top_genes(
     gene_items: list[dict],
     probe_fold_change: dict[str, float],
     species: str | None,
     n: int = 10,
+    min_fold_change: float | None = None,
 ) -> list[dict]:
     """The Top-n genes: GENE categories that passed all BMDExpress filters,
     ranked by BMD median across the gene's probes.
@@ -220,7 +265,14 @@ def gene_level_top_genes(
     by the gene's direction — the published NIEHS-13 tables (Cyp4a2, three
     probes 2.30/3.48/3.45, prints 3.1; the median would be 3.4).  BMDExpress's
     own GENE fold-change fields are empty in these projects.  (The BMD stays
-    the median — bmdMedian — as the table title says.)"""
+    the median — bmdMedian — as the table title says.)
+
+    ``min_fold_change`` (the method's genomics.gene_min_fold_change): a gene
+    whose probes' MEDIAN fold-change magnitude is below it is left out ("genes
+    with probe sets that had a median fold change <|2| were removed prior to
+    reporting", NIEHS-02 … 06).  A gene with no recorded fold change is kept.
+    The symbol is the category's title when its symbol field is empty (the
+    Defined Category Analysis leaves it so)."""
     rows = []
     for r in gene_items:
         if (r.get("genesThatPassedAllFilters") or 0) < 1:
@@ -233,11 +285,13 @@ def gene_level_top_genes(
         direction = "up" if up and not down else "down" if down and not up else "conflict"
         probes = [p for p in str(r.get("probeIds") or "").split(",") if p]
         fcs = [abs(probe_fold_change[p]) for p in probes if _float(probe_fold_change.get(p)) is not None]
+        if min_fold_change is not None and fcs and statistics.median(fcs) < min_fold_change:
+            continue
         fc = statistics.fmean(fcs) if fcs else None
         if fc is not None and direction == "down":
             fc = -fc
         rows.append({
-            "gene_symbol": _display_symbol(str(r.get("geneSymbolsPrivate") or ""), species),
+            "gene_symbol": _display_symbol(str(r.get("geneSymbolsPrivate") or _title(r)), species),
             "entrez_id": str(r.get("genesIds") or ""),
             "probe_id": ",".join(probes),
             "bmd": bmd,

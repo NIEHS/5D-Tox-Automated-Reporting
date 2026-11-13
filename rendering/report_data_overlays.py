@@ -259,6 +259,65 @@ def _find_table_number(nodes: list, platform: str):
     return None
 
 
+# The organ weight table's first note when the definition has an appendix of
+# organ weight descriptions (cited_as: organ-weight-descriptions): every book
+# that has one prints it as note (a), marked on the table's first-column
+# header (NIEHS-02 … 13; RR-8 has no such appendix and no note).
+ORGAN_DESCRIPTIONS_ID = "organ_descriptions"
+ORGAN_DESCRIPTIONS_NOTE = ("Descriptions of organ weight endpoints and changes are "
+                           "provided in Appendix {letter}.")
+
+
+def apply_table_notes(data: dict, table_notes: dict | None) -> None:
+    """Leave out the notes the report's definition says its book does not print
+    (``table_notes:``, document_template.load_table_notes).  With
+    ``outlier_exclusions: false`` the outlier-test note goes, and a note on n
+    keeps only its samples-not-received words (``without_outliers``; the
+    note goes when none are left): the exclusion is made, not noted."""
+    if (table_notes or {}).get("outlier_exclusions", True):
+        return
+    for sec in data.get("apical_sections") or []:
+        footnotes = sec.get("footnotes") or []
+        if not any(isinstance(f, dict) and (f.get("id") == "outliers" or "without_outliers" in f)
+                   for f in footnotes):
+            continue
+        kept = []
+        for f in footnotes:
+            if isinstance(f, dict) and f.get("id") == "outliers":
+                continue
+            if isinstance(f, dict) and "without_outliers" in f:
+                if not f["without_outliers"]:
+                    continue
+                f = {**f, "text": f["without_outliers"]}
+            kept.append(f)
+        sec["footnotes"] = finalize_footnotes(kept, sec.get("table_data") or {})
+
+
+def attach_organ_descriptions_note(data: dict, tree: "list | None") -> None:
+    """Note the organ weight table's appendix (_add_organ_descriptions_note) on
+    the report's rendered tree; both data paths call it (report_data,
+    latex_export.load_session_data)."""
+    for sec in data.get("apical_sections") or []:
+        if sec.get("platform") == "Organ Weight":
+            footnotes = sec.setdefault("footnotes", [])
+            _add_organ_descriptions_note(footnotes, tree)
+            finalize_footnotes(footnotes, sec.get("table_data") or {})
+
+
+def _add_organ_descriptions_note(footnotes: list[dict], tree: "list | None") -> None:
+    """Put the organ-descriptions note first among the lettered notes, when the
+    report's definition has the appendix (its letter from the tree)."""
+    from rendering.genomics_results import cited
+    letter = cited(tree, "organ-weight-descriptions", "appendix") if tree else None
+    if not letter or any(f.get("id") == ORGAN_DESCRIPTIONS_ID for f in footnotes
+                         if isinstance(f, dict)):
+        return
+    first = next((i for i, f in enumerate(footnotes)
+                  if isinstance(f, dict) and f.get("kind") == "lettered"), len(footnotes))
+    footnotes.insert(first, lettered_footnote(ORGAN_DESCRIPTIONS_NOTE.format(letter=letter),
+                                              ORGAN_DESCRIPTIONS_ID, target="header"))
+
+
 def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None) -> None:
     """Overlay the apical endpoint sections: footnotes, tree-derived table numbers, document-order sort, and per-row canonicalization.
 

@@ -3,7 +3,7 @@
 #
 # What it does:
 #   1. Copies BMDExpress 3 JARs into _bmdx_jars/ (temporary, gitignored).
-#   2. Copies the bmdx.duckdb knowledge base into _data/.
+#   2. Copies the knowledge bases (database + manifest each, and DEFAULT) into _data/.
 #   3. Clears per-user GCS session buckets (fresh start each deploy).
 #   4. Submits the build context to Cloud Build (one image).
 #   5. Deploys TWO Cloud Run services from the same image, each with its
@@ -71,10 +71,20 @@ cp "$BMDX_PROJECT_DIR/target/deps/"*.jar _bmdx_jars/deps/
 
 # -- Step 2: Stage DuckDB knowledge base -----------------------------------
 
-echo "==> Copying bmdx.duckdb knowledge base..."
+echo "==> Copying the knowledge bases..."
 rm -rf _data
-mkdir -p _data
-cp bmdx.duckdb _data/bmdx.duckdb
+mkdir -p _data/knowledge_bases
+cp knowledge_bases/DEFAULT _data/knowledge_bases/
+for kb in knowledge_bases/*/; do
+  name=$(basename "$kb")
+  # Only a finished knowledge base is ever read (knowledge_base.registry.usable).
+  if [ ! -f "$kb/kb.duckdb" ] || ! python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("complete") else 1)' "$kb/manifest.json" 2>/dev/null; then
+    echo "    skipping $name (unfinished)"
+    continue
+  fi
+  mkdir -p "_data/knowledge_bases/$name"
+  cp "$kb/kb.duckdb" "$kb/manifest.json" "_data/knowledge_bases/$name/"
+done
 
 # -- Step 3: Session buckets (preserved across deploys) ---------------------
 # GCS session buckets persist across deploys so users don't lose work.

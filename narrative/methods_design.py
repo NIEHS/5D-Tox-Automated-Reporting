@@ -53,7 +53,8 @@ def build_study_design(ctx: MethodsContext, introduce: bool = True) -> list[str]
     """``introduce``: the test article's first mention in the Materials and
     Methods (its name and abbreviation; else the abbreviation alone)."""
     from pipeline.study_design import (
-        administration_phrase, control_group, dose_noun, exposure_verb, subject_phrase,
+        administration_phrase, control_group, dose_noun, exposure_verb, internal_assessment,
+        subject_phrase,
         vehicle_phrase,
     )
 
@@ -81,7 +82,7 @@ def build_study_design(ctx: MethodsContext, introduce: bool = True) -> list[str]
         sentences.append(
             "Additional animals in the "
             f"{_format_dose_list(ctx.biosampling_doses, ctx.dose_unit)} {ctx.dose_unit} "
-            "groups were dedicated to internal dose assessment.")
+            f"groups were dedicated to {internal_assessment(ctx.dose_unit)}.")
     sentences.append(
         f"Core animals were euthanized on study day {days}, the day after the final "
         f"{'exposure' if facts.get('route') == 'inhaled' else 'dose'}.")

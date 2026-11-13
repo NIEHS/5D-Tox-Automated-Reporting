@@ -453,7 +453,8 @@ def marshal_export_data(
                 from genomics.pca_figure import build_pca_figure
                 _ip = _sdir_roster(_dtxsid_roster) / "integrated.json"
                 _pca = build_pca_figure(_json_pca.loads(_ip.read_text(encoding="utf-8")),
-                                        dose_unit=body.get("dose_unit") or "mg/kg") \
+                                        dose_unit=body.get("dose_unit") or "mg/kg",
+                                        tissue_order=_definition_fact(_dtxsid_roster or "", "tissue_order")) \
                     if _ip.exists() else None
             except Exception:  # noqa: BLE001 — leaves the figure's pending note
                 _pca = None
@@ -628,6 +629,12 @@ def marshal_export_data(
     )
     _overlay_abstract(data, body)
     _overlay_apical_sections(data, body, tree=active_tree)
+    from rendering.report_data_overlays import attach_organ_descriptions_note
+    attach_organ_descriptions_note(data, active_tree)
+    from rendering.report_data_overlays import apply_table_notes
+    if body.get("dtxsid"):
+        from document_model.view_config import study_document_facts
+        apply_table_notes(data, study_document_facts(body["dtxsid"])["table_notes"])
     _overlay_unified_and_bmd(data, body)
     _overlay_genomics(data, body)
 

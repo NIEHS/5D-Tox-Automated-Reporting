@@ -235,24 +235,35 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     # should_stale_on_reprocess is the single predicate (fail-safe: unknown -> LLM
     # -> staled). See docs/plans/phase3-reprocess-currency.md.
     from workflow.reprocess import should_stale_on_reprocess
+
+    summary["marked_stale"] = stale_sections(dtxsid, should_stale_on_reprocess, "data_changed")
+    return summary
+
+
+def stale_sections(dtxsid: str, applies, reason: str) -> list[str]:
+    """Mark stale every section ``applies(stem, section)`` selects, with
+    ``reason`` (``data_changed``; ``knowledge_base_changed``, pipeline.kb_currency):
+    the text kept, its maturity withdrawn, a version event minted.  Returns the
+    files marked."""
     from pipeline.session_store import save_section, iter_section_files
 
+    marked: list[str] = []
     # Iterate EVERY report-section file — the four singletons (background/methods/
     # bmd_summary/summary) as well as the bm2_*/genomics_* instances. The old
     # bm2_*/genomics_*-only glob silently skipped the singleton LLM sections, so a
     # reprocess never demoted summary/background/methods/bmd_summary even though
     # they are LLM-origin and must be re-blessed (F4).
-    for section_stem, section_file in iter_section_files(d):
+    for section_stem, section_file in iter_section_files(_session_dir(dtxsid)):
         try:
             section_data = json.loads(section_file.read_text(encoding="utf-8"))
-            if not should_stale_on_reprocess(section_stem, section_data):
+            if not applies(section_stem, section_data):
                 continue  # programmatic (or nothing to act on) — refresh, don't stale
             if not section_data.get("stale"):
                 section_data["stale"] = True
                 # Record WHY it went stale so the LLM rewrite is attributed and
                 # the publish gate can require a human re-accept (fail-soft:
                 # absent on programmatic/older sections).
-                section_data["regenerated"] = {"reason": "data_changed"}
+                section_data["regenerated"] = {"reason": reason}
                 # Involuntary down-ratchet (ADR-0015): the SYSTEM withdraws the
                 # FINAL maturity claim (currency-forced) while leaving PROTECTED
                 # standing, so the section stops asserting "editorially done"
@@ -268,17 +279,16 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
                 # marker is transient: save_section pops it, so it never
                 # persists in the section JSON.
                 section_data[_VERSION_EVENT_KEY] = invalidation_event(
-                    section_stem, section_data)
+                    section_stem, section_data, reason)
                 save_section(dtxsid, section_stem, section_data)
-                summary["marked_stale"].append(section_file.name)
-                logger.info("Marked %s as stale for %s", section_file.name, dtxsid)
+                marked.append(section_file.name)
+                logger.info("Marked %s as stale for %s (%s)", section_file.name, dtxsid, reason)
         except Exception as e:
             logger.warning("Failed to mark %s as stale: %s", section_file.name, e)
+    return marked
 
-    return summary
 
-
-def invalidation_event(section_key: str, section: dict) -> dict:
+def invalidation_event(section_key: str, section: dict, reason: str = "data_changed") -> dict:
     """The version event of a section staled by a change to the pool (format 2,
     C2 spec §5): a state change by the system, not a content write; the text
     is archived and kept as it was, and the reason is the currency reason."""
@@ -288,7 +298,7 @@ def invalidation_event(section_key: str, section: dict) -> dict:
         "v": EVENT_FORMAT, "section": section_key, "cause": "reprocess",
         "status": "needs-re-bless", "act": "invalidate", "actor": "system", "user": None,
         "author": author_of(section), "changed": False,
-        "content_hash": content_hash(section), "applied": True, "reason": "data_changed",
+        "content_hash": content_hash(section), "applied": True, "reason": reason,
     }
 
 

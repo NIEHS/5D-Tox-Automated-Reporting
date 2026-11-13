@@ -1,10 +1,13 @@
-"""tooling.cebs_to_pool — CEBS Individual Animal workbooks → pool truth CSVs.
+"""tooling.cebs_to_pool — CEBS Individual Animal workbooks → the pool.
 
-The supplied PFHxSAm package's truth CSVs were hand-built from the NIEHS-10
-workbooks; the converter must regenerate them byte-for-byte from the published
-CEBS workbooks (tests/fixtures/reference/NIEHS-10), so a CEBS package ingests
-the same way the supplied one did.  The 2025 (DTT) schema has no Sex column; the sex is
-filled from the Key sheet's study title, and an ambiguous title is refused.
+The study workbooks drive (ADR-0032): a standard Key/Data workbook goes into
+the pool as published; another layout is written as a standard workbook.  The
+CSV route (``as_csv``) remains for a study supplied as truth CSVs: the
+supplied PFHxSAm package's CSVs were hand-built from the NIEHS-10 workbooks,
+and the converter regenerates them byte-for-byte from the published CEBS
+workbooks (tests/fixtures/reference/NIEHS-10).  The 2025 (DTT) schema has no
+Sex column; the sex is filled from the Key sheet's study title, and an
+ambiguous title is refused.
 """
 
 from pathlib import Path
@@ -17,10 +20,17 @@ from tooling.cebs_to_pool import convert_workbook, key_sheet_sex, workbook_stem
 from tests.conftest import GIVEN_PFHXSAM_DIR, REFERENCE_DIR
 
 
+def test_reference_workbooks_go_into_the_pool_as_published(tmp_path):
+    for xlsx in sorted((REFERENCE_DIR / "NIEHS-10").glob("*Individual_Animal_*.xlsx")):
+        summary = convert_workbook(str(xlsx), str(tmp_path))
+        assert summary["status"] == "ok" and summary["written"] == [xlsx.name], summary
+        assert (tmp_path / xlsx.name).read_bytes() == xlsx.read_bytes()
+
+
 def test_reference_workbooks_regenerate_truth_csvs_byte_for_byte(tmp_path):
     written = []
     for xlsx in sorted((REFERENCE_DIR / "NIEHS-10").glob("*Individual_Animal_*.xlsx")):
-        summary = convert_workbook(str(xlsx), str(tmp_path))
+        summary = convert_workbook(str(xlsx), str(tmp_path), as_csv=True)
         assert summary["status"] == "ok", summary
         assert summary["sex_filled"] is None  # NIEHS-10 workbooks carry a Sex column
         written += summary["written"]
@@ -52,7 +62,12 @@ def test_dtt_workbook_fills_sex_from_key_title(tmp_path):
                        "in Female Sprague Dawley Rats (HSD:Sprague Dawley SD)")
     out = tmp_path / "out"
     out.mkdir()
+    # Into the pool as published; the reader fills the sex from the title.
     summary = convert_workbook(str(src), str(out))
+    assert summary["status"] == "ok" and summary["sex_filled"] == "Female"
+    from bmdx_pipe import read_study_workbook
+    assert read_study_workbook(str(out / src.name)).sex_filled == "Female"
+    summary = convert_workbook(str(src), str(out), as_csv=True)
     assert summary["status"] == "ok"
     assert summary["sex_filled"] == "Female"
     lines = (out / "body_weight_truth_female.csv").read_text().splitlines()
@@ -145,3 +160,40 @@ def test_molar_doses_map_to_the_projects_mg_per_kg_levels():
         molar_to_mg_per_kg(["0.169", "0.338"], [61.2, 300.0])
     with pytest.raises(ValueError):            # more project levels than molar ones
         molar_to_mg_per_kg(["0.169"], [61.2, 122.5])
+
+
+def test_the_removal_reasons_workbook_is_copied_for_the_study_structure(tmp_path):
+    """NIEHS-12/13: no apical platform, but each animal's disposition."""
+    src = tmp_path / "108020007_Individual_Animal_Removal_Reasons_Data.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Study Number", "Animal ID", "Sex", "Concentration", "Disposition", "Removal Day"])
+    ws.append(["108020007", "502", "FEMALE", "250", "Euthanized Moribund", "SD4"])
+    wb.save(src)
+    out = tmp_path / "out"
+    out.mkdir()
+    assert convert_workbook(str(src), str(out), study="108020006")["status"] == "rejected"
+    assert convert_workbook(str(src), str(out), study="108020007", as_csv=True)["status"] == "skipped"
+    assert not list(out.iterdir())
+    assert convert_workbook(str(src), str(out), study="108020007")["written"] == [src.name]
+    assert (out / src.name).read_bytes() == src.read_bytes()
+
+
+def test_a_database_export_takes_its_organ_weight_unit_from_the_pa06_summary(tmp_path):
+    """NIEHS-02 … 05's CEBS export records no organ weight unit; the package's
+    PA06 Organ Weights Summary prints it ("Absolute (g)")."""
+    from bmdx_pipe import key_sheet_units
+    from tooling.cebs_to_pool import pa06_weight_units
+
+    package = Path(__file__).resolve().parents[2] / "assets" / "cebs" / "NIEHS-02"
+    if not package.is_dir():
+        pytest.skip("the NIEHS-02 CEBS package is local only")
+    assert pa06_weight_units(str(package)) == {"absolute": "g", "body": "g"}
+    out = tmp_path / "out"
+    out.mkdir()
+    summary = convert_workbook(str(package / "C10674_Individual_Animal_Organ_Weight_Data.xlsx"),
+                               str(out))
+    assert any("PA06" in n for n in summary["notes"])
+    assert set(key_sheet_units(str(out / "C10674_Individual_Animal_Organ_Weight_Data.xlsx"))
+               .values()) == {"g"}

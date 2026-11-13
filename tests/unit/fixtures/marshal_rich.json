@@ -113,7 +113,7 @@
       }
     ],
     "footnotes": [
-      "BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; LOEL = lowest-observed-effect level; NOEL = no-observed-effect level; UREP = unreliable estimate of potency — a label based on review of BMD modeling results indicating the curve-fit BMD is implausibly far below the statistically observed effect threshold; NVM = no viable model: the modeled response did not meet the benchmark dose acceptance criteria."
+      "BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; LOEL = lowest-observed-effect level; NOEL = no-observed-effect level; UREP = unreliable estimate of potency is a label based on review by a subject matter expert and rejection of BMD modeling results; NVM = no viable model: the modeled response did not meet the benchmark dose acceptance criteria."
     ],
     "paragraphs": [
       "A summary of the calculated BMDs for each toxicological endpoint is provided in Table 8. The endpoint-specific LOEL and NOEL are included and could be informative for endpoints that lack a calculated BMD either because no viable model was available or because the estimated BMD was below the lower limit of extrapolation (<1 mg/kg)."
@@ -1194,14 +1194,14 @@
     {
       "id": "clinical-path",
       "level": 2,
-      "ready": false,
+      "ready": true,
       "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "internal-dose",
       "level": 2,
-      "ready": false,
+      "ready": true,
       "scope": null,
       "title": "Internal Dose Assessment"
     },

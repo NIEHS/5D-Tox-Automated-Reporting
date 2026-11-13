@@ -1,0 +1,8 @@
+# Study overlay for NIEHS Report 07 (6:1 Fluorotelomer Alcohol), DTXSID00190950 — ADR-0027 §1.
+
+# methods (pipeline.method_profile.study_overlay) — what this report's analysis
+# did that the pinned profile's defaults do not say: it printed terminal body
+# weight untested (no marks, BMD "ND", not in the BMD summary).
+methods:
+  apical:
+    terminal_body_weight_tested: false

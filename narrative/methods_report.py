@@ -46,8 +46,6 @@ External importers preserved through this shim:
                             set as llm_routes
   - report_data.py           MethodsContext + build_abstract_methods +
                             build_abstract_results + build_abstract_summary
-  - processing_helpers.py   _is_anomalous_bmd (lazy import inside a
-                            helper)
 
 A future cleanup pass could point each consumer at the new modules
 directly and delete this shim, but that's not part of this split.
@@ -70,7 +68,6 @@ from narrative.narrative_helpers import (
     _DIRECTION_WORDS,
     ANOMALY_RATIO_THRESHOLD,
     _is_reliable_bmd,
-    _is_anomalous_bmd,
     _format_dose_value,
     _format_rat_gene_symbol,
     _stat_display_name,

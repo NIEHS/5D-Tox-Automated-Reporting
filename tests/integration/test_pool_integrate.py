@@ -46,7 +46,7 @@ class TestPoolIntegrate:
             },
         }
 
-    def test_integrate_returns_200(self, given_pfhxsam, mock_bmdx_pipe):
+    def test_integrate_returns_200(self, niehs10, mock_bmdx_pipe):
         """
         Given a validated session with fingerprints and coverage matrix,
         integration should succeed and return 200.
@@ -69,7 +69,7 @@ class TestPoolIntegrate:
         )
         assert resp.status_code == 200, f"Integrate failed: {resp.text}"
 
-    def test_integrate_caches_in_memory(self, given_pfhxsam, mock_bmdx_pipe):
+    def test_integrate_caches_in_memory(self, niehs10, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool dict.
 
         Note: integrated.json is written by bmdx_pipe.integrate_pool() itself
@@ -92,7 +92,7 @@ class TestPoolIntegrate:
         cached = pool_orchestrator._integrated_pool["DTXSID50469320"]
         assert "doseResponseExperiments" in cached
 
-    def test_integrate_populates_memory(self, given_pfhxsam, mock_bmdx_pipe):
+    def test_integrate_populates_memory(self, niehs10, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool."""
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
@@ -139,7 +139,7 @@ class TestPoolIntegrate:
         assert resp.status_code == 409
         assert "phase EMPTY" in resp.json()["error"]
 
-    def test_reintegration_withdraws_the_data_approval(self, given_pfhxsam, mock_bmdx_pipe):
+    def test_reintegration_withdraws_the_data_approval(self, niehs10, mock_bmdx_pipe):
         """Re-integrating an approved study archives its data approval and says so."""
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
@@ -150,13 +150,13 @@ class TestPoolIntegrate:
         ident = {"identity": {"name": "Test", "casrn": "123-45-6", "dtxsid": "DTXSID50469320"}}
         first = client.post("/api/pool/integrate/DTXSID50469320", json=ident).json()
         assert first["approval_withdrawn"] is False
-        (given_pfhxsam / "integrated.json").write_text("{}")   # the mock writes none
-        (given_pfhxsam / "animal_report.json").write_text("{}")
+        (niehs10 / "integrated.json").write_text("{}")   # the mock writes none
+        (niehs10 / "animal_report.json").write_text("{}")
         state = client.get("/api/workflow/DTXSID50469320/state").json()
         assert (state["phase"], state["artifacts"]["integration"]) == ("APPROVED", "current")
 
         again = client.post("/api/pool/integrate/DTXSID50469320", json=ident).json()
         assert again["approval_withdrawn"] is True
-        assert not (given_pfhxsam / "animal_report.json").exists()
-        assert list((given_pfhxsam / "history" / "_data_approval").iterdir())
+        assert not (niehs10 / "animal_report.json").exists()
+        assert list((niehs10 / "history" / "_data_approval").iterdir())
         assert client.get("/api/workflow/DTXSID50469320/state").json()["phase"] == "INTEGRATED"

@@ -401,7 +401,7 @@ def build_gene_body_findings(
     require an external annotation source not present in the genomics
     cache, so this function emits bare gene symbols.  Future enhancement:
     look up gene names from integrated.json's referenceGeneAnnotations
-    or from bmdx.duckdb.
+    or from the knowledge base.
     """
     if not genomics_sections:
         return {}

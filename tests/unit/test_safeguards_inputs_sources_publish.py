@@ -84,6 +84,43 @@ def test_the_core_records_a_design_as_given(sessions_dir):
     assert saved["fields"] == {"articleRoute": "teleported"}
 
 
+_FROM_WORKBOOK = {
+    "doseResponseExperiments": [
+        {"name": "BodyWeightMale",
+         "experimentDescription": {"sex": "male", "species": "rat", "articleVehicle": None}},
+    ],
+    "_meta": {"metadata_provenance": {"BodyWeightMale": {"sex": "workbook", "species": "workbook"}}},
+}
+
+
+def test_a_statement_contradicting_the_workbooks_is_refused(monkeypatch):
+    from safeguards.inputs import require_valid_design, require_valid_experiment_metadata
+    monkeypatch.setattr("pipeline.integrated_io.load_integrated", lambda d: _FROM_WORKBOOK)
+    with pytest.raises(Refused) as e:
+        require_valid_experiment_metadata(ID, {"BodyWeightMale": {"sex": "female"}})
+    body = explain(e.value)["error"]
+    assert body["code"] == "facts_contradict_workbook" and body["status"] == 422
+    assert body["details"]["errors"] == [
+        "BodyWeightMale: sex='female', but the study workbooks state 'male'"]
+    with pytest.raises(Refused) as e:
+        require_valid_design(ID, {"species": "mouse", "articleVehicle": "corn oil"})
+    assert e.value.code == "facts_contradict_workbook"
+    assert e.value.details["errors"] == ["species='mouse', but the study workbooks state 'rat'"]
+    # What the workbooks don't record, or state the same, may be stated.
+    require_valid_design(ID, {"species": "rat", "articleVehicle": "corn oil"})
+    require_valid_experiment_metadata(ID, {"BodyWeightMale": {"sex": "male", "organ": "liver"}})
+
+
+def test_a_stated_design_never_replaces_the_workbooks():
+    import copy
+    from pipeline.study_design import apply_design_fields
+    integrated = copy.deepcopy(_FROM_WORKBOOK)
+    apply_design_fields(integrated, {"species": "mouse", "articleVehicle": "corn oil"})
+    ed = integrated["doseResponseExperiments"][0]["experimentDescription"]
+    assert ed["species"] == "rat" and ed["articleVehicle"] == "corn oil"
+    assert integrated["_meta"]["metadata_provenance"]["BodyWeightMale"]["articleVehicle"] == "stated"
+
+
 def test_the_web_approval_refuses_values_outside_the_vocabulary(client, sessions_dir,
                                                                 monkeypatch):
     import pipeline.metadata_approval  # noqa: F401 — bound to the real loader first

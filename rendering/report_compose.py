@@ -220,7 +220,10 @@ def _remap_markers(rows: list[dict], remap: dict) -> list[dict]:
         for row in rows:
             refs = row.get("marker_refs")
             if isinstance(refs, dict):
-                row["marker_refs"] = {k: remap.get(v, v) for k, v in refs.items()}
+                # A cell's ref is one footnote id or a list of them.
+                row["marker_refs"] = {
+                    k: remap.get(v, v) if isinstance(v, str) else [remap.get(i, i) for i in v]
+                    for k, v in refs.items()}
     return rows
 
 

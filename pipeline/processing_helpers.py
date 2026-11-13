@@ -270,15 +270,20 @@ def _partition_by_platform(
         sex_probe_platform[(sex, probe_id)] = plat
 
     # Partition: {platform: {sex: [TableRow, ...]}}
-    # A derived relative organ weight ("Liver Relative", built by
-    # build_table_data from the organ-weight experiment) has no probe of its
-    # own in the integrated data; it belongs to its organ's platform.
+    # A derived endpoint has no probe of its own in the integrated data: a
+    # relative organ weight ("Liver Relative", from the organ-weight
+    # experiment) belongs to its organ's platform; a derived clinical
+    # chemistry endpoint (Globulin, A/G Ratio) to its source's
+    # (bmdx_pipe.apical_report.DERIVED_SOURCE).
+    from bmdx_pipe.apical_report import DERIVED_SOURCE
     platform_tables: dict[str, dict[str, list]] = {}
     for sex, rows in table_data.items():
         for row in rows:
             plat = sex_probe_platform.get((sex, row.label))
             if plat is None and row.label.endswith(" Relative"):
                 plat = sex_probe_platform.get((sex, row.label[: -len(" Relative")]))
+            if plat is None and row.label in DERIVED_SOURCE:
+                plat = sex_probe_platform.get((sex, DERIVED_SOURCE[row.label]))
             plat = plat or "unknown"
             platform_tables.setdefault(plat, {}).setdefault(sex, []).append(row)
 
@@ -452,7 +457,7 @@ def apply_section_filters(
                     or assay_allowed(r.get("label", ""), assay_allow)
                 ]
             # organ row filter (Organ Weight only): keep n-rows / Terminal Body
-            # Weight context rows; filter organ rows by their leading token.
+            # Weight rows; filter organ rows by their leading token.
             if is_ow and organ_allowlist:
                 filtered = []
                 for r in kept:
@@ -539,6 +544,7 @@ def _build_section_cards(
     ow_sex_allow: list[str] | None = None,
     design: dict | None = None,
     method=None,
+    dispositions: dict[str, dict] | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -657,6 +663,7 @@ def _build_section_cards(
                     dose_unit=dose_unit,
                     design=design,
                     method=method,
+                    dispositions=dispositions,
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -749,7 +756,7 @@ def _build_section_cards(
         # The organ weight builder computes absolute + relative (per-animal
         # absolute/TBW × 1000) weights from raw sidecar data.  All organs
         # appear; the responsive gate controls BMD column values only.
-        # Terminal Body Weight is always shown as a context row.
+        # Terminal Body Weight is always shown, tested and modeled.
         if platform == "Organ Weight" and dtxsid:
             from tables.table_builder_common import find_sidecar_paths as _find_sidecar
             from tables.organ_weight_table import build_organ_weight_table_from_sidecar
@@ -1080,6 +1087,7 @@ async def _extract_genomics(
     go_min_genes: int,
     go_max_genes: int,
     go_min_bmd: int,
+    gene_min_fold_change: float | None = None,
 ) -> dict:
     """
     Extract gene expression genomics data from the integrated .bm2 file.
@@ -1118,7 +1126,8 @@ async def _extract_genomics(
     from genomics.bmdexpress_categories import (
         category_analyses_by_experiment, chip_species_by_experiment, gene_level_top_genes,
         display_symbols, genomic_bmr, go_direction_counts, prefilter_fold_changes,
-        probe_gene_annotations, report_bmd_decimals,
+        lower_limits_of_extrapolation, probe_gene_annotations, report_bmd_decimals,
+        reported_go_ids,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
     # Every BMD in the report prints at one precision; stamped on each section
@@ -1127,6 +1136,7 @@ async def _extract_genomics(
     chip_species = chip_species_by_experiment(integrated)
     prefilter_fc = prefilter_fold_changes(integrated)
     probe_genes = probe_gene_annotations(integrated)
+    lle_by_exp = lower_limits_of_extrapolation(integrated)
 
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
@@ -1155,7 +1165,17 @@ async def _extract_genomics(
                 g["gene_symbol"], g["entrez_id"] = annotated[g["probe_id"]]
 
         # Filter GO terms by user-configured cutoffs
-        raw_go = exp.get("go_bp", [])
+        # Each GO term once (the export lists a term once per GO analysis the
+        # project holds), and only the deduplicated analysis's terms when the
+        # project has one.
+        kept_ids = reported_go_ids(exp_cats)
+        raw_go, seen_go = [], set()
+        for g in exp.get("go_bp", []):
+            gid = g.get("go_id")
+            if gid in seen_go or (kept_ids is not None and gid not in kept_ids):
+                continue
+            seen_go.add(gid)
+            raw_go.append(g)
         filtered_go = []
         for g in raw_go:
             n_total = g.get("n_genes", 0) or 0
@@ -1246,6 +1266,7 @@ async def _extract_genomics(
             exp_cats.get("GENE", []),
             {g.get("probe_id"): g.get("fold_change") for g in genes if g.get("probe_id")},
             chip_species.get(exp.get("name")),
+            min_fold_change=gene_min_fold_change,
         )
         genomics_sections[key] = {
             "organ": organ,
@@ -1261,6 +1282,7 @@ async def _extract_genomics(
             "genomic_bmr": genomic_bmr(integrated, exp.get("name", "")),
             "top_genes_level": "gene" if gene_level else "probe",
             "bmd_decimals": bmd_decimals,
+            "lower_limit_of_extrapolation": lle_by_exp.get(exp.get("name", "")),
             # top_genes: ranked subset (top 10) shown in the gene table.
             # Gene level (BMDExpress GENE categories) when the project has them;
             # else the per-probe fits, carrying the probe id as its own column.
@@ -1527,9 +1549,9 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
     hard-stop (`_BMD_HARD_STOP` in process_integrated, armed) halts the run on a
     non-empty `divergences`.
     """
-    if entry.get("filled"):
-        # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row);
-        # there is no bm2 value to cross-check.
+    if entry.get("filled") or entry.get("anomalous"):
+        # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row),
+        # or a BMD a reviewer rejected: nothing to cross-check or fill.
         return
     entry["source"] = "bm2"
     entry["validated"] = None
@@ -1573,10 +1595,6 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
             entry["bmr_config"] = tox["bmr_config"]
         if tox.get("bmr"):
             entry["bmr"] = tox["bmr"]
-        # This endpoint is now a ToxicR value, not the bm2 anomaly marker.
-        entry.pop("anomalous", None)
-        entry.pop("bmd_original", None)
-        entry.pop("bmdl_original", None)
 
 
 def _build_apical_bmd_summary(
@@ -1584,9 +1602,13 @@ def _build_apical_bmd_summary(
     bmds_results: dict | None = None,
     divergences: list | None = None,
     bmd_decimals: int | None = None,
+    tbw_tested: bool = True,
 ) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
+    ``tbw_tested``: whether the method tests terminal body weight
+    (apical.terminal_body_weight_tested); when it does not, the endpoint is
+    left out, as NIEHS-07 … 10 leave it out.
 
     Collects BMD, BMDL, LOEL, NOEL, direction from ALL platform TableRows into
     a flat list for the separate BMD summary card.  Matches the NIEHS reference
@@ -1602,22 +1624,18 @@ def _build_apical_bmd_summary(
     Only includes endpoints that have a BMD result OR significant trend/pairwise
     findings (LOEL exists).  Endpoints with neither are uninteresting.
 
-    Anomalous BMDs (curve-fit values implausibly lower than the statistical
-    NOEL/LOEL — model artifacts) are replaced with "UREP" (Unreliable
-    Extrapolation) markers in the BMD/BMDL columns and the direction is
-    blanked.  This matches NIEHS Report 10's Table 8 convention: keep the
-    row so the LOEL/NOEL columns are still informative, but flag that the
-    curve-fit BMD shouldn't be trusted.
+    A BMD a reviewer rejected (pipeline.bmd_review: the row is UREP, an
+    unreliable estimate of potency) keeps its row with "UREP" in the BMD/BMDL
+    columns and the direction blanked, NIEHS Table 8's convention: the
+    LOEL/NOEL columns stay informative.  The reviewed values are kept as
+    bmd_original / bmdl_original with the fold range.  A flagged BMD no one
+    has decided yet stays a number, marked ``review: "pending"`` (it closes
+    the publish gate).
 
     Sort order matches the reference report: rows with reliable numeric
     BMDs first (ascending by BMD), then unreliable rows (UREP/NVM) sorted
     by LOEL ascending — "Sorted by BMD or LOEL from Low to High".
     """
-    # Import the anomaly heuristic from methods_report — same threshold
-    # the abstract Results uses to drop endpoints from the "effects
-    # included..." list, so the body table and abstract stay in sync.
-    from narrative.methods_report import _is_anomalous_bmd
-
     raw_entries: list[dict] = []
     for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
@@ -1634,14 +1652,14 @@ def _build_apical_bmd_summary(
                 reportable_status = row.bmd_status not in (None, "failure")
                 if not row.responsive and not reportable_status:
                     continue
-                # Body-weight endpoints are context only, never apical BMD
-                # candidates — the reference omits Terminal Body Weight and the
-                # per-study-day body-weight rows from Table 8 even though the
-                # terminal-day decrease is statistically responsive.  The one
-                # exception is the derived Body Weight Gain, which the NIEHS
-                # summaries list and model (NIEHS-10 male, NIEHS-13 mouse).
-                if row.label == "Terminal Body Weight" or (
-                        platform == "Body Weight" and row.label != "Body Weight Gain"):
+                # The per-study-day body-weight rows are never apical BMD
+                # candidates; the derived Body Weight Gain is (NIEHS-10 male,
+                # NIEHS-13 mouse).  Terminal Body Weight is when the method tests
+                # it (apical.terminal_body_weight_tested: NIEHS-02 and 12 list
+                # it), not when it does not (NIEHS-07 … 10 leave it out).
+                if row.label == "Terminal Body Weight" and not tbw_tested:
+                    continue
+                if platform == "Body Weight" and row.label != "Body Weight Gain":
                     continue
                 raw_entries.append({
                     "endpoint": _summary_endpoint_label(row.label, platform),
@@ -1656,6 +1674,16 @@ def _build_apical_bmd_summary(
                     # Internal ToxicR join key (raw label); stripped after merge.
                     "_key": f"{sex}::{row.label}",
                 })
+                urep = getattr(row, "_urep", None)
+                if urep:
+                    # A reviewer rejected this BMD (pipeline.bmd_review).
+                    raw_entries[-1].update({
+                        "bmd_original": urep["bmd"], "bmdl_original": urep["bmdl"],
+                        "fold": urep["fold"], "direction": "–",  # en dash, as Table 8
+                        "anomalous": True,
+                    })
+                elif getattr(row, "_bmd_review_pending", False):
+                    raw_entries[-1]["review"] = "pending"
                 fill = getattr(row, "_bmd_fill", None)
                 if fill:
                     raw_entries[-1].update({
@@ -1664,20 +1692,6 @@ def _build_apical_bmd_summary(
                         **({"bmr": fill["bmr"]} if fill.get("bmr") else {}),
                         **({"model_name": fill["model_name"]} if fill.get("model_name") else {}),
                     })
-
-    # --- Apply UREP marking ---
-    # An endpoint becomes UREP when the BMD parses as a finite number but
-    # falls implausibly far below the statistically-observed NOEL/LOEL.
-    # The original numeric values are preserved on the entry as
-    # bmd_original / bmdl_original in case downstream consumers want them.
-    for entry in raw_entries:
-        if _is_anomalous_bmd(entry):
-            entry["bmd_original"] = entry["bmd"]
-            entry["bmdl_original"] = entry["bmdl"]
-            entry["bmd"] = "UREP"
-            entry["bmdl"] = "UREP"
-            entry["direction"] = "–"  # en dash — matches reference Table 8
-            entry["anomalous"] = True
 
     # --- Reconcile with ToxicR (task #34): provenance + fill + divergence flag ---
     # Only when the caller passes the ToxicR fits; otherwise the pure-bm2 summary

@@ -10,7 +10,6 @@ import json
 
 import openpyxl
 
-from pipeline.sidecar_units import stamp_sidecar_units
 from rendering.render_common import scan_pending_markers
 from tables.table_builder_common import find_sidecar_paths, load_sidecar
 from tables.tissue_concentration_table import (
@@ -42,28 +41,21 @@ def test_niehs10_unit_reaches_the_sidecar_at_ingest(reference_session):
     assert ow["units"]["Liver"] == "grams"
 
 
-def test_niehs10_unit_comes_from_the_study_workbook_at_integration(reference_session):
+def test_niehs10_unit_comes_from_the_study_workbook(reference_session):
     # A pool of unit-less truth CSVs plus the original study workbooks (what a
-    # customer supplies): integration stamps the units from the workbook.
-    from pipeline.pool_fingerprints import ensure_fingerprints
-
+    # customer supplies): the workbooks drive, so the sidecars are written from
+    # them, with the units their Key sheets state.
     session = reference_session("NIEHS-10", "DTXSID50469320", with_workbooks=True, units=False)
     paths = find_sidecar_paths(str(session), "Tissue Concentration")
+    assert {load_sidecar(p)["source"] for p in paths.values()} == {
+        "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"}
 
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
-    assert scan_pending_markers(tc["footnotes"][0]["text"]) == [
-        "[Placeholder: concentration unit not recorded in the data]"]
-    assert compute_toxicokinetics(paths)["unit"] is None
-
-    fps = ensure_fingerprints("DTXSID50469320")
-    assert stamp_sidecar_units(fps, session)  # every platform with a workbook
-    tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
-    assert tc["footnotes"][0]["text"].endswith("plasma concentration data are presented in µg/mL.")
+    assert {r["label"] for r in tc["table_data"]["Male"] if not r.get("is_n_row")} == {
+        "2 Hours Postdose (µg/mL)", "24 Hours Postdose (µg/mL)"}
     tk = compute_toxicokinetics(paths)
     assert tk["unit"] == "µg/mL"
     assert "(in µg/mL)" in build_internal_dose_narrative(tk, CHEM)[0]
-    # Idempotent: a second integration changes nothing.
-    assert stamp_sidecar_units(fps, session) == {}
 
 
 def test_cebs_converter_writes_the_units_companion(tmp_path):
@@ -80,7 +72,7 @@ def test_cebs_converter_writes_the_units_companion(tmp_path):
     wb.save(src)
     out = tmp_path / "out"
     out.mkdir()
-    assert convert_workbook(str(src), str(out))["units"] == 1
+    assert convert_workbook(str(src), str(out), as_csv=True)["units"] == 1
     assert json.loads((out / "clin_chem_truth_male.units.json").read_text()) == {"Albumin": "g/dL"}
 
 

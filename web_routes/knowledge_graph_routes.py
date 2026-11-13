@@ -1,112 +1,237 @@
 """
-HTTP routes for the knowledge-graph crawl-config editor.
+HTTP routes for the crawl queries and the knowledge bases made from them.
 
-Exposes the literature-crawl configuration (GovernorConfig surface) for viewing
-and per-session editing, tracked against a frozen "original" baseline. Config-only:
-no crawl is launched here. Persistence is one JSON file per session
-(sessions/{dtxsid}/crawl_config.json), archived before each overwrite.
+A crawl query is named YAML text (knowledge_base.crawl_queries): read it, save
+an edit (the old text archived), or ask the query agent for a proposed edit
+(knowledge_base.query_agent — it saves nothing).  A named crawl runs a query
+into a named knowledge base in the background (knowledge_base.run_crawl); its
+progress is its manifest.  A report reads the knowledge base its document
+definition names, else the default (knowledge_base.registry).  Saving a query,
+running a crawl, assigning a knowledge base and setting the default go through
+the safeguards (safeguards.guarded, safeguards.knowledge): they refuse a
+knowledge base that cannot ground a report's genomics interpretation, and a
+query that would tie a test article to genes.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from web_routes.dtxsid_param import Dtxsid
 
-from knowledge_base.crawl_config import (
-    ORIGINAL_CRAWL_CONFIG,
-    diff_against_original,
-    validate_config,
-)
-from workflow.store import DiskPoolStore
+from knowledge_base import crawl_queries, registry
+from safeguards.refusals import Refused
+from web_routes.dtxsid_param import Dtxsid
+from web_routes.refusal_response import refusal_response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_CONFIG_NAME = "crawl_config.json"
+# Knowledge bases a crawl is running into (this process): one run per name.
+_running: set[str] = set()
+_running_lock = threading.Lock()
 
 
-def _archive_prior(dtxsid: str, store: DiskPoolStore) -> None:
-    """Archive the current session config to history/ before it's overwritten."""
-    path = store.session_dir(dtxsid) / _CONFIG_NAME
-    if not path.exists():
-        return
-    from pipeline.session_store import now_iso
-    history_dir = store.session_dir(dtxsid) / "history" / "crawl_config"
-    history_dir.mkdir(parents=True, exist_ok=True)
-    safe_ts = now_iso().replace(":", "-")
-    (history_dir / f"{safe_ts}.json").write_text(
-        path.read_text(encoding="utf-8"), encoding="utf-8",
-    )
-
-
-def _current_config(dtxsid: str, store: DiskPoolStore, *, force_default: bool) -> tuple[dict, bool]:
-    """Return (config, is_default). Falls back to the frozen original when the
-    session has no saved config (or default is forced)."""
-    if not force_default:
-        saved = store.read_json(dtxsid, _CONFIG_NAME)
-        if isinstance(saved, dict):
-            return saved, False
-    return dict(ORIGINAL_CRAWL_CONFIG), True
-
-
-@router.get("/api/crawl-config/{dtxsid}")
-async def api_get_crawl_config(dtxsid: Dtxsid, default: int = 0):
-    """Load the session's crawl config (or the frozen original if unedited).
-
-    Returns the config, whether it's the default, the immutable original (so the
-    client can render its own diff), and the server-computed change-list.
-    """
-    store = DiskPoolStore()
-    config, is_default = _current_config(dtxsid, store, force_default=bool(default))
-    return JSONResponse({
-        "config": config,
-        "is_default": is_default,
-        "original": ORIGINAL_CRAWL_CONFIG,
-        "diff": diff_against_original(config),
-    })
-
-
-@router.post("/api/crawl-config/{dtxsid}")
-async def api_save_crawl_config(dtxsid: Dtxsid, request: Request):
-    """Validate and persist a tweaked crawl config. 422 on invalid, nothing written."""
+async def _body(request: Request) -> dict:
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse({"error": "invalid JSON body"}, status_code=422)
+        body = None
+    if not isinstance(body, dict):
+        raise Refused("bad_request", "body must be a JSON object", 422)
+    return body
 
-    config = body.get("config") if isinstance(body, dict) else None
-    if not isinstance(config, dict):
-        return JSONResponse({"error": "body must be {\"config\": {...}}"}, status_code=422)
 
+def _invalid(e: Exception) -> Refused:
+    return Refused("crawl_query_invalid", str(e), 422, {"problem": str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Crawl queries
+# ---------------------------------------------------------------------------
+
+@router.get("/api/crawl-queries")
+async def api_list_queries():
+    return JSONResponse({"queries": crawl_queries.list_queries(), "format": crawl_queries.FORMAT})
+
+
+@router.get("/api/crawl-queries/{name}")
+async def api_get_query(name: str):
     try:
-        validate_config(config)
-    except ValueError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=422)
-
-    store = DiskPoolStore()
-    _archive_prior(dtxsid, store)
-    store.write_json(dtxsid, _CONFIG_NAME, config)
-    return JSONResponse({"ok": True, "diff": diff_against_original(config)})
+        text = crawl_queries.read(name)
+    except crawl_queries.QueryError as e:
+        return refusal_response(_invalid(e))
+    return JSONResponse({"name": name, "text": text, "hash": crawl_queries.text_hash(text),
+                         "history": crawl_queries.history(name)})
 
 
-@router.post("/api/crawl-config/{dtxsid}/reset")
-async def api_reset_crawl_config(dtxsid: Dtxsid):
-    """Revert to the frozen original by removing the session config (archived first)."""
-    store = DiskPoolStore()
-    _archive_prior(dtxsid, store)
-    path = store.session_dir(dtxsid) / _CONFIG_NAME
-    existed = path.exists()
-    if existed:
-        path.unlink()
-    return JSONResponse({
-        "ok": True,
-        "reset": existed,
-        "config": dict(ORIGINAL_CRAWL_CONFIG),
-        "is_default": True,
-        "original": ORIGINAL_CRAWL_CONFIG,
-        "diff": {},
-    })
+@router.post("/api/crawl-queries/check")
+async def api_check_query(request: Request):
+    """Whether a text is a query the crawl can read (nothing saved)."""
+    try:
+        body = await _body(request)
+        crawl_queries.parse(str(body.get("text") or ""))
+    except Refused as e:
+        return refusal_response(e)
+    except crawl_queries.QueryError as e:
+        return JSONResponse({"valid": False, "problem": str(e)})
+    return JSONResponse({"valid": True, "problem": None})
+
+
+@router.post("/api/crawl-queries/{name}")
+async def api_save_query(name: str, request: Request):
+    """Save ``{text}`` as the query ``name`` (an existing text archived first).
+    Refused when it names a test article and genes (safeguards.knowledge)."""
+    from safeguards.guarded import save_crawl_query
+    try:
+        body = await _body(request)
+        saved = save_crawl_query(name, str(body.get("text") or ""))
+    except Refused as e:
+        return refusal_response(e)
+    except crawl_queries.QueryError as e:
+        return refusal_response(_invalid(e))
+    return JSONResponse({"saved": True, **saved})
+
+
+@router.get("/api/crawl-queries/{name}/history/{entry}")
+async def api_query_history_entry(name: str, entry: str):
+    """One archived text of a query (an entry of its ``history``)."""
+    if entry not in crawl_queries.history(name):
+        return JSONResponse({"error": f"no archived text {entry!r} of {name!r}"}, status_code=404)
+    path = crawl_queries.QUERIES_DIR / crawl_queries.HISTORY_DIR / name / entry
+    return JSONResponse({"name": name, "entry": entry, "text": path.read_text(encoding="utf-8")})
+
+
+@router.post("/api/crawl-queries/{name}/propose")
+async def api_propose_query_edit(name: str, request: Request):
+    """The query agent's proposed edit: ``{request, text?, earlier?}`` →
+    ``{text, explanation, diff, changed, valid, problem}``.  ``text`` is the
+    text being edited (default: the saved one).  Nothing is saved."""
+    from knowledge_base.query_agent import propose
+    try:
+        body = await _body(request)
+        text = body.get("text")
+        if text is None:
+            text = crawl_queries.read(name)
+        result = await asyncio.to_thread(propose, str(text), str(body.get("request") or ""),
+                                         earlier=body.get("earlier") or [])
+    except Refused as e:
+        return refusal_response(e)
+    except crawl_queries.QueryError as e:
+        return refusal_response(_invalid(e))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:  # the gateway: LLMEgressBlocked and the like
+        return refusal_response(e)
+    return JSONResponse(result)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge bases
+# ---------------------------------------------------------------------------
+
+@router.get("/api/knowledge-bases")
+async def api_list_knowledge_bases():
+    """Every knowledge base (its manifest, without the query text), and the default."""
+    out = []
+    for m in registry.list_knowledge_bases():
+        m = dict(m)
+        m["query"] = {k: v for k, v in (m.get("query") or {}).items() if k != "text"}
+        m["running"] = m.get("name") in _running
+        out.append(m)
+    return JSONResponse({"knowledge_bases": out, "default": registry.default_name()})
+
+
+@router.get("/api/knowledge-bases/{name}")
+async def api_get_knowledge_base(name: str):
+    try:
+        m = registry.manifest(name)
+    except registry.KnowledgeBaseError as e:
+        return refusal_response(Refused("knowledge_base_unknown", str(e), 404, {"name": name}))
+    return JSONResponse({**m, "running": name in _running})
+
+
+def _run_in_background(query: str, name: str, resume: bool) -> None:
+    from knowledge_base.run_crawl import run
+    try:
+        m = run(query, name, resume)
+        logger.info("Crawl %s → %s finished: complete=%s", query, name, m.get("complete"))
+    except Exception:
+        logger.exception("Crawl %s → %s failed", query, name)
+    finally:
+        with _running_lock:
+            _running.discard(name)
+
+
+@router.post("/api/knowledge-bases/run")
+async def api_run_crawl(request: Request):
+    """Run ``{query, name, resume?}`` into the knowledge base ``name``, in the
+    background.  Its progress is its manifest (GET /api/knowledge-bases/{name}).
+    Refused before it starts when the run could not take the name, or the
+    query ties a test article to genes (safeguards.knowledge)."""
+    from safeguards.guarded import require_crawl_run
+    try:
+        body = await _body(request)
+        query, name = str(body.get("query") or ""), str(body.get("name") or "")
+        resume = bool(body.get("resume"))
+        require_crawl_run(query, name, resume)
+        with _running_lock:
+            if name in _running:
+                raise Refused("crawl_running", f"a crawl into {name!r} is running", 409,
+                              {"name": name})
+            _running.add(name)
+    except Refused as e:
+        return refusal_response(e)
+    threading.Thread(target=_run_in_background, args=(query, name, resume),
+                     name=f"crawl-{name}", daemon=True).start()
+    return JSONResponse({"started": True, "query": query, "name": name}, status_code=202)
+
+
+@router.post("/api/knowledge-bases/default")
+async def api_set_default_knowledge_base(request: Request):
+    """Make ``{name}`` the knowledge base of every report that names none."""
+    from safeguards.guarded import set_default_knowledge_base
+    try:
+        body = await _body(request)
+        name = str(body.get("name") or "")
+        set_default_knowledge_base(name)
+    except Refused as e:
+        return refusal_response(e)
+    return JSONResponse({"default": name})
+
+
+@router.get("/api/session/{dtxsid}/knowledge-base")
+async def api_session_knowledge_base(dtxsid: Dtxsid):
+    """The knowledge base the session's report reads: its definition's, else
+    the default; ``usable`` false when it cannot ground the genomics
+    interpretation (the reason in ``problem``)."""
+    from pipeline.kb_currency import recorded
+    name, source = registry.assigned_name(dtxsid)
+    try:
+        kb = registry.kb_for(dtxsid)
+        problem = None
+    except registry.KnowledgeBaseError as e:
+        kb, problem = None, str(e)
+    return JSONResponse({"name": name, "source": source, "usable": kb is not None,
+                         "problem": problem, "capabilities": (kb or {}).get("capabilities"),
+                         "processed_with": recorded(dtxsid)})
+
+
+@router.post("/api/session/{dtxsid}/knowledge-base")
+async def api_assign_knowledge_base(dtxsid: Dtxsid, request: Request):
+    """Name ``{name}`` in the report's document definition (``null``: read the
+    default again).  The next Process takes it up."""
+    from safeguards.guarded import assign_knowledge_base
+    try:
+        body = await _body(request)
+        name = body.get("name")
+        result = assign_knowledge_base(dtxsid, str(name) if name is not None else None)
+    except Refused as e:
+        return refusal_response(e)
+    except registry.KnowledgeBaseError as e:
+        return refusal_response(Refused("knowledge_base_unknown", str(e), 404, {"name": name}))
+    return JSONResponse(result)

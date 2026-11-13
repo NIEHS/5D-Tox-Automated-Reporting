@@ -266,6 +266,9 @@ document:
       title: Animal Condition, Body Weights, and Organ Weights
       narrative_key: animal_condition
       ready_key: animalCondition
+      # Clinical observations alone still give it its Animal Condition prose.
+      requires_platform: [Body Weight, Organ Weight, Clinical Observations]
+      not_collected_text: "Body and organ weights were not evaluated in this study."
       children:
       - id: table-body-weight
         type: table
@@ -284,6 +287,8 @@ document:
       title: Clinical Pathology
       narrative_key: clinical_pathology
       ready_key: clinicalPath
+      requires_platform: [Clinical Chemistry, Hematology, Hormones]
+      not_collected_text: "Clinical pathology (clinical chemistry, hematology, and hormone analyses) was not evaluated in this study."
       children:
       - id: table-clin-chem
         type: table
@@ -308,6 +313,8 @@ document:
       title: Internal Dose Assessment
       narrative_key: internal_dose
       ready_key: internalDose
+      requires_platform: Tissue Concentration
+      not_collected_text: "Internal dose was not assessed in this study."
       children:
       - id: table-tissue-conc
         type: table
@@ -452,6 +459,9 @@ document:
     element: book-app
     book_part_type: appendix
     title: Organ Weight Descriptions
+    # The organ weight table's note (a) points here: "Descriptions of organ
+    # weight endpoints and changes are provided in Appendix E."
+    cited_as: organ-weight-descriptions
     children:
     - id: appendix-e-descriptions
       type: heading-only

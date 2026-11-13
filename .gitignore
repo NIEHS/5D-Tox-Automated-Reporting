@@ -121,3 +121,9 @@ assets/windows/
 # Separate workspaces (tooling/workspace.sh): other people's sessions, uploads
 # and outputs — study data, never committed.
 workspaces/
+
+# A named knowledge base's crawl outputs (knowledge_base.run_crawl) stay on disk;
+# the database and its manifest are the record.  The baseline's are kept: they
+# were the repository's citegraph_output*/ and rebuild its database row for row.
+knowledge_bases/*/crawl/
+!knowledge_bases/baseline-2026-05/crawl/

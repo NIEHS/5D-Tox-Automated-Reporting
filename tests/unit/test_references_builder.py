@@ -4,7 +4,8 @@ Unit tests for the graph-grounded references builder.
 Two concerns are pinned:
   * the candidate POOL is a pure, deterministic graph computation (same genes ->
     same pool, stable [Pn] token order, full metadata resolution) — tested
-    against the real bmdx.duckdb shipped in the worktree, with NO network;
+    against the baseline knowledge base shipped in the worktree
+    (knowledge_bases/baseline-2026-05), with NO network;
   * report-wide ASSEMBLY merges per-stratum [Pn] citations into ONE globally
     numbered list and rewrites inline tokens to [n] — tested with tiny in-memory
     fixtures so it needs no DB and no LLM.
@@ -26,7 +27,8 @@ from narrative.references_builder import (
     references_paragraphs,
 )
 
-DB_PATH = pathlib.Path(__file__).resolve().parents[2] / "bmdx.duckdb"
+DB_PATH = (pathlib.Path(__file__).resolve().parents[2]
+           / "knowledge_bases" / "baseline-2026-05" / "kb.duckdb")
 
 # A gene set with known KB coverage (liver/male PFHxSAm responsive genes).
 _GENES = ["CYP7A1", "EGR1", "MYC", "NFKBIA", "PRLR", "ABCB1A"]
@@ -208,9 +210,9 @@ def test_detect_override_in_pool_tokens_do_not_warn():
 
 
 # ---------------------------------------------------------------------------
-# Real-DB tests — the pool against the shipped bmdx.duckdb (no network)
+# Real-DB tests — the pool against the shipped baseline knowledge base (no network)
 # ---------------------------------------------------------------------------
-@pytest.mark.skipif(not DB_PATH.exists(), reason="bmdx.duckdb not present")
+@pytest.mark.skipif(not DB_PATH.exists(), reason="baseline knowledge base not present")
 class TestRealDB:
     def test_pool_from_real_graph_is_deterministic_and_resolved(self):
         pool_a = build_reference_pool_for_genes(_GENES, str(DB_PATH), pool_size=20)

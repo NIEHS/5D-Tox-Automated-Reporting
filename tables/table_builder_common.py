@@ -85,21 +85,27 @@ def significance_explanation(dose_unit: str | None = None) -> str:
 #       above the lettered footnotes.
 #
 #   {"kind": "lettered",   "text": str, "id": str,
-#    "marker": {"target": "header" | "cells" | "none"},
+#    "marker": {"target": "caption" | "header" | "cells" | "none"},
 #    "letter": str}        # <- assigned by finalize_footnotes, not the builder
 #       A lettered footnote.  `id` is a stable identity (NOT the letter);
 #       `marker.target` declares where the letter also appears:
+#         "caption" — superscripted after the table's caption (a table with
+#                    no first-column header: NIEHS-07 … 10's plasma table)
 #         "header" — superscripted on the table's first-column header
+#                    ("Endpoint^a,b": the notes on the whole table)
 #         "cells"  — superscripted on specific row cells; the rows name
 #                    this footnote by `id` via their `marker_refs` dict
 #         "none"   — appears only in the footnote list, no in-table marker
 #
-# A row that hosts a cell marker carries `marker_refs: {dose_key: footnote_id}`
-# — the stable id, never a letter.  `finalize_footnotes` is the single place
-# that turns ids into letters: it assigns the letters and derives each row's
-# `markers: {dose_key: letter}` from `marker_refs`.  Because it always
+# A row that hosts a cell marker carries `marker_refs: {cell: footnote_id}` —
+# the stable id (or a list of ids, "6^c,d"), never a letter.  The cell is a
+# dose key (js_dose_key), "label" (the row's label: "Relative (mg/g)^e"), or
+# "bmd"/"bmdl".  `finalize_footnotes` is the single place that turns ids into
+# letters: it assigns the letters and derives each row's
+# `markers: {cell: "c" | "c,d"}` from `marker_refs`.  Because it always
 # re-derives from `marker_refs`, it is idempotent and safe to run again after
-# more footnotes are merged in downstream (see report_data.py).
+# more footnotes are merged in downstream (see report_data.py).  The emitters
+# print the letters (rendering.render_common.apical_table_plan).
 
 # ---------------------------------------------------------------------------
 # Report-level organ allowlist (per-area limiting factor)
@@ -173,6 +179,9 @@ def definition_footnote(text: str) -> dict:
     return {"kind": "definition", "text": text}
 
 
+MARKER_TARGETS = ("caption", "header", "cells", "none")
+
+
 def lettered_footnote(text: str, footnote_id: str, target: str = "none") -> dict:
     """
     Build a `lettered` footnote record.
@@ -183,11 +192,11 @@ def lettered_footnote(text: str, footnote_id: str, target: str = "none") -> dict
                      "attrition_333_male").  Rows reference this id in their
                      `marker_refs`; it is NOT the displayed letter.
         target:      Where the assigned letter also appears in the table —
-                     "header", "cells", or "none" (default).
+                     "caption", "header", "cells", or "none" (default).
     """
-    if target not in ("header", "cells", "none"):
+    if target not in MARKER_TARGETS:
         raise ValueError(
-            f"lettered_footnote target must be header/cells/none, got {target!r}"
+            f"lettered_footnote target must be one of {MARKER_TARGETS}, got {target!r}"
         )
     return {
         "kind": "lettered",
@@ -210,8 +219,8 @@ def finalize_footnotes(
     `legend` and `definition` records are skipped (they carry no letter).
 
     It then walks `serialized_rows` ({sex: [row, ...]}) and, for every row
-    carrying a `marker_refs` dict ({dose_key: footnote_id}), derives a
-    fresh `markers` dict ({dose_key: letter}) by resolving each id through
+    carrying a `marker_refs` dict ({cell: footnote_id or [ids]}), derives a
+    fresh `markers` dict ({cell: "c" or "c,d"}) by resolving each id through
     the letter map.  `marker_refs` is the stable, builder-owned source of
     truth; `markers` is always rebuilt from it — so this function is
     idempotent and may be called again after additional footnotes are
@@ -248,13 +257,29 @@ def finalize_footnotes(
             refs = row.get("marker_refs")
             if not refs:
                 continue
-            row["markers"] = {
-                dose_key: id_to_letter[fid]
-                for dose_key, fid in refs.items()
-                if fid in id_to_letter
-            }
+            markers = {}
+            for cell, fids in refs.items():
+                letters = sorted(id_to_letter[f] for f in _ids(fids) if f in id_to_letter)
+                if letters:
+                    markers[cell] = ",".join(letters)
+            row["markers"] = markers
 
     return footnotes
+
+
+def _ids(fids) -> list[str]:
+    """A cell's footnote ids: one id or a list of them."""
+    return [fids] if isinstance(fids, str) else list(fids or [])
+
+
+def add_marker_ref(row: dict, cell: str, footnote_id: str) -> None:
+    """Point ``row``'s ``cell`` (a dose key, "label", "bmd", "bmdl") at a
+    footnote as well as any it already points at ("6^c,d")."""
+    refs = row.setdefault("marker_refs", {})
+    ids = _ids(refs.get(cell))
+    if footnote_id not in ids:
+        ids.append(footnote_id)
+    refs[cell] = ids[0] if len(ids) == 1 else ids
 
 
 # ---------------------------------------------------------------------------
@@ -277,8 +302,64 @@ def finalize_footnotes(
 # death-based (per-animal terminal-day tracking), not all-NA, so it keeps
 # its own attrition logic in body_weight_table.py.
 
+def _day(obs: dict) -> int | None:
+    m = re.search(r"-?\d+", str(obs.get("day") or ""))
+    return int(m.group()) if m else None
+
+
+def _has_value(obs: dict) -> bool:
+    v = obs.get("value")
+    return bool(v and str(v).strip() and str(v).strip().upper() != "NA")
+
+
+def removed_early(sc: dict) -> set[str]:
+    """The Core Animals of a sidecar whose last recorded value is before the
+    scheduled removal (the latest day any Core Animal has a value on): found
+    dead or moribund, weighed at death.  Integration leaves their organ
+    weights out (bmdx_pipe.pool_integrator._keep_scheduled_removals)."""
+    last: dict[str, int] = {}
+    for aid, rec in (sc or {}).get("animals", {}).items():
+        if is_biosampling(rec.get("selection")):
+            continue
+        days = [d for o in rec.get("observations", []) if _has_value(o)
+                and (d := _day(o)) is not None]
+        if days:
+            last[aid] = max(days)
+    scheduled = max(last.values(), default=None)
+    return {aid for aid, d in last.items() if d < scheduled}
+
+
+def roster_sidecars(sidecar_paths: dict[str, str]) -> dict[str, dict]:
+    """The study roster beside a platform's sidecars: the body weight
+    sidecars of the same session (every animal on study), {} when none."""
+    any_path = next(iter((sidecar_paths or {}).values()), None)
+    if not any_path:
+        return {}
+    session_dir = os.path.dirname(os.path.dirname(any_path))
+    return {sex: load_sidecar(p) for sex, p in
+            find_sidecar_paths(session_dir, platform="Body Weight").items()}
+
+
+def whole_groups_removed_early(roster: dict[str, dict] | None) -> dict[str, dict[float, int]]:
+    """``{sex: {dose: n}}``: the dose groups of the study roster (the body
+    weight sidecars: every animal on study) none of whose Core Animals reached
+    the scheduled removal."""
+    out: dict[str, dict[float, int]] = {}
+    for sex, sc in (roster or {}).items():
+        early = removed_early(sc)
+        by_dose: dict[float, list[bool]] = {}
+        for aid, rec in (sc or {}).get("animals", {}).items():
+            if not is_biosampling(rec.get("selection")):
+                by_dose.setdefault(rec["dose"], []).append(aid in early)
+        groups = {d: len(f) for d, f in by_dose.items() if f and all(f)}
+        if groups:
+            out[sex] = groups
+    return out
+
+
 def detect_core_animal_availability(
     sidecar_data: dict[str, dict],
+    scheduled_only: bool = False,
 ) -> tuple[
     dict[str, dict[float, int]],
     dict[str, dict[float, int]],
@@ -296,6 +377,10 @@ def detect_core_animal_availability(
     Args:
         sidecar_data: {sex: parsed-sidecar-dict}, as returned by
                       load_sidecar() per sex.
+        scheduled_only: an animal removed early (removed_early: weighed at
+                      death) counts in the group's total but neither as
+                      available nor as a missing sample — organ weights,
+                      which count the scheduled necropsy only.
 
     Returns:
         A 3-tuple of per-sex, per-dose dicts:
@@ -312,6 +397,7 @@ def detect_core_animal_availability(
         dose_all: dict[float, set[str]] = {}
         dose_missing: dict[float, list[str]] = {}
 
+        early = removed_early(sc) if scheduled_only else set()
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             # Include Core Animals and animals with unknown selection.
@@ -322,6 +408,8 @@ def detect_core_animal_availability(
                 continue
             dose = rec["dose"]
             dose_all.setdefault(dose, set()).add(aid)
+            if aid in early:
+                continue
 
             has_data = any(
                 obs.get("value") and obs["value"].strip()
@@ -548,7 +636,8 @@ def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dic
     in render order: the significance explanation and */** marker key
     (legends), the BMD/BMDL definition, (a) the data format and, when the
     study's method profile names tests for ``platform``, (b) the statistical
-    method.  ``method`` None ⇒ the session's default method profile."""
+    method — both marked on the first-column header ("Endpoint^a,b", as
+    NIEHS-07 … 13 print them).  ``method`` None ⇒ the session's default method profile."""
     from pipeline.method_profile import marker_legend, session_method, statistics_sentence
 
     method = method if method is not None else session_method(None)
@@ -556,11 +645,11 @@ def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dic
         legend_footnote(significance_explanation(dose_unit)),
         legend_footnote(marker_legend(method)),
         definition_footnote(BMD_DEFINITION),
-        lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format"),
+        lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format", target="header"),
     ]
     stat_text = statistics_sentence(method, method.pairwise(platform))
     if stat_text:
-        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+        footnotes.append(lettered_footnote(stat_text, "stat_method", target="header"))
     return footnotes
 
 
@@ -570,17 +659,31 @@ def availability_footnotes(
     sorted_doses: list[float],
     dose_unit: str,
     design: dict | None,
+    roster: dict[str, dict] | None = None,
 ) -> tuple[list[dict], dict[str, dict[float, str]]]:
     """The sample-availability footnotes plus the attrition footnote, and the
     merged ``{sex: {dose: footnote_id}}`` n-row marker bindings of both.
-    ``availability`` is detect_core_animal_availability's result."""
+    ``availability`` is detect_core_animal_availability's result.
+
+    ``roster`` (the study's body weight sidecars) names the dose groups that
+    were all removed before the scheduled removal although this platform's
+    sidecars hold none of their animals (NIEHS-10's clinical pathology at 333
+    and 1,000 mg/kg): the attrition note covers them too, its day from the
+    roster."""
     core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals = availability
     records, sa_refs = build_sample_availability_footnotes(
         missing_sample_animals, total_core_by_sex_dose, sorted_doses,
     )
+    totals = {sex: dict(d) for sex, d in total_core_by_sex_dose.items()}
+    day_source = sidecar_data
+    absent = {sex: {d: n for d, n in groups.items() if not totals.get(sex, {}).get(d)}
+              for sex, groups in whole_groups_removed_early(roster).items()}
+    if any(absent.values()):
+        for sex, groups in absent.items():
+            totals.setdefault(sex, {}).update(groups)
+        day_source = _merge_day_sources(sidecar_data, roster or {})
     attr_record, attr_refs = build_attrition_footnote(
-        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
-        sidecar_data,
+        totals, core_n_by_sex_dose, sorted_doses, dose_unit, design, day_source,
     )
     if attr_record is not None:
         records.append(attr_record)
@@ -589,6 +692,17 @@ def availability_footnotes(
         for sex, dose_refs in refs.items():
             n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
     return records, n_row_marker_refs
+
+
+def _merge_day_sources(sidecar_data: dict[str, dict], roster: dict[str, dict]) -> dict[str, dict]:
+    """Per sex, the platform's animals and the roster's (the roster's only for
+    the animals the platform lacks), for _latest_observation_day."""
+    out: dict[str, dict] = {}
+    for sex in dict.fromkeys([*sidecar_data, *roster]):
+        animals = dict((roster.get(sex) or {}).get("animals", {}))
+        animals.update((sidecar_data.get(sex) or {}).get("animals", {}))
+        out[sex] = {"animals": animals}
+    return out
 
 
 def attach_n_row_marker_refs(
@@ -600,10 +714,8 @@ def attach_n_row_marker_refs(
     for sex, rows in serialized.items():
         sex_refs = n_row_marker_refs.get(sex, {})
         if sex_refs and rows and rows[0].get("is_n_row"):
-            n_row = rows[0]
-            refs = n_row.get("marker_refs", {})
-            refs.update({js_dose_key(d): fid for d, fid in sex_refs.items()})
-            n_row["marker_refs"] = refs
+            for d, fid in sex_refs.items():
+                add_marker_ref(rows[0], js_dose_key(d), fid)
 
 
 # ---------------------------------------------------------------------------
@@ -1024,6 +1136,42 @@ def build_n_row(
 # ---------------------------------------------------------------------------
 # BMD/BMDL display helpers
 # ---------------------------------------------------------------------------
+
+# A BMD a reviewer rejected (pipeline.bmd_review: the row is UREP, the reviewed
+# values kept on ``row._urep``).  The data tables print the reviewed BMD and
+# BMDL with this lettered note on both cells; the BMD summary (Table 8) prints
+# UREP.  As NIEHS-07 … 10 print them (e.g. NIEHS-10 Table 5, "0.811^h").
+REVIEWED_BMD_ID = "bmd_reviewed_unreliable"
+REVIEWED_BMD_NOTE = (
+    "BMD values are much lower than would be expected given the "
+    "lowest-observed-effect level and no-observed-effect level values, "
+    "suggesting that the BMD estimates do not accurately reflect the true "
+    "potency of the effect of these endpoints and are likely an anomalous "
+    "product of the BMD modeling approach.")
+
+
+def mark_reviewed_bmd(entry: dict, stat_row) -> None:
+    """When the reviewer rejected ``stat_row``'s BMD, put its reviewed BMD and
+    BMDL in ``entry``'s cells and point both at the reviewed-BMD note
+    (``reviewed_bmd_footnotes`` adds it).  Only a cell that would print UREP:
+    one the builder's own rules leave ND (the statistical gate) stays ND."""
+    urep = (stat_row.get("_urep") if isinstance(stat_row, dict)
+            else getattr(stat_row, "_urep", None))
+    if not urep or entry.get("bmd") != "UREP":
+        return
+    entry["bmd"], entry["bmdl"] = urep.get("bmd") or "—", urep.get("bmdl") or "—"
+    for cell in ("bmd", "bmdl"):
+        add_marker_ref(entry, cell, REVIEWED_BMD_ID)
+
+
+def reviewed_bmd_footnotes(serialized: dict[str, list[dict]]) -> list[dict]:
+    """The reviewed-BMD note, when a row of the table points at it."""
+    for rows in serialized.values():
+        for row in rows:
+            if REVIEWED_BMD_ID in _ids((row.get("marker_refs") or {}).get("bmd")):
+                return [lettered_footnote(REVIEWED_BMD_NOTE, REVIEWED_BMD_ID, target="cells")]
+    return []
+
 
 def bmd_display_from_stats(
     ntp_stats_row,

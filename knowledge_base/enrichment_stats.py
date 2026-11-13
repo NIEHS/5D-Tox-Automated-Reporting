@@ -118,7 +118,7 @@ def enrich_pathways(
 
     # Filter and sort
     results = [r for r in results if r["fdr"] < fdr_cutoff]
-    results.sort(key=lambda x: x["pvalue"])
+    results.sort(key=lambda x: (x["pvalue"], x["pathway_name"]))  # ties: by name, never set order
     return results
 
 
@@ -191,5 +191,5 @@ def enrich_go_terms(
             r["fdr"] = 1.0
 
     results = [r for r in results if r["fdr"] < fdr_cutoff]
-    results.sort(key=lambda x: x["pvalue"])
+    results.sort(key=lambda x: (x["pvalue"], x["go_id"]))  # ties: by id, never set order
     return results

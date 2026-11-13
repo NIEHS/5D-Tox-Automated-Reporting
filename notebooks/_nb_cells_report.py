@@ -103,7 +103,8 @@ and the method.
 content kinds, run in dependency order:
 
 - `genomics-llm`: per organ × sex, `narrative.genomics_llm.generate_genomics_narrative_async`.
-  It first builds an interpretation against the knowledge base `bmdx.duckdb`
+  It first builds an interpretation against the report's knowledge base
+  (`knowledge_base.registry.kb_for`, step 10)
   (`interpret_analysis.build_genomics_interpretation`: pathway and GO
   enrichment by Fisher's test at FDR < 0.05, the order of BMDs, the organ's
   signature, literature per gene; cached as `_cache_interpretation_<organ>_<sex>_*.json`),

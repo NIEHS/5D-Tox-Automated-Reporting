@@ -411,7 +411,38 @@ async def process_async(dtxsid: str, params: dict, store, *, policy=None) -> dic
                  "(record the real values with --design)")
     mat = materialize_result_sections(dtxsid, store, policy=policy)
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
+    log_bmd_flags(dtxsid, store)
     return payload
+
+
+def apply_bmd_review(dtxsid: str, path: Path, store) -> bool:
+    """Record the reviewer's decisions in ``path`` on the flags this run's
+    Process wrote (safeguards.guarded.review_bmds: each must be flagged, a
+    known decision, with a reason).  True when one is not yet applied, so
+    Process must run again."""
+    from pipeline.bmd_review import FLAGS_FILE, REVIEWS_FILE, unsettled
+    from safeguards.guarded import review_bmds
+
+    review_bmds(dtxsid, json.loads(Path(path).read_text()), store)
+    flags = (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []
+    todo = [u for u in unsettled(flags, store.read_json(dtxsid, REVIEWS_FILE))
+            if u["reason"] == "bmd_review_not_applied"]
+    _log(f"  BMD review recorded from {path}"
+         + (f"; {len(todo)} decision(s) to apply" if todo else "; nothing new to apply"))
+    return bool(todo)
+
+
+def log_bmd_flags(dtxsid: str, store) -> None:
+    """The apical BMDs the review screen flagged (pipeline.bmd_review), each
+    with its decision; an undecided one closes the publish gate."""
+    from pipeline.bmd_review import FLAGS_FILE
+
+    for f in (store.read_json(dtxsid, FLAGS_FILE) or {}).get("flags") or []:
+        fold = "- to ".join(f"{x:g}" for x in f["fold"] if x is not None)
+        state = (f"{f['decision']} ({f['reason']})" if f.get("decision")
+                 else "PENDING — decide it with --bmd-review")
+        _log(f"  BMD review: {f['key']}: BMD {f['bmd']} vs NOEL {f['noel']} / LOEL "
+             f"{f['loel']} ({fold}-fold below): {state}")
 
 
 def summary(dtxsid: str, store, *, policy=None) -> None:
@@ -565,12 +596,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("dtxsid", help="session id (folder under sessions/)")
     ap.add_argument("--files", nargs="+", type=Path, default=[],
                     help="input files to import into sessions/<id>/files/ first "
-                         "(.bm2, .txt/.csv, .xlsx, .sidecar.json, and a truth CSV's "
-                         ".units.json companion from tooling.cebs_to_pool)")
+                         "(.bm2, .txt/.csv, .xlsx — the study workbooks and a sample sheet "
+                         "— .sidecar.json, and a truth CSV's .units.json companion from "
+                         "tooling.cebs_to_pool --csv)")
     ap.add_argument("--name", help="test-article name (else identity.json, else resolved)")
     ap.add_argument("--casrn", help="test-article CASRN")
     ap.add_argument("--compound-name",
-                    help="short name used in captions/narratives (default: identity name)")
+                    help="short name used in captions/narratives (default: the recorded "
+                         "abbreviation, else the identity name)")
     ap.add_argument("--dose-unit", default=None,
                     help="dose unit, e.g. mg/kg or ppm (default: the unit the data records, "
                          "else mg/kg — state it explicitly).  A ppm unit also makes the "
@@ -588,6 +621,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "data does not record (e.g. the tissue of a genomic experiment named "
                          "\"EDHP mg_kg\"); laid over each named experiment and kept as the "
                          "metadata approval, re-applied at every integration")
+    ap.add_argument("--bmd-review", type=Path,
+                    help="JSON {\"<sex>|<platform>|<endpoint>\": {\"decision\": \"unreliable\" | "
+                         "\"reliable\", \"reason\": \"…\"}}: a reviewer's decisions on the apical "
+                         "BMDs Process flags as far below their NOEL/LOEL (listed as 'BMD "
+                         "review:' lines); 'unreliable' prints UREP. Recorded after this run's "
+                         "Process, which then runs again to apply them")
     ap.add_argument("--deposit", type=Path,
                     help="directory of the study's data deposit (the supplemental files "
                          "deposited with the report); recorded as the session's "
@@ -658,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [s for s in surfaces if s not in SURFACE_SUFFIX]
     if unknown:
         raise SystemExit(f"unknown surface(s): {unknown}; choose from {list(SURFACE_SUFFIX)}")
-    # Resolve user paths BEFORE chdir: the app is cwd-relative (bmdx.duckdb, templates).
+    # Resolve user paths BEFORE chdir: the app is cwd-relative (templates).
     files = [p.resolve() for p in args.files]
     metadata = args.metadata.resolve() if args.metadata else None
     design = args.design.resolve() if args.design else None
@@ -759,7 +798,8 @@ def main(argv: list[str] | None = None) -> int:
             # The GO ranking and cutoffs are the method profile's; only what
             # the command line states overrides it (source "request").
             params = {
-                "compound_name": args.compound_name or identity.get("name") or dtxsid,
+                "compound_name": (args.compound_name or identity.get("abbreviation")
+                                  or identity.get("name") or dtxsid),
                 "dose_unit": args.dose_unit,
                 **({"bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()]}
                    if args.bmd_stats else {}),
@@ -769,6 +809,9 @@ def main(argv: list[str] | None = None) -> int:
             with _Timer("process (stats + BMDS + genomics + narratives; minutes when cold)"):
                 require(dtxsid, Action.PROCESS, store, method=True)
                 process(dtxsid, params, store, policy=ownership_policy)
+            if args.bmd_review and apply_bmd_review(dtxsid, args.bmd_review, store):
+                with _Timer("process again (the BMD review)"):
+                    process(dtxsid, params, store, policy=ownership_policy)
             if args.background:
                 with _Timer("background (LLM)"):
                     background(dtxsid, identity, args.model, store, force=args.force,
@@ -783,14 +826,14 @@ def main(argv: list[str] | None = None) -> int:
         readiness = require_publishable(dtxsid, store, draft=args.draft)
         if not readiness.get("can_publish", True):
             keys = ", ".join(b["section_key"] for b in readiness.get("blocking", []))
-            _log(f"  WARNING: publish gate closed — re-accept the regenerated sections: "
-                 f"{keys} (rendering anyway: --draft)")
+            _log(f"  WARNING: publish gate closed — {keys} (rendering anyway: --draft)")
 
         with _Timer(f"render {', '.join(surfaces)}"):
             render(dtxsid, surfaces, out_dir, args.view, args.strict)
     except StepError as e:
         from safeguards.refusals import explain
-        hint = " (or pass --draft)" if getattr(e, "code", None) == "publish_blocked" else ""
+        hint = (" (or pass --draft)"
+                if getattr(e, "code", None) in ("publish_blocked", "bmd_review_required") else "")
         raise SystemExit(f"step failed ({e.status_code}): {e.message}{hint}\n"
                          f"  {explain(e)['error']['say']}")
     except PendingContentError as e:

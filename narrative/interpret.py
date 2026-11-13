@@ -5,7 +5,9 @@ Takes gene-level BMD results (from BMDExpress) and produces a grounded,
 literature-backed narrative by querying the bmdx knowledge base.
 
 Usage:
-    python interpret.py <dose_response.csv> [--db bmdx.duckdb] [--output output/interpretation.md] [--fdr 0.05]
+    python -m narrative.interpret <dose_response.csv> [--db <knowledge base>/kb.duckdb] [--output output/interpretation.md] [--fdr 0.05]
+
+The knowledge base is the default one (knowledge_base.registry) unless --db names one.
 """
 
 import argparse
@@ -14,7 +16,6 @@ from pathlib import Path
 import pandas as pd
 
 from knowledge_base.enrichment_stats import enrich_pathways, enrich_go_terms
-from knowledge_base.extract import normalize_gene
 from styling_export.llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key, resolve_model_name
 from knowledge_base.toxkb import ToxKBQuerier
 from narrative.interpret_narrative import (
@@ -38,8 +39,10 @@ from narrative.interpret_analysis import (
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def load_dose_response(csv_path: str) -> pd.DataFrame:
-    """Load and validate dose-response CSV."""
+def load_dose_response(csv_path: str, normalize=None) -> pd.DataFrame:
+    """Load and validate dose-response CSV; gene symbols spelled by ``normalize``
+    (the knowledge base's own gene rules, knowledge_base.registry.field_normalizer),
+    else trimmed and uppercased."""
     df = pd.read_csv(csv_path)
 
     # Normalize column names
@@ -52,7 +55,7 @@ def load_dose_response(csv_path: str) -> pd.DataFrame:
         raise ValueError("CSV must have a 'bmd' column")
 
     # Normalize gene symbols
-    df["gene_symbol"] = df["gene_symbol"].apply(normalize_gene)
+    df["gene_symbol"] = df["gene_symbol"].apply(normalize or (lambda g: str(g).strip().upper()))
     df = df[df["gene_symbol"] != ""].reset_index(drop=True)
 
     # Ensure BMD is numeric
@@ -64,7 +67,7 @@ def load_dose_response(csv_path: str) -> pd.DataFrame:
 
 def interpret(
     csv_path: str,
-    db_path: str = "bmdx.duckdb",
+    db_path: str | None = None,
     output_path: str = "output/interpretation.md",
     fdr_cutoff: float = 0.05,
     models: list[str] | None = None,
@@ -72,8 +75,10 @@ def interpret(
     concordance_model: str = "claude-sonnet-4-6",
 ) -> str:
     """Full interpretation pipeline."""
+    from knowledge_base.registry import field_normalizer, kb_for
+    db_path = db_path or str(kb_for(None)["path"])
     print(f"Loading dose-response data from {csv_path}...")
-    df = load_dose_response(csv_path)
+    df = load_dose_response(csv_path, field_normalizer(db_path, "genes"))
     print(f"  {len(df)} genes loaded (BMD range: {df['bmd'].min():.3g} - {df['bmd'].max():.3g})")
 
     print(f"Connecting to knowledge base: {db_path}")
@@ -255,7 +260,7 @@ if __name__ == "__main__":
     # Default: full pipeline (no subcommand, uses --csv or positional)
     parser.add_argument("csv", nargs="?", default=None, help="Path to gene-level BMD results CSV")
     parser.add_argument("--csv", dest="csv_flag", default=None, help="Path to gene-level BMD results CSV (alternative to positional)")
-    parser.add_argument("--db", default="bmdx.duckdb", help="Path to bmdx.duckdb")
+    parser.add_argument("--db", default=None, help="a knowledge base's kb.duckdb (default: the default knowledge base)")
     parser.add_argument("--output", default="output/interpretation.md", help="Output markdown path")
     parser.add_argument("--fdr", type=float, default=0.05, help="FDR cutoff for enrichment")
     parser.add_argument(

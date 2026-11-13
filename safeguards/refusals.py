@@ -70,6 +70,9 @@ PLACES = {
     "handoff": "editing the report in Word or Overleaf and bringing the edits back (ADR-0018)",
     "facts": "the facts a person states about the study (design, experiment details)",
     "publish": "the report's readiness to publish",
+    "bmd_review": "the review of apical BMDs far below their NOEL/LOEL (pipeline.bmd_review)",
+    "knowledge_base": ("the knowledge bases: the crawl queries, the crawls run from them, "
+                       "and which knowledge base each report reads (knowledge_base.registry)"),
 }
 
 
@@ -221,6 +224,11 @@ REFUSALS: dict[str, Refusal] = {
         "Some of what was stated about {what} can't be used, so nothing was saved. "
         "The details list each problem: a value that isn't one of the choices "
         "offered, or an experiment the study doesn't have."), "facts"),
+    "facts_contradict_workbook": Refusal(422, (
+        "Some of what was stated about {what} contradicts the study's own workbooks, "
+        "so nothing was saved. The workbooks are the study's record of its design and "
+        "its animals; the details list each fact and what the workbooks say. Facts the "
+        "workbooks don't record, such as the vehicle, can still be stated."), "facts"),
     # ── the Background's sources (safeguards.sources) ────────────────────────
     "background_sources_unreachable": Refusal(503, (
         "The Background can't be written now: {sources} could not be reached, and "
@@ -237,8 +245,54 @@ REFUSALS: dict[str, Refusal] = {
     # ── the publish gate (safeguards.publish) ────────────────────────────────
     "publish_blocked": Refusal(409, (
         "The report can't be published yet: sections were written again after the "
-        "study's data changed ({keys}). Read each one and accept it again, then "
-        "publish."), "sections"),
+        "study's data or its knowledge base changed ({keys}). Read each one and accept "
+        "it again, then publish."), "sections"),
+    "bmd_review_required": Refusal(409, (
+        "The report can't be published yet: some apical BMDs are much lower than the "
+        "study's NOEL and LOEL would suggest ({keys}). For each, a reviewer decides "
+        "whether it is an unreliable estimate of potency (UREP) or a reliable one, and "
+        "says why; then run Process again, and publish."), "bmd_review"),
+    # ── the review of apical BMDs (safeguards.inputs) ────────────────────────
+    "bmd_review_invalid": Refusal(422, (
+        "The BMD review was not saved: {errors}. Each decision names an endpoint the "
+        "last Process flagged, is either “unreliable” (UREP) or “reliable”, and gives "
+        "the reviewer's reason."), "bmd_review"),
+    # ── the knowledge bases (safeguards.knowledge) ───────────────────────────
+    "knowledge_base_unknown": Refusal(404, (
+        "There is no knowledge base named {name}. Choose one from the list of "
+        "knowledge bases, or run a crawl to make it."), "knowledge_base"),
+    "knowledge_base_unfinished": Refusal(409, (
+        "The knowledge base {name} is not finished: its crawl did not run every "
+        "stage ({missing}), so it is not used for any report. Resume its crawl where "
+        "its sources can be reached."), "knowledge_base"),
+    "knowledge_base_cannot_serve": Refusal(409, (
+        "The knowledge base {name} can't ground a report's genomics interpretation: "
+        "it holds no {lacking}. A report's knowledge base must hold papers, claims, "
+        "genes, GO terms and pathways; its crawl query decides what it holds."),
+        "knowledge_base"),
+    "knowledge_base_unavailable": Refusal(409, (
+        "This report has no knowledge base that can be read here: {problem}. Assign "
+        "it one that can, or make one the default."), "knowledge_base"),
+    "knowledge_base_definition_fixed": Refusal(409, (
+        "This report's document definition is fixed, so a knowledge base named in it "
+        "now would not reach the report. Pin the definition to track the current one "
+        "first, then assign the knowledge base."), "method_and_document"),
+    "knowledge_base_name_taken": Refusal(409, (
+        "A knowledge base named {name} exists already. A finished one is never "
+        "replaced, and an unfinished one is resumed only from the query text it "
+        "was started from. Choose a new name, or resume it."), "knowledge_base"),
+    "crawl_running": Refusal(409, (
+        "A crawl into {name} is running already. Wait for it to finish; its "
+        "progress is in the knowledge base's record."), "knowledge_base"),
+    "crawl_query_invalid": Refusal(422, (
+        "The crawl query can't be used: {problem}. The query's text is YAML; the "
+        "details say where it does not have the form the crawl reads."), "knowledge_base"),
+    "crawl_query_ties_article_to_genes": Refusal(422, (
+        "The crawl query names a test article ({articles}) and also {why}. Its searches "
+        "go to Semantic Scholar, a public service, and together they would tie those "
+        "genes to the study. A crawl is broadly scoped and names no test article; a "
+        "crawl about a test article is kept separate and names no genes. Take one or "
+        "the other out."), "knowledge_base"),
     # ── anything else ────────────────────────────────────────────────────────
     "damaged_session_file": Refusal(422, (
         "One of this study's saved files is damaged and can't be read ({file}). "

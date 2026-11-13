@@ -9,6 +9,10 @@ full mortality paragraph with clinical signs, the same without signs, and the ed
 case where there is no earliest-death day / no latest-day clause / no surviving
 sentence.
 
+Revised 2026-10-29: the signs are worded as the reports word them
+(narrative.clinical_signs: "red discharge from eyes", not "discharge — eye,
+bilateral, red").
+
 Revised 2026-10-06: the signs sentence states the clinical observations' onset day
 (IncidenceRow.onset_day_by_dose) and the findings seen in the groups with deaths,
 never the first death day; with no clinical observations recorded (None) nothing
@@ -51,12 +55,15 @@ _MORT_FULL = {
 
 _SIGNS = {
     "Male": [IncidenceRow(label="Discharge — Eye, Bilateral, Red",
+                          parts={"observation": "Discharge", "site": "Eye", "modifier": "Bilateral, Red", "severity": ""},
                           incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "2/5", 1000.0: "4/5"},
                           onset_day_by_dose={333.0: 1, 1000.0: 0}),
-             IncidenceRow(label="Lethargy",
+             IncidenceRow(label="Lethargic",
+                          parts={"observation": "Lethargic", "site": "", "modifier": "", "severity": ""},
                           incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "0/5", 1000.0: "3/5"},
                           onset_day_by_dose={1000.0: 0})],
     "Female": [IncidenceRow(label="Discharge — Eye, Bilateral, Red",
+                            parts={"observation": "Discharge", "site": "Eye", "modifier": "Bilateral, Red", "severity": ""},
                             incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "0/5", 1000.0: "2/5"},
                             onset_day_by_dose={1000.0: 0})],
 }
@@ -95,7 +102,7 @@ def test_full_mortality_with_clinical_signs():
     assert out == [
         "Male and female rats administered 333 and 1000 mg/kg of PFHxSAm began "
         "exhibiting signs of overt toxicity on study day 0, which included "
-        "discharge — eye, bilateral, red and lethargy. In the 333 mg/kg group, "
+        "red discharge from eyes and lethargy. In the 333 mg/kg group, "
         "3 male rats and 1 female rat were found dead or moribund by study day "
         "2. In the 1000 mg/kg group, 5 male rats and 5 female rats were found "
         "dead or moribund. Rats in the 50 mg/kg groups did not exhibit signs of "

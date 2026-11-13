@@ -1,5 +1,6 @@
 """
-ToxKBQuerier — read-only typed query helpers over bmdx.duckdb.
+ToxKBQuerier — read-only typed query helpers over a knowledge base's database
+(knowledge_base.registry.kb_for resolves which one).
 
 Wraps the toxicology knowledge base (genes, pathways, GO terms, papers, claims)
 with a small set of typed query methods and a context-manager lifecycle so the
@@ -12,9 +13,9 @@ import duckdb
 
 
 class ToxKBQuerier:
-    """Wraps bmdx.duckdb with typed query methods."""
+    """Wraps a knowledge base database with typed query methods."""
 
-    def __init__(self, db_path: str = "bmdx.duckdb"):
+    def __init__(self, db_path: str):
         self.con = duckdb.connect(db_path, read_only=True)
 
     def close(self):

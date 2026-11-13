@@ -48,6 +48,9 @@ from tables.table_builder_common import (
     standard_apical_footnotes,
     availability_footnotes,
     attach_n_row_marker_refs,
+    roster_sidecars,
+    mark_reviewed_bmd,
+    reviewed_bmd_footnotes,
 )
 
 
@@ -267,6 +270,7 @@ def build_clinical_pathology_table_from_sidecar(
                 entry["decimals"] = decimals
             if trend_marker:
                 entry["trend_marker"] = trend_marker
+            mark_reviewed_bmd(entry, stat_row)
 
             rows.append(entry)
 
@@ -311,6 +315,7 @@ def build_clinical_pathology_table_from_sidecar(
     # finalize_footnotes (called later) turns the ids into displayed letters.
     avail_records, n_row_marker_refs = availability_footnotes(
         sidecar_data, availability, sorted_doses, dose_unit, design,
+        roster=roster_sidecars(sidecar_paths),
     )
     footnotes.extend(avail_records)
 
@@ -358,6 +363,8 @@ def build_clinical_pathology_table_from_sidecar(
     # letters and derives the `markers` dict from marker_refs across all rows.
     attach_n_row_marker_refs(serialized, n_row_marker_refs)
 
+    # A BMD the reviewer rejected prints with its note (mark_reviewed_bmd).
+    footnotes.extend(reviewed_bmd_footnotes(serialized))
     finalize_footnotes(footnotes, serialized)
 
     # The reference titles the hormone table "Summary of Select Hormone Data"

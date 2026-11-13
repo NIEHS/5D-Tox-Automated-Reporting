@@ -17,6 +17,8 @@ another definition and states only how it differs:
     organ_description_order: [...]    # the order it describes organs in
     dose_terms: {route: {...}}        # the words headings name the dose by, per
                                       # route (${dose_term}), deep-merged
+    knowledge_base: <name>            # the literature knowledge base its genomics
+                                      # interpretation reads (knowledge_base.registry)
     changes:                          # applied in order
       - set: appendix-d               # replace fields on a node (null removes one)
         title: New title
@@ -54,7 +56,7 @@ PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
                               "phrasing", "tissue_order", "abstract_genes", "foreword",
                               "dose_terms", "organ_descriptions", "organ_description_order",
-                              "changes"})
+                              "knowledge_base", "table_notes", "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -107,6 +109,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["abstract_genes"] = raw["abstract_genes"]
     if "foreword" in raw:
         out["foreword"] = raw["foreword"]
+    if "knowledge_base" in raw:
+        out["knowledge_base"] = raw["knowledge_base"]
     if "organ_description_order" in raw:
         out["organ_description_order"] = raw["organ_description_order"]
     if raw.get("organ_descriptions"):
@@ -120,6 +124,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["phrasing"] = _deep_merge(out.get("phrasing") or {}, raw["phrasing"])
     if raw.get("dose_terms"):
         out["dose_terms"] = _deep_merge(out.get("dose_terms") or {}, raw["dose_terms"])
+    if raw.get("table_notes"):
+        out["table_notes"] = {**(out.get("table_notes") or {}), **raw["table_notes"]}
     for i, change in enumerate(raw.get("changes") or []):
         try:
             apply_change(out["document"], change)

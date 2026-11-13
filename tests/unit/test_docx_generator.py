@@ -190,14 +190,14 @@ def test_title_page_empty_config_unchanged(scaffold):
 
 def test_front_matter_headings_match_reference_body_left(scaffold):
     """Every front-matter section header (Foreword, Table of Contents, Tables,
-    About, Peer Review, etc.) gets the SAME reference front-matter heading look —
+    Authors, Contributors, Peer Review, etc.) gets the SAME reference front-matter heading look —
     Arial 16pt bold, CENTERED, 12pt after (1-23_FrontMatter_Head1) — so they are
     uniform (no one header bigger/tighter than the rest).  Body section headings
     (Background, Summary, References — `narrative` nodes routing through the same
     renderer) stay as the left-aligned built-in Heading 1, matching the NTP
     reference's left body heads."""
     doc = _open(generate_docx(scaffold))
-    front = {"Foreword", "About This Report", "Peer Review",
+    front = {"Foreword", "Authors", "Contributors", "Peer Review",
              "Publication Details", "Acknowledgments", "Abstract"}
     body = {"Background", "Materials and Methods", "Results", "Summary", "References"}
     for p in doc.paragraphs:
@@ -815,7 +815,7 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     `pageBreakBefore` on each target node's first paragraph — the reference's
     mechanism, which composes idempotently with the dotx's own style breaks.
 
-    Targets whose STYLE does not auto-break rely on this entirely (TOC, About,
+    Targets whose STYLE does not auto-break rely on this entirely (TOC, Authors,
     Publication, Tables 3/5/6, appendices); the style-covered ones (Peer Review,
     Abstract, Results, Summary, References) also carry it for cross-surface
     parity.  Tables the reference lets flow (2/4/7/8) must NOT break."""
@@ -823,9 +823,12 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     broken = {p.text.strip() for p in doc.paragraphs
               if p.paragraph_format.page_break_before}
     # Must start a new page.
-    for t in ("Table of Contents", "About This Report", "Publication Details",
+    # (ADR-0028: the book's "About This Report" is two parts, Authors and
+    # Contributors; Authors starts the page, Contributors follows on it.)
+    for t in ("Table of Contents", "Authors", "Publication Details",
               "Peer Review", "Abstract", "Results", "Summary", "References"):
         assert t in broken, f"{t!r} should carry pageBreakBefore"
+    assert "Contributors" not in broken
     # Body apical tables 3/5/6 break; 4 flows.
     assert any(s.startswith("Table") and "Liver Weights" in s for s in broken)      # T3
     assert any(s.startswith("Table") and "Hematology" in s for s in broken)         # T5

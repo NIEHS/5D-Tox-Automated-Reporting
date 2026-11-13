@@ -123,13 +123,48 @@ def design_field_errors(fields: dict, vocabularies: dict) -> list[str]:
 
 def apply_design_fields(integrated: dict, fields: dict) -> int:
     """Put stated design facts on every experiment's experimentDescription, in
-    place; returns how many experiments were updated."""
+    place; returns how many experiments were updated.
+
+    A field the study workbooks state (``_meta.metadata_provenance`` says
+    "workbook") keeps the workbook's value: a stated fact never overrides the
+    study's own record (ADR-0032; safeguards.inputs refuses a statement that
+    contradicts it).  A field set here is recorded as "stated"."""
+    import logging
+
     experiments = integrated.get("doseResponseExperiments") or []
+    meta = integrated.setdefault("_meta", {}) if isinstance(integrated.get("_meta"), dict) else {}
+    provenance = meta.setdefault("metadata_provenance", {})
     for exp in experiments:
         if not isinstance(exp.get("experimentDescription"), dict):
             exp["experimentDescription"] = {}
-        exp["experimentDescription"].update(fields)
+        ed = exp["experimentDescription"]
+        sources = provenance.setdefault(exp.get("name", ""), {})
+        for key, value in fields.items():
+            if sources.get(key) == "workbook":
+                if value not in (None, ed.get(key)):
+                    logging.getLogger(__name__).warning(
+                        "%s: stated %s %r not applied; the study workbook states %r",
+                        exp.get("name"), key, value, ed.get(key))
+                continue
+            ed[key] = value
+            sources[key] = "stated"
     return len(experiments)
+
+
+def workbook_facts(integrated: dict | None) -> dict[str, dict]:
+    """{experiment: {field: value}} the study workbooks state for the dataset
+    (the fields ``_meta.metadata_provenance`` marks "workbook")."""
+    meta = (integrated or {}).get("_meta") or {}
+    provenance = meta.get("metadata_provenance") or {}
+    out: dict[str, dict] = {}
+    for exp in (integrated or {}).get("doseResponseExperiments") or []:
+        name = exp.get("name", "")
+        ed = exp.get("experimentDescription") or {}
+        fixed = {k: ed.get(k) for k, src in (provenance.get(name) or {}).items()
+                 if src == "workbook" and ed.get(k) is not None}
+        if fixed:
+            out[name] = fixed
+    return out
 
 
 def _duration_days(value: str | None) -> int | None:
@@ -241,6 +276,14 @@ def after_administration(facts: dict) -> str:
 def dose_noun(dose_unit: str | None) -> str:
     """"exposure concentrations" for an air concentration, else "doses"."""
     return "exposure concentrations" if is_air_concentration(dose_unit) else "doses"
+
+
+def internal_assessment(dose_unit: str | None) -> str:
+    """The internal-dose cohort's name in prose: "internal concentration
+    assessment" for an air concentration (NIEHS-12, 13), else "internal dose
+    assessment" (NIEHS-07 … 10)."""
+    return ("internal concentration assessment" if is_air_concentration(dose_unit)
+            else "internal dose assessment")
 
 
 def strain_display(facts: dict) -> str:

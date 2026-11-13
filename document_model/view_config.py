@@ -259,13 +259,13 @@ def study_document_facts(dtxsid: str) -> dict:
     ``book_meta`` (the series, publisher, permissions), ``packaging``,
     ``object_position``, ``tissue_order``, ``abstract_genes``, ``phrasing``,
     ``foreword``, ``dose_terms``, ``organ_descriptions`` and
-    ``organ_description_order``, from the study's definition, else the
+    ``organ_description_order`` and ``table_notes``, from the study's definition, else the
     definition of a new study (DEFAULT_DEFINITION)."""
     from document_model.document_definition import definition_name
     from document_model.document_template import (
         load_abstract_genes, load_book_meta, load_dose_terms, load_foreword,
         load_object_position, load_organ_description_order, load_organ_descriptions,
-        load_packaging, load_phrasing, load_tissue_order,
+        load_packaging, load_phrasing, load_table_notes, load_tissue_order,
     )
     name = definition_name(dtxsid)
     return {"book_meta": load_book_meta(name), "packaging": load_packaging(name),
@@ -276,7 +276,8 @@ def study_document_facts(dtxsid: str) -> dict:
             "foreword": load_foreword(name),
             "dose_terms": load_dose_terms(name),
             "organ_descriptions": load_organ_descriptions(name),
-            "organ_description_order": load_organ_description_order(name)}
+            "organ_description_order": load_organ_description_order(name),
+            "table_notes": load_table_notes(name)}
 
 
 # ---------------------------------------------------------------------------

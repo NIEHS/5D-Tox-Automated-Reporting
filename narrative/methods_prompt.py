@@ -94,8 +94,10 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     """
     system = (
         "You are a toxicology report writer specializing in NTP/NIEHS-style "
-        "technical reports for 5-day genomic dose-response studies. "
-        "Write precise, formal scientific text. "
+        f"technical reports for {ctx.duration_days}-day genomic dose-response studies. "
+        "Write precise, formal scientific text. State only what the study context "
+        "and the guidelines give; never supply a procedure, instrument, kit, "
+        "schedule, storage condition or analytical method they do not name. "
         "Return ONLY valid JSON with no markdown formatting."
     )
 
@@ -294,6 +296,64 @@ def _assay_guides(ctx: MethodsContext) -> dict[str, str]:
     }
 
 
+def _examinations(ctx: MethodsContext) -> str:
+    """The examinations the data record, for the Clinical Examinations intro."""
+    parts = []
+    if ctx.has_body_weight or ctx.has_organ_weights:
+        parts.append("body and organ weights" if ctx.has_body_weight and ctx.has_organ_weights
+                     else "body weights" if ctx.has_body_weight else "organ weights")
+    if ctx.has_clin_chem or ctx.has_hematology or ctx.has_hormones:
+        parts.append("clinical pathology")
+    if ctx.has_tissue_conc:
+        from pipeline.study_design import internal_assessment
+        parts.append(f"samples for {internal_assessment(ctx.dose_unit)}")
+    if ctx.has_gene_expression:
+        parts.append("tissue samples for transcriptomics")
+    return ", ".join(parts) or "none"
+
+
+def _internal_dose_guide(ctx: MethodsContext) -> str:
+    """What the data say about the internal dose samples: the animals they came
+    from, their dose groups and, for a plasma time course, the hours after the
+    last administration.  How they were handled and measured is not in the data."""
+    from pipeline.study_design import after_administration, internal_assessment
+
+    groups = (f" in the {', '.join(f'{d:g}' for d in ctx.biosampling_doses)} {ctx.dose_unit} "
+              f"groups" if ctx.biosampling_doses else "")
+    hours = (f"; plasma concentrations were measured at "
+             f"{' and '.join(str(h) for h in ctx.pk_timepoints)} hours "
+             f"{after_administration({'route': ctx.route})}" if ctx.pk_timepoints else "")
+    return (f"One paragraph: samples were collected from animals dedicated for "
+            f"{internal_assessment(ctx.dose_unit)}{groups}{hours}. State only these facts. "
+            f"The sample handling, storage and analytical method are not in the study data: "
+            f"write exactly '[Placeholder: the internal dose sample handling and analytical "
+            f"method are not in the study data]'. Name no instrument, temperature or assay.")
+
+
+# The gene-set statistics the method profile ranks by (genomics.go_ranking).
+_GO_STAT_PHRASE = {"fifth_pct": "5th percentile", "median": "median", "mean": "mean"}
+
+
+def _gene_set_reporting(ctx: MethodsContext) -> str:
+    """Which gene sets were reported and their potency metric, from the
+    method profile (genomics.go_display, genomics.go_ranking): the 2023 books
+    rank by the median, the 2025 books by the 5th percentile."""
+    settings = ctx.method_settings or {}
+    display = settings.get("genomics.go_display") or {}
+    ranking = [s for s in (settings.get("genomics.go_ranking") or []) if s in _GO_STAT_PHRASE]
+    out = []
+    if display.get("min_bmd") is not None and display.get("pct") is not None:
+        out.append(f"Gene sets were reported when at least {display['min_bmd']:g} genes passed "
+                   f"all filters and at least {display['pct']:g}% of the set was populated.")
+    if ranking:
+        out.append(f"BMD, BMDL and BMDU at the {_GO_STAT_PHRASE[ranking[0]]} of the set's gene "
+                   f"BMDs were the potency metrics.")
+    else:
+        out.append("The gene-set potency statistic is not recorded: write exactly "
+                   "'[Placeholder: the gene-set potency statistic is not in the study data]'.")
+    return " ".join(out)
+
+
 def _genomic_workflow_phrase(ctx: MethodsContext) -> str:
     """The transcriptomic prefilter and BMD-modeling steps as the .bm2 records
     them: a BMDExpress 3 project runs the Curve Fit Prefilter and ToxicR model
@@ -487,14 +547,14 @@ def _build_subsection_guidelines(
     """
     guides: dict[str, str] = {
         "clinical_exams": (
-            "Brief introductory paragraph describing the scope of clinical examinations "
-            "performed during the study: clinical observations, body/organ weight collection, "
-            "clinical pathology sampling, and (if applicable) tissue collection for internal dose assessment."
+            "Brief introductory paragraph naming the examinations this study's data "
+            f"record: {_examinations(ctx)}. Name no other."
         ),
         "clinical_obs": (
-            "One paragraph. Standard boilerplate: animals were observed twice daily for morbidity/mortality, "
-            "clinical observations were recorded once daily, "
-            "cage-side observations included assessment of general appearance, behavior, and respiratory patterns."
+            "One or two sentences: clinical observations were recorded for each animal. "
+            "How often animals were observed and what each observation assessed are not "
+            "in the study data: write exactly '[Placeholder: the clinical observation "
+            "schedule is not in the study data]'."
         ),
         "body_organ_weights": (
             f"One paragraph. Body weights recorded on study day 0 and at necropsy on study day "
@@ -503,28 +563,26 @@ def _build_subsection_guidelines(
             f"Absolute and relative (organ-to-body-weight ratio) weights calculated."
         ),
         "clinical_pathology": (
-            f"One paragraph covering blood collection method (retroorbital or cardiac puncture under anesthesia), "
-            f"sample processing. "
+            f"One paragraph: blood was collected for clinical pathology and these parameters "
+            f"were measured. "
             f"{'Clinical chemistry parameters: ' + ', '.join(ctx.clin_chem_endpoints[:10]) + '. ' if ctx.clin_chem_endpoints else ''}"
             f"{'Hematology parameters: ' + ', '.join(ctx.hematology_endpoints[:10]) + '. ' if ctx.hematology_endpoints else ''}"
             f"{'Hormone parameters: ' + ', '.join(ctx.hormone_endpoints[:5]) + '. ' if ctx.hormone_endpoints else ''}"
-            f"Reference the analyzer instruments (e.g., Advia 120 for hematology, AU680 for clinical chemistry)."
+            f"The collection method, anesthesia, sample processing and analyzers are not in "
+            f"the study data: write exactly '[Placeholder: the blood collection method and "
+            f"analyzers are not in the study data]'. Name no instrument."
         ),
-        "internal_dose": (
-            "One paragraph. Describe tissue collection for internal dose assessment: "
-            "blood/serum and tissue samples collected at necropsy, stored at -80°C, "
-            "analyzed by LC-MS/MS for parent compound and/or metabolite concentrations."
-        ),
+        "internal_dose": _internal_dose_guide(ctx),
         **_assay_guides(ctx),
         "txomics_sample": (
-            "One paragraph. RNA was isolated from flash-frozen tissue samples. "
-            "Describe tissue homogenization, RNA extraction method (e.g., RNeasy), "
-            "RNA quality assessment (RIN values)."
+            f"One or two sentences: samples of {', '.join(ctx.ge_organs) or 'the target organs'} "
+            f"were collected for transcriptomics. How they were collected, preserved and "
+            f"stored is not in the study data: write exactly '[Placeholder: the transcriptomic "
+            f"sample collection and storage are not in the study data]'. Name no kit."
         ),
         "txomics_qc": (
-            "One paragraph. Outlier detection by principal component analysis and "
-            "total read count thresholds. Samples below quality thresholds were excluded "
-            "from downstream analysis."
+            "One sentence: '[Placeholder: the sequencing quality checks and outlier criteria "
+            "are not in the study data]'. State no threshold and no excluded sample."
         ),
         "data_analysis": (
             "Brief introductory paragraph: overview of the statistical and dose-response "
@@ -538,9 +596,7 @@ def _build_subsection_guidelines(
             f"{_genomic_workflow_phrase(ctx)} "
             f"GO biological process gene-set analysis with these recorded settings: "
             f"{'; '.join(ctx.go_filter_settings) if ctx.go_filter_settings else 'not recorded'}. "
-            f"Gene sets were reported when at least 3 genes passed all filters and at least 5% "
-            f"of the set was populated; BMD, BMDL and BMDU at the 5th percentile of the set's "
-            f"gene BMDs were the potency metrics. Individual-gene results were the median over "
+            f"{_gene_set_reporting(ctx)} Individual-gene results were the median over "
             f"the probes mapped to each gene. Use ONLY these settings; do not invent others."
         ),
         "efdr": (

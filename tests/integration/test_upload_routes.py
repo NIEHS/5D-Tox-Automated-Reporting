@@ -88,7 +88,7 @@ class TestUploadCsv:
 class TestPreview:
     """GET /api/preview/{file_id} — preview uploaded file content."""
 
-    def test_preview_returns_content_for_data_upload(self, given_pfhxsam, mock_bmdx_pipe):
+    def test_preview_returns_content_for_data_upload(self, niehs10, mock_bmdx_pipe):
         """
         After session load re-registers files, preview should return content.
         """

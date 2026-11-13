@@ -1,7 +1,8 @@
 """
 Graph-grounded literature references for the generated report.
 
-The genomics interpretation already queries the knowledge graph (bmdx.duckdb)
+The genomics interpretation already queries the report's knowledge base
+(knowledge_base.registry.kb_for)
 for real, DOI-anchored papers and names them to the LLM as context, but those
 citations evaporated — they never became a structured reference list.  This
 module closes that loop end-to-end:
@@ -55,7 +56,7 @@ from pipeline.session_store import read_narrative_overrides  # noqa: E402
 
 def build_reference_pool_for_genes(
     genes: list[str],
-    db_path: str = "bmdx.duckdb",
+    db_path: str,
     pool_size: int = 25,
 ) -> list[dict]:
     """
@@ -69,7 +70,8 @@ def build_reference_pool_for_genes(
     Args:
         genes:     Responsive gene symbols (case-insensitive; the graph stores
                    upper-case HGNC symbols).
-        db_path:   Path to bmdx.duckdb (read-only).
+        db_path:   The knowledge base's database (knowledge_base.registry.kb_for;
+                   read-only).
         pool_size: How many candidate papers to offer.
 
     Returns:
@@ -407,14 +409,15 @@ def references_paragraphs(references: list[dict]) -> list[str]:
 # `gene_set_narrative` + `gene_narrative`) and turn them into the report-wide
 # reference list, deterministically.  Kept HERE so the whole references concern
 # lives in one module; the disk read is a thin, lazily-imported shim.  Strata are
-# ordered organ (liver, kidney, then alpha) then sex (male, female) so the
-# report-wide numbering matches the document order the genomics tables render in.
+# ordered organ (the report's tissue order, document_tree.tissue_key) then sex
+# (male, female) so the report-wide numbering matches the document order the
+# genomics tables render in.
 
-_ORGAN_RANK = {"liver": 0, "kidney": 1}
 _SEX_RANK = {"male": 0, "female": 1}
 
 
-def collect_reference_strata(session_dir, genomics_cache: dict) -> list[dict]:
+def collect_reference_strata(session_dir, genomics_cache: dict,
+                             tissue_order: list[str] | None = None) -> list[dict]:
     """Load the per-stratum reference pools + narratives for a session.
 
     Reads the latest `_cache_interpretation_<organ>_<sex>_*.json` for every
@@ -461,8 +464,10 @@ def collect_reference_strata(session_dir, genomics_cache: dict) -> list[dict]:
             "gene_narrative": interp.get("gene_narrative") or [],
         })
 
+    from document_model.document_tree import tissue_key
+    organ_key = tissue_key(tissue_order)
     strata.sort(key=lambda s: (
-        _ORGAN_RANK.get(s["organ"], 99), s["organ"],
+        organ_key(s["organ"]),
         _SEX_RANK.get(s["sex"], 99), s["sex"],
     ))
     return strata
@@ -516,7 +521,11 @@ def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = ""
     human-edit citation hazards (see `detect_override_citation_hazards`).  Empty
     when no stratum carries a reference pool.
     """
-    strata = collect_reference_strata(session_dir, genomics_cache)
+    from pathlib import Path
+    from document_model.view_config import study_document_facts
+    strata = collect_reference_strata(
+        session_dir, genomics_cache,
+        study_document_facts(dtxsid or Path(session_dir).name)["tissue_order"])
     if not strata:
         return {"references": [], "paragraphs": [], "rewritten": {}, "warnings": []}
     references, rewritten_list = assemble_report_references(strata, offset=offset)

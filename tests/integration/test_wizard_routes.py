@@ -14,7 +14,7 @@ import pytest
 
 @pytest.mark.integration
 class TestWizardRoutes:
-    def test_files_lists_uploaded_study_files(self, given_pfhxsam):
+    def test_files_lists_uploaded_study_files(self, niehs10):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -23,12 +23,12 @@ class TestWizardRoutes:
         assert resp.status_code == 200, resp.text
         body = resp.json()
 
-        # The regression fixture ships a populated files/ dir.
+        # The NIEHS-10 session has a populated files/ dir.
         assert body["count"] > 0
         assert body["count"] == len(body["files"])
-        # Every entry has a name + size, and the known bm2 is present.
+        # Every entry has a name + size, and the study workbook is present.
         names = {f["name"] for f in body["files"]}
-        assert "Body weight.bm2" in names
+        assert "C20022-01_Individual_Animal_Body_Weight_Data.xlsx" in names
         for f in body["files"]:
             assert isinstance(f["name"], str) and f["name"]
             assert isinstance(f["size"], int) and f["size"] >= 0
@@ -43,15 +43,15 @@ class TestWizardRoutes:
         body = resp.json()
         assert body == {"files": [], "count": 0}
 
-    def test_integrated_tree_slim_structure(self, given_pfhxsam):
+    def test_integrated_tree_slim_structure(self, niehs10):
         import json
 
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
-        # The tree endpoint needs integrated.json; the base regression fixture ships
+        # The tree endpoint needs integrated.json; the NIEHS-10 session ships
         # files+validation but not integration, so synthesize a minimal one.
-        (given_pfhxsam / "integrated.json").write_text(
+        (niehs10 / "integrated.json").write_text(
             json.dumps(
                 {
                     "name": "integrated",
@@ -102,7 +102,7 @@ class TestWizardRoutes:
         # The heavy numeric `responses` arrays must NOT be shipped.
         assert "responses" not in json.dumps(body)
 
-    def test_fingerprints_returns_classification_rows(self, given_pfhxsam):
+    def test_fingerprints_returns_classification_rows(self, niehs10):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 

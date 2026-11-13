@@ -65,11 +65,16 @@ IMPLEMENTATIONS: dict[str, dict[str, bool]] = {
     # profile names it yet (ADR-0030).
     "eligibility": {"trend_and_pairwise": True, "all_endpoints": False,
                     "trend_or_pairwise": False},
-    "outlier_test": {"dixon_r10": True},
+    # "none": a settled "no outlier test" (NIEHS-07 … 10's plasma tables);
+    # null would leave it to the built-in default.
+    "outlier_test": {"dixon_r10": True, "none": True},
     "below_limit": {"half_limit": True},
     "above_highest_dose": {"nvm": True, "keep": True},
     "bmr_type": {"sd": True, "rel_dev": True},
     "model_selection": {"model_average": True, "lowest_aic": True},
+    # Clinical chemistry endpoints derived per animal when the data lacks them
+    # (bmdx_pipe.apical_report.DERIVED_ENDPOINTS).
+    "derived_endpoint": {"globulin": True, "ag_ratio": True},
     "bmd_stat": {s: True for s in ("mean", "median", "minimum", "weighted_mean",
                                    "fifth_pct", "tenth_pct", "lower95", "upper95")},
 }
@@ -149,8 +154,10 @@ def _bmr(path, v):
 
 
 def _outliers(path, v):
+    if v == {"test": "none"}:
+        return
     if not isinstance(v, dict) or set(v) != {"test", "alpha"}:
-        _fail(path, f"expected {{test, alpha}}, got {v!r}")
+        _fail(path, f"expected {{test, alpha}} or {{test: none}}, got {v!r}")
     _impl("outlier_test")(f"{path}.test", v["test"])
     _prob(f"{path}.alpha", v["alpha"])
 
@@ -160,6 +167,18 @@ def _stats_list(path, v):
         _fail(path, f"expected a non-empty list, got {v!r}")
     for i, s in enumerate(v):
         _impl("bmd_stat")(f"{path}[{i}]", s)
+
+
+def _flag(path, v):
+    if not isinstance(v, bool):
+        _fail(path, f"expected true or false, got {v!r}")
+
+
+def _derived_list(path, v):
+    if not isinstance(v, list):
+        _fail(path, f"expected a list (empty: derive none), got {v!r}")
+    for i, s in enumerate(v):
+        _impl("derived_endpoint")(f"{path}[{i}]", s)
 
 
 def _go_display(path, v):
@@ -196,6 +215,8 @@ SCHEMA: dict = {
             "pairwise": _Map(_impl("pairwise")),
             "outliers": _outliers,
         },
+        "derived_endpoints": _derived_list,
+        "terminal_body_weight_tested": _flag,
         "bmd": {
             "engine": _impl("engine"),
             "eligibility": _impl("eligibility"),
@@ -218,6 +239,10 @@ SCHEMA: dict = {
     "genomics": {
         "go_ranking": _stats_list,
         "go_display": _go_display,
+        # A gene whose probes' median fold change is below this (magnitude) is
+        # not reported (NIEHS-02 … 06: "<|2|"); null: no floor beyond the
+        # analysis's own filters.
+        "gene_min_fold_change": _positive,
         "recorded": {
             "bmr": _bmr,
             "model_selection": _impl("model_selection"),
@@ -238,7 +263,9 @@ SCHEMA: dict = {
 # Sections added to the schema after profiles were written.  Profiles are
 # immutable, so one that predates a section does not state it: the section is
 # "to confirm" for it (the default), and a profile written since states it.
-_ADDED_LATER = frozenset({"genomics.efdr"})
+_ADDED_LATER = frozenset({"genomics.efdr", "genomics.gene_min_fold_change",
+                          "apical.derived_endpoints",
+                          "apical.terminal_body_weight_tested"})
 
 _IDENTITY_KEYS = ("name", "series", "effective", "reference", "description")
 
@@ -297,6 +324,14 @@ def _builtin_defaults() -> dict:
                 "pairwise": pairwise,
                 "outliers": None,
             },
+            # Globulin (total protein - albumin) and the A/G ratio, derived when
+            # the data lacks them, as RR-8, NIEHS-02 … 07, 12 and 13 print them;
+            # a study whose report analyzed neither states [] in its overlay.
+            "derived_endpoints": ["globulin", "ag_ratio"],
+            # Terminal body weight tested and modeled like any endpoint (marks,
+            # its BMD, a line of the BMD summary), as RR-8, NIEHS-02 … 06 and
+            # NIEHS-12 print it; NIEHS-07 … 10 printed it untested (false).
+            "terminal_body_weight_tested": True,
             "bmd": {
                 "engine": "toxicr_model_average",
                 "eligibility": "trend_and_pairwise",
@@ -319,6 +354,7 @@ def _builtin_defaults() -> dict:
         "genomics": {
             "go_ranking": ["median"],
             "go_display": {"pct": 5, "min_genes": 20, "max_genes": 500, "min_bmd": 3},
+            "gene_min_fold_change": None,
             "recorded": {"bmr": None, "model_selection": None},
             "efdr": {"generator": None, "generator_abbreviation": None, "generator_url": None,
                      "distribution": None, "resamples_per_probe": None},

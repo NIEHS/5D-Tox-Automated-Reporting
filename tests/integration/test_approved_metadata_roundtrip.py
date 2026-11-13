@@ -78,7 +78,7 @@ def test_approving_metadata_is_refused_while_validation_errors_stand(sessions_di
 
 
 @pytest.mark.integration
-def test_integration_reapplies_the_approved_descriptions(given_pfhxsam, mock_bmdx_pipe):
+def test_integration_reapplies_the_approved_descriptions(niehs10, mock_bmdx_pipe):
     from fastapi.testclient import TestClient
     from web_routes.background_server import app
 
@@ -87,7 +87,7 @@ def test_integration_reapplies_the_approved_descriptions(given_pfhxsam, mock_bmd
     mock_bmdx_pipe.integrate_pool.return_value = _integrated("heart")
     client = TestClient(app)
     assert client.post(f"/api/pool/validate/{d}").status_code == 200
-    (given_pfhxsam / "metadata_approved.json").write_text(json.dumps(
+    (niehs10 / "metadata_approved.json").write_text(json.dumps(
         {"approved_at": "2026-10-07T00:00:00+00:00", "experiments_updated": 1, "metadata": approved}))
     r = client.post(f"/api/pool/integrate/{d}",
                     json={"identity": {"name": "Test", "casrn": "123-45-6", "dtxsid": d}})

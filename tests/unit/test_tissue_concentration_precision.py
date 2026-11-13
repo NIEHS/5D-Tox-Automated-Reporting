@@ -24,7 +24,8 @@ PA48 = REFERENCE_DIR / "NIEHS-10" / "C20022-01_PA48_-_Summary_of_Tissue_Concentr
 
 
 def _published_cells() -> dict:
-    """{(sex, "<N> h postdose"): [cell per dose]} from the PA48 PDF."""
+    """{(sex, "<N> Hours Postdose (µg/mL)"): [cell per dose]} from the PA48 PDF
+    (its unit is the Key sheet's ug/ml, printed µg/mL)."""
     out, sex = {}, None
     for page in pypdf.PdfReader(PA48).pages:
         for line in page.extract_text().splitlines():
@@ -34,7 +35,7 @@ def _published_cells() -> dict:
             m = re.search(r"Plasma (\d+) hour .*?\)\s+(.*)$", line)
             if m and sex:
                 cells = re.findall(r"([\d.]+)\s*±\s*([\d.]+)\s*\(\d+\)", m.group(2))
-                out[(sex, f"{m.group(1)} h postdose")] = [f"{a}{NB}{b}" for a, b in cells]
+                out[(sex, f"{m.group(1)} Hours Postdose (µg/mL)")] = [f"{a}{NB}{b}" for a, b in cells]
     return out
 
 
@@ -45,7 +46,7 @@ def test_niehs10_table7_cells_match_published(reference_session):
     session = reference_session("NIEHS-10", "DTXSID50469320")
     paths = find_sidecar_paths(str(session), "Tissue Concentration")
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name="PFHxSAm",
-                                                       method=resolve("ntp-5day-2021"))
+                                                       method=resolve("ntp-5day-2021.1"))
     section = normalize_apical_section_for_render({
         "platform": "Tissue Concentration", "title": "Tissue Concentration",
         "tables_json": tc["table_data"], "caption": tc["caption"],
@@ -57,5 +58,4 @@ def test_niehs10_table7_cells_match_published(reference_session):
     got = {(b.sex_label, r.cells[0]): r.cells[1:3]
            for b in plan.sex_blocks for r in b.rows if not r.is_n_row}
     assert got == published
-    # The unit is the Key sheet's (ug/ml), not a literal.
-    assert tc["footnotes"][0]["text"].endswith("plasma concentration data are presented in µg/mL.")
+    # The unit, in each row label, is the Key sheet's (ug/ml), not a literal.

@@ -871,17 +871,26 @@ def assign_genomics_table_numbers(
     _visit(tree)
 
 
+def tissue_key(order: list[str] | None):
+    """A sort key for tissue names in the report's tissue order (a definition's
+    ``tissue_order``: the tissues named first, then the rest alphabetically):
+    the 2023 books put the liver first, the 2026 books are alphabetical.  Every
+    place that lists tissues (the tables, the references, the Summary, the PCA
+    figure) sorts with it, so they agree."""
+    rank = {str(t).strip().lower(): i for i, t in enumerate(order or [])}
+
+    def key(tissue) -> tuple[int, str]:
+        t = str(tissue or "").strip().lower()
+        return (rank.get(t, len(rank)), t)
+
+    return key
+
+
 def order_tissues(genomics_sections: list[dict] | None, order: list[str]) -> list[dict]:
-    """The genomic entries in the report's tissue order (a definition's
-    ``tissue_order``: the tissues named first, then the rest alphabetically),
-    each tissue's entries in their given order."""
-    rank = {t: i for i, t in enumerate(order)}
-
-    def key(entry):
-        tissue = (entry.get("organ") or "").strip().lower()
-        return (rank.get(tissue, len(rank)), tissue)
-
-    return sorted(genomics_sections or [], key=key)
+    """The genomic entries in the report's tissue order (``tissue_key``), each
+    tissue's entries in their given order."""
+    key = tissue_key(order)
+    return sorted(genomics_sections or [], key=lambda entry: key(entry.get("organ")))
 
 
 def assign_genomics_figure_numbers(

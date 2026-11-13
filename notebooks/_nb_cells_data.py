@@ -228,7 +228,7 @@ LLM layers need, exactly as the command line sets it.
 1. `os.chdir(ROOT)`: the repository (`BMDX_REPO` when a workspace sets it,
    else this notebook's parent directory). The app resolves several things relative to the working
    directory: `templates/`, `profiles/`, `sessions/` (via
-   `common.paths.SESSIONS_DIR`) and the knowledge base `bmdx.duckdb`. The repo
+   `common.paths.SESSIONS_DIR`) and the knowledge bases `knowledge_bases/`. The repo
    root goes on `sys.path` too, because the packages are imported by name
    from there (no `pip install`).
 2. `tooling.generate_report._bootstrap_env()`, the same function
@@ -264,7 +264,7 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get("BMDX_REPO") or
             (Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()))
-os.chdir(ROOT)                      # the app is cwd-relative (templates, profiles, bmdx.duckdb)
+os.chdir(ROOT)                      # the app is cwd-relative (templates, profiles, knowledge_bases)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -418,32 +418,35 @@ says what each one is. The rest of this step is about a published study.
 publishes each study's apical data as NTP "Individual Animal" workbooks
 (`C20022-01_Individual_Animal_Body_Weight_Data.xlsx` and so on), each with a
 *Key to Column Labels* sheet and a *Data* sheet, plus the study's genomic
-BMDExpress project (`.bm2`). The pool's accepted apical input is the
-long-format NTP CSV: one row per animal and observation.
+BMDExpress project (`.bm2`). These **study workbooks** are the study team's own
+record, and they drive the data (ADR-0032): validation (step 5) derives the
+BMDExpress inputs from them and checks every other file against the study they
+describe. So the workbooks go into the pool themselves.
 
 **How it's implemented** (`FROM_PACKAGE = True`, as
 `build_published_reports.build` does it):
 
 1. **`python -m tooling.cebs_to_pool --package assets/cebs/<REPORT> --out <tmp>/inputs`**
    runs as a subprocess. For each Individual Animal workbook it:
-   - reads the *Data* sheet and writes it split by sex as
-     `<platform>_truth_<sex>.csv` (`body_weight_truth_male.csv`,
-     `clin_chem_truth_female.csv`, …). The file name is what later tells
-     fingerprinting the platform and the data type (`tox_study`).
-   - reads the units the *Key* sheet states for each column
-     (`bmdx_pipe.key_sheet_units`) and writes them beside the CSV as
-     `<stem>.units.json`, because the CSV headers carry none. They end up in
-     the sidecars, and the tables print them.
-   - for the 2025-format workbooks (no `Sex` column), fills the sex from the
-     study title in the Key sheet, and says so.
-   - for NIEHS-02 … 05, which publish a database-export layout instead, first
-     converts it to the Key/Data columns (`tooling.cebs_db_export`).
-   - with `--mg-per-kg-from <project .json>` (RR-8 and NIEHS-02 … 06, whose
-     workbooks record doses in mmol/kg), converts each molar dose to the
-     genomic project's mg/kg dose level. The project's nonzero levels must line
-     up with a run of the molar levels at one ratio (the molecular weight,
-     within 1%), or the workbook is refused.
+   - copies a standard Key/Data workbook as published. The 2025-format
+     workbooks (no `Sex` column) are standard too: whoever reads one
+     (`bmdx_pipe.study_workbook`) fills the sex from the study title in the
+     Key sheet, and says so.
+   - writes any other layout as a standard workbook of the same name, with a
+     *Conversion* sheet saying what was converted:
+     - NIEHS-02 … 05 publish a database-export layout (`tooling.cebs_db_export`);
+     - NIEHS-12 and 13 publish their concentrations as the lab's results
+       workbook (`tooling.cebs_lab_concentration`);
+     - with `--mg-per-kg-from <project .json>` (RR-8 and NIEHS-02 … 06, whose
+       workbooks record doses in mmol/kg), each molar dose becomes the genomic
+       project's mg/kg dose level. The project's nonzero levels must line up
+       with a run of the molar levels at one ratio (the molecular weight,
+       within 1%), or the workbook is refused.
+   - copies the package's **sample sheet** (NIEHS-02 … 10), which says which
+     animal each genomic sample came from (`bmdx_pipe.sample_sheet`).
    It prints one JSON line per workbook: status, files written, units found.
+   (`--csv` writes the long-format truth CSVs instead, the route for a study
+   supplied that way.)
 2. **The genomic project.** When several chemicals share one BMDExpress
    project (NIEHS-07 … 10 come from one EPA PFAS kidney/liver project),
    `bmdx_pipe.subset_bm2(project, out, token)` runs the Java `SubsetBm2` helper
@@ -452,10 +455,11 @@ long-format NTP CSV: one row per animal and observation.
    copied as it is.
 
 With `FROM_PACKAGE = False` the cell copies the inputs the reference session
-`sessions/<SOURCE>/` was built from instead: the long-format CSVs and units
-files validation moved to its `_originals/`, plus the files it kept as they
-were (the `.bm2` and the clinical-observation CSVs). For NIEHS-10 the two are
-byte-identical; the conversion is checked by `tests/unit/test_cebs_to_pool.py`.
+`sessions/<SOURCE>/` was built from instead: the files validation moved to its
+`_originals/`, plus the files it kept as they were. A session built before the
+workbooks drove (2026-10-28) holds truth CSVs rather than workbooks; for NIEHS-10
+the two give byte-identical pivots and sidecars (`tests/unit/test_cebs_to_pool.py`,
+`tests/unit/test_workbook_drives_pool.py`).
 
 **Reads → writes.** `assets/cebs/<REPORT>/` → a temporary directory.
 Nothing in the session yet.
@@ -586,37 +590,68 @@ validation produces, so mistakes have to surface here.
      contents.
    For a `.bm2`, the Java `ExportBm2` helper converts the binary project to
    JSON first (`bmdx_pipe.bm2_cache`, cached by file).
-2. **Convert long-format files.** A long-format CSV (one row per animal) is
-   converted to BMDExpress's wide pivot format at this point, so every later
-   comparison sees one format: `bmdx_pipe.tox_study_csv_to_pivot_txt` writes
-   one `<stem>.txt` (endpoints × animals, a `Dose` row) and one
-   `<stem>.sidecar.json` per sex. The sidecar keeps what the pivot discards:
-   each animal's selection (core or biosampling), observation day, terminal
-   flag and raw values, plus the units from `<stem>.units.json`. The original
-   CSV and units file move to `_originals/`, and the pivot is fingerprinted in
-   their place.
-3. **Validate the pool.** `bmdx_pipe.validate_pool(dtxsid, fingerprints)`:
+2. **The study workbooks drive (ADR-0032).** A study workbook
+   (`bmdx_pipe.study_workbook`: read once, every column by name) is converted
+   at this point into the files the pool uses for its platform
+   (`bmdx_pipe.study_workbook_to_pool_files`):
+   - one `<stem>_truth_<sex>.txt`, BMDExpress's wide pivot format (endpoints ×
+     animals, a `Dose` row);
+   - one `<stem>_truth_<sex>.sidecar.json` per sex, which keeps what the pivot
+     discards: each animal's selection (core or biosampling), observation day,
+     terminal flag and raw values, plus the units the Key sheet states;
+   - for clinical observations, which are findings rather than numbers, one
+     `clinical_obs_truth_<sex>.csv` per sex for the incidence tables.
+
+   The workbook stays in `files/`. Every other source of that platform (a
+   truth CSV, pivots derived from one) is set aside in `_originals/`.
+
+   **Convert long-format files.** Without a workbook, a long-format CSV (one row
+   per animal) is converted the same way (`bmdx_pipe.tox_study_csv_to_pivot_txt`,
+   the units from `<stem>.units.json`), and moves to `_originals/`.
+3. **The study structure.** `bmdx_pipe.build_study_structure` reads the study
+   workbooks (and the sample sheet) into the study they describe:
+   - its number, title and dose unit;
+   - the design its title states (species, strain, route, duration);
+   - its dose groups and sexes;
+   - every animal with its sex, dose and group;
+   - per platform, the endpoints and days;
+   - which animal each genomic sample came from.
+
+   Workbooks that disagree with each other are an error (`workbook_conflict`).
+
+   **Validate the pool.** `bmdx_pipe.validate_pool(dtxsid, fingerprints, structure)`:
    - `classify_derived_by_anchor` (ADR-0017) first: a derived table whose
      animals provably lost data against the study workbook is relabelled
      `inferred`. Only provable loss changes a label.
    - builds the **coverage matrix**: per `platform|data_type`, the file in each
      tier (`xlsx`, `txt_csv`, `bm2`).
-   - Level 0, **roster consistency**: the `tox_study` files of one sex must
-     agree on the animals, and every other file must be a subset
+   - Level 0, **roster consistency**: every file's animals must be a subset of
+     the study's roster (the workbooks'; without them, the union of the files)
      (`roster_subset`, info when it is).
+   - **every file against the study** (`check_against_structure`). Each of
+     these is an error:
+     - an animal the study lacks (`animal_not_in_study`);
+     - an animal at another dose or of another sex (`animal_dose_mismatch`,
+       `animal_sex_mismatch`);
+     - a dose group or sex the study lacks;
+     - an endpoint the platform's workbook doesn't record
+       (`endpoint_not_in_study`, named with the workbook's closest spelling);
+     - a genomic sample at another dose or sex than its animal.
+
+     A sample that can't be traced to an animal is a warning
+     (`samples_unresolved`).
    - Level 1, **unassigned files**: a file with neither platform nor data type
      is an error (`unassigned_file`) and blocks everything.
    - per platform: `missing_tier` (a tier absent), `dose_mismatch` (files in
      one platform and sex disagree on doses), `animal_count_mismatch`,
      `sex_mismatch`; across the pool, `redundant_files`.
 4. **Check values against their source.**
-   `pipeline.value_validation.check_value_provenance` compares a derived CSV
-   with the study workbook it came from, value by value; a divergence is an
-   error. When there is no workbook to compare with (as here: the package's
-   workbooks were converted, not imported), it adds an
-   `unverified_derived_data` warning per platform instead.
+   `pipeline.value_validation.check_value_provenance` compares every source a
+   workbook set aside (a truth CSV) with the workbook, value by value; a
+   divergence is an error. A platform with derived data and no workbook gets
+   an `unverified_derived_data` warning instead.
 5. Writes `validation_report.json`: the fingerprints, the issues, the coverage
-   matrix and `is_complete`.
+   matrix, `is_complete` and the `study_structure`.
 
 `generate_report.validate` logs each issue and stops on an error.
 
@@ -626,9 +661,11 @@ validation produces, so mistakes have to surface here.
 **Phase.** `VALIDATED`, or `VALIDATION_ERRORS` with any error-severity issue.
 
 **If it goes wrong.** Errors stop the workflow until the files are fixed and
-validation runs again. Warnings and infos are expected for a converted
-package: no workbook or apical `.bm2` tier, and animals that are in the study
-roster but not in a given platform (biosampling animals, early deaths).
+validation runs again. A file that contradicts the workbooks has to be
+corrected or removed. Warnings and infos are expected for a published package:
+no apical `.bm2` tier, animals that are in the study roster but not in a given
+platform (biosampling animals, early deaths), and, for RR-8, NIEHS-12 and 13,
+genomic samples no sample sheet traces.
 """)
 
 _code(r"""
@@ -652,7 +689,11 @@ for key, tiers in report["coverage_matrix"].items():
 kinds = collections.Counter((i["severity"], i["issue_type"]) for i in report["issues"])
 print("\nissues:", ", ".join(f"{n} {sev} {kind}" for (sev, kind), n in sorted(kinds.items())))
 moved = sorted(p.name for p in (session / "_originals").glob("*")) if (session / "_originals").is_dir() else []
-print(f"converted long-format inputs (now in _originals/): {len(moved)}")
+print(f"set aside or converted inputs (now in _originals/): {len(moved)}")
+st = report.get("study_structure") or {}
+if st:
+    print(f"study {st['study_number']}: {len(st['animals'])} animals, sexes {st['sexes']}, "
+          f"doses {st['dose_groups']} {st['dose_unit'] or ''}; design from the workbooks {st['design']}")
 show_state();
 """)
 
@@ -742,28 +783,38 @@ the raw input files.
 4. Calls `bmdx_pipe.pool_integrator.integrate_pool`, which:
    1. **Chooses one source per platform.** A precedence decision first; else
       the tier preference `.bm2` > `.txt`/`.csv` > `.xlsx` (a BMDExpress
-      analysis carries BMD results; a table carries only data).
+      analysis carries BMD results; a table carries only data). A study
+      workbook is never merged itself: its data comes in as the pivots
+      validation derived from it (step 5).
    2. Sets **clinical observations** aside: they are categorical findings, not
       numbers, so they bypass Java and become incidence tables at report time
       (`_meta.clinical_obs_files`).
-   3. Converts any chosen `.xlsx` to a pivot (`xlsx_to_pivot_txt`, into
-      `_pivots/`).
-   4. Runs the Java merge: `java -cp <classpath> IntegrateProject --output … --bm2 … --txt …`.
+   3. Runs the Java merge: `java -cp <classpath> IntegrateProject --output … --bm2 … --txt …`.
       BMDExpress's own `ProjectUtilities` and `ExperimentFileUtil` load each
       project and table and combine them into one `BMDProject`. Jackson writes
       it as JSON (NaN → null).
-   5. Adds `_meta`: the chosen file per platform (`source_files`), the study
-      workbooks' animal rosters (`xlsx_rosters`), the clinical-observation files.
-   6. Runs the Java `ExportCategories` for the category analyses' lookup table
+   4. Adds `_meta`: the chosen file per platform (`source_files`), the study
+      workbooks' animal rosters (`xlsx_rosters`), the clinical-observation files,
+      and the study structure validation built (`study_structure`).
+   5. Runs the Java `ExportCategories` for the category analyses' lookup table
       and writes it beside the project as `_category_lookup.json` (it can run
       to 10+ MB, so it's kept out of `integrated.json`).
-   7. **Infers each experiment's metadata** (`bmdx_pipe.experiment_metadata.infer_experiment_metadata`):
+   6. **States each experiment's metadata from the workbooks**
+      (`bmdx_pipe.experiment_metadata.describe_from_structure`, ADR-0032):
+      - the design the workbook titles state (species, strain, route,
+        duration), on every experiment;
+      - each experiment's sex, from its animals;
+      - a genomic experiment's organ, from its samples' tissue.
+   7. **Infers the rest** (`bmdx_pipe.experiment_metadata.infer_experiment_metadata`):
       one LLM call over every experiment's name, source file and endpoint
       names, at temperature 0, validated against the controlled vocabularies.
-      It fills `experimentDescription` (platform, provider, sex, organ,
-      species, strain, route, vehicle, duration, test article). If the LLM is
-      unavailable it logs and leaves the descriptions empty.
-   8. Lays the approved metadata over the inferred (`_apply_approved_metadata`).
+      It fills the fields still empty in `experimentDescription` (platform,
+      provider, organ, vehicle, test article, …). Where it disagrees with a
+      workbook it is logged, and the workbook's value stands. If the LLM is
+      unavailable it logs and leaves those fields empty.
+   8. Lays the approved metadata over the rest (`_apply_approved_metadata`),
+      never over a workbook field. Each field's source (`workbook`, `llm`,
+      `approved`) is kept in `_meta.metadata_provenance`.
    9. Runs the Java `ExportGenomics` on the genomic `.bm2` and writes
       `genomics.sidecar.json`: per-gene BMDs and the GO category analyses,
       extracted once here so Process never reopens the raw upload. Then
@@ -773,10 +824,8 @@ the raw input files.
        `JsonToBm2` (the same project, openable in BMDExpress 3).
 5. Back in `integrate_step`:
    - `reapply_study_design`: lays `study_design.json` (step 9) over every
-     experiment and re-exports `integrated.bm2`, because inference just
-     rewrote the descriptions.
-   - `pipeline.sidecar_units.stamp_sidecar_units`: units onto the sidecars from
-     any study workbook in the pool.
+     experiment, except the fields the workbooks state, and re-exports
+     `integrated.bm2`, because inference just rewrote the descriptions.
    - deletes every `_cache_*.json`, `session.duckdb` and `session_parquet/`:
      the data under them changed.
    - `_pin_and_check_method`: pins the newest method profile if the study has
@@ -823,10 +872,13 @@ for key, src in integrated["_meta"]["source_files"].items():
 print(f"\n{len(integrated['doseResponseExperiments'])} experiments, "
       f"{len(integrated.get('bMDResult') or [])} BMD analyses, "
       f"{len(integrated.get('categoryAnalysisResults') or [])} category analyses")
+provenance = integrated["_meta"].get("metadata_provenance") or {}
 for e in integrated["doseResponseExperiments"]:
     d = e.get("experimentDescription") or {}
+    src = provenance.get(e["name"]) or {}
     print(f"  {e['name'][:34]:34} {str(d.get('platform'))[:20]:20} {str(d.get('organ')):12} "
-          f"{str(d.get('sex')):7} {len(e.get('probeResponses') or []):>6} endpoints/probes")
+          f"{str(d.get('sex')):7} {len(e.get('probeResponses') or []):>6} endpoints/probes"
+          f"   from the workbooks: {sorted(k for k, v in src.items() if v == 'workbook')}")
 for name in ("integrated.json", "integrated.bm2", "_category_lookup.json", "genomics.sidecar.json"):
     p = session / name
     print(f"  {name:24} {p.stat().st_size if p.exists() else 0:>12,} bytes")
@@ -837,11 +889,13 @@ show_state();
 _md(r"""
 ## 9. State what the data doesn't record
 
-**Purpose.** Some facts a report states are in none of the files: how the
-chemical was given, what it was dissolved in, which strain was used, who wrote
-the report. A person states them, and each is kept in the session so that
-every later integration puts it back (integration re-infers the experiment
-metadata from scratch each time).
+**Purpose.** Some facts a report states are in none of the files: what the
+chemical was dissolved in, who wrote the report, and for a study whose
+workbooks don't say, how it was given or which strain was used. A person states
+them, and each is kept in the session so that every later integration puts it
+back (integration re-infers the experiment metadata from scratch each time).
+A fact the study workbooks record is not stated over: the workbooks are the
+study's record (ADR-0032).
 
 **How it's implemented.**
 
@@ -859,11 +913,13 @@ metadata from scratch each time).
   lays it over the descriptions and records it as the approval in
   `metadata_approved.json`, the same record the browser's approval writes.
   NIEHS-10's project names its experiments by organ and sex, so it states none.
-- Both are written **as given** here. The app and the command line first
-  check them (`safeguards.inputs`): the study must have a dataset, every
-  experiment must be the dataset's, and every field and value the controlled
-  vocabulary's (`pipeline.study_design.design_field_errors`,
-  `bmdx_pipe.VOCABULARIES`); a refusal writes nothing.
+- Both are written **as given** here, except a field the workbooks state, which
+  keeps the workbooks' value (`apply_design_fields`, `approve_experiment_metadata`).
+  The app and the command line first check them (`safeguards.inputs`): the
+  study must have a dataset, every experiment must be the dataset's, every field
+  and value the controlled vocabulary's (`pipeline.study_design.design_field_errors`,
+  `bmdx_pipe.VOCABULARIES`), and nothing may contradict the workbooks
+  (`facts_contradict_workbook`); a refusal writes nothing.
 - **Front matter**, `generate_report.apply_front_matter(dtxsid, FRONT_MATTER, store)`:
   merges the given keys over the saved `front_matter.json` and cleans it
   (`rendering.front_matter.clean_front_matter`), as the Configure screen saves
@@ -1010,6 +1066,70 @@ settings = session_method(DTXSID).to_json()["settings"]
 print(f"\n{len(settings)} resolved settings (value — the layer that set it):")
 for path, s in settings.items():
     print(f"  {path:48} {str(s['value'])[:46]:46} {s['source']}")
+""")
+
+_md(r"""
+### The knowledge base
+
+**Purpose.** The genomics interpretation (step 12) is grounded in a literature
+**knowledge base**: papers, the claims extracted from them, the genes they name
+and the organs, GO terms and pathways. A report reads one, and which one is part
+of what it is reported under.
+
+**Where a knowledge base comes from** (ADR-0034). A **crawl query** is named YAML
+text, `crawl_queries/<name>.yaml`: the seed papers and searches, how a paper is
+judged and tagged, what is extracted from each paper (and by which model), what
+is counted, which follow-on crawls are seeded from that, what is annotated.
+Nothing in the code knows the topic; `crawl_queries/baseline.yaml` states the
+toxicogenomics query of May 2026 in full. A person edits the text directly or
+asks the query agent (`knowledge_base.query_agent.propose(text, request)`),
+which returns a revised text, an explanation and a diff, and saves nothing.
+`crawl_queries.save` archives the text it replaces.
+
+`knowledge_base.run_crawl.run(query, name)` runs a query, stage by stage, into
+`knowledge_bases/<name>/`: `kb.duckdb`, the crawl's outputs, and
+`manifest.json` (the query's text and hash, each stage's status, the database's
+hash, and its **capabilities**: what it holds, read off its tables). A stage
+that could not run (a source unreachable, or one that answered only in part)
+leaves the knowledge base unfinished, and an unfinished one is never read. The
+command line, `python -m tooling.run_crawl <query> --as <name>`, runs it
+through the safeguards, which refuse a query that names a test article beside
+genes: crawls are broadly scoped, and a crawl about a test article names no
+genes. A finished one never changes; its name is
+never reused.
+
+**Which one a report reads.** `knowledge_base.registry.kb_for(dtxsid)`: the
+`knowledge_base:` its document definition names (inherited through `extends`,
+like the rest of the definition), else the default named in
+`knowledge_bases/DEFAULT`. Every reader resolves through it: the
+interpretation, its references, the chat tools. A report's knowledge base must
+hold papers, claims, genes, GO and pathways; `safeguards.knowledge` refuses
+assigning one that doesn't (`document_model.knowledge_base_assignment.assign`
+is the unguarded core step, which writes the key into
+`templates/studies/<id>/document.yaml`).
+
+**When it changes.** At Process, `pipeline.kb_currency.reconcile` compares the
+knowledge base with the one the session last processed with
+(`knowledge_base.json`); on a change it discards the interpretation store
+(`_cache_interpretation_*.json`) and marks the genomics sections stale with the
+reason `knowledge_base_changed`, so they are written again and the publish gate
+waits for a person to accept them.
+
+**Reads → writes.** This cell only reads: the definition, `knowledge_bases/`.
+""")
+
+_code(r"""
+from knowledge_base import crawl_queries, registry
+
+kb = registry.kb_for(DTXSID)
+m = registry.manifest(kb["name"])
+print(f"{DTXSID} reads {kb['name']} ({kb['source']}), sha256 {kb['sha256'][:12]}…")
+print(f"  made from the query {m['query']['name']!r}; holds {', '.join(kb['capabilities'])}")
+print(f"  tables: {m.get('tables')}")
+print("\nqueries:", [q["name"] for q in crawl_queries.list_queries()])
+print("knowledge bases:", [(k["name"], "complete" if k.get("complete") else "unfinished")
+                           for k in registry.list_knowledge_bases()],
+      "— default:", registry.default_name())
 """)
 
 # ---------------------------------------------------------------------------

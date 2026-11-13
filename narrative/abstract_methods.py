@@ -120,7 +120,7 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     dose_list = _format_dose_list(ctx.dose_groups, ctx.dose_unit)
     # NIEHS convention: "mg/kg body weight [mg/kg]" on first mention of a dose
     # per body weight; an exposure concentration (ppm) is written as is.
-    from pipeline.study_design import dose_noun, is_air_concentration
+    from pipeline.study_design import dose_noun, internal_assessment, is_air_concentration
     inhaled = is_air_concentration(ctx.dose_unit)
     dose_unit_full = (ctx.dose_unit if inhaled
                       else f"{ctx.dose_unit} body weight [{ctx.dose_unit}]")
@@ -131,8 +131,8 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     if ctx.biosampling_doses:
         bio_list = _format_dose_list(ctx.biosampling_doses, ctx.dose_unit)
         biosampling_sentence = (
-            f" Blood was collected from animals dedicated for internal "
-            f"dose assessment in the {bio_list} {ctx.dose_unit} groups."
+            f" Blood was collected from animals dedicated for "
+            f"{internal_assessment(ctx.dose_unit)} in the {bio_list} {ctx.dose_unit} groups."
         )
 
     # --- Transcriptomics clauses (conditional) ---

@@ -11,7 +11,9 @@ This module owns the in-memory side of the fingerprint lifecycle:
 
   - fingerprint_and_store        — extract fingerprint + store in the
     pool, with automatic long-format → wide-format conversion for NTP
-    "tall and skinny" CSV/txt files
+    "tall and skinny" CSV/txt files.  A study workbook drives its platform
+    (ADR-0032): the pool's files for it are derived from the workbook, and
+    any other source of the platform is set aside in _originals/
   - _save_fingerprints_to_disk   — persist the in-memory pool to
     _fingerprints.json so session restore can rehydrate without
     re-running expensive metadata deduction
@@ -49,6 +51,7 @@ from pathlib import Path
 
 from bmdx_pipe import (
     FileFingerprint,
+    derived_source,
     fingerprint_file,
     lightweight_validate,
 )
@@ -103,6 +106,25 @@ def fingerprint_and_store(
     """
     ts_added = datetime.now(tz=timezone.utc).isoformat()
     fp = fingerprint_file(file_id, filename, path, file_type, ts_added, bm2_json)
+
+    # --- A study workbook drives its platform ---
+    # The pivots and sidecars (or, for clinical observations, the per-sex CSVs)
+    # are derived from the workbook itself; any other source of the platform is
+    # set aside.  The workbook stays in files/ as the source.
+    if fp.file_type == "xlsx" and fp.is_study_file and fp.platform and dtxsid:
+        return _derive_from_workbook(fp, path, dtxsid, ts_added)
+
+    # --- A CSV the platform's study workbook supersedes ---
+    # Its data comes from the workbook; the CSV is kept in _originals/ for the
+    # value cross-check (pipeline.value_validation), not converted.
+    if fp.file_type in ("txt", "csv") and fp.is_long_format and dtxsid:
+        files_dir = _session_dir(dtxsid) / "files"
+        workbook = workbook_platforms(files_dir).get(fp.platform)
+        if workbook and derived_source(path) != workbook:
+            _set_aside(_session_dir(dtxsid), [Path(path), Path(path).with_suffix(".units.json")])
+            logger.info("Set aside %s: the study workbook %s covers %s",
+                        filename, workbook, fp.platform)
+            return fp
 
     # --- Long-format conversion ---
     # If a txt/csv file is long-format (one row per animal), convert it to
@@ -179,6 +201,82 @@ def fingerprint_and_store(
         _pool_fingerprints[dtxsid][file_id] = fp
         _save_fingerprints_to_disk(dtxsid)
 
+    return fp
+
+
+def workbook_platforms(files_dir) -> dict[str, str]:
+    """{platform: workbook filename} for the study workbooks in ``files_dir``
+    (a Key and a Data sheet; the platform read from the name)."""
+    import openpyxl
+    from bmdx_pipe.file_integrator import detect_platform_and_type
+
+    out: dict[str, str] = {}
+    for f in sorted(Path(files_dir).glob("*.xlsx")):
+        platform, _ = detect_platform_and_type(f.name, "xlsx", f.stat().st_size)
+        if not platform:
+            continue
+        try:
+            wb = openpyxl.load_workbook(f, read_only=True)
+            sheets = wb.sheetnames
+            wb.close()
+        except Exception:
+            continue
+        if "Data" in sheets and any("Key to" in s for s in sheets):
+            out.setdefault(platform, f.name)
+    return out
+
+
+def _set_aside(session_dir: Path, paths: list[Path]) -> list[str]:
+    """Move files to _originals/ (those that exist).  Returns the names moved."""
+    originals = session_dir / "_originals"
+    moved = []
+    for p in paths:
+        if p.exists():
+            originals.mkdir(exist_ok=True)
+            p.rename(originals / p.name)
+            moved.append(p.name)
+    return moved
+
+
+def _derive_from_workbook(fp: FileFingerprint, path: str, dtxsid: str, ts_added: str):
+    """Write the files the pool uses from a study workbook, set aside every
+    other source of its platform, and fingerprint what was written."""
+    from bmdx_pipe import study_workbook_to_pool_files
+    from bmdx_pipe.file_integrator import detect_platform_and_type
+
+    session_dir = _session_dir(dtxsid)
+    files_dir = session_dir / "files"
+
+    # Other sources of the platform: derived tox_study pivots (a sidecar from
+    # another file) and, for clinical observations, CSVs not written from this
+    # workbook.
+    others: list[Path] = []
+    for sc in files_dir.glob("*.sidecar.json"):
+        try:
+            sidecar = json.loads(sc.read_text())
+        except (OSError, ValueError):
+            continue
+        if sidecar.get("platform") == fp.platform and sidecar.get("source") != fp.filename:
+            others += [sc.with_name(sc.name[: -len(".sidecar.json")] + ".txt"), sc]
+    if fp.platform == "Clinical":
+        for f in files_dir.glob("*.csv"):
+            platform, _ = detect_platform_and_type(f.name, "csv", f.stat().st_size)
+            if platform == "Clinical" and derived_source(f) != fp.filename:
+                others += [f, f.with_suffix(".units.json")]
+    moved = set(_set_aside(session_dir, others))
+    if moved:
+        logger.info("%s supersedes %s", fp.filename, ", ".join(sorted(moved)))
+
+    pool = _pool_fingerprints.setdefault(dtxsid, {})
+    for fid in [fid for fid, f in pool.items() if f.filename in moved]:
+        del pool[fid]
+
+    for out in study_workbook_to_pool_files(path, str(files_dir), fp.platform):
+        name = os.path.basename(out)
+        ext = Path(name).suffix.lstrip(".")
+        pool[f"scan-{name}"] = fingerprint_file(f"scan-{name}", name, out, ext, ts_added, None)
+    pool[fp.file_id] = fp
+    _save_fingerprints_to_disk(dtxsid)
     return fp
 
 
@@ -370,6 +468,8 @@ def ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
 
     # 3. Scan files/ directory for anything not yet fingerprinted
     for data_file in sorted(files_dir.iterdir()):
+        # A file set aside earlier in this scan (a study workbook superseded
+        # it) is no longer there.
         if not data_file.is_file() or data_file.name in fingerprinted:
             continue
         ext = data_file.suffix.lower().lstrip(".")

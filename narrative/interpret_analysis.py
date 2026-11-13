@@ -118,7 +118,7 @@ def rank_go_sets_by_bmd(
     Args:
         df:    Gene-level BMD DataFrame.  Required columns: gene_symbol, bmd.
                Optional: bmdl, fold_change, direction, gof_p, bmdu.
-        kb:    ToxKBQuerier connected to bmdx.duckdb — used to look up
+        kb:    ToxKBQuerier connected to the knowledge base — used to look up
                which genes belong to which GO terms.
         top_n: How many top gene sets to return (default 10, matching NIEHS).
 
@@ -196,7 +196,7 @@ def rank_go_sets_by_bmd(
         })
 
     # Step 6: sort by median BMD ascending (most potent first) and rank
-    results.sort(key=lambda x: x["bmd_median"])
+    results.sort(key=lambda x: (x["bmd_median"], x["go_id"]))
     for i, r in enumerate(results[:top_n], 1):
         r["rank"] = i
 
@@ -568,7 +568,7 @@ def compute_bmd_ordering(
             "fdr": pw["fdr"],
         })
 
-    ordered.sort(key=lambda x: x["median_bmd"])
+    ordered.sort(key=lambda x: (x["median_bmd"], x["pathway"]))
     return ordered
 
 
@@ -684,7 +684,7 @@ def analyze(
         gene_priority.append((gene, ev.get("evidence"), ev.get("mention_count") or 0, n_papers))
 
     evidence_order = {"consensus": 0, "moderate": 1, "single": 2, None: 3}
-    gene_priority.sort(key=lambda x: (evidence_order.get(x[1], 3), -x[2]))
+    gene_priority.sort(key=lambda x: (evidence_order.get(x[1], 3), -x[2], x[0]))
 
     for gene, evidence, mention_count, n_papers in gene_priority[:15]:
         organs = kb.gene_organs(gene)
@@ -725,7 +725,7 @@ def analyze(
         for pid, info in paper_gene_overlap.items()
         if len(info["genes"]) >= 2
     ]
-    top_papers.sort(key=lambda x: x["citation_count"], reverse=True)
+    top_papers.sort(key=lambda x: (-x["citation_count"], x["paper_id"]))
     top_papers = top_papers[:10]
 
     result = AnalysisResult(
@@ -866,7 +866,7 @@ def build_interpretation_context(
 
 def build_genomics_interpretation(
     genomics_section: dict,
-    db_path: str = "bmdx.duckdb",
+    db_path: str,
     fdr_cutoff: float = 0.05,
 ) -> dict:
     """
@@ -874,7 +874,7 @@ def build_genomics_interpretation(
 
     Converts a genomics_section dict (as produced by _extract_genomics() in
     pool_orchestrator.py) into a DataFrame and runs the analyze() pipeline
-    against bmdx.duckdb to produce pathway enrichment, GO enrichment,
+    against a knowledge base to produce pathway enrichment, GO enrichment,
     BMD-ordered pathways, organ signatures, and per-gene literature evidence.
 
     Uses 'all_genes' when available (full responsive gene list, better for
@@ -885,7 +885,7 @@ def build_genomics_interpretation(
         genomics_section: One entry from genomics_sections dict, containing
             at minimum 'top_genes' (list of gene dicts with gene_symbol, bmd,
             bmdl, direction, fold_change) and optionally 'all_genes'.
-        db_path: Path to the bmdx.duckdb knowledge base file.
+        db_path: The knowledge base's database (knowledge_base.registry.kb_for).
         fdr_cutoff: FDR threshold for pathway/GO enrichment significance.
 
     Returns:

@@ -233,7 +233,7 @@ def convert_package(package: str, work: str) -> dict[str, str]:
         out = os.path.join(work, prefix)
         os.makedirs(out, exist_ok=True)
         try:
-            convert_workbook(xlsx, out)
+            convert_workbook(xlsx, out, as_csv=True)
         except Exception:
             continue
         dirs[prefix] = out

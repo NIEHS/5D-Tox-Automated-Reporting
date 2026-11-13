@@ -68,7 +68,7 @@ if TYPE_CHECKING:
 # Unlock groups satisfied by an EXTERNAL resource / data-presence flag (NOT the
 # approved-set). Passed into derive_section_readiness as flags rather than read from
 # section approvals:
-#   knowledge_base — bmdx.duckdb present (gates genomics interpretation)
+#   knowledge_base — the report has a usable knowledge base (gates genomics interpretation)
 #   processed      — the session has been Processed (section content exists); gates M&M
 _RESOURCE_GROUPS: frozenset[str] = frozenset({"knowledge_base", "processed"})
 

@@ -452,16 +452,13 @@ def _convert_genomics_cache(
         sex = (entry.get("sex") or "").strip()
         by_organ.setdefault(organ.lower(), {})[sex.lower()] = entry
 
-    def _organ_rank(organ_lower: str) -> tuple[int, str]:
-        # Liver first, Kidney second, then anything else alphabetically.
-        order = {"liver": 0, "kidney": 1}
-        return (order.get(organ_lower, 99), organ_lower)
-
     def _sex_rank(sex_lower: str) -> tuple[int, str]:
         order = {"male": 0, "female": 1}
         return (order.get(sex_lower, 99), sex_lower)
 
-    for organ_lower in sorted(by_organ, key=_organ_rank):
+    # Alphabetical here; the caller puts them in the report's tissue order
+    # (document_tree.order_tissues with the definition's tissue_order).
+    for organ_lower in sorted(by_organ):
         sexes = by_organ[organ_lower]
         # Display organ name from the first cache entry (preserves casing).
         any_entry = next(iter(sexes.values()))
@@ -518,6 +515,8 @@ def _convert_genomics_cache(
                 # own this.
                 "decimals": any_entry.get("bmd_decimals") or (
                     1 if any_entry.get("top_genes_level") == "gene" else 3),
+                # A BMD below it prints "<limit (NR)" (render_common.below_lle).
+                "lle": any_entry.get("lower_limit_of_extrapolation"),
             }
 
         gene_set_entry = {
@@ -926,6 +925,16 @@ def load_session_data(
         if converted:
             data["genomics_sections"] = converted
 
+    # A study whose integrated project measured no gene expression has no
+    # genomics tables: the scaffold's placeholder entries (liver, kidney) go, so
+    # the gene_expression gate prunes the genomics nodes.  An unintegrated
+    # session keeps the scaffold.
+    _ge_project = _load_json(session_dir / "integrated.json")
+    if isinstance(_ge_project, dict) and _ge_project.get("doseResponseExperiments") and not any(
+            ((e.get("experimentDescription") or {}).get("dataType") or "").lower() == "gene_expression"
+            for e in _ge_project["doseResponseExperiments"]):
+        data["genomics_sections"] = []
+
     # This study's own authored content for study-bound freeform nodes.
     from styling_export.freeform_content import load_study_authored
     data["authored"] = load_study_authored(dtxsid)
@@ -946,10 +955,12 @@ def load_session_data(
 
     # ── Appendix C.1: PCA of the modeled expression data ──────────────
     try:
+        from document_model.view_config import study_document_facts
         from genomics.pca_figure import build_pca_figure
         _pca = build_pca_figure(_load_json(session_dir / "integrated.json") or {},
                                 dose_unit=((methods_cache or {}).get("context") or {}).get("dose_unit")
-                                or "mg/kg")
+                                or "mg/kg",
+                                tissue_order=study_document_facts(definition_of or dtxsid)["tissue_order"])
     except Exception:  # noqa: BLE001 — a figure failure leaves the pending note
         _pca = None
     if _pca:
@@ -1109,6 +1120,15 @@ def _number_and_list(data: dict, dtxsid: str, view: str | None) -> None:
     from document_model.view_config import DEFAULT_VIEW, build_view_tree
     _base_tree = build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE
     render_tree = study_tree(_base_tree, _collected, data.get("authored"), data)
+    # The organ weight table's note on its appendix, by the appendix's letter.
+    from document_model.document_tree import compute_appendix_letters
+    from rendering.report_data_overlays import attach_organ_descriptions_note
+    compute_appendix_letters(render_tree)
+    attach_organ_descriptions_note(data, render_tree)
+    # The notes the report's book does not print (its definition's table_notes).
+    from document_model.view_config import study_document_facts
+    from rendering.report_data_overlays import apply_table_notes
+    apply_table_notes(data, study_document_facts(dtxsid)["table_notes"])
     # Positional table numbers for the data-driven genomics tables — continues
     # the tree sequence (Table 8 → 9, 10, ...); then the attached charts'
     # figure numbers, continuing the tree's figures (ADR-0021 D1).  Same
