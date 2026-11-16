@@ -125,7 +125,7 @@ def _build_top_genes_sentence(
 def build_abstract_results_genomics(
     genomics_sections: dict,
     dose_groups: list[float],
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     bmd_stat: str | None = None,
     n_top_sets: int = 3,
     n_top_genes: int = 8,
@@ -174,9 +174,9 @@ def build_abstract_results_genomics(
     """
     if not genomics_sections:
         return ""
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
 
     sexes = sexes or ["Male", "Female"]
     if bmd_decimals is None:

@@ -144,7 +144,7 @@ def _format_bmd_pair(bmd, bmdl) -> str:
 def build_apical_bmd_summary_narrative(
     apical_bmd_summary: list[dict],
     compound_name: str,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     design: dict | None = None,
 ) -> list[str]:
     """
@@ -175,9 +175,9 @@ def build_apical_bmd_summary_narrative(
     """
     if not apical_bmd_summary:
         return []
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
 
     # Canonical readable platform name for prose
     _PLATFORM_PROSE = {
@@ -396,9 +396,9 @@ def build_abstract_results_apical(
     Returns:
         A single paragraph string ready to insert into the Abstract.
     """
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
     if sexes is None:
         sexes = ["Male", "Female"]
 

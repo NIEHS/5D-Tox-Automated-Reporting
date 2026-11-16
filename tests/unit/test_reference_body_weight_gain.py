@@ -28,6 +28,9 @@ from tests.unit.test_reference_bmd_summary import _table_rows
 
 # The method profile each report is the reference for (ADR-0027 §6).
 PROFILE = {"NIEHS-10": "ntp-5day-2021", "NIEHS-13": "ntp-5day-2025"}
+UNIT = {"NIEHS-10": "mg/kg", "NIEHS-13": "ppm"}
+DESIGN = {"NIEHS-10": {"species": "rat", "route": "gavage", "duration_days": 5},
+          "NIEHS-13": {"species": "rat", "route": "inhaled", "duration_days": 5}}
 
 NB = " ± "
 
@@ -37,7 +40,8 @@ def _ours(reference_session, report, dtxsid) -> dict[str, list[str]]:
     session = reference_session(report, dtxsid)
     table = build_body_weight_table_from_sidecar(find_sidecar_paths(str(session), "Body Weight"),
                                                  stats_rows=_table_rows(session, PROFILE[report]),
-                                                 method=resolve(PROFILE[report]))
+                                                 method=resolve(PROFILE[report]),
+                                                 dose_unit=UNIT[report], design=DESIGN[report])
     assert "Body Weight Gain" in table["caption"]
     out = {}
     for sex, rows in table["table_data"].items():

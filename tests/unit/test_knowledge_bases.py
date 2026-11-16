@@ -652,7 +652,8 @@ def test_no_interpretation_is_written_without_a_knowledge_base(stores, sessions_
     session = sessions_dir / "DTXSIDX"
     session.mkdir(parents=True, exist_ok=True)
     args = dict(dtxsid="DTXSIDX", compound="c", organ="liver", sex="male", gene_sets=[],
-                top_genes=[{"gene_symbol": "NFE2L2"}], all_genes=[], total_responsive=1)
+                top_genes=[{"gene_symbol": "NFE2L2"}], all_genes=[], total_responsive=1,
+                dose_unit="mg/kg")
     out = asyncio.run(generate_genomics_narrative_async(**args))
     assert "no usable knowledge base" in out["error"]
     (session / "_cache_interpretation_liver_male_abc.json").write_text(json.dumps(

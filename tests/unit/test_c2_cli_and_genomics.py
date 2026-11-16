@@ -108,8 +108,10 @@ def test_an_override_write_archives_the_text_it_replaces(client, sessions_dir):
 def test_regenerate_archives_the_person_s_text_before_clearing_it(client, sessions_dir,
                                                                  monkeypatch):
     import web_routes.llm_routes as llm
+    from tests.integration.test_process_integrated_golden import state_parameters
     d = sessions_dir / ID
     d.mkdir(parents=True)
+    state_parameters(d)
     (d / "_cache_genomics_x.json").write_text(json.dumps({
         "liver_male": {"organ": "liver", "sex": "male", "gene_sets_by_stat": {"median": []}},
         "liver_female": {"organ": "liver", "sex": "female", "gene_sets_by_stat": {"median": []}},

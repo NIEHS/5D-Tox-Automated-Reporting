@@ -1,9 +1,11 @@
 """The report's prose names the study's species, never a fixed "rats".
 
 Every deterministic narrative builder takes the study design
-(pipeline.study_design.study_design_facts); None means the standard design
-(Sprague Dawley rats by gavage), so callers without a design read as before.
+(pipeline.study_design.study_design_facts); there is no standard design to
+assume (2026-11-16), so a builder given none refuses.
 """
+
+import pytest
 
 from narrative.abstract_apical import build_abstract_results_apical
 from narrative.report_summary import build_report_summary
@@ -11,6 +13,7 @@ from narrative.unified_narrative import _build_animal_condition_paragraphs
 from tables.table_builder_common import build_attrition_footnote
 
 MICE = {"species": "mouse", "route": "gavage", "duration_days": 5}
+RATS = {"species": "rat", "route": "gavage", "duration_days": 5}
 INHALED_RATS = {"species": "rat", "route": "inhaled", "duration_days": 5}
 
 _APICAL = [{"endpoint": "Liver Weight", "sex": "Female", "platform": "Organ Weight",
@@ -38,15 +41,15 @@ def test_animal_condition_names_species_and_inhalation_verb():
     mice = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), signs, MICE)[0]
     assert mice.startswith("Female mice administered 800 mg/kg of X")
     assert "1 female mouse" in mice and "rat" not in mice
-    # No design → the standard design's wording, unchanged.
-    std = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), signs)[0]
-    assert std.startswith("Female rats administered")
+    # No design → refused: there is no standard design to assume.
+    with pytest.raises(ValueError, match="no study design given"):
+        _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), signs)
 
 
 def test_abstract_and_summary_name_the_species():
     ab = build_abstract_results_apical(_APICAL, sexes=["Female"], design=MICE)
     assert "In female mice, the effects included" in ab and "rats" not in ab
-    summary = " ".join(build_report_summary(_APICAL, {}, chemical_name="X",
+    summary = " ".join(build_report_summary(_APICAL, {}, chemical_name="X", dose_unit="mg/kg",
                                             sexes=["Female"], design=MICE))
     assert "female mice" in summary and "rats" not in summary
 
@@ -72,7 +75,7 @@ def test_sampling_time_word_follows_the_route():
 
     conc = {"Male": {4: {2: 10.0, 24: 2.0}}, "Female": {4: {2: 20.0, 24: 5.0}}}
     half = {"Male": {4: 40.1}, "Female": {4: 78.2}}
-    oral = build_abstract_results_pk("X", conc, half, [2, 24])
-    inhaled = build_abstract_results_pk("X", conc, half, [2, 24], design=INHALED_RATS)
+    oral = build_abstract_results_pk("X", conc, half, [2, 24], "mg/kg", design=RATS)
+    inhaled = build_abstract_results_pk("X", conc, half, [2, 24], "ppm", design=INHALED_RATS)
     assert "2 and 24 hours postdose" in oral
     assert "2 and 24 hours postexposure" in inhaled and "postdose" not in inhaled

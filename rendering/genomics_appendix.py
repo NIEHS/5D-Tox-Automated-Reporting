@@ -33,6 +33,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 from document_model.phrasing import Phrasing
+from pipeline.study_parameters import required_unit
 from rendering.genomics_results import _Report, _chemical_in_prose, _join, cited, units
 from rendering.render_common import (
     _STAT_PHRASE, _bmd_range, _bmr_tag, genomics_table_caption,
@@ -122,7 +123,7 @@ def efdr_methods(data: dict, efdr: dict | None, appendix, method: dict,
     if not efdr or not efdr.get("tissues"):
         return []
     tissues = efdr["tissues"]
-    unit = data.get("dose_unit") or "mg/kg"
+    unit = required_unit(data.get("dose_unit"), "the report data")
     control = f"0 {unit}"
     n = {t["experiments"] for t in tissues}
     count = str(n.pop()) if len(n) == 1 else "[Placeholder: number of synthetic null experiments]"
@@ -164,10 +165,9 @@ def _null_doses(t: dict) -> list[float]:
 
 def _own_doses(data: dict, report: _Report) -> dict:
     """{species: the study's non-zero doses} from its apical tables."""
-    from pipeline.study_design import design_or_standard
     out = {}
     for key, _, sdata in report.studies:
-        species = key or design_or_standard(data.get("study_design") or {}).get("species")
+        species = key or (data.get("study_design") or {}).get("species")
         for sec in sdata.get("apical_sections") or []:
             for rows in (sec.get("table_data") or {}).values():
                 for row in rows or []:
@@ -191,7 +191,7 @@ def _gene_set_definitions(entry: dict, p: Phrasing) -> dict | None:
     if not groups:
         return None
     d = entry.get("display") if isinstance(entry.get("display"), dict) else {}
-    dec, unit = d.get("decimals", 3), d.get("unit") or "mg/kg"
+    dec, unit = d.get("decimals", 3), required_unit(d.get("unit"), "the genomics display")
     tag = _bmr_tag(d.get("bmr"))
     phrase = _STAT_PHRASE.get(d.get("stat", "median"), d.get("stat", ""))
     rows: list[list[str]] = []

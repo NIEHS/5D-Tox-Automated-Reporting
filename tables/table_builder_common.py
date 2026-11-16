@@ -149,9 +149,9 @@ def sex_subject(table_data: dict, design: dict | None = None) -> str:
     the table carries no sex dimension.  Captions must state what the data
     shows, never a fixed sex or species.  ``design`` is the study design
     (pipeline.study_design.study_design_facts); None ⇒ the standard design."""
-    from pipeline.study_design import STANDARD_DESIGN, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    species = species_plural(STANDARD_DESIGN if design is None else design, capitalize=True)
+    species = species_plural(require_design(design), capitalize=True)
     sexes = present_sexes(table_data)
     return f"{' and '.join(sexes)} {species}" if sexes else species
 
@@ -162,9 +162,9 @@ def apical_caption(template: str, table_data: dict, compound_name: str,
     {treatment} ("Administered Triclosan for Five Days" / "Exposed to … for
     Five Days") from the table's sexes and the study design (None ⇒ the
     standard design)."""
-    from pipeline.study_design import STANDARD_DESIGN, caption_treatment
+    from pipeline.study_design import require_design, caption_treatment
 
-    facts = STANDARD_DESIGN if design is None else design
+    facts = require_design(design)
     return (template.replace("{subject}", sex_subject(table_data, design))
             .replace("{treatment}", caption_treatment(facts, compound_name)))
 
@@ -529,7 +529,7 @@ def build_attrition_footnote(
     total_core_by_sex_dose: dict[str, dict[float, int]],
     core_n_by_sex_dose: dict[str, dict[float, int]],
     sorted_doses: list[float],
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     design: dict | None = None,
     sidecar_data: dict[str, dict] | None = None,
 ) -> tuple[dict | None, dict[str, dict[float, str]]]:
@@ -582,9 +582,9 @@ def build_attrition_footnote(
         "male and female" if len(dead_sexes) == 2
         else dead_sexes[0].lower()
     )
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
     removal_day = _latest_observation_day(sidecar_data, dead)
     when = (f"by study day {removal_day}" if removal_day is not None
             else "before study termination")

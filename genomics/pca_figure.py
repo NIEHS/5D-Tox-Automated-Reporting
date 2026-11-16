@@ -83,7 +83,7 @@ def _dose_label(d: float) -> str:
     return f"{d:g}"
 
 
-def build_pca_figure(integrated: dict, dose_unit: str = "mg/kg",
+def build_pca_figure(integrated: dict, dose_unit: str,
                      tissue_order: list[str] | None = None) -> dict | None:
     """The figure payload ``{png_b64, caption}`` for Appendix C, or None when the
     project has no gene-expression experiment large enough for a PCA."""

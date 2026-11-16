@@ -67,38 +67,44 @@ BOOKSHELF = CEBS / "_bookshelf"
 BOOK_OWN_FILES = ("*.nxml", "*.jpg", "*.png", "*.gif", "*.tif", "TOC.pdf", "license.txt",
                   "SOURCE.txt")
 
+# The dosing as each book's Methods state it (study parameters no deposited file
+# records, pipeline.study_parameters): RR-8 … NIEHS-06 "administered once daily
+# for 4 consecutive days" (a 5-day study, necropsy on day 4); NIEHS-07 … 10 on
+# 5 days; NIEHS-12, 13 "for 6 hours plus T90 per day for 5 consecutive days".
 ORAL = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
-        "administrationMeans": "gavage", "articleVehicle": "corn oil", "studyDuration": "5d"}
+        "administrationMeans": "gavage", "articleVehicle": "corn oil", "studyDuration": "5d",
+        "dosingDays": 5, "dosingSchedule": "once daily"}
+ORAL_4D = {**ORAL, "dosingDays": 4}
 # NTP's study tables: "Route: Whole-Body Inhalation".
 INHALED = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "inhaled",
-           "administrationMeans": "whole-body", "studyDuration": "5d"}
+           "administrationMeans": "whole-body", "studyDuration": "5d",
+           "dosingDays": 5, "dosingSchedule": "6 hours plus T90 per day"}
 HSD = "(Hsd:Sprague Dawley® SD®)"
 HSD_EARLY = "(Hsd: Sprague Dawley SD)"   # RR-8 prints it this way
-INHALED_MICE = {"species": "mouse", "strain": "B6D2F1", "articleRoute": "inhaled",
-                "administrationMeans": "whole-body", "studyDuration": "5d"}
+INHALED_MICE = {**INHALED, "species": "mouse", "strain": "B6D2F1"}
 CRL = "/Crl"                             # "B6D2F1/Crl Mice"
 
 # report: (DTXSID, name, CASRN, short name, genomic project, experiment token,
 #          dose unit, design, designation, method profile, extra converter args)
 STUDIES = {
     "RR-8": ("DTXSID1021952", "Triphenyl Phosphate", "115-86-6", "TPHP",
-             "C11042_BMDExpressProjectFile.bm2", None, "mg/kg", ORAL, HSD_EARLY,
+             "C11042_BMDExpressProjectFile.bm2", None, "mg/kg", ORAL_4D, HSD_EARLY,
              "ntp-5day-2018", []),
     "NIEHS-02": ("DTXSID1025300", "2-Ethylhexyl Diphenyl Phosphate", "1241-94-7", "EHDP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL_4D, HSD,
                  "ntp-5day-2018", []),
     "NIEHS-03": ("DTXSID6024701", "tert-Butylphenyl Diphenyl Phosphate", "56803-37-3", "BPDP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL_4D, HSD,
                  "ntp-5day-2018", []),
     "NIEHS-04": ("DTXSID3025465", "Isodecyl Diphenyl Phosphate", "29761-21-5", "IDDP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL_4D, HSD,
                  "ntp-5day-2018", []),
     # "Phenol", as the book names it (the CEBS study page also says "Phenyl").
     "NIEHS-05": ("DTXSID4028880", "Isopropylated Phenol Phosphate", "68937-41-7", "IPP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL_4D, HSD,
                  "ntp-5day-2018", []),
     "NIEHS-06": ("DTXSID4021391", "Tricresyl Phosphate", "1330-78-5", "TCP",
-                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL, HSD,
+                 "BMDExpress_Project_File_(bm2_format).bm2", None, "mg/kg", ORAL_4D, HSD,
                  "ntp-5day-2018", []),
     "NIEHS-07": ("DTXSID00190950", "6:1 Fluorotelomer Alcohol", "375-82-6", "6:1 FTOH",
                  "C20027-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2",

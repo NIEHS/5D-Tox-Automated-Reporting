@@ -201,7 +201,7 @@ def build_body_weight_table_from_sidecar(
     sidecar_paths: dict[str, str],
     stats_rows: dict[str, dict] | None = None,
     compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     design: dict | None = None,
     method=None,
     dispositions: dict[str, dict] | None = None,
@@ -245,9 +245,11 @@ def build_body_weight_table_from_sidecar(
         Dict with keys matching the Typst apical_sections schema,
         identical to build_body_weight_table() output.
     """
-    from pipeline.study_design import design_or_standard, species_plural, species_singular
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_body_weight_table_from_sidecar")
+    from pipeline.study_design import require_design, species_plural, species_singular
 
-    _facts = design_or_standard(design)
+    _facts = require_design(design)
     animals, animal = species_plural(_facts), species_singular(_facts)
     stats_rows = stats_rows or {}
 

@@ -282,11 +282,13 @@ async def api_generate_methods(request: Request):
     Input JSON:
       {
         "identity": {ChemicalIdentity dict},
-        "study_params": {"vehicle": "...", "route": "...", "duration_days": 5, "species": "..."},
         "animal_report": {optional animal_report.json dict}
       }
-      All other study metadata (dose groups, sample sizes, endpoints, BMD params)
-      is extracted automatically from the file pool fingerprints and .bm2 caches.
+      The study design (species … dose unit) is the session's study parameters,
+      recorded or stated (pipeline.study_parameters) — never the request's; an
+      incomplete set refuses (422).  All other study metadata (dose groups, sample
+      sizes, endpoints, BMD params) is extracted from the file pool fingerprints
+      and .bm2 caches.
 
     Returns JSON:
       {
@@ -309,17 +311,12 @@ async def api_generate_methods(request: Request):
 
     body = await request.json()
     identity = body.get("identity", {})
-    study_params = body.get("study_params", {})
     animal_report_data = body.get("animal_report")
     model = body.get("model", "") or DEFAULT_CLAUDE_MODEL
     dtxsid = identity.get("dtxsid", "")
 
-    # --- Backwards compatibility: accept old flat fields too ---
-    # The old frontend sent vehicle, route, etc. as top-level fields.
-    # Merge them into study_params if present.
-    for key in ("vehicle", "route", "duration_days", "species"):
-        if key in body and key not in study_params:
-            study_params[key] = body[key]
+    from pipeline.study_parameters import require_session_parameters
+    parameters = require_session_parameters(dtxsid)
 
     # --- Collect fingerprints from the server's pool cache ---
     fingerprints = {}
@@ -356,7 +353,7 @@ async def api_generate_methods(request: Request):
         identity=identity,
         fingerprints=fingerprints,
         animal_report=animal_report_data,
-        study_params=study_params,
+        parameters=parameters,
         bm2_jsons=bm2_jsons,
         session_dir=str(SESSIONS_DIR / validate_dtxsid(dtxsid)) if dtxsid else None,
         integrated=integrated_data,
@@ -464,11 +461,13 @@ async def api_methods_context(dtxsid: Dtxsid):
     animal_report_data = read_session_json(dtxsid, "animal_report.json")
     identity = read_session_json(dtxsid, "identity.json") or {}
 
-    # --- Extract context ---
+    # --- Extract context (the study parameters, complete or refused) ---
+    from pipeline.study_parameters import require_session_parameters
     ctx = extract_methods_context(
         identity=identity,
         fingerprints=fingerprints,
         animal_report=animal_report_data,
+        parameters=require_session_parameters(dtxsid),
         bm2_jsons=bm2_jsons,
         session_dir=str(SESSIONS_DIR / validate_dtxsid(dtxsid)),
     )
@@ -632,6 +631,13 @@ def _study_subject(dtxsid: str) -> str:
         integrated = None
     return subject_phrase(study_design_facts(integrated)) if integrated else ""
 
+def _session_dose_unit(dtxsid: str) -> str:
+    """The session's dose unit (its study parameters, recorded or stated);
+    refuses (422) when they are incomplete — never mg/kg assumed."""
+    from pipeline.study_parameters import require_session_parameters
+    return require_session_parameters(dtxsid).values["dose_unit"]
+
+
 @router.post("/api/generate-genomics-narrative")
 async def api_generate_genomics_narrative(request: Request):
     """
@@ -664,7 +670,7 @@ async def api_generate_genomics_narrative(request: Request):
         top_genes=body.get("top_genes", []),
         all_genes=body.get("all_genes", []),
         total_responsive=body.get("total_responsive_genes", 0),
-        dose_unit=body.get("dose_unit", "mg/kg"),
+        dose_unit=_session_dose_unit(body.get("dtxsid", "")),
         force=force,
         subject=_study_subject(body.get("dtxsid", "")),
         model=body.get("model", ""),
@@ -776,6 +782,10 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
             status_code=404,
         )
 
+    # The study's dose unit (its parameters): refused here, before a person's
+    # text is archived or cleared, when they are incomplete.
+    dose_unit = _session_dose_unit(dtxsid)
+
     # --- (2) Clear the user override for this organ (both kinds) ------------
     # Regenerate means "throw away my edits for this organ too" — otherwise
     # the override tier (which wins on render) would mask the new LLM text.
@@ -832,7 +842,7 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
                 top_genes=entry.get("top_genes") or [],
                 all_genes=entry.get("all_genes") or [],
                 total_responsive=entry.get("total_responsive_genes", 0),
-                dose_unit=entry.get("dose_unit", "mg/kg"),
+                dose_unit=dose_unit,
                 subject=subject,
                 bmd_decimals=entry.get("bmd_decimals"),
                 force=True,

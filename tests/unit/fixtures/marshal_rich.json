@@ -7,7 +7,7 @@
       },
       {
         "label": "Methods",
-        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. [Placeholder: the benchmark response used to model the endpoints is not in the study data]"
+        "text": "A short-term in vivo biological potency study on Test Article in adult Sprague Dawley rats was conducted. Test Article was formulated in corn oil and administered once daily for 5 consecutive days by gavage (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. [Placeholder: the benchmark response used to model the endpoints is not in the study data]"
       },
       {
         "label": "Results",
@@ -687,6 +687,7 @@
       "internal_dose": "Internal Concentration"
     }
   },
+  "dose_unit": "mg/kg",
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "figure_entries": [
     {

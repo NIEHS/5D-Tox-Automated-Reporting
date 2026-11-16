@@ -42,7 +42,6 @@ from web_routes.server_state import (
 from bmdx_pipe import (
     build_table_data_from_bm2,
 )
-from narrative.unified_narrative import generate_platform_narrative
 from narrative.interpret import (
     ToxKBQuerier,
     fetch_gene_descriptions,
@@ -198,9 +197,7 @@ async def api_process_bm2(request: Request):
       {
         "bm2_id": "<uuid from upload>",
         "section_title": "Animal Condition, Body Weights, and Organ Weights",
-        "table_caption_template": "Summary of ... {sex} ... {compound} ...",
-        "compound_name": "PFHxSAm",
-        "dose_unit": "mg/kg"
+        "table_caption_template": "Summary of ... {sex} ... {compound} ..."
       }
 
     Calls build_table_data_from_bm2() from apical_report.py, which exports
@@ -228,8 +225,6 @@ async def api_process_bm2(request: Request):
 
     body = await request.json()
     bm2_id = body.get("bm2_id", "")
-    compound_name = body.get("compound_name", "Test Compound")
-    dose_unit = body.get("dose_unit", "mg/kg")
 
     upload = _bm2_uploads.get(bm2_id)
     if not upload:
@@ -258,15 +253,10 @@ async def api_process_bm2(request: Request):
         upload["table_data"] = table_data
         upload["bm2_json"] = bm2_json
 
-        # Generate the NTP-style results narrative from the table data.
-        # This produces paragraphs describing body weight and organ weight
-        # findings that the user can edit in the UI before export.  The bm2's
-        # table_data mixes body- and organ-weight rows with no clean platform
-        # string, so pass None to let the entry auto-detect by row type.
-        narrative = generate_platform_narrative(
-            None, table_data, compound_name, dose_unit,
-        )
-        upload["narrative"] = narrative
+        # No narrative here: it states the study's species, route and duration,
+        # which a lone .bm2 outside a study does not give (nothing is assumed;
+        # Process writes it from the study's parameters).
+        upload["narrative"] = []
 
         # Serialize TableRow objects to JSON-friendly dicts
         tables_json = serialize_table_rows(table_data)
@@ -274,7 +264,7 @@ async def api_process_bm2(request: Request):
         return JSONResponse({
             "bm2_id": bm2_id,
             "tables": tables_json,
-            "narrative": narrative,  # list of auto-generated paragraph strings
+            "narrative": [],  # none: a lone .bm2 gives no study parameters
         })
 
     except Exception as e:
@@ -814,14 +804,10 @@ async def api_preview_file(file_id: str):
                     bm2_entry["table_data"] = table_data
                     bm2_entry["bm2_json"] = bm2_json
 
-                    # Generate a default narrative (will be overwritten with
-                    # real compound name / dose unit when the user processes
-                    # via the section builder).  None platform → auto-detect
-                    # by row type from the mixed bm2 table_data.
-                    narrative = generate_platform_narrative(
-                        None, table_data, "Test Compound", "mg/kg",
-                    )
-                    bm2_entry["narrative"] = narrative
+                    # No narrative here: it needs the compound and the
+                    # study's dose unit, which Process supplies (no unit is
+                    # assumed).
+                    bm2_entry["narrative"] = []
                 except Exception as e:
                     return JSONResponse(
                         {"error": f"Processing failed: {e}"},

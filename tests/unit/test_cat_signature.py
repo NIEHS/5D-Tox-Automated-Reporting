@@ -109,9 +109,9 @@ def test_narrative_prose_unchanged_by_signature():
     # The same rows through the prose builder produce the same prose regardless of
     # the signature pass (they are independent projections over the same data).
     bw = {"Male": [_bw_decreasing()]}
-    before = generate_platform_narrative("Body Weight", bw, "PFHxSAm", UNIT)
+    before = generate_platform_narrative("Body Weight", bw, "PFHxSAm", UNIT, design={"species": "rat", "route": "gavage", "duration_days": 5})
     _ = platform_cat_signature("Body Weight", bw, UNIT)
-    after = generate_platform_narrative("Body Weight", bw, "PFHxSAm", UNIT)
+    after = generate_platform_narrative("Body Weight", bw, "PFHxSAm", UNIT, design={"species": "rat", "route": "gavage", "duration_days": 5})
     assert before == after
     assert "decreased" in before[0]
 

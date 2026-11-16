@@ -405,10 +405,6 @@ async def process_async(dtxsid: str, params: dict, store, *, policy=None) -> dic
     ctx = (payload.get("methods") or {}).get("context") or {}
     if ctx:
         _log(f"  dose unit: {ctx.get('dose_unit')} ({ctx.get('dose_unit_source', '?')})")
-        if ctx.get("design_fallback"):
-            fb = ", ".join(f"{k}={ctx.get(k)}" for k in ctx["design_fallback"])
-            _log(f"  NOTE: not recorded in the data, standard design used: {fb} "
-                 "(record the real values with --design)")
     mat = materialize_result_sections(dtxsid, store, policy=policy)
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
     log_bmd_flags(dtxsid, store)
@@ -605,17 +601,20 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                     help="short name used in captions/narratives (default: the recorded "
                          "abbreviation, else the identity name)")
     ap.add_argument("--dose-unit", default=None,
-                    help="dose unit, e.g. mg/kg or ppm (default: the unit the data records, "
-                         "else mg/kg — state it explicitly).  A ppm unit also makes the "
-                         "route fallback inhalation instead of gavage in corn oil")
+                    help="state the study's dose unit, e.g. mg/kg or ppm, in its "
+                         "study_design.json (kept; needed when the files record none, or "
+                         "record several).  Never assumed: a study whose unit is neither "
+                         "recorded nor stated is refused at Process")
     ap.add_argument("--metadata", type=Path,
                     help="JSON {filename: {platform, data_type}} classification overrides")
     ap.add_argument("--design", type=Path,
-                    help="JSON of study-design facts the data does not record, kept with the "
-                         "session and applied to every experiment's metadata at each "
-                         "integration: species, strain, articleRoute, "
-                         "administrationMeans, articleVehicle, studyDuration "
-                         "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
+                    help="JSON of study parameters the data does not record, kept in the "
+                         "session's study_design.json (merged; null withdraws one): the "
+                         "experiment metadata species, strain, articleRoute, "
+                         "administrationMeans, articleVehicle, studyDuration (applied to every "
+                         "experiment at each integration) and doseUnit, dosingDays, "
+                         "dosingSchedule (controlled vocabulary; e.g. "
+                         "{\"strain\": \"Sprague-Dawley\", \"dosingDays\": 5})")
     ap.add_argument("--experiment-metadata", type=Path,
                     help="JSON {experiment name: {organ, sex, …}} of experiment metadata the "
                          "data does not record (e.g. the tissue of a genomic experiment named "
@@ -777,6 +776,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 store.write_json(dtxsid, "identity.json", identity)
                 _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
+            if args.dose_unit:
+                design = {**(_stated(design) if design else {}), "doseUnit": args.dose_unit}
             if design:
                 with _Timer("study design"):
                     apply_design(dtxsid, design, store, guarded=True)
@@ -793,14 +794,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.stop_after == "integrate":
                 return 0
 
-            if not args.dose_unit:
-                _log("  NOTE: no --dose-unit — using the unit the data records, else mg/kg")
             # The GO ranking and cutoffs are the method profile's; only what
             # the command line states overrides it (source "request").
             params = {
                 "compound_name": (args.compound_name or identity.get("abbreviation")
                                   or identity.get("name") or dtxsid),
-                "dose_unit": args.dose_unit,
                 **({"bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()]}
                    if args.bmd_stats else {}),
                 **{k: getattr(args, k) for k in ("go_pct", "go_min_genes", "go_max_genes",

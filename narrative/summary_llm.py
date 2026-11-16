@@ -23,6 +23,7 @@ from narrative import prompt_templates
 from narrative.prompt_templates import RenderedPrompt, TemplateError
 from narrative.test_article import abbreviation_of, naming_rule
 from pipeline import prompt_store
+from pipeline.study_parameters import required_unit
 from styling_export.llm_helpers import llm_generate_json_async
 
 SECTION = "summary"
@@ -61,12 +62,12 @@ def summary_inputs(session_dir: Path) -> dict:
                          or session_dir.name,
         "abbreviation": abbreviation_of(identity),
         "dose_groups": methods.get("dose_groups") or [],
-        "dose_unit": methods.get("dose_unit") or "mg/kg",
+        "dose_unit": required_unit(methods.get("dose_unit"), "the Methods context"),
         "bmd_stat": (stat_order or [None])[0],
         "sexes": derive_study_sexes(integrated),
         "abstract_background": _read("background.json").get("abstract_background", "") or "",
         "apical_evaluated": bool(sections),
-        "design": study_design_facts(integrated, methods.get("dose_unit")),
+        "design": study_design_facts(integrated),
         "tissue_order": study_document_facts(session_dir.name)["tissue_order"],
     }
 
@@ -74,9 +75,9 @@ def summary_inputs(session_dir: Path) -> dict:
 def template_variables(inputs: dict) -> dict:
     """The summary template's variables (prompt_templates.SECTIONS["summary"])."""
     from narrative.report_summary import build_report_summary
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    design = design_or_standard(inputs.get("design"))
+    design = require_design(inputs.get("design"))
     return {
         "draft_paragraphs": build_report_summary(**inputs),
         "chemical_name": inputs["chemical_name"],

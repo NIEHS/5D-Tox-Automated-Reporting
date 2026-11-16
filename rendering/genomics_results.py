@@ -53,6 +53,7 @@ import math
 import re
 
 from document_model.phrasing import Phrasing
+from pipeline.study_parameters import required_unit
 from rendering.render_common import make_italic, make_sub
 from tables.table_builder_common import format_display_number
 
@@ -104,7 +105,7 @@ class _Report:
     precision, the chemical — and the definition's words for them."""
 
     def __init__(self, data: dict, phrasing: Phrasing):
-        from pipeline.study_design import design_or_standard, exposure_verb, species_plural
+        from pipeline.study_design import require_design, exposure_verb, species_plural
         self.data = data
         self.p = phrasing
         studies = data.get("studies") or []
@@ -114,7 +115,7 @@ class _Report:
         if studies:
             self.studies = [(s["key"], s["title"].lower(), s.get("data") or {}) for s in studies]
         else:
-            self.studies = [("", species_plural(design_or_standard(design)), data)]
+            self.studies = [("", species_plural(require_design(design)), data)]
         self.lle = {key: _lle(sdata) for key, _, sdata in self.studies}
         self.noun = {key: noun for key, noun, _ in self.studies}
         # The groups each study's genomic tables hold (its sexes, or the one study).
@@ -527,7 +528,12 @@ def attach_genomics_results(data: dict, tree, phrasing: Phrasing) -> None:
     if not phrasing or not (sets or genes):
         return
     report = _Report(data, phrasing)
-    unit = data.get("dose_unit") or "mg/kg"
+    # The study's unit, required once there is a BMD to state (an entry with
+    # no gene sets or genes prints none; the scaffold's are empty).
+    stated = any(e.get("top_genes") or e.get("gene_sets") or e.get("gene_sets_by_stat")
+                 for e in sets + genes)
+    unit = (required_unit(data.get("dose_unit"), "the report data") if stated
+            else data.get("dose_unit"))
     appendix = cited(tree, "supplemental-data", "appendix")
     summary_table = cited(tree, "gene-set-summary-table", "table")
     from genomics.gene_names import gene_names

@@ -594,15 +594,20 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
 
 
 def record_study_design(dtxsid: str, fields: dict, store: PoolStore) -> int:
-    """Record stated study-design facts (route, vehicle, strain, …) the data
-    does not carry, in study_design.json, which every later integration
-    re-applies, and put them on every experiment now.  Returns the experiments
-    updated.  Written as given: that the values are the vocabulary's is the
-    safeguards' (safeguards.inputs)."""
+    """Record stated study parameters the data does not carry (route, vehicle,
+    strain, …, the dose unit, the dosing days and schedule) in
+    study_design.json — the one place stated values live — and put the design
+    facts on every experiment now (every later integration re-applies them).
+    Merged into what is already stated: a field given as null is withdrawn.
+    Returns the experiments updated.  Written as given: that the values are
+    the vocabulary's is the safeguards' (safeguards.inputs)."""
     from common.clock import now_iso
     from pipeline.study_design import DESIGN_FILE
+    from pipeline.study_parameters import stated_fields
 
-    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
+    merged = {**stated_fields(dtxsid, store), **fields}
+    merged = {k: v for k, v in merged.items() if v is not None}
+    store.write_json(dtxsid, DESIGN_FILE, {"fields": merged, "recorded_at": now_iso()})
     return reapply_study_design(dtxsid, store)
 
 

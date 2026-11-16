@@ -436,9 +436,9 @@ def _apply_dispositions(mortality: dict, structure: dict) -> None:
 def _animals(design: dict | None) -> str:
     """The study's species plural for prose ("rats", "mice"; "animals" when
     unrecorded); None ⇒ the standard design."""
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    return species_plural(design_or_standard(design))
+    return species_plural(require_design(design))
 
 
 def _mortality_sex_subject(mortality: dict, animals: str = "rats") -> str:
@@ -738,11 +738,11 @@ def _build_animal_condition_paragraphs(
     """The "Animal Condition" paragraph(s) (_animal_condition_core), led by
     the internal-dose animals removed off schedule when the study records them
     (NIEHS-12, 13 put that sentence first)."""
-    from pipeline.study_design import design_or_standard, species_plural, species_singular
+    from pipeline.study_design import require_design, species_plural, species_singular
 
     paragraphs = _animal_condition_core(compound_name, dose_unit, mortality,
                                         clinical_obs_incidence, design)
-    facts = design_or_standard(design)
+    facts = require_design(design)
     lead = _internal_removals_sentence(mortality or {}, dose_unit, species_singular(facts),
                                        species_plural(facts))
     if lead:
@@ -785,10 +785,10 @@ def _animal_condition_core(
         List of paragraph strings (usually 1-2 paragraphs).
     """
     from pipeline.study_design import (
-        design_or_standard, exposure_verb, species_plural, species_singular,
+        require_design, exposure_verb, species_plural, species_singular,
     )
 
-    facts = design_or_standard(design)
+    facts = require_design(design)
     animals, animal = species_plural(facts), species_singular(facts)
     paragraphs: list[str] = []
 

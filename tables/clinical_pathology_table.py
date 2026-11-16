@@ -87,7 +87,7 @@ def build_clinical_pathology_table_from_sidecar(
     sidecar_paths: dict[str, str],
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     design: dict | None = None,
     imputed_cells: dict | None = None,
     method=None,
@@ -128,6 +128,8 @@ def build_clinical_pathology_table_from_sidecar(
             title, caption, compound, dose_unit, first_col_header,
             table_data (serialized), footnotes, bmd_definition.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_clinical_pathology_table_from_sidecar")
     # ── Load sidecars to get per-dose Core Animals counts ─────────────────
     # The sidecar tells us exactly how many Core Animals contributed to each
     # dose group.  This is the N that goes in the n-row.  The NTP stats

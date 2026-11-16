@@ -287,7 +287,7 @@ class TestBuildAttritionFootnote:
         core_n = {"Male": {0.0: 5, 333.0: 0}, "Female": {0.0: 5, 333.0: 0}}
         record, refs = build_attrition_footnote(
             total, core_n, [0.0, 333.0], "mg/kg",
-        )
+        design={"species": "rat", "route": "gavage", "duration_days": 5})
         assert record is not None
         assert record["id"] == "attrition"
         assert record["marker"]["target"] == "cells"
@@ -298,7 +298,7 @@ class TestBuildAttritionFootnote:
     def test_no_dead_groups_returns_none(self):
         total = {"Male": {0.0: 5}}
         core_n = {"Male": {0.0: 5}}
-        record, refs = build_attrition_footnote(total, core_n, [0.0], "mg/kg")
+        record, refs = build_attrition_footnote(total, core_n, [0.0], "mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
         assert record is None
         assert refs == {}
 
@@ -307,7 +307,7 @@ class TestBuildAttritionFootnote:
         core_n = {"Male": {1000.0: 0}}
         record, refs = build_attrition_footnote(
             total, core_n, [1000.0], "mg/kg",
-        )
+        design={"species": "rat", "route": "gavage", "duration_days": 5})
         # Only males dead -> text says "male", not "male and female".
         assert record["text"].startswith("All male 1,000 mg/kg")
 
@@ -322,8 +322,8 @@ class TestBuildAttritionFootnote:
         total = {"Male": {1000.0: 2}}
         core_n = {"Male": {1000.0: 0}}
         record, _ = build_attrition_footnote(total, core_n, [1000.0], "mg/kg",
-                                             sidecar_data=sidecars)
+                                             sidecar_data=sidecars, design={"species": "rat", "route": "gavage", "duration_days": 5})
         assert record["text"].endswith("euthanized by study day 4.")
         # No day recorded: never assumed.
-        record, _ = build_attrition_footnote(total, core_n, [1000.0], "mg/kg")
+        record, _ = build_attrition_footnote(total, core_n, [1000.0], "mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
         assert record["text"].endswith("euthanized before study termination.")

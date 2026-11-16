@@ -22,18 +22,19 @@ def _row(label, bmd="ND", bmdl="ND", vals=None, resp=True):
 
 
 UNIT = "mg/kg"
+RATS = {"species": "rat", "route": "gavage", "duration_days": 5}
 CN = "PFHxSAm"
 
 
 def test_empty_returns_empty():
-    assert generate_platform_narrative("Body Weight", {}, CN, UNIT) == []
-    assert generate_platform_narrative(None, {}, CN, UNIT) == []
+    assert generate_platform_narrative("Body Weight", {}, CN, UNIT, RATS) == []
+    assert generate_platform_narrative(None, {}, CN, UNIT, RATS) == []
 
 
 def test_body_weight_platform_produces_body_weight_prose():
     bw = _row("Terminal Body Wt.", "41.2", "22.8",
               {0.0: "100.0", 50.0: "85.0*", 100.0: "70.0**"})
-    out = generate_platform_narrative("Body Weight", {"Male": [bw]}, CN, UNIT)
+    out = generate_platform_narrative("Body Weight", {"Male": [bw]}, CN, UNIT, RATS)
     assert len(out) == 1
     para = out[0]
     assert "Terminal body weight" in para
@@ -46,7 +47,7 @@ def test_body_weight_platform_produces_body_weight_prose():
 def test_organ_weight_platform_produces_organ_prose():
     liver_abs = _row("Liver Absolute", "12.5", "6.3",
                      {0.0: "5.0", 50.0: "7.0*", 100.0: "9.0**"})
-    out = generate_platform_narrative("Organ Weight", {"Male": [liver_abs]}, CN, UNIT)
+    out = generate_platform_narrative("Organ Weight", {"Male": [liver_abs]}, CN, UNIT, RATS)
     assert len(out) == 1
     para = out[0]
     assert "Liver" in para
@@ -58,7 +59,7 @@ def test_clinical_sub_platform_produces_sub_platform_prose():
     alt = _row("Alanine aminotransferase", "45.0", "30.0",
                {0.0: "20.0", 50.0: "25.0*", 100.0: "30.0**"})
     out = generate_platform_narrative(
-        "Clinical Chemistry", {"Male": [alt]}, CN, UNIT)
+        "Clinical Chemistry", {"Male": [alt]}, CN, UNIT, RATS)
     assert len(out) == 1
     para = out[0]
     assert "Alanine aminotransferase was significantly increased" in para
@@ -71,7 +72,7 @@ def test_unknown_platform_auto_detects_body_then_organ():
               {0.0: "100.0", 50.0: "85.0*", 100.0: "70.0**"})
     liver_abs = _row("Liver Absolute", "12.5", "6.3",
                      {0.0: "5.0", 50.0: "7.0*", 100.0: "9.0**"})
-    out = generate_platform_narrative(None, {"Male": [bw, liver_abs]}, CN, UNIT)
+    out = generate_platform_narrative(None, {"Male": [bw, liver_abs]}, CN, UNIT, RATS)
     joined = "\n".join(out)
     # Both the body-weight and organ findings surface, in that order.
     assert "Terminal body weight" in joined
@@ -86,7 +87,7 @@ def test_unknown_platform_falls_back_to_generic_for_endpoint_rows():
     # organ-weight builder's endpoint branch (mirrors the old twin auto-detect).
     glucose = _row("Glucose", "60.0", "40.0",
                    {0.0: "100.0", 50.0: "90.0*", 100.0: "80.0**"})
-    out = generate_platform_narrative(None, {"Male": [glucose]}, CN, UNIT)
+    out = generate_platform_narrative(None, {"Male": [glucose]}, CN, UNIT, RATS)
     joined = "\n".join(out)
     assert "Glucose" in joined
     assert "60.0" in joined and "40.0" in joined

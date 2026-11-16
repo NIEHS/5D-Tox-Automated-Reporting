@@ -131,6 +131,29 @@ def seed_processable(session, dtxsid):
     (session / "validation_report.json").write_text(
         json.dumps({"issues": [], "coverage_matrix": {}}))
     pin_profile(dtxsid, newest_profile(), by="user")
+    state_parameters(session)
+
+
+# The study parameters a synthetic session states (pipeline.study_parameters:
+# Process refuses a study whose parameters are not all recorded or stated).
+STATED_PARAMETERS = {"species": "rat", "strain": "Sprague-Dawley", "articleRoute": "oral",
+                     "administrationMeans": "gavage", "articleVehicle": "corn oil",
+                     "studyDuration": "5d", "dosingDays": 5, "dosingSchedule": "once daily",
+                     "doseUnit": "mg/kg"}
+
+
+def state_parameters(session, fields: dict | None = None):
+    """State the study parameters in the session's study_design.json and put
+    the design facts on integrated.json's experiments, as integration does."""
+    from pipeline.study_design import apply_design_fields
+
+    fields = dict(STATED_PARAMETERS if fields is None else fields)
+    (session / "study_design.json").write_text(json.dumps({"fields": fields}))
+    ip = session / "integrated.json"
+    if ip.exists():
+        integrated = json.loads(ip.read_text())
+        apply_design_fields(integrated, fields)
+        ip.write_text(json.dumps(integrated, indent=2))
 
 
 def _setup_session(sessions_dir):

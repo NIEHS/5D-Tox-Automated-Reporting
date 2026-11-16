@@ -128,8 +128,9 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
 - Animals: {_subject if ctx.species else _not_recorded}
 {sex_line}
 - Route of administration: {ctx.route or _not_recorded}
-- Vehicle: {ctx.vehicle or _not_recorded}
-- Duration: {ctx.duration_days} days
+- Vehicle: {ctx.vehicle or ("none (inhalation)" if ctx.route == "inhaled" else _not_recorded)}
+- Study duration: {ctx.duration_days} days
+- Dosing: {ctx.dosing_schedule}, on {ctx.dosing_days} consecutive days (study days 0–{ctx.dosing_days - 1}); necropsy on study day {ctx.dosing_days}
 - Dose groups ({ctx.dose_unit}): {dose_str}
 - Animals per treatment group: {per_group}
 - Animals in {control_group(ctx.dose_unit)} group: {control_n}"""
@@ -558,7 +559,7 @@ def _build_subsection_guidelines(
         ),
         "body_organ_weights": (
             f"One paragraph. Body weights recorded on study day 0 and at necropsy on study day "
-            f"{ctx.duration_days} (do not state any other necropsy day). "
+            f"{ctx.dosing_days} (do not state any other necropsy day). "
             f"{'Organ weights: ' + ', '.join(ctx.organ_weight_endpoints[:10]) + '.' if ctx.organ_weight_endpoints else 'Organs were weighed at necropsy.'} "
             f"Absolute and relative (organ-to-body-weight ratio) weights calculated."
         ),

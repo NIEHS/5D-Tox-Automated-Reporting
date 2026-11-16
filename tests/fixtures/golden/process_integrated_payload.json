@@ -5,11 +5,11 @@
     ],
     "descriptive": [
       "Exposure to the test chemical resulted in dose-related changes in clinical chemistry measurements. Reliable BMD values were calculated for 2 endpoints.",
-      "In male animals, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female animals, no apical endpoints showed dose-related changes."
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, no apical endpoints showed dose-related changes."
     ],
     "paragraphs": [
       "Exposure to the test chemical resulted in dose-related changes in clinical chemistry measurements. Reliable BMD values were calculated for 2 endpoints.",
-      "In male animals, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female animals, no apical endpoints showed dose-related changes.",
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, no apical endpoints showed dose-related changes.",
       "MOCK analytical paragraph for the BMD summary."
     ]
   },
@@ -70,14 +70,11 @@
       "clin_chem_endpoints": [],
       "constant_variance": null,
       "curve_fit_prefilter": null,
-      "design_fallback": [
-        "route",
-        "vehicle",
-        "duration_days"
-      ],
       "dose_groups": [],
       "dose_unit": "mg/kg",
       "dose_unit_source": "stated",
+      "dosing_days": 5,
+      "dosing_schedule": "once daily",
       "dtxsid": "DTXSID_TEST",
       "duration_days": 5,
       "fold_change_filter": null,
@@ -96,6 +93,7 @@
       "has_tissue_conc": false,
       "hematology_endpoints": [],
       "hormone_endpoints": [],
+      "inhalation": null,
       "method_profile": "ntp-5day-2025.1",
       "method_settings": {
         "apical.bmd.acceptance.bmd_above_highest_dose": "nvm",
@@ -169,8 +167,8 @@
       "prefilter_pvalue": null,
       "route": "gavage",
       "sexes": [],
-      "species": null,
-      "strain": null,
+      "species": "rat",
+      "strain": "Sprague Dawley",
       "vehicle": "corn oil",
       "zero_count_excluded": null
     },
@@ -182,7 +180,7 @@
         "key": "study_design",
         "level": 3,
         "paragraphs": [
-          "Animals were administered the test chemical by gavage in corn oil once daily for 5 consecutive days (study days 0–4). Core animals were euthanized on study day 5, the day after the final dose. [Placeholder: strain, the animal source, age at receipt, quarantine, and the randomization procedure are not in the study data]"
+          "Sprague Dawley rats were administered the test chemical by gavage in corn oil once daily for 5 consecutive days (study days 0–4). Core animals were euthanized on study day 5, the day after the final dose. [Placeholder: the animal source, age at receipt, quarantine, and the randomization procedure are not in the study data]"
         ],
         "table": null
       },
@@ -339,13 +337,13 @@
   "unified_narratives": {
     "apical": {
       "paragraphs": [
-        "Terminal body weight was significantly increased in male animals with a positive trend (Table 2). The BMD and BMDL were 42.0 and 28.0 mg/kg, respectively. Terminal body weight was significantly increased in female animals with a positive trend (Table 2). The BMD and BMDL were 63.0 and 48.0 mg/kg, respectively."
+        "Terminal body weight was significantly increased in male rats with a positive trend (Table 2). The BMD and BMDL were 42.0 and 28.0 mg/kg, respectively. Terminal body weight was significantly increased in female rats with a positive trend (Table 2). The BMD and BMDL were 63.0 and 48.0 mg/kg, respectively."
       ],
       "title": "Animal Condition, Body Weights, and Organ Weights"
     },
     "clinical_pathology": {
       "paragraphs": [
-        "In male animals, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
+        "In male rats, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
       ],
       "title": "Clinical Pathology"
     }

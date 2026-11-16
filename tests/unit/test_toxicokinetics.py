@@ -85,7 +85,7 @@ def test_empty_when_no_data():
 def test_narrative_is_grounded_in_computed_numbers(plasma_sidecars):
     from tables.toxicokinetics import build_internal_dose_narrative
     tk = compute_toxicokinetics(plasma_sidecars)
-    paras = build_internal_dose_narrative(tk, "PFHxSAm", "mg/kg")
+    paras = build_internal_dose_narrative(tk, "PFHxSAm", "mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     text = " ".join(paras).lower()
     assert len(paras) >= 3
     # The published half-lives appear verbatim (prose derives from the numbers).
@@ -100,4 +100,4 @@ def test_narrative_is_grounded_in_computed_numbers(plasma_sidecars):
 
 def test_narrative_empty_when_no_tk():
     from tables.toxicokinetics import build_internal_dose_narrative
-    assert build_internal_dose_narrative({"by_sex": {}}, "X") == []
+    assert build_internal_dose_narrative({"by_sex": {}}, "X", dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5}) == []

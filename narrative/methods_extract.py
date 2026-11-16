@@ -14,7 +14,7 @@ fully-populated MethodsContext that downstream steps consume:
 
 Public entry point:
 
-  extract_methods_context(fingerprints, identity, study_params,
+  extract_methods_context(fingerprints, identity, parameters,
                           integrated, animal_report, bm2_jsons,
                           session_dir)
 
@@ -246,7 +246,8 @@ def extract_methods_context(
     identity: dict,
     fingerprints: dict,
     animal_report: dict | None = None,
-    study_params: dict | None = None,
+    parameters=None,
+    group_sizes: dict | None = None,
     bm2_jsons: dict | None = None,
     session_dir: str | None = None,
     integrated: dict | None = None,
@@ -264,8 +265,12 @@ def extract_methods_context(
                        _pool_fingerprints[dtxsid] cache.  Each fingerprint has domain, sexes,
                        dose_groups, endpoint_names, organ, etc.
         animal_report: Optional dict from animal_report.json (dose_design, domain_coverage, etc.).
-        study_params:  Optional user-provided overrides: vehicle, route, duration_days,
-                       species, strain.
+        parameters:    The study's parameters (pipeline.study_parameters.StudyParameters),
+                       complete: species, strain, route, vehicle, duration, dosing
+                       days and schedule, dose unit — recorded or stated, never
+                       defaulted.  Required.
+        group_sizes:   Optional explicit n_per_group / n_control (else derived from
+                       the animal data).
         bm2_jsons:     Optional dict of {file_id: bm2_json_dict} for extracting BMDExpress
                        analysis metadata from analysisInfo.notes.
         session_dir:   Optional path to the session directory.  Used to scan sidecar files
@@ -283,7 +288,10 @@ def extract_methods_context(
     if method is not None:
         ctx.method_profile = method.profile
         ctx.method_settings = dict(method.values)
-    study_params = study_params or {}
+    if parameters is None or not parameters.complete:
+        raise ValueError("extract_methods_context needs the study's complete parameters "
+                         "(pipeline.study_parameters)")
+    group_sizes = group_sizes or {}
     bm2_jsons = bm2_jsons or {}
 
     # --- Chemical identity ---
@@ -295,13 +303,12 @@ def extract_methods_context(
 
     # Group sizes: an explicit override only; otherwise derived from the animal
     # data below (never a protocol constant — studies differ, e.g. 4 vs 5).
-    ctx.n_per_group = study_params.get("n_per_group")
-    ctx.n_control = study_params.get("n_control")
+    ctx.n_per_group = group_sizes.get("n_per_group")
+    ctx.n_control = group_sizes.get("n_control")
 
     # --- Scan fingerprints for platform presence and collect metadata ---
     all_doses: set[float] = set()
     all_sexes: set[str] = set()
-    recorded_units: list[str] = []
 
     for fid, fp in fingerprints.items():
         # Support both dict and object-style access
@@ -350,37 +357,25 @@ def extract_methods_context(
         sexes = _get("sexes", [])
         if sexes:
             all_sexes.update(sexes)
-        du = _get("dose_unit")
-        if du:
-            recorded_units.append(du)
-        # Species from fingerprints (name-inferred) — used below only when
-        # neither the recorded metadata nor the user gives one.
-        sp = _get("species")
-        if sp and not ctx.species:
-            ctx.species = sp
 
     if all_doses:
         ctx.dose_groups = sorted(all_doses)
     if all_sexes:
         ctx.sexes = sorted(all_sexes)
-    # --- Dose unit: stated (study_params) > recorded (fingerprints) > mg/kg ---
-    from pipeline.study_design import resolve_dose_unit, strain_display, study_design_facts
-    ctx.dose_unit, ctx.dose_unit_source = resolve_dose_unit(
-        study_params.get("dose_unit"), recorded_units)
-
-    # --- Study design: the study's recorded metadata (experimentDescription),
-    # explicit overrides on top, the standard-design fallback for what neither
-    # gives (pipeline.study_design; route/vehicle follow the dose unit).
-    design = study_design_facts(integrated, ctx.dose_unit)
-    ctx.vehicle = study_params.get("vehicle") or design["vehicle"]
-    ctx.route = study_params.get("route") or design["route"]
-    ctx.species = study_params.get("species") or design["species"] or ctx.species
-    ctx.strain = study_params.get("strain") or strain_display(design) or None
-    # Duration: stated > recorded studyDuration > the standard five days
-    # (logged as a fallback like the other design facts).
-    ctx.duration_days = (study_params.get("duration_days") or design["duration_days"]
-                         or ctx.duration_days)
-    ctx.design_fallback = [k for k in design["fallback"] if not study_params.get(k)]
+    # --- Study design: the study's parameters, each recorded or stated
+    # (pipeline.study_parameters) — nothing assumed.
+    from pipeline.study_design import strain_display
+    values = parameters.values
+    ctx.dose_unit = values["dose_unit"]
+    ctx.dose_unit_source = parameters.sources["dose_unit"]
+    ctx.vehicle = values["vehicle"]
+    ctx.route = values["route"]
+    ctx.species = values["species"]
+    ctx.strain = strain_display(parameters.facts()) or None
+    ctx.inhalation = parameters.inhalation
+    ctx.duration_days = values["duration_days"]
+    ctx.dosing_days = values["dosing_days"]
+    ctx.dosing_schedule = values["dosing_schedule"]
 
     # --- Animal report: domain coverage and biosampling count ---
     if animal_report:

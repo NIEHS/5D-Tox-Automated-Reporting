@@ -58,6 +58,8 @@ import shutil
 import zipfile
 from pathlib import Path
 
+from pipeline.study_parameters import required_unit
+
 from common.session_files import read_json_file
 from pipeline.session_store import latest_session_cache
 from rendering.latex_generator import generate_main_tex, generate_report_body
@@ -508,7 +510,7 @@ def _convert_genomics_cache(
             display = {
                 "stat": next((st for st in any_entry["stat_order"] if st in gsb), "median"),
                 "bmr": any_entry.get("genomic_bmr"),
-                "unit": dose_unit or "mg/kg",
+                "unit": required_unit(dose_unit, "the session's Methods context"),
                 # The report's one BMD precision (report_bmd_decimals, stamped
                 # by the extraction); an older payload: 1 decimal for the
                 # gene-level (2025) tables, else 3.  ADR-0027 profiles will
@@ -766,11 +768,14 @@ def load_session_data(
     # selected sexes/assays/organs.  Resolve the view's filters (falling back
     # to the global template for 'default'); {} ⇒ no filtering (full superset).
     _vf = _resolve_apical_filters(dtxsid, view)
-    # The session's dose unit as Process resolved it (stated > recorded > mg/kg),
-    # carried by the Methods context; every table header and caption uses it.
+    # The session's dose unit as Process resolved it (the study parameters:
+    # recorded or stated, never assumed), carried by the Methods context; every
+    # table header and caption uses it.
+    # A session not yet processed has none: what would state it (a table, a
+    # BMD) refuses at its use (pipeline.study_parameters.required_unit).
     _mc = _load_json(latest_session_cache(session_dir, "_cache_methods_*.json"))
     session_dose_unit = (((_mc or {}).get("context") or {}).get("dose_unit")
-                         if isinstance(_mc, dict) else None) or "mg/kg"
+                         if isinstance(_mc, dict) else None)
     data["dose_unit"] = session_dose_unit
     sections_path = latest_session_cache(session_dir, "_cache_sections_*.json")
     sections_cache = _load_json(sections_path)
@@ -778,6 +783,7 @@ def load_session_data(
         raw_sections = sections_cache.get("sections", []) or []
         if raw_sections:
             from pipeline.processing_helpers import apply_section_filters
+            from pipeline.study_design import study_design_facts
             raw_sections = apply_section_filters(
                 raw_sections,
                 sex_allow=_vf["sex_apical"],
@@ -785,6 +791,9 @@ def load_session_data(
                 organ_allowlist=_vf["organ_ow"],
                 ow_sex_allow=_vf["sex_ow"],
                 compound_name=chemical_name,
+                # The study's own design: an organ weight caption rebuilt here
+                # names its animals ("Mice"), never an assumed rat study.
+                design=study_design_facts(_load_json(session_dir / "integrated.json")),
             )
             # Re-interpolate the compound name into each caption: the cache bakes it
             # at Process time, so a session integrated before its name resolved would
@@ -957,9 +966,10 @@ def load_session_data(
     try:
         from document_model.view_config import study_document_facts
         from genomics.pca_figure import build_pca_figure
+        if not session_dose_unit:
+            raise ValueError("not processed: no dose unit")
         _pca = build_pca_figure(_load_json(session_dir / "integrated.json") or {},
-                                dose_unit=((methods_cache or {}).get("context") or {}).get("dose_unit")
-                                or "mg/kg",
+                                dose_unit=session_dose_unit,
                                 tissue_order=study_document_facts(definition_of or dtxsid)["tissue_order"])
     except Exception:  # noqa: BLE001 — a figure failure leaves the pending note
         _pca = None
@@ -994,7 +1004,7 @@ def load_session_data(
     # Title, running header and cover: the animals and route the study records.
     if _integ:
         from rendering.report_data import apply_study_design
-        apply_study_design(data, _integ, dose_unit=session_dose_unit)
+        apply_study_design(data, _integ)
 
     # ── Appendix D-1: apical BMD acceptance criteria (the method profile's) ──
     from pipeline.method_profile import session_method
@@ -1038,18 +1048,20 @@ def load_session_data(
                     if isinstance(b, dict) and b.get("type") and b.get("factor") is not None}
     if len(_apical_bmrs) == 1:
         _mctx["apical_bmr"] = next(iter(_apical_bmrs))
-    overlay_abstract(
-        data,
-        abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
-        genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
-        dose_unit=_mctx.get("dose_unit") or "mg/kg",
-        dose_groups=_mctx.get("dose_groups") or [],
-        methods_context=_mctx or None,
-        # Sexes come from the .bm2 metadata (single source of truth): a sex-less
-        # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
-        sexes=derive_study_sexes(_integ),
-        genes=_abstract_genes(definition_of or dtxsid),
-    )
+    # No Methods context (not processed): no abstract — nothing assumed.
+    if _mctx.get("dose_unit"):
+        overlay_abstract(
+            data,
+            abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
+            genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
+            dose_unit=_mctx["dose_unit"],
+            dose_groups=_mctx.get("dose_groups") or [],
+            methods_context=_mctx or None,
+            # Sexes come from the .bm2 metadata (single source of truth): a sex-less
+            # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
+            sexes=derive_study_sexes(_integ),
+            genes=_abstract_genes(definition_of or dtxsid),
+        )
 
     # ── User-owned content overrides (ADR-0005 round-trip) ────────────
     # Edits a human made to report.tex (in Overleaf, the local stand-in, or by

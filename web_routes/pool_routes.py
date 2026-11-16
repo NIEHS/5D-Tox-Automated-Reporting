@@ -207,6 +207,15 @@ async def api_workflow_publish_readiness(dtxsid: Dtxsid):
     return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).publish_readiness())
 
 
+@router.get("/api/workflow/{dtxsid}/study-parameters")
+async def api_workflow_study_parameters(dtxsid: Dtxsid):
+    """Return the study's DERIVED parameters (pipeline.study_parameters): each
+    value with its source (recorded / stated / inferred), the missing and the
+    conflicting ones, and ``complete``.  Process is refused until complete; a
+    front end shows what to state before anyone presses it.  Read-only."""
+    return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).study_parameters())
+
+
 # ---------------------------------------------------------------------------
 # Validation route
 # ---------------------------------------------------------------------------

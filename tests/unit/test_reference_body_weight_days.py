@@ -45,12 +45,14 @@ def _published(pdf) -> dict[str, list[str]]:
     return out
 
 
-def _ours(session, profile: str | None) -> dict[str, list[str]]:
+def _ours(session, profile: str | None, unit: str = "mg/kg",
+          design: dict | None = None) -> dict[str, list[str]]:
     """Our body weight cells under `profile` (None: NIEHS-02, which predates
     the profiles — the built-in defaults)."""
     table = build_body_weight_table_from_sidecar(
         find_sidecar_paths(str(session), "Body Weight"), stats_rows=_table_rows(session, profile),
-        method=resolve(profile) if profile else None)
+        method=resolve(profile) if profile else None, dose_unit=unit,
+        design=design or {"species": "rat", "route": "gavage", "duration_days": 5})
     [rows] = table["table_data"].values()
     return {r["label"]: [r["values"][k] for k in sorted(r["values"], key=float)]
             for r in rows if not r.get("is_n_row")}
@@ -66,7 +68,9 @@ def test_rows_and_cells_match_the_published_summary(reference_session, report, s
     assert list(published) == days + ["Body Weight Gain"]
     session = reference_session(report, "DTXSID6020430" if report == "NIEHS-12" else "DTXSID1020431",
                                 study=study)
-    ours = _ours(session, "ntp-5day-2025")
+    ours = _ours(session, "ntp-5day-2025", "ppm",
+                 {"species": "mouse" if study == "108020007" else "rat", "route": "inhaled",
+                  "duration_days": 5})
     for (s, row, i), (theirs, mine) in _UNREPRODUCIBLE.items():
         if s == study:
             assert (published[row][i], ours[row][i]) == (theirs, mine)

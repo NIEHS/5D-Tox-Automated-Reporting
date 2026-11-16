@@ -568,7 +568,7 @@ def build_umap_figure(
     *,
     organ: str,
     sex: str,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     style: dict | None = None,
     clusters: dict | None = None,
     umap_ref: list[dict] | None = None,
@@ -693,7 +693,7 @@ def build_cluster_figure(
     *,
     organ: str,
     sex: str,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     style: dict | None = None,
     clusters: dict | None = None,
     umap_ref: list[dict] | None = None,
@@ -894,7 +894,7 @@ def build_generic_chart(
     *,
     organ: str,
     sex: str,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     style: dict | None = None,
     spec: dict | None = None,
     clusters: dict | None = None,
@@ -1003,7 +1003,7 @@ def render_chart_images(
     gene_sets: list[dict],
     organ: str,
     sex: str,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     clusters: dict | None = None,
     gene_dir: dict[str, str] | None = None,
     *,
@@ -1209,7 +1209,7 @@ def _resolve_registry(chart_types: dict | None) -> dict:
 def render_chart_images_for_sections(
     genomics_sections: dict,
     bmd_stat: str = "median",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     chart_style_cfg: dict | None = None,
     chart_types: dict | None = None,
 ) -> list[dict]:
@@ -1244,6 +1244,8 @@ def render_chart_images_for_sections(
     run_in_executor themselves.  A single-session render (4 pairs) is
     fast enough to do inline on a page load.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "render_chart_images_for_sections")
     # Build the effective registry ONCE for the whole batch.  chart_types may
     # arrive as raw YAML specs (name → dict) or as already-built ChartType
     # objects; build_registry handles the former, and a dict of ChartType is

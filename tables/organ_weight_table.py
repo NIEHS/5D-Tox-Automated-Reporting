@@ -214,7 +214,7 @@ def build_organ_weight_table_from_sidecar(
     sidecar_paths: dict[str, str],
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     design: dict | None = None,
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
@@ -248,6 +248,8 @@ def build_organ_weight_table_from_sidecar(
         Dict matching the Typst apical_sections schema, or empty dict if
         no responsive organ endpoints exist.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_organ_weight_table_from_sidecar")
     # ── Load sidecars and extract per-animal organ data ───────────────────
     sidecar_data: dict[str, dict] = {}
     for sex, sc_path in sidecar_paths.items():

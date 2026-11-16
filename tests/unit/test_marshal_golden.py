@@ -64,6 +64,9 @@ BODY_RICH = {
             "chemical_name": "Test Article",
             "dose_groups": [0, 3, 10, 30],
             "dose_unit": "mg/kg",
+            "species": "rat", "strain": "Sprague Dawley", "route": "gavage",
+            "vehicle": "corn oil", "duration_days": 5, "dosing_days": 5,
+            "dosing_schedule": "once daily",
             "has_gene_expression": True,
         }
     },

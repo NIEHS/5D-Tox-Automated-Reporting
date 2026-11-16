@@ -13,6 +13,7 @@ it (the 2026 era).
 
 from __future__ import annotations
 
+from pipeline.study_parameters import required_unit
 from rendering.render_common import (
     _STAT_PHRASE, _bmd_range, _bmr_tag, _entry_sex_blocks, _finite_or_none,
     _genomics_display,
@@ -50,7 +51,7 @@ def most_potent_gene_sets(data: dict) -> dict | None:
                 groups.setdefault(label, []).append((bmd, tissue[:1].upper() + tissue[1:], row, d))
     if not groups:
         return None
-    tag, unit = _bmr_tag(display.get("bmr")), display.get("unit") or "mg/kg"
+    tag, unit = _bmr_tag(display.get("bmr")), required_unit(display.get("unit"), "the genomics display")
     phrase = _STAT_PHRASE.get(display.get("stat", "median"), display.get("stat", ""))
     headers = ["Tissue", "Category Name",
                "Input Genes/Platform Genes in Gene Set (% Coverage)",

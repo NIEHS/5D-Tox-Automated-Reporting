@@ -429,6 +429,7 @@ def test_apical_row_values_render_real_measurements_not_dose_keys():
         "apical_sections": [
             {
                 "platform": "Body Weight",
+                "dose_unit": "mg/kg",
                 "table_data": {
                     "Male": [
                         {

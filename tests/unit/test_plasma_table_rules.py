@@ -59,7 +59,7 @@ def test_every_table7_cell_matches_the_pa48_summary(reference_session, report):
     session = reference_session(report, STUDIES[report])
     tc = build_tissue_concentration_table_from_sidecar(
         find_sidecar_paths(str(session), "Tissue Concentration"), compound_name="X",
-        method=resolve("ntp-5day-2021.1"))
+        method=resolve("ntp-5day-2021.1"), dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     got = {}
     for sex, rows in tc["table_data"].items():
         for row in rows:

@@ -76,7 +76,7 @@ async def generate_genomics_narrative_async(
     top_genes: list,
     all_genes: list,
     total_responsive: int,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     force: bool = False,
     model: str = "",
     subject: str = "",

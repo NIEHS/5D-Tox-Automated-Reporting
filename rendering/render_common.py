@@ -40,6 +40,7 @@ from document_model.document_node import DocNode
 # Render-time numeric re-rounding for mean ± SE cells — already the shared
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
+from pipeline.study_parameters import required_unit
 from tables.table_builder_common import (
     format_display_number, format_dose_label, format_mean_se_display,
 )
@@ -675,7 +676,7 @@ def incidence_table_plan(node: DocNode, data: dict) -> IncidenceTablePlan | None
         return None
 
     doses = section.get("doses", []) or []
-    dose_unit = section.get("dose_unit", "mg/kg")
+    dose_unit = required_unit(section.get("dose_unit"), "the incidence section")
     # Column count = the Observation label column plus one per dose group; rows
     # are padded to this so a short counts list still fills every dose column.
     ncols = 1 + len(doses)
@@ -863,7 +864,7 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
     if not groups:
         return None
 
-    dose_unit = section.get("dose_unit", "mg/kg")
+    dose_unit = required_unit(section.get("dose_unit"), "the apical section")
     first_col = section.get("first_col_header", "Endpoint")
 
     # The dose grid IS the column structure.  The rows of one study share
@@ -1537,7 +1538,7 @@ def _bmr_tag(bmr: dict | None) -> str:
 
 def _display_is_legacy(d: dict) -> bool:
     return (_bmr_tag(d.get("bmr")) == "1Std" and d.get("stat", "median") == "median"
-            and d.get("unit", "mg/kg") == "mg/kg")
+            and d.get("unit") == "mg/kg")
 
 
 def gene_set_table_headers(entry: dict) -> tuple[str, ...]:

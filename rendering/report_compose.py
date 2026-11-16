@@ -127,7 +127,7 @@ def composed_design(designs: list[dict]) -> dict:
     pipeline.study_design then names their animals together ("Rats and Mice")."""
     if len(designs) == 1:
         return designs[0]
-    out = {"species": None, "strain": None, "studies": designs, "fallback": [],
+    out = {"species": None, "strain": None, "studies": designs,
            "conflicts": sorted({c for d in designs for c in d.get("conflicts") or []})}
     for field in ("route", "vehicle", "duration_days", "inhalation"):
         values = {d.get(field) for d in designs}

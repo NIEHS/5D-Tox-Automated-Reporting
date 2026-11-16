@@ -76,14 +76,25 @@ def require_valid_design(dtxsid: str, fields) -> None:
     from bmdx_pipe import VOCABULARIES
     from pipeline.integrated_io import load_integrated
     from pipeline.study_design import design_field_errors
+    from pipeline.study_parameters import STATED_FIELDS, stated_field_errors
 
-    errors = design_field_errors(fields, VOCABULARIES)
+    errors = design_field_errors(fields, VOCABULARIES, allowed=STATED_FIELDS)
+    if not errors:
+        errors = stated_field_errors(fields)
     if errors:
         raise _invalid(dtxsid, "the study design", errors)
     integrated = load_integrated(dtxsid)
     names = [e.get("name", "") for e in (integrated or {}).get("doseResponseExperiments") or []]
     contradictions = sorted({c.split(": ", 1)[1] for c in workbook_contradictions(
         {n: fields for n in names}, integrated)})
+    # A stated dose unit never overrides the one the files record; it may only
+    # pick among units they disagree on (pipeline.study_parameters).
+    if fields.get("doseUnit"):
+        from pipeline.study_parameters import recorded_dose_units
+        recorded = {u.strip().lower(): u for u in recorded_dose_units(dtxsid) if u.strip()}
+        if recorded and fields["doseUnit"].strip().lower() not in recorded:
+            contradictions.append(f"doseUnit: the files record {sorted(recorded.values())}, "
+                                  f"not {fields['doseUnit']!r}")
     if contradictions:
         raise _contradicts(dtxsid, "the study design", contradictions)
 
@@ -99,6 +110,21 @@ def require_valid_experiment_metadata(dtxsid: str, given) -> None:
     contradictions = workbook_contradictions(given, integrated)
     if contradictions:
         raise _contradicts(dtxsid, "the experiment details", contradictions)
+
+
+def require_study_parameters(dtxsid: str, store=None):
+    """Process needs every study parameter (pipeline.study_parameters), each
+    recorded by the data or stated in study_design.json: else
+    ``study_parameters_incomplete`` (422), naming each missing or conflicting
+    one.  Returns the parameters.  Writes nothing."""
+    from pipeline import study_parameters
+
+    params = study_parameters.load(dtxsid, store)
+    if not params.complete:
+        exc = study_parameters.StudyParametersIncomplete(dtxsid, params)
+        raise Refused("study_parameters_incomplete", str(exc), status_code=422,
+                      details={"problems": exc.problems, "parameters": exc.parameters})
+    return params
 
 
 def _contradicts(dtxsid: str, what: str, errors: list[str]) -> Refused:

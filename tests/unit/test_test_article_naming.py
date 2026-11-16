@@ -28,16 +28,16 @@ def test_abbreviation_of_identity():
 def test_summary_uses_the_abbreviation_the_background_introduced():
     first = build_report_summary(
         _APICAL, {}, chemical_name="Perfluorohexanesulfonamide", abbreviation="PFHxSAm",
-        abstract_background="Perfluorohexanesulfonamide (PFHxSAm) is a PFAS.")[0]
+        abstract_background="Perfluorohexanesulfonamide (PFHxSAm) is a PFAS.", dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})[0]
     assert first.endswith("biological potency of PFHxSAm.")
 
 
 def test_summary_introduces_the_abbreviation_itself_without_a_background():
     first = build_report_summary(
-        _APICAL, {}, chemical_name="Perfluorohexanesulfonamide", abbreviation="PFHxSAm")[0]
+        _APICAL, {}, chemical_name="Perfluorohexanesulfonamide", abbreviation="PFHxSAm", dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})[0]
     assert "potency of Perfluorohexanesulfonamide (PFHxSAm)." in first
 
 
 def test_summary_names_the_chemical_when_no_abbreviation():
-    first = build_report_summary(_APICAL, {}, chemical_name="Triclosan")[0]
+    first = build_report_summary(_APICAL, {}, chemical_name="Triclosan", dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})[0]
     assert first.endswith("biological potency of Triclosan.")

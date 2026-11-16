@@ -11,7 +11,7 @@
       },
       {
         "label": "Results",
-        "text": "In male rats, there were no apical endpoints for which a BMD value could be reliably estimated. In female rats, there were no apical endpoints for which a BMD value could be reliably estimated."
+        "text": ""
       },
       {
         "label": "Summary",
@@ -28,7 +28,7 @@
     {
       "caption": "",
       "compound": "Test Article",
-      "dose_unit": "mg/kg",
+      "dose_unit": null,
       "footnotes": [],
       "narrative": [],
       "table_data": {},
@@ -37,7 +37,7 @@
     {
       "caption": "",
       "compound": "Test Article",
-      "dose_unit": "mg/kg",
+      "dose_unit": null,
       "footnotes": [],
       "narrative": [],
       "table_data": {},
@@ -746,6 +746,7 @@
       "internal_dose": "Internal Concentration"
     }
   },
+  "dose_unit": null,
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "figure_entries": [
     {

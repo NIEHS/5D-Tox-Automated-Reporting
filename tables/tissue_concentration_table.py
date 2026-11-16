@@ -217,7 +217,7 @@ def timepoint_label(hours: int, after: str, unit: str | None) -> str:
 def build_tissue_concentration_table_from_sidecar(
     sidecar_paths: dict[str, str],
     compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     design: dict | None = None,
     method=None,
 ) -> dict:
@@ -249,15 +249,17 @@ def build_tissue_concentration_table_from_sidecar(
         table_type="pharmacokinetic" flag for specialized Typst rendering.
         Returns empty dict if no tissue concentration data found.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_tissue_concentration_table_from_sidecar")
     from pipeline.method_profile import session_method
     from pipeline.study_design import (
-        after_administration, design_or_standard, species_plural, species_singular,
+        after_administration, require_design, species_plural, species_singular,
     )
 
     method = method if method is not None else session_method(None)
     sig_figs = method.get("internal_dose.sig_figs")
 
-    _after = after_administration(design_or_standard(design))
+    _after = after_administration(require_design(design))
     # ── Load sidecars ─────────────────────────────────────────────────────
     sidecar_data: dict[str, dict] = {}
     for sex, sc_path in sidecar_paths.items():
@@ -294,8 +296,8 @@ def build_tissue_concentration_table_from_sidecar(
         units = hour_units.get(h, set())
         return next(iter(units)) if len(units) == 1 else None
 
-    animal = species_singular(design_or_standard(design))
-    animals = species_plural(design_or_standard(design))
+    animal = species_singular(require_design(design))
+    animals = species_plural(require_design(design))
 
     # ── Build the table rows ──────────────────────────────────────────────
     serialized: dict[str, list[dict]] = {}

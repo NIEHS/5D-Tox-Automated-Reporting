@@ -224,6 +224,12 @@ REFUSALS: dict[str, Refusal] = {
         "Some of what was stated about {what} can't be used, so nothing was saved. "
         "The details list each problem: a value that isn't one of the choices "
         "offered, or an experiment the study doesn't have."), "facts"),
+    "study_parameters_incomplete": Refusal(422, (
+        "This study can't be processed yet: some of its parameters are missing, or its "
+        "files disagree about them. The details name each one. Every parameter the "
+        "report states (species, strain, route, vehicle, study duration, dosing days "
+        "and schedule, dose unit) must be recorded in the study's files or stated for "
+        "the study; none is ever assumed."), "facts"),
     "facts_contradict_workbook": Refusal(422, (
         "Some of what was stated about {what} contradicts the study's own workbooks, "
         "so nothing was saved. The workbooks are the study's record of its design and "
@@ -342,6 +348,7 @@ _MESSAGE_RULES: tuple[tuple[str, str, str], ...] = (
     ("StepError", r"^No fingerprinted files found", "files_not_recognised"),
     ("StepError", r"^Animal report generation failed:", "animal_report_failed"),
     ("StepError", r"^No integrated data found", "not_integrated"),
+    ("StepError", r"the study parameters are incomplete", "study_parameters_incomplete"),
     ("StepError", r"^Processing failed: .*(?:RunApicalBmds|ExportGenomics)", "calculation_program_failed"),
     ("StepError", r"^Processing failed:", "processing_failed"),
     ("StepError", r"^Content preparation failed:", "content_preparation_failed"),

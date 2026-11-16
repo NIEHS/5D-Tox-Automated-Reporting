@@ -108,7 +108,7 @@ def _bw_table(tmp_path, animals):
     path.write_text(json.dumps({"animals": {
         str(i): {"dose": dose, "selection": "Core Animals", "observations": days(last)}
         for i, (dose, last) in enumerate(animals)}}))
-    return build_body_weight_table_from_sidecar({"Male": str(path)}, dose_unit="mg/kg")
+    return build_body_weight_table_from_sidecar({"Male": str(path)}, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
 
 
 def test_a_removal_after_the_first_weighing_marks_the_later_cells(tmp_path):
@@ -153,6 +153,9 @@ def test_a_group_short_of_samples_names_its_matrices_once():
 # Whole-group attrition on the clinical and organ tables (NIEHS-10 "–^d")
 # ---------------------------------------------------------------------------
 
+RATS = {"species": "rat", "route": "gavage", "duration_days": 5}
+
+
 def _animal(dose, obs):
     return {"dose": dose, "selection": "Core Animals",
             "observations": [{"endpoint": e, "value": v, "day": d} for e, v, d in obs]}
@@ -176,7 +179,7 @@ def test_a_group_removed_before_necropsy_is_noted_though_the_platform_lacks_it()
     clin = {"Male": {"animals": {
         "1": _animal(0.0, [("ALT", "50", "SD5")]), "2": _animal(0.0, [("ALT", "52", "SD5")])}}}
     av = detect_core_animal_availability(clin)
-    records, refs = availability_footnotes(clin, av, [0.0, 333.0], "mg/kg", None, roster=_roster())
+    records, refs = availability_footnotes(clin, av, [0.0, 333.0], "mg/kg", RATS, roster=_roster())
     assert [r["text"] for r in records] == [
         "All male 333 mg/kg rats were found dead or moribund and euthanized by study day 1."]
     assert refs["Male"] == {333.0: records[0]["id"]}
@@ -193,7 +196,7 @@ def test_organ_weights_count_the_scheduled_necropsy_only():
     core_n, total, missing = detect_core_animal_availability(organ, scheduled_only=True)
     assert (core_n["Male"].get(333.0, 0), total["Male"][333.0], missing["Male"]) == (0, 1, {})
     records, _ = availability_footnotes(organ, (core_n, total, missing), [0.0, 333.0],
-                                        "mg/kg", None)
+                                        "mg/kg", RATS)
     assert [r["text"] for r in records] == [
         "All male 333 mg/kg rats were found dead or moribund and euthanized by study day 1."]
 
