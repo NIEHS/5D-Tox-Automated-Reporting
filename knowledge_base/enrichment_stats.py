@@ -40,6 +40,55 @@ def benjamini_hochberg(pvalues: list[float]) -> list[float]:
 
 
 # ---------------------------------------------------------------------------
+# The tested family
+# ---------------------------------------------------------------------------
+
+# A term is reported when at least this many responsive genes are in it.  A
+# REPORTING rule only: the multiple-testing family is every term the knowledge
+# base defines (below), fixed before the data are seen.
+MIN_REPORTED_OVERLAP = 2
+
+
+def _over_representation(
+    responsive_by_term: dict[str, list[str]],
+    term_sizes: dict[str, int],
+    n_responsive: int,
+    bg_total: int,
+    fdr_cutoff: float,
+) -> list[dict]:
+    """Fisher's exact test (one-sided, over-representation) for EVERY term the
+    knowledge base defines (``term_sizes``), Benjamini-Hochberg across all of
+    them, then the terms with at least MIN_REPORTED_OVERLAP responsive genes
+    and FDR below ``fdr_cutoff``.
+
+    The family is the knowledge base's terms, not the terms the responsive
+    genes happen to hit: a term with no responsive gene has p = 1 and still
+    counts toward the correction.  Correcting only over the terms with an
+    observed overlap makes the family depend on the results and understates
+    the FDR (a synthetic case: 0.0039 over the hit terms, 0.388 over 100
+    predefined pathways).  Each record carries ``family_size``."""
+    family = [t for t, size in term_sizes.items() if size > 0]
+    tested = []
+    for term in family:
+        genes = responsive_by_term.get(term) or []
+        a = len(genes)
+        size = term_sizes[term]
+        if a == 0:
+            pval = 1.0
+        else:
+            b = n_responsive - a
+            c = size - a
+            d = bg_total - size - b
+            _, pval = fisher_exact([[a, b], [c, d]], alternative="greater")
+        tested.append((term, genes, size, pval))
+    fdrs = benjamini_hochberg([p for *_, p in tested])
+    return [{"term": term, "overlap_genes": sorted(genes), "overlap_count": len(genes),
+             "size": size, "pvalue": pval, "fdr": fdr, "family_size": len(family)}
+            for (term, genes, size, pval), fdr in zip(tested, fdrs)
+            if len(genes) >= MIN_REPORTED_OVERLAP and fdr < fdr_cutoff]
+
+
+# ---------------------------------------------------------------------------
 # Pathway enrichment (Fisher's exact test)
 # ---------------------------------------------------------------------------
 
@@ -51,7 +100,8 @@ def enrich_pathways(
     """
     Over-representation analysis for pathways using Fisher's exact test.
 
-    For each pathway with at least one responsive gene, build a 2x2 table:
+    Every pathway the knowledge base defines is tested (_over_representation);
+    for each, a 2x2 table:
                       In pathway    Not in pathway
     Responsive           a              b
     Not responsive       c              d
@@ -84,40 +134,11 @@ def enrich_pathways(
         for pname in pnames:
             pathway_responsive.setdefault(pname, []).append(gene)
 
-    results = []
-    pvals = []
-
-    for pathway_name, genes_in_pathway in pathway_responsive.items():
-        a = len(genes_in_pathway)
-        if a < 2:
-            continue  # skip singletons
-        b = n_responsive - a
-        pathway_size = pathway_counts.get(pathway_name, 0)
-        c = pathway_size - a
-        d = bg_total - pathway_size - b
-
-        _, pval = fisher_exact([[a, b], [c, d]], alternative="greater")
-
-        results.append({
-            "pathway_name": pathway_name,
-            "overlap_genes": sorted(genes_in_pathway),
-            "overlap_count": a,
-            "pathway_size": pathway_size,
-            "pvalue": pval,
-        })
-        pvals.append(pval)
-
-    # BH correction
-    if pvals:
-        fdrs = benjamini_hochberg(pvals)
-        for i, r in enumerate(results):
-            r["fdr"] = fdrs[i]
-    else:
-        for r in results:
-            r["fdr"] = 1.0
-
-    # Filter and sort
-    results = [r for r in results if r["fdr"] < fdr_cutoff]
+    results = _over_representation(pathway_responsive, pathway_counts, n_responsive,
+                                   bg_total, fdr_cutoff)
+    for r in results:
+        r["pathway_name"] = r.pop("term")
+        r["pathway_size"] = r.pop("size")
     results.sort(key=lambda x: (x["pvalue"], x["pathway_name"]))  # ties: by name, never set order
     return results
 
@@ -157,39 +178,11 @@ def enrich_go_terms(
         for go_id in go_ids:
             go_responsive.setdefault(go_id, []).append(gene)
 
-    results = []
-    pvals = []
-
-    for go_id, genes_in_term in go_responsive.items():
-        a = len(genes_in_term)
-        if a < 2:
-            continue
-        b = n_responsive - a
-        term_size = go_counts.get(go_id, 0)
-        c = term_size - a
-        d = bg_total - term_size - b
-
-        _, pval = fisher_exact([[a, b], [c, d]], alternative="greater")
-
-        go_name = kb.go_term_name(go_id)
-        results.append({
-            "go_id": go_id,
-            "go_term": go_name,
-            "overlap_genes": sorted(genes_in_term),
-            "overlap_count": a,
-            "term_size": term_size,
-            "pvalue": pval,
-        })
-        pvals.append(pval)
-
-    if pvals:
-        fdrs = benjamini_hochberg(pvals)
-        for i, r in enumerate(results):
-            r["fdr"] = fdrs[i]
-    else:
-        for r in results:
-            r["fdr"] = 1.0
-
-    results = [r for r in results if r["fdr"] < fdr_cutoff]
+    results = _over_representation(go_responsive, go_counts, n_responsive, bg_total,
+                                   fdr_cutoff)
+    for r in results:
+        r["go_id"] = r.pop("term")
+        r["term_size"] = r.pop("size")
+        r["go_term"] = kb.go_term_name(r["go_id"])
     results.sort(key=lambda x: (x["pvalue"], x["go_id"]))  # ties: by id, never set order
     return results
