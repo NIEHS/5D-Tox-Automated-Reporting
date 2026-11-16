@@ -10,7 +10,6 @@ import json
 
 import openpyxl
 
-from rendering.render_common import scan_pending_markers
 from tables.table_builder_common import find_sidecar_paths, load_sidecar
 from tables.tissue_concentration_table import (
     _parse_timepoint, build_tissue_concentration_table_from_sidecar,

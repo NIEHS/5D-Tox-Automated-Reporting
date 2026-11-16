@@ -28,7 +28,6 @@ import asyncio
 import hashlib
 import json
 import logging
-from pathlib import Path
 
 from common.paths import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid

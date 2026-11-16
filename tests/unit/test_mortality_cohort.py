@@ -137,8 +137,9 @@ def test_the_body_weight_footnote_says_how_the_animal_left(tmp_path):
     from common.dispositions import dispositions
 
     path = tmp_path / "bw.sidecar.json"
-    days = lambda last: [{"day": f"SD{d}", "endpoint": "Body Weight", "value": "20",
-                          "terminal": d == last} for d in range(last + 1)]
+    def days(last):
+        return [{"day": f"SD{d}", "endpoint": "Body Weight", "value": "20",
+                 "terminal": d == last} for d in range(last + 1)]
     path.write_text(json.dumps({"animals": {
         "1": {"dose": 0.0, "selection": "Core Animals", "observations": days(5)},
         "2": {"dose": 0.0, "selection": "Core Animals", "observations": days(5)},

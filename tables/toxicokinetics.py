@@ -31,7 +31,6 @@ authored split.
 
 from __future__ import annotations
 
-from common.animal_selection import is_biosampling
 
 import math
 

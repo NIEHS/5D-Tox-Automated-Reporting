@@ -11,7 +11,6 @@ change of knowledge base stales the genomics sections.
 from __future__ import annotations
 
 import json
-import shutil
 import textwrap
 from pathlib import Path
 
