@@ -57,7 +57,7 @@ def test_build_genomics_interpretation_coerces_string_nan_bmd(monkeypatch):
 
     # Stub analyze() to capture the DataFrame it receives and run the exact
     # operations that used to raise on a mixed float/str column.
-    def _fake_analyze(df, kb, fdr_cutoff=0.05):
+    def _fake_analyze(df, kb, fdr_cutoff=0.05, enrichment_withheld=""):
         captured["df"] = df
         bmd_min = float(df["bmd"].min())   # crashed pre-fix
         bmd_max = float(df["bmd"].max())   # crashed pre-fix
@@ -113,7 +113,7 @@ def test_min_max_over_all_string_nan_does_not_raise(monkeypatch):
             self.close()
             return False
 
-    def _fake_analyze(df, kb, fdr_cutoff=0.05):
+    def _fake_analyze(df, kb, fdr_cutoff=0.05, enrichment_withheld=""):
         return AnalysisResult(
             df=df,
             responsive_genes=list(df["gene_symbol"]),

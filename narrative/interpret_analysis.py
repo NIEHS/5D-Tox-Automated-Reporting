@@ -632,6 +632,9 @@ class AnalysisResult:
     gene_literature: list   # [{gene, evidence, mention_count, n_papers, organs, claims}]
     top_papers: list        # [{paper_id, title, year, citation_count, genes}]
     fdr_cutoff: float = 0.05
+    # Why enrichment was not computed ("" when it was): the complete
+    # responsive gene list was not available, only a ranked subset.
+    enrichment_withheld: str = ""
     context_text: str = ""
     llm_narrative: str = ""
     narrative_runs: list = field(default_factory=list)
@@ -647,9 +650,13 @@ def analyze(
     df: pd.DataFrame,
     kb: ToxKBQuerier,
     fdr_cutoff: float = 0.05,
+    enrichment_withheld: str = "",
 ) -> AnalysisResult:
     """
     Run all analyses on dose-response data and return structured results.
+    ``enrichment_withheld`` (a reason): the genes are not the complete
+    responsive set, so no enrichment is computed — a ranked subset's
+    over-representation is not the responsive set's.
     """
     responsive_genes = list(df["gene_symbol"])
     bmd_min = float(df["bmd"].min())
@@ -660,13 +667,16 @@ def analyze(
         n_up = int((df["direction"].str.lower() == "up").sum())
         n_down = int((df["direction"].str.lower() == "down").sum())
 
-    print("  Running pathway enrichment...")
-    pw_enriched = enrich_pathways(responsive_genes, kb, fdr_cutoff)
-    print(f"  {len(pw_enriched)} significant pathways (FDR < {fdr_cutoff})")
+    if enrichment_withheld:
+        pw_enriched, go_enriched = [], []
+    else:
+        print("  Running pathway enrichment...")
+        pw_enriched = enrich_pathways(responsive_genes, kb, fdr_cutoff)
+        print(f"  {len(pw_enriched)} significant pathways (FDR < {fdr_cutoff})")
 
-    print("  Running GO term enrichment...")
-    go_enriched = enrich_go_terms(responsive_genes, kb, fdr_cutoff)
-    print(f"  {len(go_enriched)} significant GO terms (FDR < {fdr_cutoff})")
+        print("  Running GO term enrichment...")
+        go_enriched = enrich_go_terms(responsive_genes, kb, fdr_cutoff)
+        print(f"  {len(go_enriched)} significant GO terms (FDR < {fdr_cutoff})")
 
     print("  Computing BMD ordering...")
     bmd_ordered = compute_bmd_ordering(df, pw_enriched)
@@ -742,6 +752,7 @@ def analyze(
         gene_literature=gene_literature,
         top_papers=top_papers,
         fdr_cutoff=fdr_cutoff,
+        enrichment_withheld=enrichment_withheld,
     )
     result.context_text = format_context_text(result)
     return result
@@ -754,7 +765,9 @@ def format_context_text(result: AnalysisResult) -> str:
 
     # --- Summary ---
     lines.append("=== DOSE-RESPONSE SUMMARY ===")
-    lines.append(f"{len(result.responsive_genes)} responsive genes, BMD range {result.bmd_min:.3g}-{result.bmd_max:.3g}")
+    what = ("genes (a ranked subset, not the complete responsive set)"
+            if result.enrichment_withheld else "responsive genes")
+    lines.append(f"{len(result.responsive_genes)} {what}, BMD range {result.bmd_min:.3g}-{result.bmd_max:.3g}")
     if result.n_up or result.n_down:
         lines.append(f"Direction: {result.n_up} up, {result.n_down} down")
     lines.append("")
@@ -769,6 +782,8 @@ def format_context_text(result: AnalysisResult) -> str:
                 f"{pw['overlap_count']}/{pw['pathway_size']} genes)"
             )
             lines.append(f"   Genes: {', '.join(pw['overlap_genes'])}")
+    elif result.enrichment_withheld:
+        lines.append(f"Not computed: {result.enrichment_withheld}")
     else:
         lines.append("No significantly enriched pathways at this FDR threshold.")
     lines.append("")
@@ -783,6 +798,8 @@ def format_context_text(result: AnalysisResult) -> str:
                 f"{gt['overlap_count']}/{gt['term_size']} genes)"
             )
             lines.append(f"   Genes: {', '.join(gt['overlap_genes'])}")
+    elif result.enrichment_withheld:
+        lines.append(f"Not computed: {result.enrichment_withheld}")
     else:
         lines.append("No significantly enriched GO terms at this FDR threshold.")
     lines.append("")
@@ -825,11 +842,16 @@ def format_context_text(result: AnalysisResult) -> str:
         lines.append(f"  Organs: {organs_str}")
         if gl['claims']:
             lines.append("  Key claims:")
+            # A claim that does not name the gene comes from a paper that
+            # mentions it: said so, never presented as evidence about the gene.
             for c in gl['claims']:
                 claim_text = c["claim"][:200]
                 year = c.get("year", "")
                 title_short = (c.get("paper_title") or "")[:60]
-                lines.append(f'  - "{claim_text}" ({title_short}, {year})')
+                where = ("" if c.get("association", "claim") == "claim"
+                         else f" [paper-level: from a paper that mentions {gl['gene']}; "
+                              "the claim does not name it]")
+                lines.append(f'  - "{claim_text}" ({title_short}, {year}){where}')
         lines.append("")
 
     # --- Top Relevant Papers ---
@@ -897,11 +919,16 @@ def build_genomics_interpretation(
                 pw_enriched, go_enriched, bmd_ordered, organ_sig,
                 gene_literature lists/dicts for caching and inspection.
     """
-    # Prefer all_genes (full list) over top_genes (truncated to 20) because
-    # Fisher's exact test needs the complete responsive gene set to compute
-    # meaningful enrichment p-values. top_genes alone would under-power the
-    # test and miss real pathway signals.
-    gene_list = genomics_section.get("all_genes") or genomics_section.get("top_genes", [])
+    # Enrichment is of the complete responsive gene set (all_genes).  A section
+    # without it (cached before all_genes existed) has only the ranked top
+    # genes: the other analyses run on them, but no enrichment is computed or
+    # presented — over-representation in a selected subset is not enrichment
+    # of the responsive set.
+    complete = genomics_section.get("all_genes")
+    gene_list = complete or genomics_section.get("top_genes", [])
+    withheld = ("" if complete else
+                "the complete responsive gene list is not available for this section "
+                "(only its top genes); re-process the study to compute enrichment.")
 
     if not gene_list:
         return {
@@ -937,7 +964,7 @@ def build_genomics_interpretation(
     # ToxKBQuerier opens a duckdb connection; the context manager closes it
     # even if analyze() raises, to avoid leaking file handles.
     with ToxKBQuerier(db_path) as kb:
-        result = analyze(df, kb, fdr_cutoff)
+        result = analyze(df, kb, fdr_cutoff, enrichment_withheld=withheld)
 
     # Return the formatted context text plus a serializable snapshot of the
     # raw enrichment results.  The snapshot enables caching without re-running
@@ -946,6 +973,7 @@ def build_genomics_interpretation(
         "context_text": result.context_text,
         "analysis_result": {
             "n_responsive": len(result.responsive_genes),
+            "enrichment_withheld": result.enrichment_withheld,
             "bmd_range": [result.bmd_min, result.bmd_max],
             "n_up": result.n_up,
             "n_down": result.n_down,

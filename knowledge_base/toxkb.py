@@ -9,8 +9,15 @@ concern is isolated from the analysis and narrative layers (and so
 enrichment_stats can type-reference it without importing interpret).
 """
 
+import re
+
 import duckdb
 
+
+
+def _gene_pattern(gene: str) -> "re.Pattern":
+    """The gene's symbol as a whole word, any case ("NFE2L2", "Nfe2l2")."""
+    return re.compile(r"(?<![A-Za-z0-9])" + re.escape(gene) + r"(?![A-Za-z0-9])", re.IGNORECASE)
 
 class ToxKBQuerier:
     """Wraps a knowledge base database with typed query methods."""
@@ -99,15 +106,25 @@ class ToxKBQuerier:
         }
 
     def gene_claims(self, gene: str) -> list[dict]:
+        """The claims of the papers that mention ``gene``, each with its
+        ``association``: "claim" when the claim's own text names the gene, else
+        "paper" — the claim comes from a paper that mentions the gene, which
+        does not say the claim is about it (claims are recorded per paper,
+        paper_claims; genes per paper, paper_genes).  Claim-level ones first."""
         rows = self.con.execute(
-            "SELECT pc.claim, p.title, p.year "
+            "SELECT pc.claim, p.title, p.year, pc.paper_id "
             "FROM paper_claims pc "
             "JOIN paper_genes pg ON pc.paper_id = pg.paper_id "
             "JOIN papers p ON pc.paper_id = p.paper_id "
             "WHERE pg.gene_symbol = ?",
             [gene],
         ).fetchall()
-        return [{"claim": r[0], "paper_title": r[1], "year": r[2]} for r in rows]
+        names = _gene_pattern(gene)
+        out = [{"claim": r[0], "paper_title": r[1], "year": r[2], "paper_id": r[3],
+                "association": "claim" if names.search(r[0] or "") else "paper"}
+               for r in rows]
+        out.sort(key=lambda c: c["association"] != "claim")   # stable: claim-level first
+        return out
 
     def pathway_genes(self, pathway_name: str) -> list[str]:
         rows = self.con.execute(
