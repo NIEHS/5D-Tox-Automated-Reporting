@@ -18,7 +18,9 @@ log it.  The
 route and vehicle fallback follows the dose unit: a concentration in air (ppm)
 means inhalation, never gavage or corn oil; an oral dose (mg/kg) means gavage
 in corn oil; any other unit gets no route fallback.  The dose unit itself is
-resolved by ``resolve_dose_unit``: stated > recorded > mg/kg.
+resolved by ``resolve_dose_unit``: stated > the one unit recorded > mg/kg; data
+recording more than one unit is a conflict (DoseUnitConflict) that only a
+stated unit resolves.
 
 Facts a person states for a study whose data does not record them (``generate_report
 --design``) are kept in ``sessions/<id>/study_design.json`` and put back on every
@@ -93,15 +95,33 @@ def is_air_concentration(dose_unit: str | None) -> bool:
     return (dose_unit or "").strip().lower() in {u.lower() for u in _AIR_CONCENTRATION_UNITS}
 
 
+class DoseUnitConflict(ValueError):
+    """The data record more than one dose unit (ppm and mg/kg) and none was
+    stated.  ``units`` the units recorded."""
+
+    def __init__(self, units: list[str]):
+        self.units = units
+        super().__init__(
+            f"the data record more than one dose unit ({', '.join(units)}); state the "
+            "study's dose unit (--dose-unit, or the study's settings) to reconcile them")
+
+
 def resolve_dose_unit(stated: str | None, recorded: list[str] | None = None) -> tuple[str, str]:
     """(unit, source): the unit the user stated (--dose-unit / the UI), else the
     one unit the data records, else "mg/kg" — source is "stated", "recorded" or
-    "fallback"."""
+    "fallback" (no unit recorded at all).  Data recording more than one unit
+    (compared case-insensitively) with none stated raise DoseUnitConflict: a
+    conflict is never resolved to mg/kg."""
     if stated and stated.strip():
         return stated.strip(), "stated"
-    units = sorted({u.strip() for u in recorded or [] if u and u.strip()})
-    if len(units) == 1:
-        return units[0], "recorded"
+    by_key: dict[str, str] = {}
+    for u in recorded or []:
+        if u and u.strip():
+            by_key.setdefault(u.strip().lower(), u.strip())
+    if len(by_key) > 1:
+        raise DoseUnitConflict(sorted(by_key.values()))
+    if by_key:
+        return next(iter(by_key.values())), "recorded"
     return "mg/kg", "fallback"
 
 

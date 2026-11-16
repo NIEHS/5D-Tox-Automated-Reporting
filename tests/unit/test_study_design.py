@@ -1,5 +1,7 @@
 """Study-design facts come from the recorded metadata, never protocol defaults."""
 
+import pytest
+
 from narrative.abstract_methods import build_abstract_methods
 from narrative.methods_design import (
     assemble_methods_sections, build_chemistry, build_dose_selection, build_study_design,
@@ -7,7 +9,7 @@ from narrative.methods_design import (
 )
 from narrative.methods_models import MethodsContext
 from pipeline.study_design import (
-    administration_phrase, resolve_dose_unit, study_design_facts, study_type_label,
+    DoseUnitConflict, administration_phrase, resolve_dose_unit, study_design_facts, study_type_label,
     subject_phrase, vehicle_phrase,
 )
 from rendering.render_common import scan_pending_markers
@@ -60,7 +62,11 @@ def test_unknown_unit_gets_no_route_fallback():
 def test_dose_unit_resolution():
     assert resolve_dose_unit("ppm", ["mg/kg"]) == ("ppm", "stated")
     assert resolve_dose_unit(None, ["ppm", "ppm"]) == ("ppm", "recorded")
-    assert resolve_dose_unit(None, ["ppm", "mg/kg"]) == ("mg/kg", "fallback")
+    with pytest.raises(DoseUnitConflict) as e:     # a conflict is never mg/kg
+        resolve_dose_unit(None, ["ppm", "mg/kg"])
+    assert e.value.units == ["mg/kg", "ppm"]
+    assert resolve_dose_unit(None, ["ppm", "PPM", None]) == ("ppm", "recorded")
+    assert resolve_dose_unit("ppm", ["ppm", "mg/kg"]) == ("ppm", "stated")   # stated reconciles
     assert resolve_dose_unit(None, []) == ("mg/kg", "fallback")
 
 

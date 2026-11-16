@@ -1686,7 +1686,11 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
         (fp.get("dose_unit") if isinstance(fp, dict) else getattr(fp, "dose_unit", None))
         for fp in ensure_fingerprints(dtxsid).values()
     ]
-    dose_unit, _dose_unit_source = resolve_dose_unit(dose_unit_stated, _recorded_units)
+    from pipeline.study_design import DoseUnitConflict
+    try:
+        dose_unit, _dose_unit_source = resolve_dose_unit(dose_unit_stated, _recorded_units)
+    except DoseUnitConflict as e:
+        raise StepError(f"{dtxsid}: {e}", 422) from None
     logger.info("Dose unit for %s: %s (%s)", dtxsid, dose_unit, _dose_unit_source)
 
     # The study's analysis method (ADR-0027): its pinned profile, its study
