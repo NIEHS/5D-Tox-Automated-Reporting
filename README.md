@@ -21,17 +21,19 @@ Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, the
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Install dependencies (bmdx-pipe, packages/bmdx-pipe, is a workspace member)
 uv sync
 
-# Start the server (default port 9000)
-uv run python background_server.py
+# Start the server (default port 9000), from the repository root
+uv run python -m web_routes.background_server
 
 # Or on a specific port / host
-uv run python background_server.py --port 8080 --host 0.0.0.0
+uv run python -m web_routes.background_server --port 8080 --host 0.0.0.0
 ```
 
-Open `http://localhost:9000` in a browser. The login gate displays the usage guide — read it before proceeding.
+Open `http://localhost:9000` in a browser. The browser UI is a separate front end: `uv sync`
+does not build it, so build it before serving it (the API and the headless tools below work
+without it). The login gate displays the usage guide — read it before proceeding.
 
 **Without the browser:** `python -m tooling.generate_report <DTXSID> --files …` runs the whole pipeline in-process, and `tooling/generate_report_api.sh` drives a running server with `curl`. See [`docs/headless-report-generation.html`](docs/headless-report-generation.html) (Markdown source: [`.md`](docs/headless-report-generation.md)).
 
@@ -71,7 +73,7 @@ The approved report projects to four render surfaces from one document tree. Two
 
 ## Architecture
 
-A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a literature knowledge base (`knowledge_bases/`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
+A FastAPI server (`web_routes/background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a literature knowledge base (`knowledge_bases/`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
 
 For the *why* behind this structure — the purpose → architecture narrative, the domain glossary, and the decision records this section points to — see [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/).
 
@@ -79,7 +81,7 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 
 | Module | Purpose |
 |--------|---------|
-| `background_server.py` | FastAPI app, middleware, router mounting, static file serving |
+| `web_routes/background_server.py` | FastAPI app, middleware, router mounting, static file serving |
 | `pool_orchestrator.py` | File pool lifecycle: fingerprint → validate → integrate → process |
 | `session_routes.py` | Session load/save, approve/unapprove, version history, BMD summary |
 | `upload_routes.py` | Upload `.bm2`, CSV, ZIP; process genomics; preview files |
