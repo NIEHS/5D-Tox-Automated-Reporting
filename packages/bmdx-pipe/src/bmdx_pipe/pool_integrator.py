@@ -389,10 +389,13 @@ def tox_study_csv_to_pivot_txt(
         output_dir: Directory to write the pivot .txt files.
         platform:   Apical platform name (e.g., "Body Weight") from fingerprint.
         data_type:  Data type (e.g., "tox_study") from fingerprint.
-        units:      {endpoint column: unit} the CSV itself cannot carry (its
-                    headers are the workbook's unit-less Data-sheet labels) —
-                    e.g. key_sheet_units() of the source workbook.  Recorded in
-                    each sidecar as "units" for the endpoints this file has.
+        units:      {column: unit} the CSV itself cannot carry (its headers
+                    are the workbook's unit-less Data-sheet labels) — e.g.
+                    key_sheet_units() of the source workbook.  Each endpoint
+                    column's unit is recorded in each sidecar as "units" for
+                    the endpoints this file has; the unit under the dose
+                    column ("Concentration") is the dose unit, recorded as
+                    "dose_unit".
 
     Returns:
         List of paths to the generated pivot .txt files.
@@ -488,7 +491,8 @@ def study_workbook_to_pool_files(path: str, output_dir: str, platform: str) -> l
         return f"{stem}_truth_{(sex or 'unknown').lower().replace(' ', '_')}.txt"
 
     return long_rows_to_pivot(wb.header, wb.rows, output_dir, platform, "tox_study",
-                              source=source, out_name=out_name, units=wb.units or None)
+                              source=source, out_name=out_name, units=wb.units or None,
+                              dose_unit=wb.dose_unit)
 
 
 def long_rows_to_pivot(
@@ -501,10 +505,17 @@ def long_rows_to_pivot(
     source: str,
     out_name,
     units: dict[str, str] | None = None,
+    dose_unit: str | None = None,
 ) -> list[str]:
     """
     The NTP long-format rows (one row per animal and observation) → one
     BMDExpress pivot .txt and one sidecar .json per sex, in ``output_dir``.
+
+    ``dose_unit``: the unit the source records its doses in (a workbook's Key
+    sheet "Dose in mg/kg"; a CSV's units companion under its dose column,
+    "Concentration").  Recorded in each sidecar as "dose_unit", from which the
+    pivot's fingerprint takes it (file_integrator.sidecar_dose_unit).  None:
+    the source records none, and none is written.
 
     The rows come from a tox_study CSV (tox_study_csv_to_pivot_txt) or from a
     study workbook's Data sheet (study_workbook_to_pool_files); both write the
@@ -825,6 +836,11 @@ def long_rows_to_pivot(
                           for i in endpoint_cols if units and header[i] in units}
             if file_units:
                 sidecar_data["units"] = file_units
+            # The unit of the doses, when the source records it (the CSV's
+            # units companion names it under the dose column).
+            recorded_dose_unit = dose_unit or (units or {}).get(header[dose_col])
+            if recorded_dose_unit:
+                sidecar_data["dose_unit"] = recorded_dose_unit
             import json as json_mod
             with open(sidecar_path, "w") as sf:
                 json_mod.dump(sidecar_data, sf, indent=2)
