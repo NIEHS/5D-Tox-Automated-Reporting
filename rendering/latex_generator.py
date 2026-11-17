@@ -787,9 +787,11 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     if plan is None:
         return _emit_table_placeholder(node)
 
+    # The BMR the table's BMDs were fit at, as a subscript (none: no subscript).
+    sub = f"\\textsubscript{{{_escape_latex(plan.bmr_tag)}}}" if plan.bmr_tag else ""
     headers = [_cell_latex(plan.first_col)] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + ([
-        f"BMD\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
-        f"BMDL\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
+        f"BMD{sub} ({_escape_latex(plan.dose_unit)})",
+        f"BMDL{sub} ({_escape_latex(plan.dose_unit)})",
     ] if plan.bmd_columns else [])
     colspec = "l" + "c" * (plan.ncols - 1)
 

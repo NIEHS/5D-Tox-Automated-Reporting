@@ -12,7 +12,10 @@ visible "[Placeholder: …]" marker per subsection.  The marker keeps a draft
 honest and blocks a strict (deliverable) build until the study team supplies
 the text (render_common.scan_pending_markers).
 
-The remaining subsections stay LLM-written from their method guides.
+The apical BMD paragraph and the eFDR subsection state how a computation was
+done and whether the report has it; they are built from the record of that
+computation (methods_analysis).  The remaining subsections
+stay LLM-written from their method guides.
 ``assemble_methods_sections`` merges both in skeleton order for every caller.
 """
 
@@ -21,8 +24,9 @@ from __future__ import annotations
 from narrative.methods_models import MethodsContext, MethodsSection
 from narrative.narrative_helpers import _format_dose_list, _join_oxford
 
-# Subsections written here, never requested from the LLM.
-DATA_BUILT_KEYS = ("study_design", "dose_selection", "chemistry")
+# Subsections built from the data or the record of a computation (this module
+# and methods_analysis), never requested from the LLM.
+DATA_BUILT_KEYS = ("study_design", "dose_selection", "chemistry", "bmd_apical", "efdr")
 
 
 def _facts(ctx: MethodsContext) -> dict:
@@ -139,10 +143,24 @@ def build_chemistry(ctx: MethodsContext, introduce: bool = True) -> list[str]:
     return [" ".join(sentences + [_placeholder(missing)])]
 
 
+def _build_bmd_apical(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    from narrative.methods_analysis import build_bmd_apical
+
+    return build_bmd_apical(ctx, introduce)
+
+
+def _build_efdr(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    from narrative.methods_analysis import build_efdr
+
+    return build_efdr(ctx, introduce)
+
+
 _BUILDERS = {
     "study_design": build_study_design,
     "dose_selection": build_dose_selection,
     "chemistry": build_chemistry,
+    "bmd_apical": _build_bmd_apical,
+    "efdr": _build_efdr,
 }
 # The data-built subsections that name the test article, and whether one
 # introduces its abbreviation (Chemistry always does, with its identifiers).

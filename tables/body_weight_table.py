@@ -76,7 +76,7 @@ from tables.table_builder_common import (
     format_mean_se as _format_mean_se,
     load_sidecar as _load_sidecar,
     find_sidecar_paths,
-    BMD_DEFINITION,
+    bmd_definition_footnote,
     definition_footnote,
     lettered_footnote,
     finalize_footnotes,
@@ -128,7 +128,7 @@ def data_format_footnote(sidecars) -> str:
         unit=unit or UNIT_NOT_RECORDED.format(what="body weight"))
 
 
-# BMD_DEFINITION is imported from table_builder_common.py.
+# The BMD definition is built per table (table_builder_common.bmd_definition_footnote).
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ def _study_day_label(probe_label: str) -> str:
 
 
 # _js_dose_key, _mean_se, _format_mean_se, _load_sidecar, find_sidecar_paths,
-# and BMD_DEFINITION are imported from table_builder_common.py.
+# are imported from table_builder_common.py.
 
 
 # ---------------------------------------------------------------------------
@@ -205,9 +205,12 @@ def build_body_weight_table_from_sidecar(
     design: dict | None = None,
     method=None,
     dispositions: dict[str, dict] | None = None,
+    bmrs: list[dict] | None = None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
+    ``bmrs``: the benchmark response(s) the table's BMDs were fit at (the
+    column definition and header name them; none given, none is named).
 
     This is the preferred builder for body weight tables when sidecar data
     is available.  It replaces the generic build_table_data → serialize path
@@ -430,7 +433,7 @@ def build_body_weight_table_from_sidecar(
     # body-weight cells carry no significance markers.  Provenance: every
     # body-weight footnote is Canonical — anchored in NIEHS Report 10 Table 2.
     footnotes: list[dict] = [
-        definition_footnote(BMD_DEFINITION),
+        bmd_definition_footnote(bmrs),
         lettered_footnote(data_format_footnote(loaded_sidecars), "data_format", target="header"),
     ]
     # The statistical-method footnote names the tests the study's method

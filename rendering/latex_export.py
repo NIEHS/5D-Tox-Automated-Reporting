@@ -294,20 +294,21 @@ def _resolve_apical_filters(dtxsid: str, view: str | None) -> dict:
     }
 
 
-# Pipeline defaults for the GO-category cutoffs (mirror process_integrated's
-# ProcessContext defaults) — used when a view declares no `methods` override.
-_GO_CUTOFF_DEFAULTS = dict(go_pct=5, go_min_genes=20, go_max_genes=500, go_min_bmd=3)
-
-
 def _resolve_go_cutoffs(dtxsid: str, view: str | None) -> dict:
     """
     The GO-category cutoffs for a view, as apply_genomics_cutoffs kwargs.
 
-    A view may declare a ``methods`` block with any of go_pct / go_min_genes /
-    go_max_genes / go_min_bmd; unset keys fall back to the pipeline defaults so
-    the 'default' view reproduces today's cutoffs.
+    They are the study's method's (genomics.go_display of its pinned profile,
+    as Process applies them and the Methods state them): fixed defaults stood
+    here, so a study whose method sets others (ntp-5day-2018: 10 to 250 genes)
+    printed gene sets its Methods excluded.  A view may declare a ``methods``
+    block overriding any of go_pct / go_min_genes / go_max_genes / go_min_bmd.
     """
-    cut = dict(_GO_CUTOFF_DEFAULTS)
+    from pipeline.method_profile import session_method
+
+    go = session_method(dtxsid).get("genomics.go_display")
+    cut = dict(go_pct=go["pct"], go_min_genes=go["min_genes"],
+               go_max_genes=go["max_genes"], go_min_bmd=go["min_bmd"])
     try:
         from document_model.view_config import load_view, DEFAULT_VIEW
         methods = (load_view(dtxsid, view or DEFAULT_VIEW) or {}).get("methods") or {}

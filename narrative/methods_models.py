@@ -235,6 +235,14 @@ class MethodsContext:
     # profile; the statistics and BMD paragraphs are written from them.
     method_profile: str = ""
     method_settings: dict | None = None
+    # Where the method in force departs from the pinned profile
+    # (MethodSettings.substitutions): the Methods state each.
+    method_substitutions: list | None = None
+    # The record of how the apical BMDs are computed
+    # (tables.apical_bmds.apical_bmd_method): the BMD paragraph, built from it,
+    # states the settings in force and nothing else.  None: a context cached
+    # before the record existed (2026-11-17).
+    apical_bmd_method: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize for JSON persistence.  Converts dataclass to a plain dict."""

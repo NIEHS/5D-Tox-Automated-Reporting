@@ -252,6 +252,7 @@ def extract_methods_context(
     session_dir: str | None = None,
     integrated: dict | None = None,
     method=None,
+    apical_bmd_method: dict | None = None,
 ) -> MethodsContext:
     """
     Build a MethodsContext from all available data sources.
@@ -280,6 +281,10 @@ def extract_methods_context(
                        containing "S1500" identifies TempO-Seq.
         method:        The study's resolved method (pipeline.method_profile); its
                        settings travel on the context for the methods prose.
+        apical_bmd_method: The record of how the apical BMDs are computed
+                       (tables.apical_bmds.apical_bmd_method), as Process built it
+                       for the rows it models; else built here for the platforms
+                       and sexes the pool's files hold.
 
     Returns:
         Populated MethodsContext with all available study metadata.
@@ -362,6 +367,10 @@ def extract_methods_context(
         ctx.dose_groups = sorted(all_doses)
     if all_sexes:
         ctx.sexes = sorted(all_sexes)
+    # --- How the apical BMDs are computed: the one record the BMD paragraph,
+    # the legends and the summary state (tables.apical_bmds).
+    record = _apical_bmd_record(ctx, fingerprints, integrated, method)
+    ctx.apical_bmd_method = apical_bmd_method if apical_bmd_method is not None else record
     # --- Study design: the study's parameters, each recorded or stated
     # (pipeline.study_parameters) — nothing assumed.
     from pipeline.study_design import strain_display
@@ -504,6 +513,42 @@ def extract_methods_context(
         ctx.genomics_chip = chip
 
     return ctx
+
+
+# The apical platforms a BMD is modelled for, by the name the method profile
+# and the tables use, from the name a file is fingerprinted with.
+_BMD_PLATFORMS = {"Body Weight": "Body Weight", "Organ Weights": "Organ Weight",
+                  "Organ Weight": "Organ Weight", "Clinical Chemistry": "Clinical Chemistry",
+                  "Hematology": "Hematology", "Hormones": "Hormones"}
+
+
+def _apical_bmd_record(ctx: MethodsContext, fingerprints: dict, integrated: dict | None,
+                       method=None) -> dict:
+    """tables.apical_bmds.apical_bmd_method for the platforms and sexes the
+    pool's files hold, under the study's method (the one passed, else the
+    session's pinned one)."""
+    from tables.apical_bmds import TOXICR_ENGINE, apical_bmd_method
+
+    if method is None:
+        from narrative.methods_prompt import _method
+        method = _method(ctx)
+    ctx.method_substitutions = [dict(x) for x in getattr(method, "substitutions", None) or []]
+    platform_sexes: dict[str, list[str]] = {}
+    for fp in (fingerprints or {}).values():
+        _get = fp.get if isinstance(fp, dict) else lambda k, d=None: getattr(fp, k, d)
+        platform = _BMD_PLATFORMS.get(_get("platform") or "")
+        if not platform:
+            continue
+        have = platform_sexes.setdefault(platform, [])
+        have.extend(s for s in sorted(str(x).title() for x in _get("sexes", None) or [])
+                    if s not in have)
+    platform_sexes = {p: sorted(platform_sexes[p]) for p in _BMD_PLATFORMS.values()
+                      if p in platform_sexes}
+    engine_bmr = None
+    if method.get("apical.bmd.engine") != TOXICR_ENGINE:
+        from pipeline.bmds27.engine import default_bmr
+        engine_bmr = default_bmr()
+    return apical_bmd_method(integrated, method, platform_sexes, engine_bmr)
 
 
 def _extract_core_group_sizes(session_dir: str) -> tuple[int | None, int | None]:

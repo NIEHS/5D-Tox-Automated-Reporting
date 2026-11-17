@@ -91,9 +91,11 @@ def build_clinical_pathology_table_from_sidecar(
     design: dict | None = None,
     imputed_cells: dict | None = None,
     method=None,
+    bmrs: list[dict] | None = None,
 ) -> dict:
     """
     Build a clinical pathology table (Tables 4/5/6) from sidecar + NTP stats.
+    ``bmrs``: the benchmark response(s) the table's BMDs were fit at.
 
     Combines raw animal-level data from the sidecar JSON (for correct N counts
     limited to Core Animals) with NTP stats output (for mean±SE with significance
@@ -301,7 +303,7 @@ def build_clinical_pathology_table_from_sidecar(
     #                        block below.
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for this platform.
-    footnotes = standard_apical_footnotes(dose_unit, method, platform)
+    footnotes = standard_apical_footnotes(dose_unit, method, platform, bmrs)
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # [Canonical] — both anchored in NIEHS Report 10.  The detection and

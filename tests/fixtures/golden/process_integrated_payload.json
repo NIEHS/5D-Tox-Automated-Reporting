@@ -57,6 +57,10 @@
   "methods": {
     "context": {
       "abbreviation": "",
+      "apical_bmd_method": {
+        "engine": "toxicr_model_average",
+        "settings": []
+      },
       "apical_bmr": null,
       "apical_bmrs": null,
       "best_model_selection": null,
@@ -153,6 +157,7 @@
         "internal_dose.pairwise": "shirley_or_dunn",
         "internal_dose.sig_figs": 3
       },
+      "method_substitutions": [],
       "model_averaging": null,
       "models_fit": null,
       "n_biosampling": 0,

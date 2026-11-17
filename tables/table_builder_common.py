@@ -28,17 +28,9 @@ import re
 # Constants — shared NIEHS table text
 # ---------------------------------------------------------------------------
 
-# The BMD/BMDL definition line that appears ABOVE the lettered footnotes.
-# It's not lettered — it's a standalone definition paragraph below the
-# table rule, before footnote (a).  Used by all apical tables that show
-# BMD/BMDL columns.
-BMD_DEFINITION = (
-    "BMD\u2081Std = benchmark dose corresponding to a benchmark response "
-    "set to one standard deviation from the mean; "
-    "BMDL\u2081Std = benchmark dose lower confidence limit corresponding "
-    "to a benchmark response set to one standard deviation from the mean; "
-    "NA = not applicable; ND = not determined."
-)
+# The BMD/BMDL definition line that appears ABOVE the lettered footnotes is
+# built per table from the BMR(s) its BMDs were fit at (bmd_definition_footnote):
+# it was a literal "one standard deviation" for every table of every study.
 
 # Significance-marker text.  The `*` / `**` markers themselves are baked
 # into the mean ± SE cell strings upstream by bmdx-pipe's build_table_data;
@@ -177,6 +169,21 @@ def legend_footnote(text: str) -> dict:
 def definition_footnote(text: str) -> dict:
     """Build a `definition` footnote record (unlettered abbreviation paragraph)."""
     return {"kind": "definition", "text": text}
+
+
+def bmd_definition_footnote(bmrs: list[dict] | None) -> dict:
+    """The `definition` record of a table's BMD/BMDL columns, for the benchmark
+    response(s) its BMDs were fit at (tables.apical_bmds.platform_bmrs of the
+    study's record of the apical BMD method).  It is not lettered: a standalone
+    paragraph below the table rule, before footnote (a).  The record carries
+    the BMRs (``bmrs``): the column headers' subscript is read from it
+    (render_common.apical_table_plan), so header and definition cannot
+    disagree.  No BMR given: the terms alone, and no subscript."""
+    from tables.apical_bmds import bmd_terms
+
+    bmrs = [dict(b) for b in bmrs or [] if isinstance(b, dict) and b.get("factor") is not None]
+    return {"kind": "definition", "bmrs": bmrs,
+            "text": f"{bmd_terms(bmrs)}; NA = not applicable; ND = not determined."}
 
 
 MARKER_TARGETS = ("caption", "header", "cells", "none")
@@ -631,20 +638,22 @@ def collect_table_doses(sidecar_data: dict[str, dict], ntp_stats: dict[str, list
     return sorted(doses)
 
 
-def standard_apical_footnotes(dose_unit: str, method, platform: str) -> list[dict]:
+def standard_apical_footnotes(dose_unit: str, method, platform: str,
+                              bmrs: list[dict] | None = None) -> list[dict]:
     """The footnotes every organ-weight / clinical-pathology table opens with,
     in render order: the significance explanation and */** marker key
     (legends), the BMD/BMDL definition, (a) the data format and, when the
     study's method profile names tests for ``platform``, (b) the statistical
     method — both marked on the first-column header ("Endpoint^a,b", as
-    NIEHS-07 … 13 print them).  ``method`` None ⇒ the session's default method profile."""
+    NIEHS-07 … 13 print them).  ``method`` None ⇒ the session's default method profile.
+    ``bmrs``: the benchmark response(s) the table's BMDs were fit at."""
     from pipeline.method_profile import marker_legend, session_method, statistics_sentence
 
     method = method if method is not None else session_method(None)
     footnotes: list[dict] = [
         legend_footnote(significance_explanation(dose_unit)),
         legend_footnote(marker_legend(method)),
-        definition_footnote(BMD_DEFINITION),
+        bmd_definition_footnote(bmrs),
         lettered_footnote(FOOTNOTE_MEAN_SE_FORMAT, "data_format", target="header"),
     ]
     stat_text = statistics_sentence(method, method.pairwise(platform))

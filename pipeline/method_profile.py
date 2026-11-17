@@ -418,6 +418,10 @@ class MethodSettings:
     values: dict = field(default_factory=dict)
     sources: dict = field(default_factory=dict)
     deviations: list = field(default_factory=list)
+    # The same deviations as records the report states (the Methods name each):
+    # [{"setting": dotted path, "asked": the profile's value, "used": the value
+    # in force, "why": "not implemented" | why it cannot run here}].
+    substitutions: list = field(default_factory=list)
     # Settings whose availability here was not checked (resolve(probe=False)):
     # their values are the profile's, not substituted.  Never set by a run.
     unchecked: list = field(default_factory=list)
@@ -603,12 +607,16 @@ def _substitute_unimplemented(settings: MethodSettings, *, probe: bool = True) -
             settings.deviations.append(
                 f"{p}: {settings.sources[p]} asks for {v!r}, which this tool does not "
                 f"implement; {defaults[p]!r} is used")
+            settings.substitutions.append(
+                {"setting": p, "asked": v, "used": defaults[p], "why": why})
             settings.values[p] = defaults[p]
             settings.sources[p] = f"default (not implemented: {v})"
         elif why:
             settings.deviations.append(
                 f"{p}: {settings.sources[p]} asks for {v!r}, which cannot run here "
                 f"({why}); {defaults[p]!r} is used")
+            settings.substitutions.append(
+                {"setting": p, "asked": v, "used": defaults[p], "why": why})
             settings.values[p] = defaults[p]
             settings.sources[p] = f"default (unavailable here: {v})"
 

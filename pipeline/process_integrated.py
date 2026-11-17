@@ -220,6 +220,10 @@ class ProcessContext:
 
     # --- accumulated state (None until the producing Layer runs) ---
     platform_tables: dict | None = None
+    # The record of how the apical BMDs are computed
+    # (tables.apical_bmds.apical_bmd_method): the Methods paragraph, the tables'
+    # BMD column definitions and headers and the BMD summary's legend read it.
+    apical_bmd_method: dict | None = None
     ntp_hash: str | None = None
     bmds_inputs: list | None = None
     sections_hash: str | None = None
@@ -537,7 +541,7 @@ def _build_bmd_summary(ctx):
         # (the bmd_summary hash is ntp+bmds only — no filters), so the cache
         # serves every version.
         apical_bmd_summary = _build_apical_bmd_summary(
-            platform_tables, tbw_tested=_tbw_tested(ctx))
+            platform_tables, tbw_tested=_tbw_tested(ctx), bmd_method=ctx.apical_bmd_method)
         apical_bmd_summary_bmds = _build_bmds_bmd_summary(
             platform_tables, bmds_results,
         )
@@ -572,6 +576,7 @@ def _build_bmd_summary(ctx):
     apical_bmd_summary = _build_apical_bmd_summary(
         _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
         bmd_decimals=ctx.bmd_decimals, tbw_tested=_tbw_tested(ctx),
+        bmd_method=ctx.apical_bmd_method,
     )
     if divergences:
         _report_bmd_divergences(ctx.dtxsid, divergences)
@@ -797,7 +802,7 @@ async def _get_sections(ctx):
             lambda: _build_section_cards(
                 platform_tables, compound_name, dose_unit,
                 dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
-                method=_method(ctx),
+                method=_method(ctx), bmd_method=ctx.apical_bmd_method,
                 dispositions=dispositions(integrated.get("_meta", {}).get("study_structure")),
             ),
         )
@@ -1068,6 +1073,21 @@ async def _get_bmds(ctx):
     ctx.bmds_results = results
 
 
+def _apical_bmd_method(ctx, modeled: dict[str, list[str]]) -> dict:
+    """tables.apical_bmds.apical_bmd_method for the platforms and sexes whose
+    rows are modeled (``modeled``: {platform: [sexes]})."""
+    from tables.apical_bmds import TOXICR_ENGINE, apical_bmd_method
+
+    method = _method(ctx)
+    engine_bmr = None
+    if method.get("apical.bmd.engine") != TOXICR_ENGINE:
+        from pipeline.bmds27.engine import default_bmr
+        engine_bmr = default_bmr()
+    return apical_bmd_method(ctx.integrated, method,
+                             {p: sorted(sexes) for p, sexes in sorted(modeled.items())},
+                             engine_bmr)
+
+
 async def _bmds_then_sections(ctx):
     """BMDS, then the ToxicR fills onto the rows, then the reviewer's UREP
     decisions on them, then the section cards."""
@@ -1196,6 +1216,7 @@ async def _get_methods(ctx):
         session_dir=str(_session_dir(dtxsid)),
         integrated=integrated,
         method=_method(ctx),
+        apical_bmd_method=ctx.apical_bmd_method,
     )
 
     # Build and call the LLM
@@ -1281,13 +1302,19 @@ async def run_data(ctx) -> None:
     # Attach the platform (the platform_tables key) onto each _bmds_input so the
     # ToxicR path can resolve the per-endpoint fit config (recorded vs inferred BMR).
     ctx.bmds_inputs = []
+    modeled: dict[str, list[str]] = {}
     for platform, sex_rows in ctx.platform_tables.items():
-        for rows in sex_rows.values():
+        for sex, rows in sex_rows.items():
             for row in rows:
                 bi = getattr(row, "_bmds_input", None)
                 if bi:
                     bi = {**bi, "platform": platform}
                     ctx.bmds_inputs.append(bi)
+                    if sex not in modeled.setdefault(platform, []):
+                        modeled[platform].append(sex)
+    # What is modeled, and with which settings: one record for everything the
+    # report says about it.
+    ctx.apical_bmd_method = _apical_bmd_method(ctx, modeled)
 
     # Compute per-unit hashes.  The sections stage reads sidecar JSONs
     # and the clinical-obs CSVs straight off disk and uses

@@ -261,12 +261,34 @@ def appendix_gene_identifiers(data: dict, p: Phrasing) -> dict | None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _state_efdr_in_methods(data: dict, tree, efdr: dict | None) -> None:
+    """The Materials and Methods' eFDR subsection says what THIS report has:
+    the analysis (and the table that reports it) or none.  A study's Methods
+    are built for its own session; the eFDR of a report composed of several
+    studies is the report session's (narrative.methods_analysis)."""
+    from narrative.methods_analysis import efdr_paragraphs
+
+    methods = data.get("methods")
+    sections = methods.get("sections") if isinstance(methods, dict) else None
+    if not sections:
+        return
+    has = bool(efdr and efdr.get("tissues"))
+    paragraphs = efdr_paragraphs(has, cited(tree, "efdr-table", "table") if has else None)
+    # A subsection with no text yet (a study not processed: the scaffold) stays
+    # empty unless the report has the analysis.
+    methods["sections"] = [
+        {**s, "paragraphs": paragraphs}
+        if isinstance(s, dict) and s.get("key") == "efdr" and (has or s.get("paragraphs")) else s
+        for s in sections]
+
+
 def attach_genomics_appendix(data: dict, tree, efdr: dict | None, phrasing: Phrasing,
                              method: dict | None = None) -> None:
     """Write the genomic appendices' content into ``data`` (module docstring),
     worded by the definition's ``phrasing``; ``method`` is the method
     profile's genomics.efdr (MethodSettings.efdr_generation).  Nothing when the
     definition declares no phrasing (it binds none of these keys)."""
+    _state_efdr_in_methods(data, tree, efdr)
     if not phrasing:
         return
     matrix = appendix_efdr_matrix(efdr, phrasing)

@@ -830,17 +830,19 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
 
     ADR-0006 #4: the section lookup, dose grid, and Male/Female cell rows are
     the shared render_common.apical_table_plan EXTRACT; this function only EMITs
-    the HTML — the dose-column + BMD/BMDL headers (HTML uses the unicode ₁Std
-    subscript and a plain space), the sex-separator rows, and the n-row CSS hook.
+    the HTML — the dose-column + BMD/BMDL headers (HTML writes the BMR subscript
+    in unicode, "₁Std", and a plain space), the sex-separator rows, and the n-row CSS hook.
     """
     plan = apical_table_plan(node, data)
     if plan is None:
         return _emit_table_placeholder(node)
 
+    from tables.apical_bmds import subscript_tag
+    tag = subscript_tag(plan.bmr_tag)   # the BMR the table's BMDs were fit at
     headers = (
         [plan.first_col]
         + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + ([f"BMD₁Std ({plan.dose_unit})", f"BMDL₁Std ({plan.dose_unit})"]
+        + ([f"BMD{tag} ({plan.dose_unit})", f"BMDL{tag} ({plan.dose_unit})"]
            if plan.bmd_columns else [])
     )
 

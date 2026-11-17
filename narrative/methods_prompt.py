@@ -407,57 +407,10 @@ def _method(ctx: MethodsContext):
     return session_method(ctx.dtxsid or None)
 
 
-# The apical platforms by name, and whether the study has each.
-def _present_platforms(ctx: MethodsContext) -> list[str]:
-    return [name for name, has in (
-        ("Body Weight", ctx.has_body_weight), ("Organ Weight", ctx.has_organ_weights),
-        ("Clinical Chemistry", ctx.has_clin_chem), ("Hematology", ctx.has_hematology),
-        ("Hormones", ctx.has_hormones),
-    ) if has]
-
-
-def _apical_bmr_phrase(ctx: MethodsContext) -> str:
-    """The apical BMR for the assay families present — the method profile's,
-    which tables.apical_bmds applies when a platform records no config."""
-    method = _method(ctx)
-    by_bmr: dict[str, list[str]] = {}
-    for platform in _present_platforms(ctx):
-        bmr = method.bmr_when_unrecorded(platform)
-        factor = float(bmr["factor"])
-        label = (f"{factor * 100:g}% relative deviation" if bmr["type"] == "rel_dev"
-                 else f"{factor:g} standard deviation")
-        by_bmr.setdefault(label, []).append(platform.lower())
-    if len(by_bmr) <= 1:
-        return next(iter(by_bmr), "1 standard deviation")
-    return "; ".join(f"{label} ({', '.join(fams)})" for label, fams in by_bmr.items())
-
-
-
 # The data each pairwise family is for, as the NIEHS methods describe it.
 _FAMILY_DATA = {
     "Organ Weight": "organ and body weight data (approximately normal)",
     "Clinical Chemistry": "clinical pathology data (typically skewed)",
-}
-
-# Prose for the registered BMD engine and eligibility (pipeline.method_profile).
-_ENGINE_TEXT = {
-    "toxicr_model_average": ("ToxicR Laplace model averaging of the Hill, Power, "
-                             "Exponential 3 and Exponential 5 models with constant variance"),
-    "bmds_2_7_high_dose_drop": (
-        "a modification of the Benchmark Dose Software (BMDS) version 2.7.0, run in batch "
-        "through the Python BMDS interface (version 0.11), with the Linear, Polynomial "
-        "(degree 2 to the number of dose groups minus 1), Power, Hill and Exponential "
-        "(M2 to M5) models and BMDS 2.7.0 model defaults; when no model was recommended, "
-        "the highest dose group was removed and the data set modeled again, until a model "
-        "was recommended or three dose groups remained"),
-}
-_ELIGIBILITY_TEXT = {
-    "trend_or_pairwise": ("Except for body weights, an endpoint was modeled if it showed a "
-                          "significant trend or at least one significant pairwise "
-                          "difference."),
-    "trend_and_pairwise": ("Except for body weights, an endpoint was modeled only if it "
-                           "showed a significant trend and at least one significant "
-                           "pairwise difference."),
 }
 
 
@@ -478,10 +431,12 @@ def _stat_analysis_guideline(ctx: MethodsContext) -> str:
                          f"procedures of {names}")
         trend_tests.append(trend_test)
         other_tests.append(other)
+    from pipeline.method_profile import _TREND_TEXT
+    trend = _TREND_TEXT[method.get("apical.statistics.trend_test")]
     select_p = method.get("apical.statistics.trend_select_p")
     alpha = method.get("apical.statistics.alpha")
     text = ("One or two paragraphs, the NIEHS method: " + "; ".join(sentences) + ". "
-            f"The Jonckheere test assessed dose-response trends and selected the "
+            f"The {trend} test assessed dose-response trends and selected the "
             f"trend-sensitive test ({' or '.join(trend_tests)}) when significant at "
             f"p <= {select_p:g}, otherwise {' or '.join(other_tests)}. ")
     if method.get("apical.statistics.outliers"):
@@ -489,45 +444,17 @@ def _stat_analysis_guideline(ctx: MethodsContext) -> str:
                  "excluded. ")
     else:
         text += "Do not describe any outlier test or exclusion of values. "
+    # The levels as bmdx_pipe.apical_report derives them: the NOEL is the
+    # tested dose next below the LOEL, not any higher dose without a
+    # significant difference.
     return text + (
-        f"NOEL = highest dose without a significant (p <= {alpha:g}) pairwise "
-        "difference from the control group; LOEL = lowest dose with one. Do not mention "
+        f"LOEL = the lowest dose with a significant (p <= {alpha:g}) pairwise "
+        "difference from the control group; NOEL = the highest dose below the LOEL, "
+        "not determined when the LOEL is the lowest dose tested or there is no LOEL. "
+        "State both exactly so. Do not mention "
         "normality or variance-homogeneity tests (Shapiro-Wilk, Levene). Only mention "
         "clinical pathology if it is in the context.")
 
-
-def _bmd_apical_guideline(ctx: MethodsContext) -> str:
-    """The apical BMD paragraph, from the study's method profile: eligibility,
-    engine, BMR and acceptance criteria are the ones applied."""
-    method = _method(ctx)
-    engine = method.get("apical.bmd.engine")
-    if engine == "bmds_2_7_high_dose_drop":
-        # The engine's own rules decide (pipeline.bmds27; Appendix D, Table D-1),
-        # not the profile's acceptance criteria.
-        return (
-            "One paragraph. Apical BMD modeling used dose-group summary data (N, mean, "
-            "standard deviation). "
-            f"{_ELIGIBILITY_TEXT[method.get('apical.bmd.eligibility')]} "
-            f"Modeling used {_ENGINE_TEXT[engine]} and a benchmark response of "
-            f"{_apical_bmr_phrase(ctx)} (relative to control). Each model was placed in a "
-            "bin by the recommendation rules of Appendix D, Table D-1; among the viable models "
-            "(those no rule placed in the warning or failure bin), the one with the lowest "
-            "AIC was recommended when their BMDLs were within 3-fold of each other, else the "
-            "one with the lowest BMDL. An "
-            "endpoint meeting the statistical criteria without a recommended model is "
-            "reported as having no viable model. The genomic BMR in the context does NOT "
-            "apply to apical endpoints.")
-    acc = method.acceptance_criteria()
-    high = " and BMD <= the highest dose" if acc.max_dose else ""
-    return (
-        "One paragraph. Apical BMD modeling used nontransformed individual-animal data. "
-        f"{_ELIGIBILITY_TEXT[method.get('apical.bmd.eligibility')]} "
-        f"Modeling used {_ENGINE_TEXT[engine]} and a benchmark "
-        f"response of {_apical_bmr_phrase(ctx)}. "
-        f"Modeled responses were excluded unless R2 >= {acc.r2_min:g} and BMD/BMDL <= "
-        f"{acc.bmd_bmdl_max:g}{high}; an endpoint meeting the "
-        "statistical criteria without a viable model is reported as having no viable "
-        "model. The genomic BMR in the context does NOT apply to apical endpoints.")
 
 def _build_subsection_guidelines(
     ctx: MethodsContext,
@@ -590,7 +517,6 @@ def _build_subsection_guidelines(
             "modeling approaches applied to both apical and transcriptomic endpoints."
         ),
         "stat_analysis": _stat_analysis_guideline(ctx),
-        "bmd_apical": _bmd_apical_guideline(ctx),
         "bmd_genomics": (
             f"One or two paragraphs. Transcriptomic BMD analysis in "
             f"{ctx.bmdexpress_version or 'BMDExpress (version not recorded)'}: "
@@ -599,11 +525,6 @@ def _build_subsection_guidelines(
             f"{'; '.join(ctx.go_filter_settings) if ctx.go_filter_settings else 'not recorded'}. "
             f"{_gene_set_reporting(ctx)} Individual-gene results were the median over "
             f"the probes mapped to each gene. Use ONLY these settings; do not invent others."
-        ),
-        "efdr": (
-            "One or two sentences: empirical false discovery rate results (synthetic null "
-            "data processed with the same parameters) are not included in this report's data "
-            "package. Do not describe a permutation procedure or give rates."
         ),
         "data_accessibility": (
             "One paragraph. Data availability statement: "

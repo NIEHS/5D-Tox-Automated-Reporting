@@ -545,11 +545,16 @@ def _build_section_cards(
     design: dict | None = None,
     method=None,
     dispositions: dict[str, dict] | None = None,
+    bmd_method: dict | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
     ``method`` is the study's resolved method (pipeline.method_profile): the
     tables' statistical-method footnotes and marker legends name it.
+    ``bmd_method`` is the record of how the apical BMDs are computed
+    (tables.apical_bmds.apical_bmd_method): each table's BMD column definition
+    names the benchmark response(s) its platform's BMDs were fit at (none
+    named without the record).
 
     For each platform, serializes TableRow objects to JSON-friendly dicts
     and generates an auto-written results narrative.
@@ -600,6 +605,8 @@ def _build_section_cards(
         List of section dicts, each with platform, title, tables_json, narrative.
         The platform string IS the display title (e.g., "Body Weight").
     """
+    from tables.apical_bmds import platform_bmrs
+
     sections = []
     for platform, sex_rows in sorted(platform_tables.items()):
         # All endpoints appear in every table (CLAUDE.md business rule).
@@ -664,6 +671,7 @@ def _build_section_cards(
                     design=design,
                     method=method,
                     dispositions=dispositions,
+                    bmrs=platform_bmrs(bmd_method, platform),
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -727,6 +735,7 @@ def _build_section_cards(
                     imputed_cells=platform_imputed,
                     design=design,
                     method=method,
+                    bmrs=platform_bmrs(bmd_method, platform),
                 )
 
                 if cp_result.get("table_data"):
@@ -774,6 +783,7 @@ def _build_section_cards(
                     sex_allow=ow_sex_allow,
                     design=design,
                     method=method,
+                    bmrs=platform_bmrs(bmd_method, platform, ow_sex_allow),
                 )
 
                 if ow_result and ow_result.get("table_data"):
@@ -1603,12 +1613,17 @@ def _build_apical_bmd_summary(
     divergences: list | None = None,
     bmd_decimals: int | None = None,
     tbw_tested: bool = True,
+    bmd_method: dict | None = None,
 ) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
     ``tbw_tested``: whether the method tests terminal body weight
     (apical.terminal_body_weight_tested); when it does not, the endpoint is
     left out, as NIEHS-07 … 10 leave it out.
+    ``bmd_method``: the record of how the apical BMDs are computed
+    (tables.apical_bmds.apical_bmd_method); every entry then carries the
+    benchmark response its BMD was fit at (``bmr``), which the summary's
+    legend is built from.
 
     Collects BMD, BMDL, LOEL, NOEL, direction from ALL platform TableRows into
     a flat list for the separate BMD summary card.  Matches the NIEHS reference
@@ -1701,6 +1716,13 @@ def _build_apical_bmd_summary(
             _merge_toxicr_into(entry, bmds_results, divergences, bmd_decimals)
     for entry in raw_entries:
         entry.pop("_key", None)
+        if bmd_method is not None and not entry.get("bmr"):
+            # A BMD the study's own analysis gave (or a row not filled): the
+            # BMR that analysis records for its assay and sex.
+            from tables.apical_bmds import platform_bmrs
+            bmrs = platform_bmrs(bmd_method, entry.get("platform"), [entry.get("sex")])
+            if len(bmrs) == 1:
+                entry["bmr"] = bmrs[0]
 
     # --- Sort: reliable BMDs first (ascending), then by LOEL ascending ---
     # Reliable = numeric, parseable, non-empty bmd string.  Reference

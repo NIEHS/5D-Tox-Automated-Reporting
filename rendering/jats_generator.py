@@ -485,7 +485,7 @@ def _emit_apical_table(node: DocNode, data: dict) -> list:
     headers = (
         [plan.first_col]
         + [_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + ([f"BMD1Std ({plan.dose_unit})", f"BMDL1Std ({plan.dose_unit})"]
+        + ([f"BMD{plan.bmr_tag} ({plan.dose_unit})", f"BMDL{plan.bmr_tag} ({plan.dose_unit})"]
            if plan.bmd_columns else [])
     )
     rows: list[list[str]] = []

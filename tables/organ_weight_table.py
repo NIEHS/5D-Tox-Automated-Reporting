@@ -219,9 +219,11 @@ def build_organ_weight_table_from_sidecar(
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
     method=None,
+    bmrs: list[dict] | None = None,
 ) -> dict:
     """
     Build NIEHS Table 3 (Organ Weights) from sidecar + NTP stats.
+    ``bmrs``: the benchmark response(s) the table's BMDs were fit at.
 
     Computes absolute and relative organ weights from raw animal-level data
     in the sidecar JSON.  Only organs that have at least one responsive
@@ -648,7 +650,7 @@ def build_organ_weight_table_from_sidecar(
     # NIEHS Report 10 Table 3, with the reference PDF as the authority.
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for organ weights.
-    footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight")
+    footnotes = standard_apical_footnotes(dose_unit, method, "Organ Weight", bmrs)
     footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT.format(
         organ=units["relative_organ"], body=units["body"]), "relative_weight", target="cells"))
     # The books mark the note on the table's first relative weight

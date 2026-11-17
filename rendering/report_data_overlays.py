@@ -477,17 +477,12 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
     # with every export.
     bmd_summary = body.get("bmd_summary")
     bmd_endpoints = body.get("bmd_summary_endpoints", [])
-    from rendering.render_common import BMD_SUMMARY_LEGEND
-    _bmd_summary_footnotes = [BMD_SUMMARY_LEGEND]
+    # The legend is built where the table is planned, from the benchmark
+    # response(s) the entries were fit at (render_common.bmd_summary_legend).
     if bmd_summary:
         data["bmd_summary"] = dict(bmd_summary)
-        if not data["bmd_summary"].get("footnotes"):
-            data["bmd_summary"]["footnotes"] = _bmd_summary_footnotes
     elif bmd_endpoints:
-        data["bmd_summary"] = {
-            "endpoints": bmd_endpoints,
-            "footnotes": _bmd_summary_footnotes,
-        }
+        data["bmd_summary"] = {"endpoints": bmd_endpoints}
 
     # --- Apical Endpoint BMD Summary paragraphs ---
     # Three-layer paragraph block prepended before Table 8:

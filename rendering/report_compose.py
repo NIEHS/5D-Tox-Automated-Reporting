@@ -103,6 +103,7 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
                 "appendix_bmd_acceptance_matrix"):
         if key in first:
             data[key] = copy.deepcopy(first[key])
+    _state_each_studys_bmd_method(data, studies)
     data["apical_sections"] = _merge_apical(studies)
     data["genomics_sections"] = _merge_genomics(studies)
     data["bmd_summary"] = _merge_bmd_summary(studies, data.get("bmd_summary") or {})
@@ -115,6 +116,29 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
         data["summary"] = {"paragraphs": list(dict.fromkeys(paragraphs))}
     _merge_abstract(data, studies)
     return True
+
+
+def _state_each_studys_bmd_method(data: dict, studies: list[dict]) -> None:
+    """The apical BMD paragraph states how each study's BMDs were computed
+    (narrative.methods_analysis).  The studies' paragraphs, when they are the
+    same, are stated once (the first study's, as the shared prose is); when
+    they differ, each study's is stated under its name."""
+    def paragraphs(sdata: dict) -> list[str]:
+        for sec in (sdata.get("methods") or {}).get("sections") or []:
+            if isinstance(sec, dict) and sec.get("key") == "bmd_apical":
+                return list(sec.get("paragraphs") or [])
+        return []
+
+    each = [(s["title"], paragraphs(s["data"])) for s in studies]
+    if len({tuple(p) for _, p in each}) <= 1:
+        return
+    merged = [f"{title}. {p}" for title, ps in each for p in ps]
+    methods = data.get("methods")
+    if isinstance(methods, dict):
+        methods["sections"] = [
+            {**sec, "paragraphs": merged}
+            if isinstance(sec, dict) and sec.get("key") == "bmd_apical" else sec
+            for sec in methods.get("sections") or []]
 
 
 # ---------------------------------------------------------------------------

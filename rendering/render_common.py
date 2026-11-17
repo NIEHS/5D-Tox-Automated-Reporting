@@ -755,6 +755,11 @@ class ApicalTablePlan:
         footnotes: raw footnote dicts; the emitter renders the markup.
         caption_units: the caption as inline units ("Table N. ", its text, the
                    mark) when a note is marked on it, else None.
+        bmr_tag:   the BMD/BMDL column headers' subscript ("1Std", "rd25"), for
+                   the one benchmark response the table's BMD definition
+                   footnote carries; "" when it carries none or several (the
+                   headers then read "BMD", "BMDL", and the footnote names
+                   them).
     """
     node_id: str
     caption: str
@@ -766,6 +771,7 @@ class ApicalTablePlan:
     footnotes: list
     bmd_columns: bool = True
     caption_units: list | None = None
+    bmr_tag: str = ""
 
 
 def marked(text: str, letters: str | None):
@@ -915,7 +921,20 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
         node.id, caption, marked(first_col, table_marks(footnotes, "header")), dose_unit,
         doses, ncols, sex_blocks, footnotes, bmd_columns,
         marked_caption(node, caption, table_marks(footnotes, "caption")),
+        bmr_tag=_footnotes_bmr_tag(footnotes),
     )
+
+
+def _footnotes_bmr_tag(footnotes: list) -> str:
+    """The subscript of the one BMR a table's BMD definition footnote carries
+    (table_builder_common.bmd_definition_footnote), else ""."""
+    from tables.apical_bmds import bmr_tag
+
+    for fn in footnotes or []:
+        bmrs = fn.get("bmrs") if isinstance(fn, dict) else None
+        if isinstance(bmrs, list):
+            return bmr_tag(bmrs[0]) if len(bmrs) == 1 else ""
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -954,12 +973,10 @@ BMD_SUMMARY_HEADERS: tuple[str, ...] = (
 
 
 # The abbreviation legend under the BMD summary table (every term can appear
-# in its cells).
-BMD_SUMMARY_LEGEND = (
-    "BMD₁Std = benchmark dose corresponding to a benchmark response set "
-    "to one standard deviation from the mean; "
-    "BMDL₁Std = benchmark dose lower confidence limit corresponding to a "
-    "benchmark response set to one standard deviation from the mean; "
+# in its cells).  The BMD and BMDL terms are defined for the benchmark
+# response(s) the listed BMDs were fit at (each entry's ``bmr``): a literal
+# "one standard deviation" stood here for every study.
+_BMD_SUMMARY_TERMS = (
     "LOEL = lowest-observed-effect level; "
     "NOEL = no-observed-effect level; "
     "UREP = unreliable estimate of potency is a label based on review by a "
@@ -967,6 +984,21 @@ BMD_SUMMARY_LEGEND = (
     "NVM = no viable model: the modeled response did not meet the benchmark "
     "dose acceptance criteria."
 )
+
+
+def bmd_summary_legend(endpoints: list[dict] | None) -> str:
+    """The summary's legend for ``endpoints``: BMD/BMDL defined for the BMR(s)
+    the entries carry (none carried: the terms alone), then the fixed terms."""
+    from tables.apical_bmds import bmd_terms
+
+    bmrs: list[dict] = []
+    for ep in endpoints or []:
+        bmr = ep.get("bmr") if isinstance(ep, dict) else None
+        if isinstance(bmr, dict) and bmr.get("factor") is not None:
+            bmr = {"type": bmr.get("type"), "factor": float(bmr["factor"])}
+            if bmr not in bmrs:
+                bmrs.append(bmr)
+    return f"{bmd_terms(bmrs)}; {_BMD_SUMMARY_TERMS}"
 
 
 @dataclass(frozen=True)
@@ -1003,9 +1035,9 @@ def _bmr_phrase(bmr: dict | None) -> str:
 def inferred_bmr_footnote(endpoints: list[dict]) -> dict | None:
     """A definition footnote naming the BMDs fit at an INFERRED BMR, or None.
 
-    Such a BMD was not modeled in the BMDExpress project: ToxicR (the engine
-    BMDExpress uses) fit it from the animal data, and because the project
-    records no BMR for its assay the assay-family default was used — an
+    Such a BMD was not modeled in the study's BMDExpress project: ToxicR (the
+    engine BMDExpress uses) fit it from the animal data, and because the
+    project records no BMR for its assay the method profile's was used — an
     assumption the report states rather than hides."""
     groups: dict[str, list[str]] = {}
     for ep in endpoints or []:
@@ -1024,10 +1056,11 @@ def inferred_bmr_footnote(endpoints: list[dict]) -> dict | None:
     return {
         "kind": "definition",
         "text": (
-            "BMDs not modeled in the BMDExpress project were fit from the "
-            "individual animal data with the same model-averaging engine "
-            "(ToxicR). The project records no benchmark response for these "
-            "endpoints, so the default for the assay type was used — "
+            "The data integrated for this report record no benchmark dose "
+            "analysis of these endpoints, and so no benchmark response for "
+            "them; they were modeled for this report from the individual "
+            "animal data by ToxicR model averaging at the benchmark response "
+            "the study's analysis method gives for the assay type — "
             + "; ".join(parts) + "."
         ),
     }
@@ -1098,8 +1131,8 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
     footnotes: list = []
     if endpoints:
         # The web export passes the legend as plain strings; normalize to
-        # typed records, defaulting to the standard legend.
-        for fn in summary.get("footnotes") or [BMD_SUMMARY_LEGEND]:
+        # typed records, defaulting to the legend for the entries' BMRs.
+        for fn in summary.get("footnotes") or [bmd_summary_legend(endpoints)]:
             footnotes.append(fn if isinstance(fn, dict) else {"kind": "definition", "text": str(fn)})
         if any(NOT_DETERMINED in r[4:6] for r in rows or []):
             footnotes.append({"kind": "definition", "text": ND_DEFINITION})

@@ -27,6 +27,7 @@ results are model-averaged (`bestStatResult.@type == "modelaveraging"`) — like
 # ---------------------------------------------------------------------------
 # Imports
 # ---------------------------------------------------------------------------
+import json
 import logging
 
 from bmdx_pipe import run_apical_bmds_java
@@ -249,3 +250,186 @@ def run_bmds_for_endpoints(
         else:
             logger.info("ToxicR %s: %s — %s", key, res.get("status"), res.get("notes"))
     return results
+
+
+# ---------------------------------------------------------------------------
+# The record of the apical BMD method (2026-11-17)
+# ---------------------------------------------------------------------------
+# What the Methods, the table legends and the BMD summary legend say about the
+# apical BMDs is read from ONE record of what was computed: per sex and assay,
+# the settings the study's BMDExpress project records (its BMDs are printed
+# as that analysis gave them; our fit fills only what it did not model), or,
+# where the project records no analysis, the settings this tool fits with.
+# Nothing in the report states a benchmark response, a variance assumption or
+# a model set that is not in this record.
+
+_MODEL_NAMES = {_HILL: "Hill", _POWER: "Power", _EXP3: "Exponential 3", _EXP5: "Exponential 5"}
+
+
+def bmr_phrase(bmr: dict | None) -> str | None:
+    """{"type": "SD"|"RD", "factor": f} → "1 standard deviation" / "25% relative
+    deviation"; None for no record (nothing is assumed)."""
+    if not isinstance(bmr, dict) or bmr.get("factor") is None:
+        return None
+    f = float(bmr["factor"])
+    if bmr.get("type") == "RD":
+        return f"{f * 100:g}% relative deviation"
+    return f"{f:g} standard deviation" + ("" if f == 1 else "s")
+
+
+def bmr_tag(bmr: dict | None) -> str:
+    """The subscript a BMD column carries for its BMR: "1Std", "2Std", "rd25"
+    (as the genomics tables write it); "" for no record."""
+    if not isinstance(bmr, dict) or bmr.get("factor") is None:
+        return ""
+    f = float(bmr["factor"])
+    return f"rd{round(f * 100):g}" if bmr.get("type") == "RD" else f"{f:g}Std"
+
+
+def _recorded_analysis(notes: list[str]) -> dict:
+    """What a bMDResult's analysisInfo notes say of the analysis, as written:
+    the software, how a model was chosen, the models, the variance note."""
+    def find(prefix: str) -> str | None:
+        for n in notes or []:
+            if n.startswith(prefix):
+                return n.split(":", 1)[1].strip() if ":" in n else ""
+        return None
+
+    variance = find("Constant Variance")
+    models = find("Models fit") or find("Models Used") or ""
+    return {
+        "software": find("BMDExpress3 Version") or find("BMDExpress2 Version")
+                    or find("BMDExpress Version"),
+        "selection": find("Model Averaging Method") or find("Best Model Selection"),
+        "models": [m.split(":")[0].strip() for m in models.split(",") if m.strip()],
+        # True / False as the note says; None when the project has no such note.
+        "constant_variance": (None if variance is None
+                              else variance.strip() in ("1", "true", "True")),
+    }
+
+
+TOXICR_ENGINE = "toxicr_model_average"
+# The order the report presents the assays in (its tables', and the published
+# Methods' "body weights, organ weights, and clinical pathology").
+_PLATFORM_ORDER = ("Body Weight", "Organ Weight", "Clinical Chemistry", "Hematology", "Hormones")
+
+
+def in_report_order(platform_sexes: dict[str, list[str]]) -> dict[str, list[str]]:
+    rank = {p: i for i, p in enumerate(_PLATFORM_ORDER)}
+    return {p: platform_sexes[p]
+            for p in sorted(platform_sexes, key=lambda p: (rank.get(p, len(rank)), p))}
+
+
+def apical_bmd_method(integrated: dict | None, method,
+                      platform_sexes: dict[str, list[str]],
+                      engine_bmr: dict | None = None) -> dict:
+    """The record of how this study's apical BMDs are computed.
+
+    ``platform_sexes``: {platform display name: [sexes]} the study has data for.
+    Returns {"engine", "settings": [...]}; each setting is one group of
+    (platform, sex) sharing the same fit settings:
+      source              "recorded" (the BMDExpress project's analysis; its BMDs
+                          are printed, and our fit fills what it left without a
+                          BMD, under the same BMR and variance), "inferred" (no
+                          analysis recorded: this tool's fit, at the method
+                          profile's BMR) or "engine" (an engine that is the
+                          source of every BMD and runs with its own settings:
+                          BMDS 2.7, at ``engine_bmr``)
+      platforms           {platform: [sexes]}
+      bmr                 {"type": "SD"|"RD", "factor"}
+      constant_variance   the variance our fit used (not for "engine")
+      models              the models our fit averages (not for "engine")
+      analysis            (recorded only) the project's own notes: software,
+                          selection, models, constant_variance (None: no note)
+    """
+    engine = method.get("apical.bmd.engine")
+    platform_sexes = in_report_order(platform_sexes)
+    if engine != TOXICR_ENGINE:
+        platforms = {p: [str(s).title() for s in sexes]
+                     for p, sexes in platform_sexes.items()}
+        return {"engine": engine,
+                "settings": [{"source": "engine", "bmr": engine_bmr,
+                              "platforms": platforms}] if platforms else []}
+    integrated = integrated or {}
+    configs = parse_bmd_configs(integrated)
+    notes_of = {}
+    for b in integrated.get("bMDResult") or []:
+        notes = (b.get("analysisInfo") or {}).get("notes") or []
+        sp = _sex_platform_from_source(_parse_notes(notes)["data_source"])
+        if sp is not None:
+            notes_of.setdefault(sp, notes)
+
+    groups: dict[str, dict] = {}
+    for platform, sexes in platform_sexes.items():
+        for sex in sexes or [""]:   # a study without a sex dimension: one group
+            key = (str(sex).title(), _canon_platform(platform))
+            cfg = _config_for(key[0], platform, configs, method)
+            recorded = cfg.get("bmr_config") == "bm2_config"
+            setting = {
+                "source": "recorded" if recorded else "inferred",
+                "bmr": bmr_record(cfg),
+                "constant_variance": not cfg["is_ncv"],
+                "models": [_MODEL_NAMES.get(m, str(m)) for m in cfg["models"]],
+            }
+            if recorded:
+                setting["analysis"] = _recorded_analysis(notes_of.get(key) or [])
+            sig = json.dumps(setting, sort_keys=True)
+            group = groups.setdefault(sig, {**setting, "platforms": {}})
+            group["platforms"].setdefault(platform, []).extend([key[0]] if key[0] else [])
+    # Recorded analyses first; each kind in the order its first assay appears.
+    settings = sorted(groups.values(), key=lambda g: g["source"] != "recorded")
+    return {"engine": engine, "settings": settings}
+
+
+def platform_bmrs(record: dict | None, platform: str,
+                  sexes: list[str] | None = None) -> list[dict]:
+    """The distinct BMRs ``record`` gives for ``platform`` (for ``sexes`` when
+    given), in the record's order; [] when the record does not cover it."""
+    out: list[dict] = []
+    want = {str(s).title() for s in sexes} if sexes else None
+    for setting in (record or {}).get("settings") or []:
+        have = setting.get("platforms", {}).get(platform)
+        if not have or (want is not None and not want & set(have)):
+            continue
+        if setting["bmr"] not in out:
+            out.append(setting["bmr"])
+    return out
+
+
+_BMR_MEANS = {"SD": "{n} standard deviation{s} from the mean",
+              "RD": "a {pct}% relative deviation from the control mean"}
+_NUMBER_WORD = {1: "one", 2: "two", 3: "three"}
+
+
+def _bmr_meaning(bmr: dict) -> str:
+    f = float(bmr["factor"])
+    if bmr.get("type") == "RD":
+        return _BMR_MEANS["RD"].format(pct=f"{f * 100:g}")
+    n = _NUMBER_WORD.get(int(f), f"{f:g}") if f == int(f) else f"{f:g}"
+    return _BMR_MEANS["SD"].format(n=n, s="" if f == 1 else "s")
+
+
+def subscript_tag(tag: str) -> str:
+    """"1Std" → "₁Std" (the published legends' form); other tags as written."""
+    digits = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+    return tag.translate(digits) if tag.endswith("Std") else tag
+
+
+def bmd_terms(bmrs: list[dict] | None) -> str:
+    """The legend's definition of the BMD and BMDL columns for the BMR(s) the
+    table's BMDs were fit at.  One BMR: the published wording ("BMD₁Std =
+    benchmark dose corresponding to a benchmark response set to one standard
+    deviation from the mean; BMDL₁Std = …").  Several: each named.  None
+    recorded: the terms alone — a BMR is never assumed."""
+    bmrs = [b for b in bmrs or [] if isinstance(b, dict) and b.get("factor") is not None]
+    if len(bmrs) == 1:
+        tag, means = subscript_tag(bmr_tag(bmrs[0])), _bmr_meaning(bmrs[0])
+        return (f"BMD{tag} = benchmark dose corresponding to a benchmark response "
+                f"set to {means}; "
+                f"BMDL{tag} = benchmark dose lower confidence limit corresponding "
+                f"to a benchmark response set to {means}")
+    base = "BMD = benchmark dose; BMDL = benchmark dose lower confidence limit"
+    if not bmrs:
+        return base
+    return base + "; benchmark responses were set to " + " or ".join(
+        _bmr_meaning(b) for b in bmrs) + ", by endpoint"
