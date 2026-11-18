@@ -28,7 +28,6 @@ import asyncio
 import hashlib
 import json
 import logging
-from pathlib import Path
 
 from common.paths import SESSIONS_DIR
 from common.dtxsid import validate_dtxsid
@@ -77,7 +76,7 @@ async def generate_genomics_narrative_async(
     top_genes: list,
     all_genes: list,
     total_responsive: int,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     force: bool = False,
     model: str = "",
     subject: str = "",

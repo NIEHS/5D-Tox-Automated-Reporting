@@ -12,7 +12,10 @@ visible "[Placeholder: …]" marker per subsection.  The marker keeps a draft
 honest and blocks a strict (deliverable) build until the study team supplies
 the text (render_common.scan_pending_markers).
 
-The remaining subsections stay LLM-written from their method guides.
+The apical BMD paragraph and the eFDR subsection state how a computation was
+done and whether the report has it; they are built from the record of that
+computation (methods_analysis).  The remaining subsections
+stay LLM-written from their method guides.
 ``assemble_methods_sections`` merges both in skeleton order for every caller.
 """
 
@@ -21,13 +24,14 @@ from __future__ import annotations
 from narrative.methods_models import MethodsContext, MethodsSection
 from narrative.narrative_helpers import _format_dose_list, _join_oxford
 
-# Subsections written here, never requested from the LLM.
-DATA_BUILT_KEYS = ("study_design", "dose_selection", "chemistry")
+# Subsections built from the data or the record of a computation (this module
+# and methods_analysis), never requested from the LLM.
+DATA_BUILT_KEYS = ("study_design", "dose_selection", "chemistry", "bmd_apical", "efdr")
 
 
 def _facts(ctx: MethodsContext) -> dict:
-    return {"species": ctx.species, "strain": ctx.strain,
-            "route": ctx.route, "vehicle": ctx.vehicle}
+    return {"species": ctx.species, "strain": ctx.strain, "route": ctx.route,
+            "vehicle": ctx.vehicle, "inhalation": ctx.inhalation}
 
 
 def _placeholder(items: list[str]) -> str:
@@ -54,23 +58,24 @@ def build_study_design(ctx: MethodsContext, introduce: bool = True) -> list[str]
     Methods (its name and abbreviation; else the abbreviation alone)."""
     from pipeline.study_design import (
         administration_phrase, control_group, dose_noun, exposure_verb, internal_assessment,
-        subject_phrase,
-        vehicle_phrase,
+        schedule_phrase, subject_phrase, vehicle_phrase,
     )
 
     facts = _facts(ctx)
     sex_words = " and ".join(s.lower() for s in ctx.sexes) if ctx.sexes else ""
     subject = subject_phrase(facts)
-    animals = f"{sex_words.capitalize()} {subject}" if sex_words else subject.capitalize()
+    animals = f"{sex_words.capitalize()} {subject}" if sex_words else subject[:1].upper() + subject[1:]
     how = " ".join(p for p in (administration_phrase(facts), vehicle_phrase(facts)) if p)
-    days = ctx.duration_days
+    # Dosed on study days 0 … n−1, necropsy on day n (the study parameters).
+    days = ctx.dosing_days
     chem = ((_introduced(ctx) if introduce or not ctx.abbreviation else ctx.abbreviation)
             or "the test article")
 
     sentences = []
     doses = _dose_sentence_list(ctx)
     sentences.append(
-        f"{animals} were {exposure_verb(facts)} {chem}{' ' + how if how else ''} once daily "
+        f"{animals} were {exposure_verb(facts)} {chem}{' ' + how if how else ''} "
+        f"{schedule_phrase(ctx.dosing_schedule)} "
         f"for {days} consecutive days (study days 0–{days - 1})"
         + (f" at {dose_noun(ctx.dose_unit)} of {doses}." if doses else "."))
     if ctx.n_per_group is not None and ctx.n_control is not None:
@@ -87,9 +92,7 @@ def build_study_design(ctx: MethodsContext, introduce: bool = True) -> list[str]
         f"Core animals were euthanized on study day {days}, the day after the final "
         f"{'exposure' if facts.get('route') == 'inhaled' else 'dose'}.")
 
-    from pipeline.study_design import missing_design_facts
-    missing = [m for m in missing_design_facts(facts) if m != "species"]
-    missing += ["the animal source", "age at receipt", "quarantine",
+    missing = ["the animal source", "age at receipt", "quarantine",
                 "the randomization procedure"]
     return [" ".join(sentences) + " " + _placeholder(missing)]
 
@@ -140,10 +143,24 @@ def build_chemistry(ctx: MethodsContext, introduce: bool = True) -> list[str]:
     return [" ".join(sentences + [_placeholder(missing)])]
 
 
+def _build_bmd_apical(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    from narrative.methods_analysis import build_bmd_apical
+
+    return build_bmd_apical(ctx, introduce)
+
+
+def _build_efdr(ctx: MethodsContext, introduce: bool = True) -> list[str]:
+    from narrative.methods_analysis import build_efdr
+
+    return build_efdr(ctx, introduce)
+
+
 _BUILDERS = {
     "study_design": build_study_design,
     "dose_selection": build_dose_selection,
     "chemistry": build_chemistry,
+    "bmd_apical": _build_bmd_apical,
+    "efdr": _build_efdr,
 }
 # The data-built subsections that name the test article, and whether one
 # introduces its abbreviation (Chemistry always does, with its identifiers).
@@ -204,6 +221,7 @@ def refresh_data_built(sections: list[dict], context: dict | None,
     if not isinstance(context, dict) or not context:
         return sections
     ctx = MethodsContext.from_dict(context)
+    ctx.require_study_parameters()
     keys = [s.get("key") for s in sections if isinstance(s, dict)]
     built = _built(ctx, [k for k in (order or []) if k in keys] + keys)
     out = []

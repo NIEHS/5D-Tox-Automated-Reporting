@@ -11,14 +11,10 @@ assuming the NIEHS 5-day gavage protocol ([[feedback_no_hardcoded_report_facts]]
 the wording the title, the Abstract and Materials and Methods use, returning ""
 for an unknown fact so callers can drop the clause.
 
-Fallback (decided by the user, 2026-10-05): a fact the metadata does not record
-takes the program's standard design — Sprague Dawley rats, by gavage in corn
-oil, for five days — and the facts list it under ``fallback`` so callers can
-log it.  The
-route and vehicle fallback follows the dose unit: a concentration in air (ppm)
-means inhalation, never gavage or corn oil; an oral dose (mg/kg) means gavage
-in corn oil; any other unit gets no route fallback.  The dose unit itself is
-resolved by ``resolve_dose_unit``: stated > recorded > mg/kg.
+No fallback (user decision 2026-11-16, replacing the standard-design fallback of
+2026-10-05): a fact the data does not record is None here, and Process refuses a
+study whose parameters are incomplete (pipeline.study_parameters, the one
+resolution of every parameter with where it came from — recorded or stated).
 
 Facts a person states for a study whose data does not record them (``generate_report
 --design``) are kept in ``sessions/<id>/study_design.json`` and put back on every
@@ -69,21 +65,8 @@ _INHALATION_METHODS = {"whole-body": "Whole-body", "nose-only": "Nose-only"}
 _MEDIUM_VEHICLES = {"feed", "water", "aerosol", "gas"}
 
 
-# Units that are an exposure concentration in air (inhalation studies) and
-# units that are an oral dose per body weight.
+# Units that are an exposure concentration in air (inhalation studies).
 _AIR_CONCENTRATION_UNITS = {"ppm", "ppb", "mg/m3", "mg/m³", "µg/m3", "µg/m³"}
-_ORAL_DOSE_UNITS = {"mg/kg", "mg/kg/day", "mg/kg bw", "mg/kg body weight"}
-
-# The program's standard design, used only for facts the metadata lacks.
-FALLBACK_STRAIN = {"rat": "Sprague-Dawley"}
-FALLBACK_ORAL = {"route": "gavage", "vehicle": "corn oil"}
-FALLBACK_AIR = {"route": "inhaled"}
-FALLBACK_DURATION_DAYS = 5
-
-# What a caller with no integrated project at all (no design to read) assumes:
-# the standard design, so its wording matches the fallback.
-STANDARD_DESIGN = {"species": "rat", "strain": "Sprague-Dawley", "route": "gavage",
-                   "vehicle": "corn oil", "duration_days": FALLBACK_DURATION_DAYS}
 
 _NUMBER_WORDS = ("Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven",
                  "Eight", "Nine", "Ten")
@@ -93,25 +76,15 @@ def is_air_concentration(dose_unit: str | None) -> bool:
     return (dose_unit or "").strip().lower() in {u.lower() for u in _AIR_CONCENTRATION_UNITS}
 
 
-def resolve_dose_unit(stated: str | None, recorded: list[str] | None = None) -> tuple[str, str]:
-    """(unit, source): the unit the user stated (--dose-unit / the UI), else the
-    one unit the data records, else "mg/kg" — source is "stated", "recorded" or
-    "fallback"."""
-    if stated and stated.strip():
-        return stated.strip(), "stated"
-    units = sorted({u.strip() for u in recorded or [] if u and u.strip()})
-    if len(units) == 1:
-        return units[0], "recorded"
-    return "mg/kg", "fallback"
-
-
-def design_field_errors(fields: dict, vocabularies: dict) -> list[str]:
-    """Why a stated design is unusable: a field outside DESIGN_FIELDS, or a value
-    outside its controlled vocabulary.  Empty when it is fine."""
+def design_field_errors(fields: dict, vocabularies: dict,
+                        allowed: tuple = DESIGN_FIELDS) -> list[str]:
+    """Why a stated design is unusable: a field outside ``allowed`` (the
+    stated study parameters, pipeline.study_parameters.STATED_FIELDS), or a
+    value outside its controlled vocabulary.  Empty when it is fine."""
     if not isinstance(fields, dict):
         return ["the design must be a JSON object of field: value"]
-    errors = [f"unsupported field {k!r}; use {list(DESIGN_FIELDS)}"
-              for k in sorted(set(fields) - set(DESIGN_FIELDS))]
+    errors = [f"unsupported field {k!r}; use {list(allowed)}"
+              for k in sorted(set(fields) - set(allowed))]
     for key, value in fields.items():
         vocab = vocabularies.get(key)
         allowed = ([v for vs in vocab.values() for v in vs] if isinstance(vocab, dict)
@@ -140,6 +113,11 @@ def apply_design_fields(integrated: dict, fields: dict) -> int:
         ed = exp["experimentDescription"]
         sources = provenance.setdefault(exp.get("name", ""), {})
         for key, value in fields.items():
+            # The stated-only parameters (the dose unit, the dosing days and
+            # schedule) are not experiment metadata: they stay in
+            # study_design.json (pipeline.study_parameters).
+            if key not in DESIGN_FIELDS:
+                continue
             if sources.get(key) == "workbook":
                 if value not in (None, ed.get(key)):
                     logging.getLogger(__name__).warning(
@@ -176,13 +154,14 @@ def _duration_days(value: str | None) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def study_design_facts(integrated: dict | None, dose_unit: str | None = None) -> dict:
-    """{species, strain, route, vehicle, duration_days, sexes, conflicts, fallback}
-    from the experiments' recorded metadata (``sexes``: the sexes the experiments
-    record, sorted).  A field is the value every experiment
-    that records it agrees on (disagreements are listed under ``conflicts``);
-    a field none records takes the standard-design fallback for ``dose_unit``
-    (see the module docstring), listed under ``fallback``."""
+def study_design_facts(integrated: dict | None) -> dict:
+    """{species, strain, route, vehicle, duration_days, inhalation, sexes,
+    conflicts} from the experiments' recorded metadata (stated facts are on it
+    since integration; ``sexes``: the sexes the experiments record, sorted).  A
+    field is the value every experiment that records it agrees on
+    (disagreements are listed under ``conflicts``); one none records is None.
+    The wording helpers below read this shape; Process takes its facts from
+    pipeline.study_parameters, which refuses what is missing."""
     seen: dict[str, set[str]] = {f: set() for f in _FIELDS}
     sexes: set[str] = set()
     for exp in (integrated or {}).get("doseResponseExperiments") or []:
@@ -205,7 +184,7 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
     inhalation = route if route in _INHALATION_METHODS else None
     if inhalation:
         route = "inhaled"
-    facts = {
+    return {
         "species": one["species"],
         "strain": one["strain"],
         "route": route,
@@ -214,46 +193,14 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
         "inhalation": inhalation,
         "sexes": sorted(sexes),
         "conflicts": conflicts,
-        "fallback": [],
     }
-    unit = (dose_unit or "").strip().lower()
-    if is_air_concentration(unit):
-        standard = dict(FALLBACK_AIR)
-    elif unit in _ORAL_DOSE_UNITS or not unit:
-        standard = dict(FALLBACK_ORAL)
-    else:
-        standard = {}
-    strain = FALLBACK_STRAIN.get(facts["species"] or "")
-    if strain:
-        standard["strain"] = strain
-    # A recorded duration that is not in days (an hour-scale study) stays
-    # unstated rather than replaced by five days.
-    if not one["studyDuration"]:
-        standard["duration_days"] = FALLBACK_DURATION_DAYS
-    for key, value in standard.items():
-        if not facts[key] and key not in _conflicting_keys(conflicts):
-            facts[key] = value
-            facts["fallback"].append(key)
-    return facts
 
 
-def _conflicting_keys(conflicts: list[str]) -> set[str]:
-    """The design keys whose recorded values disagree (no fallback over a
-    disagreement: that needs a person)."""
-    by_field = {"strain": "strain", "articleRoute": "route",
-                "administrationMeans": "route", "articleVehicle": "vehicle",
-                "studyDuration": "duration_days"}
-    return {by_field[c] for c in conflicts if c in by_field}
-
-
-def missing_design_facts(facts: dict) -> list[str]:
-    """Plain names of the design facts the data does not record (an
-    inhalation study has no vehicle to record)."""
-    names = {"species": "species", "strain": "strain",
-             "route": "route of administration", "vehicle": "vehicle"}
-    if facts.get("route") == "inhaled":
-        names.pop("vehicle")
-    return [label for key, label in names.items() if not facts.get(key)]
+def schedule_phrase(schedule: str) -> str:
+    """The dosing schedule as the Methods print it after the route: "once
+    daily"; "for 6 hours plus T90 per day" (NIEHS-12, 13)."""
+    schedule = schedule.strip()
+    return f"for {schedule}" if schedule[:1].isdigit() else schedule
 
 
 def exposure_verb(facts: dict) -> str:
@@ -291,10 +238,14 @@ def strain_display(facts: dict) -> str:
     return _STRAIN_DISPLAY.get(strain, strain)
 
 
-def design_or_standard(design: dict | None) -> dict:
-    """The design a caller was given, or the standard design when it has none
-    (a caller with no integrated project — its wording matches the fallback)."""
-    return STANDARD_DESIGN if design is None else design
+def require_design(design: dict | None) -> dict:
+    """The design a caller was given; None is refused — there is no standard
+    design to assume (the study parameters, pipeline.study_parameters, are
+    complete before anything is written)."""
+    if design is None:
+        raise ValueError("no study design given; the wording needs the study's "
+                         "parameters (pipeline.study_parameters) — none is assumed")
+    return design
 
 
 def species_singular(facts: dict) -> str:

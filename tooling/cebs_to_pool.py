@@ -404,8 +404,14 @@ def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled
             for r in sex_rows:
                 w.writerow([_cell(c) for c in r[:len(header)]])
         written.append(os.path.basename(out))
-        if units:
-            Path(out).with_suffix(".units.json").write_text(json.dumps(units, indent=2) + "\n")
+        # The companion: each endpoint column's unit and, under the dose
+        # column, the unit the doses are in (the Key sheet's, or mg/kg after a
+        # molar conversion) — the pool records it in the sidecar and the
+        # file's fingerprint.
+        companion = {**({"Concentration": dose_unit} if dose_unit else {}), **(units or {})}
+        if companion:
+            Path(out).with_suffix(".units.json").write_text(
+                json.dumps(companion, indent=2) + "\n")
     return {"file": name, "status": "ok", "written": written, "notes": notes,
             "sex_filled": filled, "units": len(units), "dose_unit": dose_unit}
 

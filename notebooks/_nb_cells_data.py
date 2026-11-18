@@ -364,9 +364,11 @@ if OWN_DATA:
                                     # ("DTXSID" + up to 64 letters, digits, _ or -)
     NAME = CASRN = None             # the test article; None: resolved from a real DTXSID
     SHORT_NAME = None               # the short name the prose uses ("PFHxSAm"); None: the name
-    DOSE_UNIT = None                # None: the unit the data records, else mg/kg
-    DESIGN = None                   # {"strain": …, "articleRoute": …, …}; None: the standard
-                                    # design (SD rats, gavage, corn oil, 5 days), logged as such
+    DOSE_UNIT = None                # None: the unit the data records; if they record none,
+                                    # state it here — none is assumed
+    DESIGN = None                   # {"strain": …, "articleRoute": …, "dosingDays": …,
+                                    # "dosingSchedule": …}: every study parameter the data
+                                    # do not record; Process refuses until all are known
     METHOD_PROFILE = None           # None: the newest profile, tracked
     FRONT_MATTER = {}               # {"authors": […], "strain_designation": …}
     EXPERIMENT_METADATA = None
@@ -904,10 +906,13 @@ study's record (ADR-0032).
   (`{fields, recorded_at}`), and calls
   `workflow.steps.reapply_study_design`, which sets the fields on every
   experiment's `experimentDescription` (`apply_design_fields`), saves
-  `integrated.json` and re-exports `integrated.bm2`. Without a stated design,
-  the report uses the standard design (Sprague Dawley rats, gavage in corn oil,
-  5 days; inhalation for a ppm study) and says so in the log
-  (`pipeline.study_design`).
+  `integrated.json` and re-exports `integrated.bm2`. `study_design.json` is the
+  one place stated values live: besides those design facts it holds the study
+  parameters no deposited file records — the dose unit (`doseUnit`, when the
+  files record none), the dosing days and the dosing schedule. There is no
+  standard design (2026-11-16): `pipeline.study_parameters` resolves every
+  parameter as recorded or stated, and Process refuses a study with one
+  missing or conflicting, naming it (`study_parameters_incomplete`).
 - **Experiment metadata**, `generate_report.apply_experiment_metadata(dtxsid, EXPERIMENT_METADATA)`:
   `pipeline.metadata_approval.approve_experiment_metadata(dtxsid, given, merge=True)`
   lays it over the descriptions and records it as the approval in
@@ -960,10 +965,15 @@ study's record (ADR-0032).
 _code(r"""
 from pipeline.deposit import record_deposit
 
+from pipeline.study_parameters import load as study_parameters
+
+if DOSE_UNIT:
+    DESIGN = {**(DESIGN or {}), "doseUnit": DOSE_UNIT}
 if DESIGN:
     gr.apply_design(DTXSID, DESIGN, store)
-else:
-    print("  no design stated: the report uses the standard design and says so")
+params_now = study_parameters(DTXSID, store)
+print("  study parameters:", "complete" if params_now.complete
+      else "; ".join(params_now.problems()) + " — Process will refuse")
 if EXPERIMENT_METADATA:
     gr.apply_experiment_metadata(DTXSID, EXPERIMENT_METADATA)
 if FRONT_MATTER:

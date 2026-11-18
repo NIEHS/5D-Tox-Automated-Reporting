@@ -87,13 +87,15 @@ def build_clinical_pathology_table_from_sidecar(
     sidecar_paths: dict[str, str],
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     design: dict | None = None,
     imputed_cells: dict | None = None,
     method=None,
+    bmrs: list[dict] | None = None,
 ) -> dict:
     """
     Build a clinical pathology table (Tables 4/5/6) from sidecar + NTP stats.
+    ``bmrs``: the benchmark response(s) the table's BMDs were fit at.
 
     Combines raw animal-level data from the sidecar JSON (for correct N counts
     limited to Core Animals) with NTP stats output (for mean±SE with significance
@@ -128,6 +130,8 @@ def build_clinical_pathology_table_from_sidecar(
             title, caption, compound, dose_unit, first_col_header,
             table_data (serialized), footnotes, bmd_definition.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_clinical_pathology_table_from_sidecar")
     # ── Load sidecars to get per-dose Core Animals counts ─────────────────
     # The sidecar tells us exactly how many Core Animals contributed to each
     # dose group.  This is the N that goes in the n-row.  The NTP stats
@@ -299,7 +303,7 @@ def build_clinical_pathology_table_from_sidecar(
     #                        block below.
     # The marker legend and the statistical-method footnote are written from
     # the study's method profile — the tests that ran for this platform.
-    footnotes = standard_apical_footnotes(dose_unit, method, platform)
+    footnotes = standard_apical_footnotes(dose_unit, method, platform, bmrs)
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # [Canonical] — both anchored in NIEHS Report 10.  The detection and

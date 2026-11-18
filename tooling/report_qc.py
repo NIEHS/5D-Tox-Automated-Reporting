@@ -131,9 +131,9 @@ def _integrated(dtxsid: str) -> dict:
     return json.loads(p.read_text()) if p.exists() else {}
 
 
-def _design(integrated: dict, unit: str | None) -> dict:
+def _design(integrated: dict) -> dict:
     from pipeline.study_design import study_design_facts
-    return study_design_facts(integrated, unit)
+    return study_design_facts(integrated)
 
 
 def _members(dtxsid: str) -> list[str]:
@@ -812,17 +812,17 @@ def qc_report(dtxsid: str) -> ReportQC:
         ("ppm" if "ppm" in units else "mg/kg")
     title = soup.find("h1").get_text(" ", strip=True) if soup.find("h1") else ""
     unit = "ppm" if "Inhalation" in title or "Respiratory" in title else unit
-    design = _design(integrated, unit)
+    design = _design(integrated)
     sexes = _sexes(dtxsid)
     members = _members(dtxsid)
     if members:
         # A report over several studies: their design together, their sexes.
         from rendering.report_compose import composed_design
-        design = composed_design([_design(_integrated(m), unit) for m in members])
+        design = composed_design([_design(_integrated(m)) for m in members])
         sexes = set().union(*(_sexes(m) for m in members))
     qc.stats.update({"title": title, "unit": unit, "sexes": sorted(sexes),
                      "design": {k: design.get(k) for k in ("species", "strain", "route", "vehicle",
-                                                           "duration_days", "fallback")},
+                                                           "duration_days")},
                      "words": len(text.split())})
     check_markers(qc, text)
     check_junk(qc, text)

@@ -23,7 +23,6 @@ import shutil
 import tempfile
 import uuid
 import zipfile
-from pathlib import Path
 
 import orjson
 from fastapi import APIRouter, Request, UploadFile, File
@@ -43,7 +42,6 @@ from web_routes.server_state import (
 from bmdx_pipe import (
     build_table_data_from_bm2,
 )
-from narrative.unified_narrative import generate_platform_narrative
 from narrative.interpret import (
     ToxKBQuerier,
     fetch_gene_descriptions,
@@ -199,9 +197,7 @@ async def api_process_bm2(request: Request):
       {
         "bm2_id": "<uuid from upload>",
         "section_title": "Animal Condition, Body Weights, and Organ Weights",
-        "table_caption_template": "Summary of ... {sex} ... {compound} ...",
-        "compound_name": "PFHxSAm",
-        "dose_unit": "mg/kg"
+        "table_caption_template": "Summary of ... {sex} ... {compound} ..."
       }
 
     Calls build_table_data_from_bm2() from apical_report.py, which exports
@@ -229,8 +225,6 @@ async def api_process_bm2(request: Request):
 
     body = await request.json()
     bm2_id = body.get("bm2_id", "")
-    compound_name = body.get("compound_name", "Test Compound")
-    dose_unit = body.get("dose_unit", "mg/kg")
 
     upload = _bm2_uploads.get(bm2_id)
     if not upload:
@@ -259,15 +253,10 @@ async def api_process_bm2(request: Request):
         upload["table_data"] = table_data
         upload["bm2_json"] = bm2_json
 
-        # Generate the NTP-style results narrative from the table data.
-        # This produces paragraphs describing body weight and organ weight
-        # findings that the user can edit in the UI before export.  The bm2's
-        # table_data mixes body- and organ-weight rows with no clean platform
-        # string, so pass None to let the entry auto-detect by row type.
-        narrative = generate_platform_narrative(
-            None, table_data, compound_name, dose_unit,
-        )
-        upload["narrative"] = narrative
+        # No narrative here: it states the study's species, route and duration,
+        # which a lone .bm2 outside a study does not give (nothing is assumed;
+        # Process writes it from the study's parameters).
+        upload["narrative"] = []
 
         # Serialize TableRow objects to JSON-friendly dicts
         tables_json = serialize_table_rows(table_data)
@@ -275,7 +264,7 @@ async def api_process_bm2(request: Request):
         return JSONResponse({
             "bm2_id": bm2_id,
             "tables": tables_json,
-            "narrative": narrative,  # list of auto-generated paragraph strings
+            "narrative": [],  # none: a lone .bm2 gives no study parameters
         })
 
     except Exception as e:
@@ -470,45 +459,84 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
     other_results = []  # csv, txt, xlsx — raw data files
     skipped = []
 
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        for member in zf.namelist():
-            # Skip directories, __MACOSX metadata, and hidden files
-            if member.endswith("/"):
-                continue
-            basename = os.path.basename(member)
-            if not basename or basename.startswith(".") or "__MACOSX" in member:
-                continue
+    # ── 1. Stage: extract every accepted member before anything changes ────
+    # Members are flattened to their base names, so two members with the same
+    # name would replace one another: refused, with nothing written.  A member
+    # that cannot be extracted refuses the whole archive the same way.
+    staging = os.path.join(zip_tmp_dir, "staged")
+    os.makedirs(staging)
+    staged: list[str] = []
+    origins: dict[str, list[str]] = {}
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for member in zf.namelist():
+                # Skip directories, __MACOSX metadata, and hidden files
+                if member.endswith("/"):
+                    continue
+                basename = os.path.basename(member)
+                if not basename or basename.startswith(".") or "__MACOSX" in member:
+                    continue
+                ext = os.path.splitext(basename)[1].lower()
+                if ext not in _ZIP_VALID_EXTENSIONS:
+                    skipped.append(basename)
+                    continue
+                origins.setdefault(basename, []).append(member)
+            collisions = {n: m for n, m in origins.items() if len(m) > 1}
+            if collisions:
+                shutil.rmtree(zip_tmp_dir, ignore_errors=True)
+                return JSONResponse({
+                    "error": "The archive holds more than one file with the same name; "
+                             "uploaded files are stored by name, so one would replace "
+                             "another. Nothing was uploaded.",
+                    "collisions": collisions,
+                }, status_code=409)
+            for name, (member,) in origins.items():
+                with zf.open(member) as src, open(os.path.join(staging, name), "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                staged.append(name)
+    except (zipfile.BadZipFile, OSError, RuntimeError) as e:
+        shutil.rmtree(zip_tmp_dir, ignore_errors=True)
+        return JSONResponse({"error": f"The archive could not be extracted ({e}); "
+                                      "nothing was uploaded."}, status_code=400)
 
-            # Check file extension
-            _, ext = os.path.splitext(basename)
-            ext = ext.lower()
-            if ext not in _ZIP_VALID_EXTENSIONS:
-                skipped.append(basename)
-                continue
+    # ── 2. Invalidate before the pool changes ──────────────────────────────
+    # Downstream artifacts derived from the old files are cleared first, so no
+    # state has the new files beside results computed without them.
+    if needs_invalidation and staged:
+        inv_summary = invalidate_pool_artifacts(dtxsid)
+        pool_invalidated = True
+        logger.info("Pool invalidated before zip upload: %s", inv_summary)
 
-            safe_name = os.path.basename(basename)
+    # ── 3. Commit: move the staged files in, then register them ────────────
+    # A file it replaces is kept aside until the upload completes; on any
+    # failure the replaced files are restored, the new ones removed, and
+    # their registrations dropped (fingerprints are re-derived from files/).
+    backup = os.path.join(zip_tmp_dir, "replaced")
+    os.makedirs(backup)
+    placed: list[tuple[str, str]] = []           # (name, path) moved in
+    try:
+        for safe_name in staged:
+            ext = os.path.splitext(safe_name)[1].lower()
+            if persist_dir:
+                file_path = str(persist_dir / safe_name)
+                if os.path.exists(file_path):
+                    shutil.copy2(file_path, os.path.join(backup, safe_name))
+                os.replace(os.path.join(staging, safe_name), file_path)
+            else:
+                # No DTXSID provided — a temp directory (lost on restart)
+                tmp_dir = tempfile.mkdtemp(prefix=f"{ext.lstrip('.')}_")
+                file_path = os.path.join(tmp_dir, safe_name)
+                shutil.move(os.path.join(staging, safe_name), file_path)
+            placed.append((safe_name, file_path))
 
-            # If a file with the same name already exists, remove its old
-            # fingerprint and upload dict entry before registering the new one.
+        for safe_name, file_path in placed:
+            ext = os.path.splitext(safe_name)[1].lower()
+            # A file of the same name replaces the existing one: its old
+            # fingerprint and upload entry go before the new one registers.
             if dtxsid:
                 old_id = remove_old_file_entries(dtxsid, safe_name)
                 if old_id:
                     logger.info("Zip: replacing existing file %s (old_id=%s)", safe_name, old_id)
-
-            if persist_dir:
-                # Persist to session files/ directory so the file survives
-                # page reloads and server restarts — applies to ALL file
-                # types (.bm2, .csv, .txt, .xlsx), not just .bm2.
-                file_path = str(persist_dir / safe_name)
-                with zf.open(member) as src, open(file_path, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                tmp_dir = None  # no temp dir needed — file is in session dir
-            else:
-                # No DTXSID provided — extract to a temp directory (lost on restart)
-                tmp_dir = tempfile.mkdtemp(prefix=f"{ext.lstrip('.')}_")
-                file_path = os.path.join(tmp_dir, safe_name)
-                with zf.open(member) as src, open(file_path, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
 
             file_id = str(uuid.uuid4())
 
@@ -566,16 +594,22 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
                     "type": file_type,
                     "validation_issues": v_issues,
                 })
+    except Exception:
+        logger.exception("Zip upload failed for %s; rolling back", dtxsid or "(no session)")
+        for safe_name, file_path in reversed(placed):
+            kept = os.path.join(backup, safe_name)
+            if os.path.exists(kept):
+                os.replace(kept, file_path)
+            elif os.path.exists(file_path):
+                os.remove(file_path)
+            if dtxsid:
+                remove_old_file_entries(dtxsid, safe_name)
+        shutil.rmtree(zip_tmp_dir, ignore_errors=True)
+        return JSONResponse({"error": "The upload failed and was rolled back; the "
+                                      "session's files are as they were.",
+                             "pool_invalidated": pool_invalidated}, status_code=500)
 
-    # Clean up the zip temp file (individual extracted files are in their
-    # own temp dirs and persist until the server shuts down)
     shutil.rmtree(zip_tmp_dir, ignore_errors=True)
-
-    # Invalidate downstream artifacts if the pool had already progressed.
-    if needs_invalidation and not pool_invalidated:
-        inv_summary = invalidate_pool_artifacts(dtxsid)
-        pool_invalidated = True
-        logger.info("Pool invalidated after zip upload: %s", inv_summary)
 
     # Collect all validation issues from individual file fingerprints
     # into a flat list for the response — the client shows these as
@@ -770,14 +804,10 @@ async def api_preview_file(file_id: str):
                     bm2_entry["table_data"] = table_data
                     bm2_entry["bm2_json"] = bm2_json
 
-                    # Generate a default narrative (will be overwritten with
-                    # real compound name / dose unit when the user processes
-                    # via the section builder).  None platform → auto-detect
-                    # by row type from the mixed bm2 table_data.
-                    narrative = generate_platform_narrative(
-                        None, table_data, "Test Compound", "mg/kg",
-                    )
-                    bm2_entry["narrative"] = narrative
+                    # No narrative here: it needs the compound and the
+                    # study's dose unit, which Process supplies (no unit is
+                    # assumed).
+                    bm2_entry["narrative"] = []
                 except Exception as e:
                     return JSONResponse(
                         {"error": f"Processing failed: {e}"},

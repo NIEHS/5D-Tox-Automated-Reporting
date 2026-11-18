@@ -37,10 +37,10 @@ def _experiment(organ, n=8, probes=12, dtype="gene_expression"):
 
 def test_figure_from_gene_expression_experiments_only():
     payload = build_pca_figure({"doseResponseExperiments": [
-        _experiment("liver"), _experiment("kidney"), _experiment("liver", dtype="tox_study")]})
+        _experiment("liver"), _experiment("kidney"), _experiment("liver", dtype="tox_study")]}, dose_unit="mg/kg")
     assert payload["png_b64"] and payload["filename"] == "appendix-c-pca.png"
     assert payload["caption"].startswith("Principal Component Analysis")
 
 
 def test_no_expression_data_no_figure():
-    assert build_pca_figure({"doseResponseExperiments": []}) is None
+    assert build_pca_figure({"doseResponseExperiments": []}, dose_unit="mg/kg") is None

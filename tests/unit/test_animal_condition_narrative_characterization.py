@@ -80,25 +80,28 @@ _MORT_EDGE = {
 }
 
 
+RATS = {"species": "rat", "route": "gavage", "duration_days": 5}
+
+
 def test_no_mortality_data_returns_empty():
-    assert _build_animal_condition_paragraphs(CN, UNIT, {}, None) == []
+    assert _build_animal_condition_paragraphs(CN, UNIT, {}, None, RATS) == []
 
 
 def test_all_survived_brief_statement():
     # Clinical observations recorded, all normal.
-    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, {})
+    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, {}, RATS)
     assert out == [
         "All male and female rats survived to study termination (SD5) without "
         "signs of overt toxicity."
     ]
     # None recorded: survival only.
-    assert _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, None) == [
+    assert _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, None, RATS) == [
         "All male and female rats survived to study termination (SD5)."
     ]
 
 
 def test_full_mortality_with_clinical_signs():
-    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_FULL, _SIGNS)
+    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_FULL, _SIGNS, RATS)
     assert out == [
         "Male and female rats administered 333 and 1000 mg/kg of PFHxSAm began "
         "exhibiting signs of overt toxicity on study day 0, which included "
@@ -112,7 +115,7 @@ def test_full_mortality_with_clinical_signs():
 
 def test_full_mortality_without_signs():
     # No clinical observations recorded: the death details stand alone.
-    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_FULL, None)
+    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_FULL, None, RATS)
     assert out == [
         "In the 333 mg/kg "
         "group, 3 male rats and 1 female rat were found dead or moribund by "
@@ -126,7 +129,7 @@ def test_edge_no_earliest_no_latest_no_surviving():
     # earliest_death_day stays None (empty death_days), latest_day_num stays 0,
     # and the only surviving dose is the control (0.0, filtered out) → no
     # surviving sentence.
-    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_EDGE, None)
+    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_EDGE, None, RATS)
     assert out == [
         "In the 1000 mg/kg group, 2 male rats were found dead or moribund."
     ]

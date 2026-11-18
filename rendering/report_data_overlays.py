@@ -22,6 +22,7 @@ from pathlib import Path
 
 from common.session_files import read_json_file, read_session_json
 from pipeline.session_store import latest_session_cache, session_path
+from pipeline.study_parameters import required_unit
 from tables.table_builder_common import lettered_footnote, finalize_footnotes
 
 
@@ -89,7 +90,7 @@ def overlay_abstract(
     bmd_endpoints: list | None = None,
     genomics_cache: dict | None = None,
     dose_groups: list | None = None,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     bmd_stat=None,
     methods_context: dict | None = None,
     sexes: list[str] | None = None,
@@ -145,6 +146,15 @@ def overlay_abstract(
             p for p in (abstract_bg_text, study_purpose_sentence) if p
         )
 
+    # The study's design: the report's (data["study_design"], from its
+    # integrated project), else the Methods context's — the same study
+    # parameters Process resolved.  Never a standard design.
+    design = data.get("study_design")
+    if design is None and methods_context:
+        design = {k: methods_context.get(k) for k in
+                  ("species", "strain", "route", "vehicle", "duration_days", "inhalation",
+                   "sexes")}
+
     # Apical Results/Summary: prefer endpoints already on `data`, else the arg.
     endpoints = (data.get("bmd_summary") or {}).get("endpoints") or bmd_endpoints or []
     dose_groups = dose_groups or []
@@ -159,7 +169,7 @@ def overlay_abstract(
             bmd_stat=bmd_stat,
             methods_ctx=methods_context,
             sexes=sexes,
-            design=data.get("study_design"),
+            design=design,
             genes=genes,
         )
         if results_text:
@@ -171,7 +181,7 @@ def overlay_abstract(
             dose_unit=dose_unit,
             bmd_stat=bmd_stat,
             sexes=sexes,
-            design=data.get("study_design"),
+            design=design,
             genes=genes,
         )
         if summary_text:
@@ -208,12 +218,14 @@ def _overlay_abstract(data: dict, body: dict) -> None:
     )
 
     # Dose groups / unit come from the MethodsContext when present, else the
-    # body's dose_unit (default mg/kg).
+    # body's dose_unit.  With neither (a study not yet processed) there is no
+    # abstract to write: nothing is stated, and no unit is assumed.
     dose_groups: list = []
-    dose_unit = body.get("dose_unit", "mg/kg")
     if methods_context:
         dose_groups = methods_context.get("dose_groups", []) or []
-        dose_unit = methods_context.get("dose_unit", dose_unit)
+    dose_unit = (methods_context or {}).get("dose_unit") or body.get("dose_unit")
+    if not dose_unit:
+        return
 
     # The request body carries genomics as an array, but the abstract builders
     # want the cached organ×sex dict — read it from disk by dtxsid.
@@ -335,7 +347,8 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
             # definition / lettered) with letters assigned.  Copy the list
             # so we don't mutate the cached section.
             footnotes = list(sec.get("footnotes", []))
-            dose_unit = sec.get("dose_unit") or body.get("dose_unit") or "mg/kg"
+            dose_unit = required_unit(sec.get("dose_unit") or body.get("dose_unit"),
+                                      f"the {sec.get('title') or 'apical'} section")
             table_data = sec.get("table_data", {})
 
             # Build per-sex missing-animal footnotes from table row data.
@@ -464,17 +477,12 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
     # with every export.
     bmd_summary = body.get("bmd_summary")
     bmd_endpoints = body.get("bmd_summary_endpoints", [])
-    from rendering.render_common import BMD_SUMMARY_LEGEND
-    _bmd_summary_footnotes = [BMD_SUMMARY_LEGEND]
+    # The legend is built where the table is planned, from the benchmark
+    # response(s) the entries were fit at (render_common.bmd_summary_legend).
     if bmd_summary:
         data["bmd_summary"] = dict(bmd_summary)
-        if not data["bmd_summary"].get("footnotes"):
-            data["bmd_summary"]["footnotes"] = _bmd_summary_footnotes
     elif bmd_endpoints:
-        data["bmd_summary"] = {
-            "endpoints": bmd_endpoints,
-            "footnotes": _bmd_summary_footnotes,
-        }
+        data["bmd_summary"] = {"endpoints": bmd_endpoints}
 
     # --- Apical Endpoint BMD Summary paragraphs ---
     # Three-layer paragraph block prepended before Table 8:
@@ -497,10 +505,8 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
         if _nonzero:
             _lle = min(_nonzero) / 3.0
             _lle_str = f"{_lle:.3f}".rstrip("0").rstrip(".") or "0"
-            _dose_unit_str = (
-                methods_data["context"].get("dose_unit", "mg/kg")
-                if methods_data and methods_data.get("context") else "mg/kg"
-            )
+            _dose_unit_str = required_unit(methods_data["context"].get("dose_unit"),
+                                           "the Methods context")
             _table_num = None
             from document_model.document_tree import find_node, compute_table_numbers
             compute_table_numbers()

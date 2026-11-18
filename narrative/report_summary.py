@@ -79,7 +79,7 @@ def build_report_summary(
     *,
     chemical_name: str,
     dose_groups: list[float] | None = None,
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
     abstract_background: str = "",
@@ -100,9 +100,9 @@ def build_report_summary(
     of the chemical: the Summary introduces it at the first mention and uses
     it after (narrative.test_article).  ``tissue_order`` is the report's
     (document_tree.tissue_key), so the organs come in the tables' order."""
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
     apical = apical_bmd_summary or []
     if apical_evaluated is None:
         apical_evaluated = bool(apical)

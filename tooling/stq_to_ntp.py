@@ -24,16 +24,21 @@ Assumptions (all from the delivered data, flagged deliberately):
   * The source is MALE-ONLY (STQ `SEX` is `Male` throughout).
   * `SELECTION` (`None` / `Core Males`) maps to `Core Animals` — no biosampling
     cohort is present in the extract, so every animal is treated as core-study.
-  * `DOSE_FACTOR` is empty, so `Concentration = DOSE` (mg/kg) directly.
+  * `DOSE_FACTOR` is empty, so `Concentration = DOSE` directly.  The dose
+    unit is the extract's `DOSE_UNIT` column (mg/kg on every row of both
+    studies): written to each CSV's units companion under "Concentration",
+    which the pool records in the sidecar ("dose_unit") and the file's
+    fingerprint.  Never assumed: no column or an empty one writes none, and
+    two units in one study is an error.
   * Organ weights are pivoted to one row per animal (Kidney-Left / Kidney-Right /
     Liver / Terminal Body Weight); the reference's `Heart` column is absent here
     and is simply not emitted (the studies did not weigh heart).
   * Units are the extract's own: the body-weight extract's `UNIT` column ("g")
     goes to the CSV's `<stem>.units.json` companion ({column: unit}, as
     tooling.cebs_to_pool writes from a workbook's Key sheet), which the pool
-    reads into the sidecar.  The organ-weight extract has no unit column, so
-    its CSV has no companion and the tables say the unit is not recorded —
-    a unit is never assumed.
+    reads into the sidecar.  The organ-weight extract has no unit column for
+    its weights, so its companion carries the dose unit only and the tables
+    say the weight unit is not recorded — a unit is never assumed.
 
 Output: one folder per chemical (both produce the same filenames):
     <out>/<Chem>/body_weight_truth_male.csv
@@ -137,6 +142,19 @@ def _recorded_unit(rows: list[list], unit_idx: int | None, what: str) -> str | N
     return units.pop() if units else None
 
 
+# The dose column of the NTP long format; the units companion names the dose
+# unit under it.
+DOSE_COLUMN = "Concentration"
+
+
+def _dose_unit(header: list[str], rows: list[list], what: str) -> dict[str, str]:
+    """{"Concentration": unit} from the extract's DOSE_UNIT column; {} when it
+    records none."""
+    idx = header.index("DOSE_UNIT") if "DOSE_UNIT" in header else None
+    unit = _recorded_unit(rows, idx, f"{what} dose")
+    return {DOSE_COLUMN: unit} if unit else {}
+
+
 def _sex_suffix(rows: list[list], sex_idx: int) -> str:
     sexes = {str(r[sex_idx]).strip().lower() for r in rows if r[sex_idx]}
     return sexes.pop() if len(sexes) == 1 else "all"
@@ -167,7 +185,8 @@ def convert_body_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]:
         out = outdir / chem / f"body_weight_truth_{sex}.csv"
         _write_csv(out, out_header, drows)
         unit = _recorded_unit(srows, unit_idx, f"{study} body weight")
-        _write_units(out, {"Body Weight": unit} if unit else {})
+        _write_units(out, {**_dose_unit(header, srows, study),
+                           **({"Body Weight": unit} if unit else {})})
         written.append((out, chem, len(drows)))
     return written
 
@@ -213,8 +232,11 @@ def convert_organ_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]
         sex = sexes.pop() if len(sexes) == 1 else "all"
         out = outdir / chem / f"organ_weights_truth_{sex}.csv"
         _write_csv(out, out_header, drows)
-        # No unit column in the organ-weight extract: no companion.
-        _write_units(out, {})
+        # No unit column for the weights in the organ-weight extract: the
+        # companion carries the dose unit only.
+        _write_units(out, _dose_unit(header, [r for r in rows
+                                              if r[idx["DEPOSITOR_STUDY_NUMBER"]] == study],
+                                     study))
         written.append((out, chem, len(drows)))
     return written
 

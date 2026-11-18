@@ -78,6 +78,34 @@ def _bmr(model) -> dict:
             "factor": values.get("bmr")}
 
 
+def default_bmr() -> dict:
+    """The BMR every dataset is modelled at: BMDS 2.7's continuous default
+    (the package's DefaultParams), as tables.apical_bmds.bmr_record writes one."""
+    from pipeline.bmds27.ntp_bmds.models.base import DefaultParams
+
+    kind = constants.BMR_INVERTED_CROSSALK[constants.CONTINUOUS][DefaultParams.cont_bmr_type["d"]]
+    return {"type": {"Std. Dev.": "SD", "Rel. Dev.": "RD"}[kind],
+            "factor": float(DefaultParams.cont_bmr["d"])}
+
+
+def recommendation_rules() -> list[dict]:
+    """The model recommendation rules every continuous dataset is run with
+    (the package's Recommender defaults), in its order, the disabled ones left
+    out: [{"rule", "threshold" (None: the rule has none), "bin"}] — what
+    Appendix D's Table D-1 prints when this engine is the one in force."""
+    import math
+
+    from pipeline.bmds27.ntp_bmds.logic import Recommender
+
+    out = []
+    for rule in Recommender(constants.CONTINUOUS).rules:
+        name, enabled, bin_text, threshold = rule.as_row()
+        if enabled:
+            out.append({"rule": name, "bin": bin_text,
+                        "threshold": None if math.isnan(threshold) else threshold})
+    return out
+
+
 def result_of(session) -> dict:
     """The endpoint's result in the shape the ToxicR path returns
     (tables.apical_bmds.run_bmds_for_endpoints), plus what NTP's run decided."""

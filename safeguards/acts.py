@@ -124,11 +124,16 @@ _DATA_ACTS = frozenset(Action)
 def require(dtxsid: str, act, store=None, *, method: bool = False):
     """Every check an act on a study's data must pass, in order: R6, the
     phase (C1), and with ``method`` (running Process: the statistics, the BMDs,
-    the text) the person's method choice (C1 D1). Returns the derived state."""
+    the text) the person's method choice (C1 D1) and the study's parameters,
+    complete (safeguards.inputs.require_study_parameters). Returns the derived
+    state."""
     act = Action(act)
     if act in _DATA_ACTS:
         require_data_session(dtxsid, store)
     st = require_legal(dtxsid, act, store)
     if method:
         require_method_chosen(dtxsid)
+        # Every study parameter recorded or stated, none assumed (2026-11-16).
+        from safeguards.inputs import require_study_parameters
+        require_study_parameters(dtxsid, store)
     return st

@@ -13,7 +13,6 @@ Full-session validation is pure Python (no Java), so these run over the real
 validate endpoint without mocking bmdx_pipe.
 """
 
-import json
 from pathlib import Path
 
 import pytest

@@ -55,7 +55,7 @@ def build_abstract_summary(
     apical_bmd_summary: list[dict] | None = None,
     genomics_sections: dict | None = None,
     dose_groups: list[float] | None = None,
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
@@ -102,11 +102,13 @@ def build_abstract_summary(
     Returns:
         Paragraph string, or empty string if no reliable BMDs exist anywhere.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_abstract_summary")
     if bmd_decimals is None:
         bmd_decimals = genomics_bmd_decimals(genomics_sections)
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    animals = species_plural(require_design(design))
     # Iterate the conditions ACTUALLY present (metadata-driven, from derive_study_sexes).
     # Real sexes → per-sex tracks with "in {sex} rats" prose. No sex dimension (explicit
     # []) → one sexless track per genomics sex-token present (e.g. "unknown"), rendered
@@ -289,7 +291,7 @@ def build_abstract_results(
     apical_bmd_summary: list[dict] | None = None,
     genomics_sections: dict | None = None,
     dose_groups: list[float] | None = None,
-    dose_unit: str = "mg/kg",
+    dose_unit: str | None = None,
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
     methods_ctx: dict | None = None,
@@ -324,6 +326,8 @@ def build_abstract_results(
     Returns:
         A single paragraph string for the Abstract Results section.
     """
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(dose_unit, "build_abstract_results")
     parts: list[str] = []
 
     if apical_bmd_summary:

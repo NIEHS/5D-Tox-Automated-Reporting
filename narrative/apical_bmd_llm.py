@@ -115,10 +115,10 @@ async def generate_apical_bmd_narrative_async(
         or {"error": str} on failure.
     """
     from pipeline.study_design import (
-        design_or_standard, dose_noun, exposure_verb, species_plural, subject_phrase,
+        require_design, dose_noun, exposure_verb, species_plural, subject_phrase,
     )
 
-    facts = design_or_standard(design)
+    facts = require_design(design)
     animals = species_plural(facts)
     if not study_duration:
         days = facts.get("duration_days")

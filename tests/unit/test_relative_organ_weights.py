@@ -38,7 +38,7 @@ def test_organ_table_relative_row_uses_ntp_statistics(male_organ_weights):
         _row("Liver Relative", {0.0: "40.0 ± 0.5**", 4.0: "47.0 ± 0.6**"}, bmd="1.9"),
     ]}
     out = build_organ_weight_table_from_sidecar(
-        male_organ_weights, stats)
+        male_organ_weights, stats, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     rows = {r["label"]: r for r in out["table_data"]["Male"]}
     assert "Liver Relative Absolute (g)" not in rows
     rel = rows["Liver Relative (mg/g)"]
@@ -55,7 +55,7 @@ def test_organ_table_relative_row_uses_ntp_statistics(male_organ_weights):
 def test_organ_table_relative_row_without_statistics_stays_display_only(male_organ_weights):
     stats = {"Male": [_row("Liver", {0.0: "10.0 ± 0.2"}, bmd="2.5")]}
     out = build_organ_weight_table_from_sidecar(
-        male_organ_weights, stats)
+        male_organ_weights, stats, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     rel = {r["label"]: r for r in out["table_data"]["Male"]}["Liver Relative (mg/g)"]
     assert rel["bmd"] == "ND" and not rel["responsive"]
     assert "*" not in "".join(rel["values"].values())

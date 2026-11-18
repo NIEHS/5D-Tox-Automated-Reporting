@@ -22,7 +22,6 @@ it, so this stays fast and offline; fixture builders are reused to avoid drift.
 import pytest
 from unittest.mock import AsyncMock
 
-from workflow.errors import StepError
 from workflow.steps import process_step, document_step
 from workflow.store import DiskPoolStore
 

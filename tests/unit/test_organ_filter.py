@@ -268,7 +268,7 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
             "Male": [_row("Alanine aminotransferase")],
         }
     }
-    paras = generate_clinical_pathology_narrative(platform_tables, "TestChem", "mg/kg")
+    paras = generate_clinical_pathology_narrative(platform_tables, "TestChem", "mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     assert paras  # the endpoint was not filtered away
 
 
@@ -303,7 +303,7 @@ def test_organ_allowlist_applied_after_cache_via_apply_section_filters():
             ],
         },
     }]
-    out = apply_section_filters(superset, organ_allowlist=["liver"], compound_name="C")
+    out = apply_section_filters(superset, organ_allowlist=["liver"], compound_name="C", design={"species": "rat", "route": "gavage", "duration_days": 5})
     labels = [r["label"] for r in out[0]["tables_json"]["Male"]]
     assert labels == ["n", "Liver Absolute (g)"]  # kidney dropped, n-row kept
     # single organ + single sex → the specific caption

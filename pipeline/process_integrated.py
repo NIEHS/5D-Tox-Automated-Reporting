@@ -220,6 +220,10 @@ class ProcessContext:
 
     # --- accumulated state (None until the producing Layer runs) ---
     platform_tables: dict | None = None
+    # The record of how the apical BMDs are computed
+    # (tables.apical_bmds.apical_bmd_method): the Methods paragraph, the tables'
+    # BMD column definitions and headers and the BMD summary's legend read it.
+    apical_bmd_method: dict | None = None
     ntp_hash: str | None = None
     bmds_inputs: list | None = None
     sections_hash: str | None = None
@@ -244,8 +248,9 @@ class ProcessContext:
     # each with its decision or None: pending (pipeline.bmd_review).
     bmd_reviews: dict | None = None
     bmd_flags: list | None = None
-    # The dose unit as the caller stated it (None ⇒ recorded or fallback).
-    dose_unit_stated: str | None = None
+    # The study's parameters, each recorded or stated (pipeline.study_parameters);
+    # complete, or Process was refused.  dose_unit is its dose unit.
+    study_parameters: "object | None" = None
     chart_images: list | None = None
     llm_gs_by_organ: dict | None = None
     llm_gene_by_organ: dict | None = None
@@ -302,9 +307,8 @@ async def _build_apical_bmd_narrative(ctx):
             ) or {}
             _chem_name = _methods_ctx.get("chemical_name") or compound_name or "the test article"
             _dose_groups = _methods_ctx.get("dose_groups") or []
-            from pipeline.study_design import study_design_facts
-            _design = study_design_facts(ctx.integrated, dose_unit)
-            _days = _methods_ctx.get("duration_days") or _design.get("duration_days")
+            _design = ctx.study_parameters.facts()
+            _days = _design["duration_days"]
 
             # Descriptive paragraphs (deterministic, no LLM).
             desc_paras = build_apical_bmd_summary_narrative(
@@ -443,8 +447,8 @@ async def _build_genomics_llm_narratives(ctx):
             # organ×kind pair.  Load once; pass into the merge below.
             _overrides = read_narrative_overrides(_session_dir(dtxsid))
 
-            from pipeline.study_design import study_design_facts, subject_phrase
-            _subject = subject_phrase(study_design_facts(ctx.integrated, ctx.dose_unit))
+            from pipeline.study_design import subject_phrase
+            _subject = subject_phrase(ctx.study_parameters.facts())
 
             async def _one(key, gen_data):
                 """LLM-generate narrative for a single organ×sex."""
@@ -537,7 +541,7 @@ def _build_bmd_summary(ctx):
         # (the bmd_summary hash is ntp+bmds only — no filters), so the cache
         # serves every version.
         apical_bmd_summary = _build_apical_bmd_summary(
-            platform_tables, tbw_tested=_tbw_tested(ctx))
+            platform_tables, tbw_tested=_tbw_tested(ctx), bmd_method=ctx.apical_bmd_method)
         apical_bmd_summary_bmds = _build_bmds_bmd_summary(
             platform_tables, bmds_results,
         )
@@ -572,6 +576,7 @@ def _build_bmd_summary(ctx):
     apical_bmd_summary = _build_apical_bmd_summary(
         _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
         bmd_decimals=ctx.bmd_decimals, tbw_tested=_tbw_tested(ctx),
+        bmd_method=ctx.apical_bmd_method,
     )
     if divergences:
         _report_bmd_divergences(ctx.dtxsid, divergences)
@@ -776,8 +781,8 @@ async def _get_sections(ctx):
     apical_sex_allow = (ctx.sex_filters or {}).get("apical")
     # Species, verb and duration for the table captions (the render path
     # recomposes them from the current design, so a cached caption is not stale).
-    from pipeline.study_design import internal_assessment, study_design_facts
-    _design = study_design_facts(integrated, dose_unit)
+    from pipeline.study_design import internal_assessment
+    _design = ctx.study_parameters.facts()
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
@@ -797,7 +802,7 @@ async def _get_sections(ctx):
             lambda: _build_section_cards(
                 platform_tables, compound_name, dose_unit,
                 dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
-                method=_method(ctx),
+                method=_method(ctx), bmd_method=ctx.apical_bmd_method,
                 dispositions=dispositions(integrated.get("_meta", {}).get("study_structure")),
             ),
         )
@@ -1068,6 +1073,21 @@ async def _get_bmds(ctx):
     ctx.bmds_results = results
 
 
+def _apical_bmd_method(ctx, modeled: dict[str, list[str]]) -> dict:
+    """tables.apical_bmds.apical_bmd_method for the platforms and sexes whose
+    rows are modeled (``modeled``: {platform: [sexes]})."""
+    from tables.apical_bmds import TOXICR_ENGINE, apical_bmd_method
+
+    method = _method(ctx)
+    engine_bmr = None
+    if method.get("apical.bmd.engine") != TOXICR_ENGINE:
+        from pipeline.bmds27.engine import default_bmr
+        engine_bmr = default_bmr()
+    return apical_bmd_method(ctx.integrated, method,
+                             {p: sorted(sexes) for p, sexes in sorted(modeled.items())},
+                             engine_bmr)
+
+
 async def _bmds_then_sections(ctx):
     """BMDS, then the ToxicR fills onto the rows, then the reviewer's UREP
     decisions on them, then the section cards."""
@@ -1180,9 +1200,8 @@ async def _get_methods(ctx):
     bm2_jsons = cached_bm2_jsons(_session_dir(dtxsid))
     animal_report_data = read_session_json(dtxsid, "animal_report.json")
 
-    # No protocol defaults: species, strain, route and vehicle come from the
-    # study's recorded metadata (extract_methods_context → pipeline.study_design).
-    study_params: dict = {"dose_unit": ctx.dose_unit_stated} if ctx.dose_unit_stated else {}
+    # No protocol defaults: every design fact is the study's parameter, recorded
+    # or stated (pipeline.study_parameters; Process refused an incomplete set).
 
     # Extract structured context from all data sources.
     # Pass session_dir so biosampling dose groups can be scanned
@@ -1192,11 +1211,12 @@ async def _get_methods(ctx):
         identity=identity,
         fingerprints=fps_for_methods,
         animal_report=animal_report_data,
-        study_params=study_params,
+        parameters=ctx.study_parameters,
         bm2_jsons=bm2_jsons,
         session_dir=str(_session_dir(dtxsid)),
         integrated=integrated,
         method=_method(ctx),
+        apical_bmd_method=ctx.apical_bmd_method,
     )
 
     # Build and call the LLM
@@ -1282,13 +1302,19 @@ async def run_data(ctx) -> None:
     # Attach the platform (the platform_tables key) onto each _bmds_input so the
     # ToxicR path can resolve the per-endpoint fit config (recorded vs inferred BMR).
     ctx.bmds_inputs = []
+    modeled: dict[str, list[str]] = {}
     for platform, sex_rows in ctx.platform_tables.items():
-        for rows in sex_rows.values():
+        for sex, rows in sex_rows.items():
             for row in rows:
                 bi = getattr(row, "_bmds_input", None)
                 if bi:
                     bi = {**bi, "platform": platform}
                     ctx.bmds_inputs.append(bi)
+                    if sex not in modeled.setdefault(platform, []):
+                        modeled[platform].append(sex)
+    # What is modeled, and with which settings: one record for everything the
+    # report says about it.
+    ctx.apical_bmd_method = _apical_bmd_method(ctx, modeled)
 
     # Compute per-unit hashes.  The sections stage reads sidecar JSONs
     # and the clinical-obs CSVs straight off disk and uses
@@ -1351,11 +1377,9 @@ async def run_data(ctx) -> None:
         else:
             _fps_for_methods[fid] = fp
     ctx.fps_for_methods = _fps_for_methods
-    from pipeline.study_design import study_design_facts
     ctx.methods_hash = _hash_methods(
         dtxsid, _fps_for_methods,
-        {**study_design_facts(integrated, ctx.dose_unit), "dose_unit": ctx.dose_unit,
-         "method": _method(ctx).signature()})
+        {**ctx.study_parameters.to_dict(), "method": _method(ctx).signature()})
 
     # Launch all four concurrently — cached units return instantly,
     # uncached units run in parallel (BMDS in thread pool, genomics
@@ -1676,18 +1700,6 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     # narratives. identity.json is authored at integration and always on disk for a
     # processable session, so the default is now only a last resort.
     compound_name = body.get("compound_name") or _resolve_compound_name(dtxsid)
-    # Dose unit: the one the caller states, else the one the data records,
-    # else mg/kg (pipeline.study_design.resolve_dose_unit).  A ppm study must
-    # read ppm everywhere, including render-only paths that see only caches.
-    from pipeline.pool_fingerprints import ensure_fingerprints
-    from pipeline.study_design import resolve_dose_unit
-    dose_unit_stated = body.get("dose_unit") or None
-    _recorded_units = [
-        (fp.get("dose_unit") if isinstance(fp, dict) else getattr(fp, "dose_unit", None))
-        for fp in ensure_fingerprints(dtxsid).values()
-    ]
-    dose_unit, _dose_unit_source = resolve_dose_unit(dose_unit_stated, _recorded_units)
-    logger.info("Dose unit for %s: %s (%s)", dtxsid, dose_unit, _dose_unit_source)
 
     # The study's analysis method (ADR-0027): its pinned profile, its study
     # overlay, then what THIS request states explicitly.  The GO ranking
@@ -1745,6 +1757,25 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
             "No integrated data found -- run integration first", status_code=400
         )
 
+    # The study's parameters (species … dose unit), each recorded by the data or
+    # stated in study_design.json — no fallback: missing or conflicting ones
+    # refuse Process, named (pipeline.study_parameters).  A ppm study reads ppm
+    # everywhere, including render-only paths that see only caches.
+    from pipeline import study_parameters
+    params = study_parameters.load(dtxsid, store, integrated)
+    if not params.complete:
+        raise StepError(str(study_parameters.StudyParametersIncomplete(dtxsid, params)), 422)
+    dose_unit = params.values["dose_unit"]
+    asked = (body.get("dose_unit") or "").strip()
+    if asked and asked.lower() != dose_unit.lower():
+        raise StepError(
+            f"{dtxsid}: the request names the dose unit {asked!r}, but the study's is "
+            f"{dose_unit!r} ({params.sources['dose_unit']}); state the unit in "
+            "study_design.json, not in the request", 422)
+    logger.info("Study parameters for %s: %s", dtxsid,
+                {p: f"{v} ({params.sources.get(p)})" for p, v in params.values.items()
+                 if v is not None})
+
     # Bundle the parsed request inputs into the context object threaded
     # through every Layer.  Accumulated state (platform_tables, hashes,
     # cached blobs, each Layer's output) is filled in as the pipeline runs.
@@ -1753,7 +1784,7 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
         integrated=integrated,
         compound_name=compound_name,
         dose_unit=dose_unit,
-        dose_unit_stated=dose_unit_stated,
+        study_parameters=params,
         bmd_stats=bmd_stats,
         bmd_stat=bmd_stat,
         go_pct=go_pct,

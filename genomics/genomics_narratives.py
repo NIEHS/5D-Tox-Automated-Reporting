@@ -157,7 +157,8 @@ def build_genomics_body_narratives(
         })
 
     dose_groups = ctx.get("dose_groups") or []
-    dose_unit = ctx.get("dose_unit") or "mg/kg"
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(ctx.get("dose_unit"), "the Methods context")
     fold_change_filter = ctx.get("fold_change_filter")
     chem_name = chemical_name or ctx.get("chemical_name") or "the test article"
     # The species the prose names (the Methods context carries the recorded

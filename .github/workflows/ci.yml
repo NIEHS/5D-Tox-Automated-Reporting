@@ -15,9 +15,15 @@
 # ---------------------------------------------------------------------------
 name: CI
 
-# Trigger is MANUAL (Actions tab → CI → Run workflow). Add `push:` /
-# `pull_request:` triggers to run it on every change.
+# Runs on every push to main and every pull request into it, and on demand
+# (Actions tab → CI → Run workflow).  Lint, unit + integration tests, the
+# bmdx-pipe tests and a non-interactive end-to-end smoke (tests/smoke: the real
+# server as its own process, files uploaded and state read over HTTP).
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -44,3 +50,6 @@ jobs:
 
       - name: bmdx-pipe tests
         run: uv run pytest packages/bmdx-pipe/tests -p no:cacheprovider
+
+      - name: End-to-end smoke (server over HTTP, non-interactive)
+        run: uv run pytest tests/smoke -m smoke -p no:cacheprovider

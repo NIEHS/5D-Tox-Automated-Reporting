@@ -44,6 +44,6 @@ def test_summary_uses_the_stamped_precision():
     }}
     assert genomics_bmd_decimals(genomics) == 1
     text = " ".join(build_report_summary([], genomics, chemical_name="X",
-                                         dose_groups=[0, 7.8], sexes=["Male"]))
+                                         dose_groups=[0, 7.8], sexes=["Male"], dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5}))
     assert "4.2 (2.2) mg/kg" in text and "3.3 (0.3) mg/kg" in text
     assert "4.232" not in text

@@ -1326,10 +1326,11 @@ def _render_apical_table(doc: Document, node: DocNode, data: dict) -> None:
     if plan is None:
         _add_pending(doc, f"Table data pending: {node.title}")
         return
+    tag = f" {plan.bmr_tag}" if plan.bmr_tag else ""   # the BMR the BMDs were fit at
     headers = (
         [plan.first_col]
         + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + ([f"BMD 1Std ({plan.dose_unit})", f"BMDL 1Std ({plan.dose_unit})"]
+        + ([f"BMD{tag} ({plan.dose_unit})", f"BMDL{tag} ({plan.dose_unit})"]
            if plan.bmd_columns else [])
     )
     rows: list[list[str]] = []

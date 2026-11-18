@@ -31,7 +31,6 @@ authored split.
 
 from __future__ import annotations
 
-from common.animal_selection import is_biosampling
 
 import math
 
@@ -216,7 +215,7 @@ def _fmt_dose(d: float) -> str:
     return f"{int(d)}" if float(d).is_integer() else f"{d:g}"
 
 
-def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str = "mg/kg",
+def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str,
                                   design: dict | None = None) -> list[str]:
     """Deterministic Internal Dose Assessment prose grounded in the computed TK.
 
@@ -235,9 +234,9 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
     by_sex = tk.get("by_sex") or {}
     if not by_sex:
         return []
-    from pipeline.study_design import design_or_standard, internal_assessment, species_plural
+    from pipeline.study_design import require_design, internal_assessment, species_plural
 
-    facts = design_or_standard(design)
+    facts = require_design(design)
     animals = species_plural(facts)
     paragraphs: list[str] = []
     sexes = [s for s in ("Male", "Female") if s in by_sex]

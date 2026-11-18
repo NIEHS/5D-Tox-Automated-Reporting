@@ -44,3 +44,31 @@ def test_docx_freeform_text_decodes_entities():
     node = SimpleNamespace(resolved_content={"html": "<p>the study&rsquo;s Table&nbsp;1</p>"},
                            representation="html")
     assert _freeform_text(node) == "the study’s Table 1"
+
+
+def test_a_replaced_engine_is_noted_under_the_table(monkeypatch):
+    """RR-8 and NIEHS-02 … 10 pin BMDS 2.7; ToxicR runs.  Their definitions
+    title Appendix D for the BMDS rules, so the table says they were not
+    applied (it was recorded only in the log)."""
+    from pipeline import bmds27
+
+    monkeypatch.setattr(bmds27, "unavailable_reason", lambda: "no Wine")
+    matrix = build_bmd_acceptance_matrix(resolve("ntp-5day-2021.1"))
+    assert matrix["caption"] == "Benchmark Dose Acceptance Criteria for Apical Endpoints"
+    note = matrix["footnotes"][-1]["text"]
+    assert "(ntp-5day-2021.1) selects a model by the model recommendation rules of the " \
+           "Benchmark Dose Software (BMDS) version 2.7.0" in note
+    assert "Those rules were not applied" in note and "no Wine" not in note
+    # A study whose own method is the one in force has no such note.
+    assert len(build_bmd_acceptance_matrix(resolve("ntp-5day-2025.1"))["footnotes"]) == 1
+
+
+def test_the_bmds_engine_prints_its_own_rules(monkeypatch):
+    from pipeline import bmds27
+
+    monkeypatch.setattr(bmds27, "unavailable_reason", lambda: None)
+    matrix = build_bmd_acceptance_matrix(resolve("ntp-5day-2021.1"))
+    assert matrix["caption"].startswith("Benchmark Dose Model Recommendation/Selection Rules")
+    rows = {r[0]: r[1:] for r in matrix["rows"]}
+    assert rows["GGOF"] == ["0.1", "Warning"] and rows["BMD exists"] == ["NA", "Failure"]
+    assert "Goodness of fit" not in rows and "BMDU exists" not in rows

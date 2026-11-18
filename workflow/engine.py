@@ -194,6 +194,19 @@ class WorkflowEngine:
             catalog=catalog,
         )
 
+    # -- derived study parameters (the Process guard) ----------------------
+
+    def study_parameters(self) -> dict:
+        """The study's parameters, DERIVED (never stored): each value with its
+        source (recorded / stated / inferred), what is missing, what the data
+        record conflicting values for, and whether the set is ``complete`` —
+        Process is refused until it is (safeguards.inputs.require_study_parameters).
+        Separate from ``state()``, which never reads integrated.json.  Before
+        integration: every parameter missing except the stated ones."""
+        from pipeline import study_parameters
+
+        return study_parameters.load(self.dtxsid, self.store).to_dict()
+
     # -- derived publish readiness (currency BLOCK, report grain) ----------
 
     def publish_readiness(self) -> dict:

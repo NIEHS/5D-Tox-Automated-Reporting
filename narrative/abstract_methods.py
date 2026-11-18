@@ -71,11 +71,11 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
 
       A short-term in vivo biological potency study on {TA} in adult {sexes}
       {Species} (Strain) rats was conducted.  {TA} was formulated in
-      {vehicle} and administered once daily for {duration} consecutive days
-      by {route} (study days 0–{duration-1}).  {TA} was administered at
+      {vehicle} and administered {schedule} for {dosing_days} consecutive days
+      by {route} (study days 0–{dosing_days-1}).  {TA} was administered at
       {N_doses} doses ({dose_list} {dose_unit}).  Blood was collected from
       animals dedicated for internal dose assessment in the
-      {biosampling_doses} {dose_unit} groups.  On study day {duration}, the
+      {biosampling_doses} {dose_unit} groups.  On study day {dosing_days}, the
       day after the final dose was administered, animals were euthanized,
       standard toxicological measures were assessed, and the {ge_organs}
       were assayed in gene expression studies using the {assay} assay.
@@ -95,25 +95,31 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     ta_name = ctx.abbreviation or ctx.chemical_name or "the test article"
 
     # --- Sexes ("adult male and female") ---
-    sexes = [s.lower() for s in ctx.sexes] if ctx.sexes else ["male", "female"]
-    sexes_str = " and ".join(sexes)
+    # The sexes the data record; none recorded → none named (never assumed).
+    sexes_str = " and ".join(s.lower() for s in ctx.sexes or [])
+    adult = f"adult {sexes_str}" if sexes_str else "adult"
 
     # --- Animals, route and vehicle: as the study records them ---
     # (pipeline.study_design via MethodsContext).  An unrecorded fact drops
     # its clause rather than defaulting to the gavage/corn oil protocol;
     # Materials and Methods flags it.
-    from pipeline.study_design import administration_phrase, subject_phrase, vehicle_phrase
-    facts = {"species": ctx.species, "strain": ctx.strain,
-             "route": ctx.route, "vehicle": ctx.vehicle}
+    from pipeline.study_design import (
+        administration_phrase, schedule_phrase, subject_phrase, vehicle_phrase,
+    )
+    facts = {"species": ctx.species, "strain": ctx.strain, "route": ctx.route,
+             "vehicle": ctx.vehicle, "inhalation": ctx.inhalation}
     subject = subject_phrase(facts)
     vehicle = vehicle_phrase(facts)
     given = f"formulated {vehicle} and" if vehicle else ""
     route_clause = administration_phrase(facts)
 
-    # --- Duration + study days range ---
-    duration = ctx.duration_days or 5
+    # --- Dosing days + study days range: dosed on days 0 … n−1, euthanized on
+    # day n (the study parameters; a 2018-era 5-day study was dosed on 4) ---
+    ctx.require_study_parameters()
+    duration = ctx.dosing_days
     last_day = duration - 1
     sacrifice_day = duration
+    schedule = schedule_phrase(ctx.dosing_schedule)
 
     # --- Dose list ---
     n_doses = len(ctx.dose_groups)
@@ -121,8 +127,8 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     # NIEHS convention: "mg/kg body weight [mg/kg]" on first mention of a dose
     # per body weight; an exposure concentration (ppm) is written as is.
     from pipeline.study_design import dose_noun, internal_assessment, is_air_concentration
-    inhaled = is_air_concentration(ctx.dose_unit)
-    dose_unit_full = (ctx.dose_unit if inhaled
+    inhaled = ctx.route == "inhaled"
+    dose_unit_full = (ctx.dose_unit if is_air_concentration(ctx.dose_unit)
                       else f"{ctx.dose_unit} body weight [{ctx.dose_unit}]")
     noun = dose_noun(ctx.dose_unit)
 
@@ -198,13 +204,13 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     # --- Assemble the paragraph ---
     paragraph = (
         f"A short-term in vivo biological potency study on {ta_name} in "
-        f"adult {sexes_str} {subject} was conducted. "
+        f"{adult} {subject} was conducted. "
         + (f"Animals were exposed to {ta_name}{' ' + route_clause if route_clause else ''} "
-           f"once daily for {duration} consecutive days (study days 0–{last_day}) "
+           f"{schedule} for {duration} consecutive days (study days 0–{last_day}) "
            f"at {n_doses} {noun} ({dose_list} {dose_unit_full})."
            if inhaled else
-           f"{ta_name} was {given + ' ' if given else ''}administered once "
-           f"daily for {duration} consecutive days{' ' + route_clause if route_clause else ''} "
+           f"{ta_name} was {given + ' ' if given else ''}administered {schedule} "
+           f"for {duration} consecutive days{' ' + route_clause if route_clause else ''} "
            f"(study days 0–{last_day}). "
            f"{ta_name} was administered at {n_doses} {noun} "
            f"({dose_list} {dose_unit_full}).")

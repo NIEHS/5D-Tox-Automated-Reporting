@@ -33,9 +33,10 @@ loop (`process`, the command line's version, starts its own with
 `asyncio.run`).
 
 **The context.** `_build_process_context` builds a `ProcessContext` passed
-through every layer: the compound name (given, else `identity.json`); the dose
-unit (`pipeline.study_design.resolve_dose_unit`: stated, else recorded in the
-files, else mg/kg); the method (step 10, with `PROCESS_OVERRIDES` as the
+through every layer: the compound name (given, else `identity.json`); the study's
+parameters (`pipeline.study_parameters`: each recorded by the data or stated in
+`study_design.json`, never assumed; missing or conflicting ones refuse Process,
+`StepError` 422), of which the dose unit is one; the method (step 10, with `PROCESS_OVERRIDES` as the
 request layer), from which come the GO ranking statistics and the GO display
 cutoffs (`go_pct`, `go_min_genes`, `go_max_genes`, `go_min_bmd`); the organ,
 sex, assay, gene and gene-set filters of the document template or the

@@ -205,7 +205,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str, method_sig: str = "") -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 34  # bumped: a concentration n-note naming an outlier carries its words without them (table_notes). Was 33: whole-group attrition on the clinical and organ tables from the study roster; organ weights count the scheduled necropsy only. Was 32: a BMD the reviewer rejected prints its reviewed value with the books' lettered note in the data tables (UREP stays in the BMD summary). Was 31: the organ-weight table's Terminal Body Weight row carries its statistics (markers, BMD/NVM; ND when not modeled). Was 30: footnote marks placed as the books place them (header, caption, row label, a removal's later cells; a cell may carry several); a group of one prints no SE. Was 29: the plasma table applies the BD rule, leaves out unreceived samples, labels rows "2 Hours Postdose (unit)". Was 28: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 35  # bumped: each table's BMD column definition names the benchmark response(s) its BMDs were fit at and carries them for the header (bmd_definition_footnote). Was 34: a concentration n-note naming an outlier carries its words without them (table_notes). Was 33: whole-group attrition on the clinical and organ tables from the study roster; organ weights count the scheduled necropsy only. Was 32: a BMD the reviewer rejected prints its reviewed value with the books' lettered note in the data tables (UREP stays in the BMD summary). Was 31: the organ-weight table's Terminal Body Weight row carries its statistics (markers, BMD/NVM; ND when not modeled). Was 30: footnote marks placed as the books place them (header, caption, row label, a removal's later cells; a cell may carry several); a group of one prints no SE. Was 29: the plasma table applies the BD rule, leaves out unreceived samples, labels rows "2 Hours Postdose (unit)". Was 28: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -386,7 +386,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 8  # bumped: Terminal Body Weight listed when the method tests it (apical.terminal_body_weight_tested). Was 7: UREP only by a reviewer's decision (pipeline.bmd_review), never automatic. Was 6: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 9  # bumped: every entry carries the benchmark response its BMD was fit at (the legend is built from them). Was 8: Terminal Body Weight listed when the method tests it (apical.terminal_body_weight_tested). Was 7: UREP only by a reviewer's decision (pipeline.bmd_review), never automatic. Was 6: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
@@ -419,7 +419,7 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 #    concentrations, no vehicle or formulations.
 # 4: the biosampling cohort is recognized in either CEBS spelling ("Biosample
 #    Animals" in NIEHS-07/-12/-13), so its doses reach Study Design.
-_METHODS_CACHE_SCHEMA_VERSION = 7  # bumped: the Abstract's plasma means follow the table's BD rule. Was 6: the prompt no longer supplies procedures, instruments or a gene-set statistic the data lack
+_METHODS_CACHE_SCHEMA_VERSION = 8  # bumped: the context carries the record of the apical BMD method and the method's substitutions; the apical BMD paragraph is built from them (narrative.methods_analysis). Was 7: the Abstract's plasma means follow the table's BD rule. Was 6: the prompt no longer supplies procedures, instruments or a gene-set statistic the data lack
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:

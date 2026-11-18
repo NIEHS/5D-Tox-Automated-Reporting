@@ -220,13 +220,15 @@ async def api_genomics_chart_images(request: Request):
     gene_sets = body.get("gene_sets", [])
     if not gene_sets:
         return JSONResponse({"error": "No gene_sets provided"}, status_code=400)
+    from pipeline.study_parameters import required_unit
+    dose_unit = required_unit(body.get("dose_unit"), "the request")
 
     try:
         result = render_chart_images(
             gene_sets=gene_sets,
             organ=body.get("organ", ""),
             sex=body.get("sex", ""),
-            dose_unit=body.get("dose_unit", "mg/kg"),
+            dose_unit=dose_unit,
             clusters=body.get("clusters"),
         )
         return JSONResponse(result)

@@ -36,7 +36,7 @@ def build_abstract_results_pk(
     pk_concentrations: dict | None,
     pk_half_lives: dict | None,
     pk_timepoints: list[int],
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     sexes: list[str] | None = None,
     design: dict | None = None,
 ) -> str:
@@ -145,9 +145,9 @@ def build_abstract_results_pk(
     # --- Assemble ---
     # The chemical name appears in the first sentence; subsequent sentences
     # use the species alone since the test article is implicit.
-    from pipeline.study_design import after_administration, design_or_standard, species_plural
+    from pipeline.study_design import after_administration, require_design, species_plural
 
-    facts = design_or_standard(design)
+    facts = require_design(design)
     animals = species_plural(facts)
     return (
         f"Average {chemical_name} plasma concentrations at "

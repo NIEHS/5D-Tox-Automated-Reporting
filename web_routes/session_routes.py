@@ -493,11 +493,15 @@ async def api_session_load(dtxsid: Dtxsid):
                 # render matches the pool_orchestrator render.
                 from document_model.document_tree import ACTIVE_TEMPLATE
                 from document_model.document_template import load_chart_style, load_chart_types
+                # The study's dose unit (its parameters): incomplete ones
+                # refuse here (logged below), never an mg/kg axis.
+                from pipeline.study_parameters import require_session_parameters
                 rerendered = render_chart_images_for_sections(
                     genomics_sections=genomics_cache,
                     bmd_stat=bmd_stat,
                     chart_style_cfg=load_chart_style(ACTIVE_TEMPLATE),
                     chart_types=load_chart_types(ACTIVE_TEMPLATE),
+                    dose_unit=require_session_parameters(dtxsid).values["dose_unit"],
                 )
                 if rerendered:
                     chart_images = rerendered

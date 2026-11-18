@@ -10,7 +10,6 @@ import json
 
 import openpyxl
 
-from rendering.render_common import scan_pending_markers
 from tables.table_builder_common import find_sidecar_paths, load_sidecar
 from tables.tissue_concentration_table import (
     _parse_timepoint, build_tissue_concentration_table_from_sidecar,
@@ -50,12 +49,12 @@ def test_niehs10_unit_comes_from_the_study_workbook(reference_session):
     assert {load_sidecar(p)["source"] for p in paths.values()} == {
         "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"}
 
-    tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
+    tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     assert {r["label"] for r in tc["table_data"]["Male"] if not r.get("is_n_row")} == {
         "2 Hours Postdose (µg/mL)", "24 Hours Postdose (µg/mL)"}
     tk = compute_toxicokinetics(paths)
     assert tk["unit"] == "µg/mL"
-    assert "(in µg/mL)" in build_internal_dose_narrative(tk, CHEM)[0]
+    assert "(in µg/mL)" in build_internal_dose_narrative(tk, CHEM, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})[0]
 
 
 def test_cebs_converter_writes_the_units_companion(tmp_path):

@@ -18,12 +18,13 @@ _GENOMICS = {"liver_male": {
          "bmd": 4.232, "bmdl": 2.172}]},
     "top_genes": [{"gene_symbol": "Eci1", "bmd": 3.341, "bmdl": 0.349}],
 }}
+_RATS = {"species": "rat", "route": "gavage", "duration_days": 5}
 _DOSES = [0.0, 7.8, 15.6, 31.25, 62.5, 125.0, 250.0, 500.0, 1000.0]
 
 
 def _build(**kw):
     args = dict(chemical_name="Triclosan", dose_groups=_DOSES, dose_unit="mg/kg",
-                bmd_stat="fifth_pct", sexes=["Male"])
+                bmd_stat="fifth_pct", sexes=["Male"], design=_RATS)
     args.update(kw)
     return build_report_summary(kw.pop("apical", _APICAL), kw.pop("genomics", _GENOMICS),
                                 **{k: v for k, v in args.items() if k not in ("apical", "genomics")})
@@ -61,4 +62,4 @@ def test_anomalous_bmds_are_named_and_excluded():
 
 
 def test_nothing_to_summarize():
-    assert build_report_summary([], {}, chemical_name="X") == []
+    assert build_report_summary([], {}, chemical_name="X", dose_unit="mg/kg", design=_RATS) == []

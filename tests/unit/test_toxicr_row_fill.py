@@ -10,7 +10,7 @@ from bmdx_pipe import TableRow
 
 from document_model.document_node import DocNode
 from pipeline.processing_helpers import _build_apical_bmd_summary, fill_rows_from_toxicr
-from rendering.render_common import BMD_SUMMARY_LEGEND, bmd_summary_plan
+from rendering.render_common import bmd_summary_legend, bmd_summary_plan
 
 _TOX = {"Male::Liver": {"bmd": 62.976, "bmdl": 15.978, "status": "viable",
                         "model_name": "Exp 3", "bmr_config": "inferred",
@@ -63,7 +63,11 @@ def test_rendered_summary_footnotes_inferred_bmr():
     node = DocNode(id="bmd-summary", title="BMD Summary", node_type="bmd-summary")
     plan = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}})
     texts = [f["text"] for f in plan.footnotes]
-    assert texts[0] == BMD_SUMMARY_LEGEND
+    # The legend defines the BMD for the benchmark response the entries were fit at.
+    assert texts[0] == bmd_summary_legend(endpoints)
+    assert texts[0].startswith("BMD₁Std = benchmark dose corresponding to a benchmark response "
+                               "set to one standard deviation from the mean; BMDL₁Std = ")
+    assert "NVM = no viable model" in texts[0]
     assert "Absolute Liver Weight (male): benchmark response of 1 standard deviation" in texts[1]
 
 
@@ -72,7 +76,21 @@ def test_no_inferred_note_for_bm2_values():
         {"Organ Weight": {"Male": [_row("Liver", bmd="55.1", status="viable")]}})
     node = DocNode(id="bmd-summary", title="BMD Summary", node_type="bmd-summary")
     plan = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}})
-    assert [f["text"] for f in plan.footnotes] == [BMD_SUMMARY_LEGEND]
+    # No record of the BMR these were fit at: the legend names none.
+    [legend] = [f["text"] for f in plan.footnotes]
+    assert legend.startswith("BMD = benchmark dose; BMDL = benchmark dose lower confidence "
+                             "limit; LOEL = ")
+    # With the study's record, the entry carries its BMR and the legend names it.
+    record = {"settings": [{"source": "recorded", "bmr": {"type": "RD", "factor": 0.25},
+                            "platforms": {"Organ Weight": ["Male"]}}]}
+    endpoints = _build_apical_bmd_summary(
+        {"Organ Weight": {"Male": [_row("Liver", bmd="55.1", status="viable")]}},
+        bmd_method=record)
+    assert endpoints[0]["bmr"] == {"type": "RD", "factor": 0.25}
+    plan = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}})
+    assert plan.footnotes[0]["text"].startswith(
+        "BMDrd25 = benchmark dose corresponding to a benchmark response set to a 25% "
+        "relative deviation from the control mean")
 
 
 def test_responsive_row_bmdexpress_never_modeled_takes_toxicr_nvm():

@@ -29,7 +29,7 @@ def test_bmd_and_markers_stay_with_their_sex(tmp_path):
                           responsive=False)
     table = build_body_weight_table_from_sidecar(
         {"Male": _sidecar(tmp_path, "Male"), "Female": _sidecar(tmp_path, "Female")},
-        stats_rows={"Male": {"SD5": male_sd5}, "Female": {"SD5": female_sd5}})
+        stats_rows={"Male": {"SD5": male_sd5}, "Female": {"SD5": female_sd5}}, dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     male = {r["label"]: r for r in table["table_data"]["Male"]}
     female = {r["label"]: r for r in table["table_data"]["Female"]}
     assert (male["5"]["bmd"], female["5"]["bmd"]) == ("55.0", "ND")

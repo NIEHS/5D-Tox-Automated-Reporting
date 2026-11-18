@@ -227,19 +227,26 @@ def test_process_runs_the_bmds27_engine_when_the_method_asks_and_keeps_the_recor
     assert len(written["endpoints"]["Female::Thyroid Stimulating Hormone"]["runs"]) == len(rec["runs"])
 
 
-def test_methods_guidance_describes_the_engine_that_ran(monkeypatch):
-    from narrative import methods_prompt
+def test_methods_describe_the_engine_that_ran(monkeypatch):
+    from narrative.methods_analysis import build_bmd_apical
+    from narrative.methods_models import MethodsContext
     from pipeline import method_profile as mp
+    from pipeline.bmds27.engine import default_bmr
+    from tables.apical_bmds import apical_bmd_method
 
     monkeypatch.setattr(bmds27, "unavailable_reason", lambda: None)
     s = mp.resolve("ntp-5day-2021")
-    ctx = SimpleNamespace(method_settings=s.values, method_profile=s.profile, dtxsid="",
-                          has_body_weight=True, has_organ_weights=True, has_clin_chem=True,
-                          has_hematology=False, has_hormones=False)
-    text = methods_prompt._bmd_apical_guideline(ctx)
+    record = apical_bmd_method(None, s, {"Body Weight": ["Male"], "Organ Weight": ["Male"]},
+                               default_bmr())
+    assert record["engine"] == "bmds_2_7_high_dose_drop"
+    assert record["settings"][0]["source"] == "engine"
+    ctx = MethodsContext(method_settings=s.values, method_profile=s.profile, sexes=["Male"],
+                         apical_bmd_method=record,
+                         method_substitutions=[dict(x) for x in s.substitutions])
+    text = " ".join(build_bmd_apical(ctx))
     assert "Benchmark Dose Software (BMDS) version 2.7.0" in text
     assert "highest dose group was removed" in text
-    assert "Table D-1" in text and "R2 >=" not in text
+    assert "Table D-1" in text and "R²" not in text and "ToxicR" not in text
     assert "1 standard deviation" in text
 
 

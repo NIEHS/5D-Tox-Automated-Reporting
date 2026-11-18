@@ -145,15 +145,15 @@ def build_gene_set_body_intro(
 
 
 def _animals(design: dict | None) -> str:
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import require_design, species_plural
 
-    return species_plural(design_or_standard(design))
+    return species_plural(require_design(design))
 
 
 def build_gene_set_body_findings(
     genomics_sections: dict,
     dose_groups: list[float],
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     bmd_stat: str | None = None,
     n_top: int = 2,
     sexes: list[str] | None = None,
@@ -372,7 +372,7 @@ def build_gene_body_intro(
 def build_gene_body_findings(
     genomics_sections: dict,
     dose_groups: list[float],
-    dose_unit: str = "mg/kg",
+    dose_unit: str,
     n_top: int = 8,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,

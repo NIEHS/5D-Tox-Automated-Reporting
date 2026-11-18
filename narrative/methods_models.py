@@ -95,12 +95,11 @@ class MethodsContext:
     # term ("rat"); strain the display form ("Sprague Dawley").
     species: str | None = None
     strain: str | None = None
-    # Design facts filled from the standard-design fallback, not the data.
-    design_fallback: list[str] = field(default_factory=list)
     dose_groups: list[float] = field(default_factory=list)
-    dose_unit: str = "mg/kg"
-    # Where dose_unit came from: "stated", "recorded" or "fallback".
-    dose_unit_source: str = "fallback"
+    # The study's dose unit (pipeline.study_parameters; never defaulted) and
+    # where it came from: "recorded" or "stated".
+    dose_unit: str | None = None
+    dose_unit_source: str | None = None
     # Core animals per treated dose group / in the vehicle control group, per sex —
     # DERIVED from the study's animal data (methods_extract._extract_core_group_sizes).
     # None when the data has no animal roster: the prompt then states nothing.
@@ -111,7 +110,15 @@ class MethodsContext:
     sexes: list[str] = field(default_factory=list)
     vehicle: str | None = None
     route: str | None = None
-    duration_days: int = 5
+    # How an inhalation exposure was made ("whole-body"), else None.
+    inhalation: str | None = None
+    # The study's duration (the "for Five Days" of the captions), the days it
+    # was dosed (study days 0 … n−1; necropsy on day n) and the schedule
+    # ("once daily", "6 hours plus T90 per day") — study parameters, each
+    # recorded or stated (2018-era studies: a 5-day study dosed on 4 days).
+    duration_days: int | None = None
+    dosing_days: int | None = None
+    dosing_schedule: str | None = None
 
     # --- Domain presence flags (drive conditional subsections) ---
     has_body_weight: bool = False
@@ -121,6 +128,16 @@ class MethodsContext:
     has_hormones: bool = False
     has_tissue_conc: bool = False
     has_gene_expression: bool = False
+
+    def require_study_parameters(self) -> None:
+        """Refuse (StepError 409) a context without the study parameters the
+        design wording states — one cached before they were required
+        (2026-11-16) assumed them; it is never re-stated from it."""
+        if not (self.dosing_days and self.dosing_schedule and self.dose_unit):
+            from workflow.errors import StepError
+            raise StepError("the Materials and Methods were built before the study's "
+                            "parameters were required (dosing days, schedule, dose unit); "
+                            "run Process again", 409)
 
     @property
     def has_clin_path(self) -> bool:
@@ -218,6 +235,14 @@ class MethodsContext:
     # profile; the statistics and BMD paragraphs are written from them.
     method_profile: str = ""
     method_settings: dict | None = None
+    # Where the method in force departs from the pinned profile
+    # (MethodSettings.substitutions): the Methods state each.
+    method_substitutions: list | None = None
+    # The record of how the apical BMDs are computed
+    # (tables.apical_bmds.apical_bmd_method): the BMD paragraph, built from it,
+    # states the settings in force and nothing else.  None: a context cached
+    # before the record existed (2026-11-17).
+    apical_bmd_method: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize for JSON persistence.  Converts dataclass to a plain dict."""

@@ -245,14 +245,14 @@ def _build_full_title(ta: dict, design: dict | None = None) -> str:
     )
 
 
-def apply_study_design(data: dict, integrated: dict | None,
-                       dose_unit: str | None = None) -> None:
+def apply_study_design(data: dict, integrated: dict | None) -> None:
     """Set the study-design facts the title, running header and cover state
-    (data["study_design"]) from the integrated project's recorded metadata,
-    with the standard-design fallback for ``dose_unit`` (pipeline.study_design)."""
+    (data["study_design"]) from the integrated project's recorded metadata
+    (stated facts applied at integration; nothing assumed — Process refused a
+    study whose parameters are incomplete, pipeline.study_parameters)."""
     from pipeline.study_design import study_design_facts
 
-    apply_design(data, study_design_facts(integrated, dose_unit))
+    apply_design(data, study_design_facts(integrated))
 
 
 def apply_design(data: dict, design: dict) -> None:
@@ -451,9 +451,11 @@ def marshal_export_data(
             try:
                 import json as _json_pca
                 from genomics.pca_figure import build_pca_figure
+                from pipeline.study_parameters import required_unit
                 _ip = _sdir_roster(_dtxsid_roster) / "integrated.json"
                 _pca = build_pca_figure(_json_pca.loads(_ip.read_text(encoding="utf-8")),
-                                        dose_unit=body.get("dose_unit") or "mg/kg",
+                                        dose_unit=required_unit(body.get("dose_unit"),
+                                                                "the request"),
                                         tissue_order=_definition_fact(_dtxsid_roster or "", "tissue_order")) \
                     if _ip.exists() else None
             except Exception:  # noqa: BLE001 — leaves the figure's pending note
@@ -481,7 +483,7 @@ def marshal_export_data(
         # Title, running header and cover name the animals and route the
         # study records (no protocol defaults).
         if _integ:
-            apply_study_design(data, _integ, dose_unit=body.get("dose_unit"))
+            apply_study_design(data, _integ)
 
     # ── Appendix D-1: the apical BMD acceptance criteria of the study's method
     # profile — the criteria its BMDs were classified with.
@@ -707,6 +709,15 @@ def marshal_export_data(
     if protection:
         data["protection"] = protection
 
+    # The study's dose unit (its parameters, carried by the Methods context, or
+    # the request's): the genomics results and figures state it.  Never mg/kg
+    # assumed — a ppm study's web preview read mg/kg here before 2026-11-16.
+    if not data.get("dose_unit"):
+        _mc = (body.get("methods_data") or {}).get("context") or {}
+        _section_units = {s.get("dose_unit") for s in body.get("apical_sections") or []
+                          if isinstance(s, dict) and s.get("dose_unit")}
+        data["dose_unit"] = (_mc.get("dose_unit") or body.get("dose_unit")
+                             or (_section_units.pop() if len(_section_units) == 1 else None))
     from rendering.genomics_summary import DATA_KEY, most_potent_gene_sets
     data.setdefault(DATA_KEY, most_potent_gene_sets(data))
     from document_model.phrasing import phrasing_for
@@ -1054,7 +1065,7 @@ def scaffold_report_data(
             "title": "Animal Condition, Body Weights, and Organ Weights",
             "caption": "",
             "compound": chemical_name,
-            "dose_unit": "mg/kg",
+            "dose_unit": None,   # the scaffold has no tables; no unit is assumed
             "narrative": [],
             "table_data": {},
             "footnotes": [],
@@ -1063,7 +1074,7 @@ def scaffold_report_data(
             "title": "Clinical Pathology",
             "caption": "",
             "compound": chemical_name,
-            "dose_unit": "mg/kg",
+            "dose_unit": None,   # the scaffold has no tables; no unit is assumed
             "narrative": [],
             "table_data": {},
             "footnotes": [],

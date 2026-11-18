@@ -1591,6 +1591,20 @@ def fingerprint_bm2(
     return fp
 
 
+def sidecar_dose_unit(path: str) -> str | None:
+    """The dose unit a pivot's sidecar records ("dose_unit": the unit its
+    source stated — a workbook's Key sheet, a CSV's units companion).  None
+    when the file has no sidecar or the sidecar records none; never assumed."""
+    sidecar = Path(path).with_suffix(".sidecar.json")
+    if Path(path).suffix != ".txt" or not sidecar.exists():
+        return None
+    try:
+        unit = json.loads(sidecar.read_text()).get("dose_unit")
+    except (OSError, ValueError):
+        return None
+    return unit.strip() if isinstance(unit, str) and unit.strip() else None
+
+
 def derived_source(path: str) -> str | None:
     """The file a derived txt/csv was written from: a CSV's first line
     "# Source: <file>", or a pivot's sidecar "source".  None for an original."""
@@ -1641,6 +1655,7 @@ def fingerprint_file(
     elif file_type in ("txt", "csv"):
         fp = fingerprint_txt_csv(file_id, filename, path, file_type, ts_added)
         fp.derived_from = derived_source(path)
+        fp.dose_unit = fp.dose_unit or sidecar_dose_unit(path)
         return fp
     elif file_type == "bm2":
         return fingerprint_bm2(file_id, filename, path, ts_added, bm2_json)

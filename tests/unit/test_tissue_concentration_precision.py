@@ -46,10 +46,10 @@ def test_niehs10_table7_cells_match_published(reference_session):
     session = reference_session("NIEHS-10", "DTXSID50469320")
     paths = find_sidecar_paths(str(session), "Tissue Concentration")
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name="PFHxSAm",
-                                                       method=resolve("ntp-5day-2021.1"))
+                                                       method=resolve("ntp-5day-2021.1"), dose_unit="mg/kg", design={"species": "rat", "route": "gavage", "duration_days": 5})
     section = normalize_apical_section_for_render({
         "platform": "Tissue Concentration", "title": "Tissue Concentration",
-        "tables_json": tc["table_data"], "caption": tc["caption"],
+        "tables_json": tc["table_data"], "caption": tc["caption"], "dose_unit": "mg/kg",
     })
     node = DocNode(id="tissue-concentration", title="Tissue Concentration",
                    node_type="table", platform="Tissue Concentration")

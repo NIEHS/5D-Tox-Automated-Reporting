@@ -20,6 +20,7 @@ def _settings(**genomics) -> dict:
 def _ctx(**kw) -> MethodsContext:
     ctx = MethodsContext(chemical_name="X", casrn="1-1-1", dtxsid="DTXSID0", dose_unit="mg/kg",
                          dose_groups=[0.0, 4.0, 37.0], sexes=["Male", "Female"], route="gavage",
+                         duration_days=5, dosing_days=5, dosing_schedule="once daily",
                          has_body_weight=True, has_organ_weights=True, has_clin_chem=True,
                          has_hematology=True, has_tissue_conc=True, has_gene_expression=True,
                          ge_organs=["liver", "kidney"], clin_chem_endpoints=["Albumin"],

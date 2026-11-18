@@ -40,6 +40,13 @@ def test_reference_workbooks_regenerate_truth_csvs_byte_for_byte(tmp_path):
         if not ref.exists():  # clinical obs CSVs stay in files/ (never pivoted)
             ref = GIVEN_PFHXSAM_DIR / "files" / name
         assert (tmp_path / name).read_bytes() == ref.read_bytes(), name
+    # Each companion names the dose unit the Key sheet states ("Dose in mg/kg")
+    # under the dose column, so a pool built from the CSVs records it.
+    import json
+    companions = sorted(tmp_path.glob("*.units.json"))
+    assert companions
+    for companion in companions:
+        assert json.loads(companion.read_text())["Concentration"] == "mg/kg", companion.name
 
 
 def _dtt_workbook(path: Path, title: str) -> None:

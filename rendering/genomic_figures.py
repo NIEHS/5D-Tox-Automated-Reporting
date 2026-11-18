@@ -44,6 +44,7 @@ import json
 from pathlib import Path
 
 from document_model.phrasing import Phrasing
+from pipeline.study_parameters import required_unit
 
 MAP_KEY = "gene_set_map_figures"
 CLUSTER_KEY = "gene_set_cluster_figures"
@@ -133,7 +134,7 @@ def attach_genomic_figures(data: dict, tree, phrasing: Phrasing, charts_cache) -
                 payload["notes"] = [_note(wording, counts, stat, phrasing)]
             figures[data_key][key] = payload
             stats.add(stat)
-    unit = data.get("dose_unit") or "mg/kg"
+    unit = required_unit(data.get("dose_unit"), "the report data")
     statistic = (phrasing.word("statistic", next(iter(stats)))
                  if len(stats) == 1 and None not in stats else STAT_UNRECORDED)
     terms, clusters, unclustered = _reference_size() or (None, None, None)

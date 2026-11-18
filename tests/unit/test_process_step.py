@@ -22,7 +22,6 @@ offline. This file reuses the golden test's fixture builders to avoid drift.
 import pytest
 from unittest.mock import AsyncMock
 
-from workflow.errors import StepError
 from workflow.steps import process_step
 from workflow.store import DiskPoolStore
 
