@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { HttpResponse, http } from 'msw'
+import { HttpResponse, delay, http } from 'msw'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { setDemoStage } from '../../api/mocks/demoData'
 import {
@@ -143,6 +143,14 @@ describe('the act', () => {
     const { user } = await open(DEMO_LIVE_RAT)
     await screen.findByTestId('parameters')
     await waitFor(() => expect(run()).toBeEnabled())
+    // As against the real backend: the state is re-read before the slower
+    // reads are, so the page changes while the wait is still open.
+    server.use(
+      http.get('/api/workflow/:id/study-parameters', async () => {
+        await delay(150)
+        return undefined
+      }),
+    )
     await user.click(run())
     const outcome = await screen.findByTestId('process-outcome')
     expect(outcome).toHaveTextContent('The analysis ran to its end.')

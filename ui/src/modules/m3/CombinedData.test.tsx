@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { HttpResponse, http } from 'msw'
+import { HttpResponse, delay, http } from 'msw'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { setDemoStage } from '../../api/mocks/demoData'
 import { REFUSAL_RUN_IN_FLIGHT, STATE_UPLOADED } from '../../api/mocks/fixtures'
@@ -116,6 +116,14 @@ describe('before the files are combined', () => {
     const acts = countActs()
     const { user } = await open(DEMO_LIVE_RAT)
     await screen.findByTestId('files')
+    // As against the real backend: the dataset is re-read before the state is,
+    // so the page changes while the wait is still open.
+    server.use(
+      http.get('/api/v2/studies/:id/state', async () => {
+        await delay(150)
+        return undefined
+      }),
+    )
     await user.click(combine())
     const outcome = await screen.findByTestId('combine-outcome')
     expect(outcome).toHaveTextContent('The files were combined into one dataset.')
