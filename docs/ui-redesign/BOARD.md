@@ -119,6 +119,32 @@ maintainer on 2026-11-18:
   step and in plain words since main `54de38d`; this branch adds
   `web_routes/api_guide_v2.yaml`, `1be3f31`) and in the notebook.
 
+**Built and merged on 2026-11-18** (the maintainer said "proceed"):
+
+| Part | State |
+|---|---|
+| The live copy (`tooling/demo_copy.py`, on `main`) | in the real store: `DTXSID6020430_live`, `_live_rat`, `_live_mouse`, at its start state |
+| The Demo block, the switch link, the reset | merged (`1ab7cd7`, `3f9963a`) |
+| S1 Combined data, S2 Process (`ui/src/modules/m3`, `p1`; `ui_api/dataset.py`, `process_run.py`, `long_acts.py`) | merged (`ef672ca`); one live run through the real app: Combine 34 s, Process 189 s |
+| S3 Written sections, S4 Citations (`ui/src/modules/d2`; `ui_api/writing*.py`) | merged; the Background written live once on the real live copy (48 s) |
+| S5 Review with the Bookshelf and Word | **not started: waits for the maintainer's release** |
+| The adversarial pass over the whole path, the rehearsals | not done |
+
+`ui_api/runs.py` records the long act under way on a study in this process (it
+stands in for C5's run lock); the state serves `run` and, for the pair, `demo`.
+The built pages are mapped in `ui/src/shell/ModulePage.tsx`.
+
+Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9):
+- the stage reads "Data reviewed" as soon as the files are combined, because the
+  accounting of the animals is the act the core calls the approval;
+- a row of a results table is not linked to its endpoint in the dataset by
+  record, only by name: organ-weight rows read "not recorded for this row";
+- the Clinical Observations table stops at the experiment (the dataset holds no
+  experiment under that assay's name);
+- the Background's public sources (ATSDR) answer only some of the time from here;
+- `test_read_model::test_a_broken_snapshot…` and
+  `test_ui_api_layering::test_every_place_has_a_module` still fail, as before.
+
 A route added from now on needs an entry in `web_routes/api_guide*.yaml`
 (`tests/unit/test_api_guide.py` refuses one without).
 

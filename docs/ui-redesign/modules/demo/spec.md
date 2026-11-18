@@ -394,7 +394,18 @@ guide's test does.
 7. **The Studies list shows every study in the store**, the unpublished ones
    (Bisphenol AF, Triclosan) among them, below the Demo block. Say if the demo's
    screen should show the Demo block alone.
-8. **The two workflow steps without a page** (BMD review, knowledge base; BOARD,
+8. **The stage reads "Data reviewed" as soon as the files are combined.** Combine
+   runs the accounting of the animals with it (as the command line does, so the
+   Methods get their counts), and that is the act the core calls the data
+   approval. No person reviewed anything. Say if Combine should stop before the
+   accounting, or the stage's words should change.
+9. **A row of a results table is linked to its dataset endpoint by name only.**
+   Clinical chemistry rows match; organ-weight rows ("Heart Absolute (g)") read
+   "not recorded for this row", with the experiment's endpoints listed beside.
+   Recording the link when the table is built is a change to the table builders.
+10. **The acts of the Written sections page are offered on the live copy only.**
+    Say if an ordinary study should have them there.
+11. **The two workflow steps without a page** (BMD review, knowledge base; BOARD,
    2026-11-18): not in the path. The Process page shows the knowledge base
    read-only; a flagged benchmark dose appears in the review rail as something
    that blocks publishing.
