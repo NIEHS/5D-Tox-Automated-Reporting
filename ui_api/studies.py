@@ -657,10 +657,13 @@ def delete_verdict(dtxsid: str) -> dict:
     except StudyRefusal as e:
         return {"allowed": False, "code": e.code, "say": _refusal_say(e.code, **e.details),
                 "details": dict(e.details)}
-    since = running_since(dtxsid)
-    if since:
+    from ui_api import runs
+    run = runs.current(dtxsid)
+    if run:
+        since = run["started_at"]
         return {"allowed": False, "code": "run_in_flight",
-                "say": _refusal_say("run_in_flight", time=since), "details": {"started_at": since}}
+                "say": _refusal_say("run_in_flight", time=since, what=run["what"]),
+                "details": {"started_at": since, "what": run["what"]}}
     return {"allowed": True, "code": None, "say": None, "details": {}}
 
 

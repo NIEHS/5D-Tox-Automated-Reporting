@@ -138,7 +138,8 @@ function WhereItStands({ d, stands, state }: { d: StudyDetail; stands: StudyRow[
         <Typography.Text>{stands.say}</Typography.Text>
         {run?.in_flight ? (
           <Typography.Text strong data-testid="run-in-flight">
-            Process is running on this study{formatClock(run.started_at) ? ` since ${formatClock(run.started_at)}` : ''}.
+            {run.what ? 'A long step is under way' : 'Process is running'} on this study{formatClock(run.started_at) ? ` since ${formatClock(run.started_at)}` : ''}
+            {run.what ? `: ${run.what}` : ''}.
           </Typography.Text>
         ) : next ? (
           to ? (

@@ -48,8 +48,8 @@ STUDY_REFUSALS: dict[str, Refusal] = {
         "Confirm the chemical before going on: tick the box that says it is the chemical "
         "you are studying."), None),
     "run_in_flight": Refusal(409, (
-        "Process is running on this study (since {time}). Wait for it to finish."),
-        "process"),
+        "A long step is under way on this study (since {time}): {what}. Wait for it "
+        "to finish."), "process"),
     "confirm_mismatch": Refusal(400, (
         "The id you typed doesn't match this study's id. Nothing was deleted."), None),
     "changed_since_preview": Refusal(409, (

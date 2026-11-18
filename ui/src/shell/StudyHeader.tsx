@@ -1,6 +1,6 @@
 import { ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import type { ExistingStudyState, ModuleId } from '../api/types'
 import { nextStepOf } from './nextStep'
 import { moduleById, moduleRoute, studyRoute } from '../kit/modules'
@@ -85,7 +85,8 @@ function KindNote({ state }: { state: ExistingStudyState }) {
  * side and the counterpart (ui_api.demo).
  */
 function PairNote({ state }: { state: ExistingStudyState }) {
-  const { module } = useParams<{ module?: string }>()
+  // The page's own part of the address (a module's slug), kept for the other side.
+  const module = /\/studies\/[^/]+\/([^/]+)\/?$/.exec(useLocation().pathname)?.[1]
   const pair = state.demo
   if (!pair) return null
   const live = pair.role === 'live'

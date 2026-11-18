@@ -224,10 +224,11 @@ export function RunInFlight({ studyId }: { studyId: string }) {
   const clock = formatClock(startedAt)
   return (
     <WaitOverlay
-      title="This study is being processed"
+      title={run.what ? 'A long step is under way on this study' : 'This study is being processed'}
       elapsedMs={elapsed}
       note={
         <>
+          {run.what ? `What is running: ${run.what}. ` : ''}
           {clock ? `It has been running since ${clock}` : 'It was started earlier; the start time is not known'}
           , from another page or before this one was reloaded. This page will continue when it ends.
         </>
