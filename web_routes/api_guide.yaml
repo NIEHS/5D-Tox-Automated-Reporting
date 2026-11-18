@@ -1,0 +1,841 @@
+# The guide the API page (/docs) is drawn from (web_routes/api_guide.py).
+#
+# Every operation of the server is named here once, under the step of the
+# workflow it belongs to.  For each:
+#   op        "METHOD /path", exactly as the route declares it
+#   title     what it does, in a few plain words (the line the page lists)
+#   does      one or two sentences for a reader who is not a programmer
+#   reads     the files or sources it reads
+#   writes    the files it writes
+#   code      the core function(s) that do the work (dotted names; they must exist)
+#   notebook  the heading of the notebook step that runs the same thing
+#   changes   false for a request that is not a GET and still saves nothing
+# Only op and title are required.
+#
+# The text is for the study team: nobody is addressed directly, and the
+# spelling is American (tests/unit/test_api_guide.py checks both).
+
+intro: |
+  **What this page is.** Every action the application can take is listed here.
+  The interface, the Bookshelf and the notebook all work through these same
+  actions, so the list is complete: nothing happens to a study that is not on
+  this page.
+
+  **How it is arranged.** The groups follow the workflow in order, from a
+  study's files to its finished report. A group opens to its actions. An action
+  opens to what it does, what it reads, what it writes, and where its code is.
+
+  **Reading the labels.** An action marked **GET** only reads; nothing is
+  changed, and it is always safe to run. **POST**, **PUT** and **DELETE** may
+  change what is saved; each says in its first lines whether it does.
+
+  **Running an action from this page.** "Try it out", then "Execute", runs the
+  action on the server's own studies and shows the answer below it. A study is
+  named by its identifier (a DTXSID, for example `DTXSID6020430`); the
+  [Bookshelf](/Bookshelf) lists them.
+
+  **Going further.** The notebook `notebooks/workflow_walkthrough.ipynb` runs
+  the same steps one cell at a time, with the code in view. Each action here
+  names the notebook step that matches it, and the function that does the work.
+
+not_described:
+  - prefix: /Compare
+    why: >
+      A page that sets a generated report beside its published original. It is
+      not part of the workflow this page describes.
+  - path: /
+    why: A page of the earlier interface, not an action on a study.
+  - prefix: /workflow
+    why: A page of the earlier interface, not an action on a study.
+
+groups:
+
+  # ───────────────────────────────────────────────────────────────── 1 ──
+  - key: files
+    order: 10
+    title: Study files
+    about: >
+      A study arrives as files: workbooks, BMDExpress projects, text exports.
+      Here they are added, checked against each other, and what each file
+      holds is confirmed.
+    operations:
+      - op: POST /api/upload-zip
+        title: Add a zip archive of study files
+        does: >
+          Opens the archive and adds each file it recognizes (BMDExpress
+          projects, workbooks, text and CSV tables) to the study. Files of
+          other kinds are listed as skipped.
+        writes: the study's `files/` folder, when the request names the study.
+        notebook: 4. Import
+      - op: POST /api/upload-bm2
+        title: Add BMDExpress project files (.bm2)
+        writes: the study's `files/` folder, when the request names the study.
+        notebook: 4. Import
+      - op: POST /api/upload-csv
+        title: Add loose table files (.csv, .txt)
+        writes: the study's `files/` folder, when the request names the study.
+        notebook: 4. Import
+      - op: GET /api/wizard/{dtxsid}/files
+        title: List the study's files
+        reads: the study's `files/` folder.
+      - op: GET /api/preview/{file_id}
+        title: Show the content of one added file
+      - op: POST /api/pool/validate/{dtxsid}
+        title: Check the files against each other
+        does: >
+          Works out what each file holds (which assay, which kind of data,
+          which sexes), then compares the files: the same animals, the same
+          doses, the same values where two files report the same thing. The
+          answer lists every disagreement and shows which assays the study
+          covers. A file in long format is converted to the table layout; the
+          original is kept.
+        reads: every file in `files/`.
+        writes: >
+          `_fingerprints.json` (what each file was recognized as),
+          `validation_report.json` (the disagreements and the coverage), and
+          `_originals/` (the files as they arrived, where one was converted).
+        code: workflow.steps.validate_step
+        notebook: 5. Validate
+      - op: GET /api/wizard/{dtxsid}/fingerprints
+        title: Show what each file was recognized as
+        does: For each file, the assay, the kind of data and the sexes found in it.
+        reads: "`_fingerprints.json`, or the files themselves when it is absent."
+      - op: POST /api/pool/resolve
+        title: Record which file is right where two files disagree
+        does: >
+          A person's choice for one disagreement the check found. The combined
+          dataset then takes that file's values.
+        writes: "`precedence.json`."
+        code: workflow.steps.resolve_step
+        notebook: 6. Resolve conflicts
+      - op: POST /api/pool/confirm-metadata/{dtxsid}
+        title: Confirm what each file contains
+        does: >
+          A person confirms, or corrects, the assay and kind of data recognized
+          for each file. The confirmed description is written into the working
+          copy of each text file.
+        writes: the working copies in `files/`, and `_fingerprints.json`.
+        code: workflow.steps.confirm_metadata_step
+        notebook: 7. Confirm the file classification
+      - op: DELETE /api/pool/{dtxsid}/files/{filename}
+        title: Remove one file from the study
+        does: >
+          The file is moved aside (to `_removed/`), not destroyed. The check
+          and the combined dataset built with it are no longer current.
+      - op: POST /api/pool/reset/{dtxsid}
+        title: Remove all of the study's files and everything built from them
+        does: >
+          Deletes the files, the combined dataset, the results and the report
+          sections built from them. The chemical's identity and the history of
+          earlier versions are kept.
+
+  # ───────────────────────────────────────────────────────────────── 2 ──
+  - key: dataset
+    order: 20
+    title: "Combined data: one dataset from all the files"
+    about: >
+      The checked files are combined into one dataset. Every table, figure and
+      sentence of the report is built from this dataset and nothing else.
+    operations:
+      - op: POST /api/pool/integrate/{dtxsid}
+        title: Combine the files into one dataset
+        does: >
+          Merges every checked file into a single dataset in the BMDExpress
+          project format: each experiment with its doses, animals, measured
+          values and, where the study's own analysis is among the files, its
+          benchmark dose results. Where two files disagreed, the recorded
+          choice decides. Details that format cannot hold for each animal
+          (study day, selection for biosampling, terminal status) are kept
+          beside it.
+        reads: >
+          the files in `files/`, `_fingerprints.json`, `precedence.json`, and
+          the experiment descriptions a person approved earlier, if any.
+        writes: >
+          `integrated.json` (the dataset), `integrated.bm2` (the same, as a
+          BMDExpress project), `_category_lookup.json` (gene-set results),
+          `genomics.sidecar.json` and `files/*.sidecar.json` (per-animal
+          details), `identity.json`.
+        code: workflow.steps.integrate_step
+        notebook: 8. Integrate
+      - op: GET /api/integrated-summary/{dtxsid}
+        title: Summarize the combined dataset
+        does: >
+          The experiments in the dataset, how many endpoints each has, and
+          which files each came from.
+        reads: "`integrated.json`."
+      - op: GET /api/integrated-tree/{dtxsid}
+        title: Show the combined dataset as an outline
+        does: >
+          Assay, then sex or organ, then experiment, then the names of its
+          endpoints. The measured values are left out to keep the answer small.
+        reads: "`integrated.json`."
+      - op: GET /api/integrated/{dtxsid}
+        title: Download the whole combined dataset
+        does: The complete dataset, with every animal's values. It is a large file.
+        reads: "`integrated.json`."
+      - op: GET /api/export-bm2/{dtxsid}
+        title: Download the combined dataset as a BMDExpress project (.bm2)
+        does: >
+          The dataset as a file BMDExpress 3 opens, with each experiment's
+          description (species, sex, organ, test article) filled in.
+        reads: "`integrated.json`."
+      - op: POST /api/generate-animal-report/{dtxsid}
+        title: Account for every animal across the files
+        does: >
+          Lists each animal with its dose group, sex and selection, and checks
+          that the files agree about it. Running this is the approval of the
+          data: the study moves to "approved", and Process may follow.
+        reads: the study's files and `_fingerprints.json`.
+        writes: "`animal_report.json`."
+        code: workflow.steps.generate_animal_report_step
+        notebook: "11. Approve the data: the animal report"
+
+  # ───────────────────────────────────────────────────────────────── 3 ──
+  - key: facts
+    order: 30
+    title: Study facts the report states
+    about: >
+      What a report says about the study itself: the test article, the
+      species, the dosing, the authors. Each fact is recorded in the study's
+      files or stated by a person; none is assumed.
+    operations:
+      - op: GET /api/workflow/{dtxsid}/study-parameters
+        title: Show the study's parameters and where each one comes from
+        does: >
+          Species, strain, route, vehicle, study duration, number of dosing
+          days, dosing schedule and dose unit.
+          Each value is marked as recorded in the study's files, stated by a
+          person, or inferred, and the missing or contradictory ones are
+          listed. Process is refused until none is missing.
+        reads: "`integrated.json`, the files' per-animal details, `study_design.json`."
+        code: pipeline.study_parameters.load
+        notebook: 9. State what the data doesn't record
+      - op: GET /api/experiment-metadata/{dtxsid}
+        title: Show the description of each experiment
+        does: >
+          For each experiment in the combined dataset: species, sex, organ,
+          test article and the rest of its description, with the lists of
+          permitted values, and whether a person has approved them.
+        reads: "`integrated.json`, `metadata_approved.json`."
+      - op: POST /api/experiment-metadata/{dtxsid}
+        title: Save a person's corrections to the experiment descriptions
+        does: >
+          The corrected descriptions are written into the combined dataset and
+          kept as approved, so that combining the files again applies them
+          again.
+        writes: "`integrated.json`, `integrated.bm2`, `metadata_approved.json`."
+        code: safeguards.guarded.approve_experiment_metadata
+        notebook: 9. State what the data doesn't record
+      - op: GET /api/wizard/{dtxsid}/identity
+        title: Show the test article's identifiers
+        does: Name, CASRN, DTXSID, PubChem CID and the others on record.
+        reads: "`identity.json`."
+      - op: POST /api/resolve
+        title: Look up a chemical's identifiers from a name, CASRN or DTXSID
+        does: Asks PubChem and the EPA CompTox service. Nothing is saved.
+        changes: false
+      - op: GET /api/document/{dtxsid}/front-matter
+        title: Show the authors, contributors and publication details
+        reads: "`front_matter.json`."
+      - op: POST /api/document/{dtxsid}/front-matter
+        title: Save the authors, contributors and publication details
+        writes: "`front_matter.json`."
+      - op: GET /api/models
+        title: List the language models that can be used
+      - op: POST /api/session/{dtxsid}/models
+        title: Record which language model writes each kind of text
+        writes: "`meta.json`."
+
+  # ───────────────────────────────────────────────────────────────── 4 ──
+  - key: process
+    order: 40
+    title: "Process: statistics, benchmark doses, tables and figures"
+    about: >
+      From the combined dataset to the report's results: the statistical
+      tests, the benchmark doses, the table for each assay, the gene-set and
+      gene results, and the reference list.
+    operations:
+      - op: POST /api/process-integrated/{dtxsid}
+        title: Run the analysis and build the report's tables
+        does: >
+          Reads the combined dataset and computes everything the report shows.
+          For each assay: group means, the trend and pairwise tests, the
+          benchmark dose (the study's own where its analysis recorded one,
+          else fit here), and the table as it will print. For the genomic
+          data: the gene-set and gene tables for each organ and sex, and the
+          interpretation of the most sensitive genes, written by a language
+          model from the literature knowledge base with every citation tied to
+          a paper. Only what changed since the last run is computed again. It
+          is refused while a study parameter is missing.
+        reads: >
+          `integrated.json` and the per-animal details beside it, the study
+          parameters, the pinned analysis method (`method_profile.json`), the
+          report definition (`document_definition.yaml`), the reviewer's
+          decisions on flagged benchmark doses, and the knowledge base.
+        writes: >
+          the results (`_cache_*.json`, one per unit of work), `references.json`
+          (the reference list), `session.duckdb` and `session_parquet/` (the
+          same results as tables that can be queried).
+        code: pipeline.process_integrated.run_process
+        notebook: 12. Process
+      - op: POST /api/pool/materialize-sections/{dtxsid}
+        title: Save the result tables as report sections awaiting review
+        does: >
+          Writes each assay's results from the last Process as a section of
+          the report, not yet approved. A section whose content did not change
+          is left alone, and its approval stands. Where the results changed
+          under a section a person approved, the approved version is kept in
+          the history, the approval is withdrawn, and the section is marked
+          for review again.
+        reads: the results of the last Process (`_cache_*.json`).
+        writes: "`bm2_<assay>.json`, one section per assay."
+        code: workflow.steps.materialize_result_sections
+        notebook: 12. Process
+      - op: GET /api/wizard/{dtxsid}/processed
+        title: Tell whether the study has been processed
+      - op: GET /api/bmd-review/{dtxsid}
+        title: List the benchmark doses flagged for a reviewer
+        does: >
+          The benchmark doses the last Process found far below the endpoint's
+          no-effect or lowest-effect level, each with the reviewer's decision
+          (or none yet), and the history of decisions.
+        reads: the results of the last Process, `bmd_reviews.json`.
+        code: pipeline.bmd_review.screen
+      - op: POST /api/bmd-review/{dtxsid}
+        title: Record the reviewer's decisions on flagged benchmark doses
+        does: >
+          Each flagged benchmark dose is marked reliable or unreliable, with a
+          reason. The next Process applies the decisions; the report cannot be
+          published while one is undecided.
+        writes: "`bmd_reviews.json`."
+        code: safeguards.guarded.review_bmds
+      - op: GET /api/session/{dtxsid}/bmd-summary
+        title: Summarize the benchmark doses of the apical endpoints
+        does: >
+          Every endpoint with a benchmark dose, with its lower confidence
+          limit, lowest-effect level, no-effect level and direction, lowest
+          benchmark dose first.
+        reads: the result sections (`bm2_*.json`).
+      - op: GET /api/query/{dtxsid}/schema
+        title: List the tables of results that can be queried
+        reads: "`session.duckdb`."
+      - op: POST /api/query/{dtxsid}
+        title: Ask a question of the study's data and results
+        does: >
+          Runs one read-only query (SQL) over the study's data and results as
+          tables: animals, dose groups, measurements, endpoints, the apical
+          results, benchmark dose statistics, genes and gene sets. It cannot
+          change anything.
+        reads: "`session.duckdb`."
+        code: query.session_query
+        changes: false
+      - op: GET /api/query/{dtxsid}/parquet
+        title: List the result tables that can be downloaded
+      - op: GET /api/query/{dtxsid}/parquet/{table}
+        title: Download one result table
+      - op: POST /api/genomics-clusters
+        title: Group the gene sets that share genes
+        changes: false
+      - op: POST /api/genomics-cluster-enrichment
+        title: Describe each group of gene sets by an enrichment analysis
+        does: >
+          Sends each group's gene symbols to the Enrichr service and returns
+          the terms it finds enriched.
+        changes: false
+      - op: POST /api/genomics-chart-images
+        title: Draw the gene-set map and cluster charts as images
+        changes: false
+
+  # ───────────────────────────────────────────────────────────────── 5 ──
+  - key: writing
+    order: 50
+    title: Written sections and their prompts
+    about: >
+      The sections that are prose: which parts are built from the data, which
+      a language model words, from what facts, and under which instructions
+      (the prompt).
+    operations:
+      - op: POST /api/generate
+        title: Write the Background
+        does: >
+          Gathers what public sources record about the chemical (PubChem, the
+          EPA hazard and IRIS records, ATSDR profiles, occupational limits and
+          published papers), then a language model writes the Background from
+          that material alone, with numbered references. It is refused when no
+          source could be gathered, and each citation is checked to point at a
+          gathered source. The text comes back as the answer; saving it as the
+          section is a separate action.
+        reads: the chemical's identity; the public sources named above.
+        code:
+          - narrative.data_gatherer.gather_all
+          - narrative.background_writer.generate_background
+          - narrative.background_writer.verify_background_citations
+        notebook: 13. Background and Summary
+        changes: false
+      - op: GET /api/methods-context/{dtxsid}
+        title: Show the facts the Materials and Methods are written from
+        does: >
+          Everything taken from the study's data for the Methods: doses, group
+          sizes, endpoints measured, the settings of the benchmark dose
+          analysis, and which subsections the report will have. No language
+          model is called.
+        reads: "`integrated.json`, `_fingerprints.json`, `animal_report.json`, the study parameters."
+        code: narrative.methods_report.extract_methods_context
+      - op: POST /api/generate-methods
+        title: Write the Materials and Methods
+        does: >
+          The subsections on study design, dose selection, chemistry, the
+          benchmark dose analysis and the false discovery rate are built from
+          the data, word for word, with no model. The remaining subsections
+          are worded by a language model from the extracted facts. It is
+          refused while a study parameter is missing.
+        reads: the same facts as "Show the facts the Materials and Methods are written from".
+        code:
+          - narrative.methods_report.extract_methods_context
+          - narrative.methods_report.build_methods_prompt
+          - narrative.methods_analysis.build_bmd_apical
+        changes: false
+      - op: POST /api/generate-summary
+        title: Write the Summary
+        does: >
+          The facts for the Summary are picked from the study's results by
+          rule; a language model words them under the Summary's prompt
+          template. The run is kept with the exact prompt that was sent, and
+          any number in the text that was not among the facts given is listed.
+        reads: the result sections, and the current version of the Summary's prompt template.
+        writes: a run record under the study's `narrative_runs/`.
+        code: narrative.summary_llm.generate_summary
+        notebook: 13. Background and Summary
+      - op: POST /api/generate-genomics-narrative
+        title: Write the interpretation of the gene-level results
+        does: >
+          For one organ and sex, a language model interprets the most
+          sensitive genes and gene sets, using papers from the knowledge base
+          and citing each one. Process does this itself; this action repeats
+          it on request.
+        code: narrative.genomics_llm.generate_genomics_narrative_async
+      - op: POST /api/session/{dtxsid}/regenerate-genomics-narrative
+        title: Write one organ's gene-level interpretation again
+        does: >
+          Discards the stored interpretation for the organ, and any edit a
+          person made to it, and writes a new one.
+        code: narrative.genomics_llm.generate_genomics_narrative_async
+      - op: POST /api/session/{dtxsid}/genomics-narrative-override
+        title: Save or clear a person's edit to a gene-level interpretation
+      - op: GET /api/prompts/{section}
+        title: Show a section's prompt template
+        does: >
+          The instructions the language model is given for the section
+          ("summary"), the version in use, the earlier versions, and the
+          values from a study the template can refer to.
+        reads: the prompt store (`_prompts/` in the study store).
+        code: narrative.prompt_templates.template_text
+      - op: GET /api/prompts/{section}/versions/{version}
+        title: Show one earlier version of a prompt template
+      - op: POST /api/prompts/{section}/render
+        title: Show the exact prompt a study would send to the model
+        does: >
+          Fills the template with one study's facts and returns the text as
+          the model would receive it. No model is called and nothing is saved.
+        code: narrative.summary_llm.render_for_session
+        changes: false
+      - op: POST /api/prompts/{section}/run
+        title: Try a prompt on a study
+        does: >
+          Sends the filled prompt to the model and keeps the answer as a trial
+          run. The section itself is not changed.
+        writes: a run record under the study's `narrative_runs/`.
+        code: narrative.summary_llm.generate_summary
+      - op: GET /api/prompts/{section}/runs/{dtxsid}
+        title: List a study's trial runs of a prompt
+      - op: POST /api/prompts/{section}/runs/{dtxsid}/{run_id}/use
+        title: Use a trial run's text as the section
+        does: >
+          The text becomes a new version of the section, not approved; the
+          earlier text is kept in the history. A section a person has approved
+          is never replaced.
+        code: safeguards.guarded.write_section
+      - op: POST /api/prompts/{section}
+        title: Save a new version of a prompt template
+      - op: POST /api/prompts/{section}/current
+        title: Put a version of the prompt template into use
+      - op: GET /api/prompts/{section}/studies
+        title: List the studies a prompt can be tried on
+      - op: GET /api/prompts/{section}/published/{dtxsid}
+        title: Show the section as the published report printed it
+      - op: GET /api/prompts/{section}/models/{dtxsid}
+        title: List the models, each marked allowed or not for the study's data
+        does: >
+          Unpublished study data may only be sent to the models the data
+          policy permits; the list shows which those are for the study.
+        code: narrative.model_policy
+      - op: POST /api/prompts/{section}/compare
+        title: Compare several models on the same prompt
+        does: >
+          Each chosen model writes the section from the same prompt; another
+          model judges the texts without knowing which model wrote which. The
+          comparison is kept.
+        code: narrative.narrative_compare
+      - op: GET /api/prompts/{section}/comparisons/{dtxsid}
+        title: List a study's model comparisons
+      - op: GET /api/prompts/{section}/comparisons/{dtxsid}/{comparison_id}
+        title: Show one model comparison
+      - op: GET /api/prompts/{section}/threads
+        title: List the conversations about improving a prompt
+      - op: POST /api/prompts/{section}/threads
+        title: Start a conversation about improving a prompt
+      - op: GET /api/prompts/{section}/threads/{thread_id}
+        title: Show one conversation about a prompt
+      - op: POST /api/prompts/{section}/threads/{thread_id}/messages
+        title: Send a message in a conversation about a prompt
+
+  # ───────────────────────────────────────────────────────────────── 6 ──
+  - key: citations
+    order: 60
+    title: Citations and the literature behind them
+    about: >
+      Where a cited paper comes from: the literature knowledge base the
+      gene-level interpretations draw on, the queries it was built from, and
+      the check that every citation points at a real source.
+    operations:
+      - op: GET /api/session/{dtxsid}/citation-warnings
+        title: List the citations that could not be traced to a source
+        does: >
+          Two checks, in one answer. In the Background: every citation the
+          model wrote that matches none of the gathered sources. In the
+          gene-level interpretations: every citation that names no paper of
+          the knowledge base (it was removed from the text), and every place
+          where a person's edit may have disturbed a citation. The check
+          establishes that a citation points at a source; it does not judge
+          whether the source supports the sentence.
+        reads: "`background.json`, `references.json`."
+        code:
+          - narrative.citation_check.find_unresolved_tokens
+          - narrative.references_builder.find_unresolved_citations
+      - op: GET /api/session/{dtxsid}/knowledge-base
+        title: Show which knowledge base the study's report reads
+        does: >
+          The knowledge base named in the report's definition, else the
+          default, and whether it can support the gene-level interpretation.
+        code: knowledge_base.registry.kb_for
+        notebook: The knowledge base
+      - op: POST /api/session/{dtxsid}/knowledge-base
+        title: Choose the knowledge base for the study's report
+        does: The next Process reads the chosen knowledge base.
+        writes: the study's report definition.
+        code: safeguards.guarded.assign_knowledge_base
+      - op: GET /api/knowledge-bases
+        title: List the knowledge bases
+      - op: GET /api/knowledge-bases/{name}
+        title: Show one knowledge base and how it was built
+        does: >
+          The query it was built from and the status of each stage of its
+          build, which is also how far a build in progress has come.
+      - op: POST /api/knowledge-bases/run
+        title: Build a knowledge base from a literature query
+        does: >
+          Runs in the background, stage by stage: gathers the papers the
+          query asks for through their citations, fetches the full text where
+          it is open, has a language model extract each paper's fields, and
+          builds the database. A knowledge base is read by a report only when
+          every stage finished. It is refused when the query would tie a test
+          article to genes.
+        code: safeguards.guarded.run_crawl
+      - op: POST /api/knowledge-bases/default
+        title: Choose the knowledge base reports read by default
+        code: safeguards.guarded.set_default_knowledge_base
+      - op: GET /api/crawl-queries
+        title: List the literature queries
+      - op: GET /api/crawl-queries/{name}
+        title: Show one literature query
+      - op: GET /api/crawl-queries/{name}/history/{entry}
+        title: Show an earlier text of a literature query
+      - op: POST /api/crawl-queries/check
+        title: Check that a literature query can be read
+        does: Nothing is saved.
+        changes: false
+      - op: POST /api/crawl-queries/{name}
+        title: Save a literature query
+        does: The earlier text is kept. A query that names a test article beside genes is refused.
+        code: safeguards.guarded.save_crawl_query
+      - op: POST /api/crawl-queries/{name}/propose
+        title: Ask the query assistant to propose an edit
+        does: A language model proposes a change to the query and explains it. Nothing is saved.
+        changes: false
+      - op: GET /api/corpus/{dtxsid}/organs
+        title: List the organ names found in the literature, and how each is mapped
+      - op: GET /api/corpus/{dtxsid}/history
+        title: Show the changes made to the organ names
+      - op: POST /api/corpus/{dtxsid}/organs/map
+        title: Map an organ name to another, or drop it
+      - op: POST /api/corpus/{dtxsid}/materialize
+        title: Rebuild the study's working copy of the literature with the changes
+      - op: POST /api/corpus/{dtxsid}/reset
+        title: Undo every change to the organ names
+
+  # ───────────────────────────────────────────────────────────────── 7 ──
+  - key: review
+    order: 70
+    title: Review and approval
+    about: >
+      Where the study stands, which sections are ready, which a person has
+      approved, and whether the report may be published.
+    operations:
+      - op: GET /api/workflow/{dtxsid}/state
+        title: Show where the study stands and what may be done next
+        does: >
+          The study's phase (files added, checked, combined, approved) and the
+          actions permitted in it. The phase is worked out from the files that
+          exist, each time it is asked; it is never stored.
+        reads: which of the study's files exist.
+        code: workflow.engine.WorkflowEngine.state
+        notebook: 17. Where things stand
+      - op: GET /api/workflow/{dtxsid}/sections
+        title: List the report's sections with the state of each
+        does: >
+          Every section the report's definition calls for, with whether it can
+          be approved, whether it is, and what holds it back.
+        code: workflow.engine.WorkflowEngine.derive_section_readiness
+        notebook: 14. Sections and the publish gate
+      - op: GET /api/workflow/{dtxsid}/section-readiness
+        title: Show which sections are ready, approved or held back, and why
+        code: workflow.engine.WorkflowEngine.derive_section_readiness
+      - op: GET /api/workflow/{dtxsid}/publish-readiness
+        title: Tell whether the report may be published, and what stands in the way
+        does: >
+          A section the software rewrote after the data changed must be
+          accepted again by a person, and a flagged benchmark dose must be
+          decided, before the report may be published. The answer lists each
+          thing still open.
+        code: workflow.engine.WorkflowEngine.publish_readiness
+        notebook: 14. Sections and the publish gate
+      - op: GET /api/session/{dtxsid}
+        title: Show everything saved for the study
+        does: >
+          The content of every section (Background, Methods, each assay's
+          tables, the genomic sections, the Summary), with the study's
+          identity and settings.
+        reads: the section files in the study's folder.
+      - op: POST /api/session/approve
+        title: Approve a section as it stands
+        does: >
+          Marks the section approved. Its text is not touched: the application
+          is not an editor, and a person's wording comes back from Word or
+          Overleaf.
+        code: workflow.steps.accept_section_step
+        notebook: 14. Sections and the publish gate
+      - op: POST /api/session/unapprove
+        title: Reopen an approved section, with a reason
+        does: The reason is kept in the section's history. The text stays protected from being replaced.
+        code: workflow.steps.release_section_step
+      - op: POST /api/session/save-section
+        title: Save newly written text as a draft section
+        does: >
+          Saving never approves. A section a person owns (approved, or edited)
+          is refused; it must be reopened first, with a reason.
+        code: safeguards.guarded.write_section
+      - op: POST /api/session/discard-section
+        title: Discard a section's text, with a reason
+        does: The text is kept in the history first, so it can be brought back.
+        code: workflow.steps.discard_section_step
+      - op: GET /api/session/{dtxsid}/history/{section_key}
+        title: List the earlier versions of a section
+        reads: the study's `history/` folder.
+        code: workflow.section_writes.section_history
+      - op: POST /api/session/{dtxsid}/restore
+        title: Bring back an earlier version of a section
+        does: >
+          The earlier text becomes the current one, as a draft a person owns:
+          not approved, and protected from being replaced. The text it
+          replaces is kept in the history.
+        code: workflow.steps.restore_section_step
+
+  # ───────────────────────────────────────────────────────────────── 8 ──
+  - key: report
+    order: 80
+    title: "The report: Bookshelf, Word and PDF"
+    about: >
+      The finished document, drawn from the same content each time: as a page
+      in the form of the NCBI Bookshelf, as a Word document, as a PDF.
+    operations:
+      - op: GET /Bookshelf
+        title: The shelf of reports
+        does: >
+          A page, not data: every report the server holds, each linked to its
+          Bookshelf page.
+      - op: GET /Bookshelf/{dtxsid}
+        title: One report as a Bookshelf page
+        does: >
+          The report laid out as the NCBI Bookshelf would show it, built at
+          that moment from the study's sections, with links to download it as
+          Word and as PDF. A report that cannot be built says why.
+        reads: the study's sections, results and report definition.
+        code:
+          - rendering.latex_export.load_session_data
+          - rendering.preview_surface.render_preview
+        notebook: 15. Render the deliverables
+      - op: GET /Bookshelf/{dtxsid}/report.docx
+        title: Download the report as a Word document
+        does: Built at that moment from the same content as the Bookshelf page.
+        code: rendering.preview_surface.render_preview
+        notebook: 15. Render the deliverables
+      - op: GET /Bookshelf/{dtxsid}/report.pdf
+        title: Download the report as a PDF
+        does: The Word document, converted to PDF.
+        code: rendering.preview_surface.render_preview
+      - op: POST /api/preview/{dtxsid}/materialize
+        title: Build the report files and keep them
+        does: >
+          Builds the Word document and the web view of the report and keeps
+          them in the study's folder; the set built before is kept as history.
+        writes: the study's `preview/` folder.
+        code: rendering.preview_surface.materialize_preview
+      - op: GET /api/preview/{dtxsid}/view
+        title: Show a kept report file
+      - op: GET /api/preview/{dtxsid}/download
+        title: Download a kept report file
+      - op: GET /api/document-tree
+        title: Show the report's outline
+        does: >
+          The sections in order with their headings, table numbers and the
+          assay each presents. Table numbers come from this order; none is
+          typed in.
+        code: document_model.document_tree
+      - op: POST /api/preview-latex-html
+        title: Show the report, or one section of it, as a web page
+        changes: false
+      - op: POST /api/compile-pdf
+        title: Typeset the report to PDF with LaTeX
+        changes: false
+      - op: POST /api/export-overleaf-bundle
+        title: Download the report as a LaTeX project for Overleaf
+        code: rendering.latex_export
+        changes: false
+      - op: GET /api/sessions/{dtxsid}/supplemental/
+        title: List the study's supplemental data files
+      - op: GET /api/sessions/{dtxsid}/supplemental/{name}
+        title: Download one supplemental data file
+
+  # ───────────────────────────────────────────────────────────────── 9 ──
+  - key: outside
+    order: 90
+    title: Editing outside the application (Overleaf and GitHub)
+    about: >
+      The application does not edit text. A report's LaTeX copy is kept in a
+      repository, edited in Overleaf, and the edits are read back.
+    operations:
+      - op: POST /api/provision-report/{dtxsid}
+        title: Create the report's repository on GitHub, or adopt the existing one
+      - op: GET /api/repo-binding/{dtxsid}
+        title: Show which repository the report is tied to
+      - op: POST /api/repo-binding/{dtxsid}
+        title: Tie the report to a repository
+      - op: GET /api/repo-status/{dtxsid}
+        title: Show the state of the report's working copy
+      - op: POST /api/sync-document/{dtxsid}
+        title: Refresh the report's LaTeX working copy from the study
+      - op: POST /api/commit-local/{dtxsid}
+        title: Record the current report in the working copy
+      - op: POST /api/push-to-github/{dtxsid}
+        title: Send the recorded report to GitHub
+      - op: POST /api/pull-from-github/{dtxsid}
+        title: Bring back the edits made in Overleaf
+      - op: GET /api/report-for-project/{project_id}
+        title: Find the report an Overleaf project belongs to
+
+  # ──────────────────────────────────────────────────────────────── 10 ──
+  - key: setup
+    order: 100
+    title: "Report setup: structure, layout and views"
+    about: >
+      What the report consists of and how it looks: its sections and their
+      order, the page layout, and views that show part of it.
+    operations:
+      - op: GET /api/document-config/{dtxsid}
+        title: Show the study's report definition
+      - op: POST /api/document-config/{dtxsid}
+        title: Save the study's report definition
+        does: The definition is checked by building the whole report outline from it; one that fails is not saved.
+      - op: GET /api/document-config-default
+        title: Show the standard report definition
+      - op: POST /api/document-config-default
+        title: Save the standard report definition
+      - op: GET /api/document-structure/catalog
+        title: List the kinds of section a report can have
+      - op: POST /api/document-structure/parse
+        title: Read a report definition into an outline
+        changes: false
+      - op: POST /api/document-structure/dump
+        title: Write an outline back as a report definition
+        changes: false
+      - op: POST /api/document-structure/validate
+        title: Check an outline without saving it
+        changes: false
+      - op: GET /api/layout-style/{dtxsid}
+        title: Show the study's page layout settings
+      - op: POST /api/layout-style/{dtxsid}
+        title: Save the study's page layout settings
+      - op: GET /api/layout-style-default
+        title: Show the standard page layout settings
+      - op: POST /api/layout-style-default
+        title: Save the standard page layout settings
+      - op: GET /api/views/{dtxsid}
+        title: List the study's report views
+      - op: GET /api/views/{dtxsid}/{name}
+        title: Show one report view
+      - op: POST /api/views/{dtxsid}/{name}
+        title: Save a report view
+      - op: DELETE /api/views/{dtxsid}/{name}
+        title: Delete a report view
+      - op: GET /api/report-filters-default
+        title: Show the standard filters and charts
+      - op: POST /api/report-filters-default
+        title: Save the standard filters and charts
+
+  # ──────────────────────────────────────────────────────────────── 11 ──
+  - key: assistant
+    order: 110
+    title: Questions about a study (the chat)
+    about: >
+      A language model answers questions about one study from the study's own
+      data and the knowledge base, and shows what it looked up.
+    operations:
+      - op: GET /api/chat/{dtxsid}/threads
+        title: List the conversations about the study
+      - op: POST /api/chat/{dtxsid}/threads
+        title: Start a conversation
+      - op: GET /api/chat/{dtxsid}/threads/{thread_id}
+        title: Show one conversation
+      - op: DELETE /api/chat/{dtxsid}/threads/{thread_id}
+        title: Delete a conversation
+      - op: POST /api/chat/{dtxsid}/threads/{thread_id}/messages
+        title: Ask a question
+        does: >
+          The answer arrives with the sources it rests on, the citations that
+          could not be traced, and the list of what was looked up.
+        code: narrative.chat_agent.run_turn
+
+  # ──────────────────────────────────────────────────────────────── 12 ──
+  - key: housekeeping
+    order: 120
+    title: Housekeeping and earlier routes
+    about: >
+      Deleting a study, copies of the study store, the manual, and two routes
+      from before files were combined into one dataset.
+    operations:
+      - op: POST /api/session/reset/{dtxsid}
+        title: Delete a study entirely
+        does: >
+          Removes the study's whole folder, its history included. A published
+          report's companion, and a study that a report is composed of, are
+          refused.
+      - op: GET /api/admin/sessions/summary
+        title: Count what the study store holds
+      - op: GET /api/admin/sessions/export
+        title: Download the whole study store as one archive
+      - op: GET /manual
+        title: The command-line manual
+      - op: POST /api/process-bm2
+        title: Run the statistics on a single .bm2 file (earlier route)
+      - op: POST /api/process-genomics
+        title: Rank the genes and gene sets of a single results file (earlier route)
