@@ -145,7 +145,9 @@ def pin_like(dtxsid: str, source: str, *, by: str = "copy") -> dict:
     found by its id (``studies/<id>/document``), so the copy's files would
     give it the default.  The pin keeps the source's definition name; the
     snapshot is the source's composed definition (its own snapshot when the
-    source is FIXED)."""
+    source is FIXED).  The pin names the source (``like``): ``drift`` then
+    compares with the definition the SOURCE's files give, not with the default
+    the copy's own id would give."""
     old_source = read_pin(source)
     if old_source and old_source.get("mode") == FIXED:
         name, raw = old_source.get("name"), load_snapshot(source)
@@ -154,10 +156,11 @@ def pin_like(dtxsid: str, source: str, *, by: str = "copy") -> dict:
     session = _session(dtxsid)
     pin = {"name": name, "hash": definition_hash(raw), "mode": FIXED,
            "pinned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "pinned_by": by}
+           "pinned_by": by, "like": source}
     old = read_pin(dtxsid)
     if old:
-        if (old.get("name"), old.get("hash"), old.get("mode")) == (name, pin["hash"], FIXED):
+        if (old.get("name"), old.get("hash"), old.get("mode"), old.get("like")) == (
+                name, pin["hash"], FIXED, source):
             return old
         _archive(session, old)
     session.mkdir(parents=True, exist_ok=True)
@@ -183,7 +186,8 @@ def drift(dtxsid: str) -> str | None:
     pin = read_pin(dtxsid)
     if not pin or pin.get("mode") != FIXED:
         return None
-    name, raw = _current(dtxsid)
+    # A copy pinned like another session (pin_like) follows that session's files.
+    name, raw = _current(pin.get("like") or dtxsid)
     now = definition_hash(raw)
     if (name, now) == (pin.get("name"), pin.get("hash")):
         return None
