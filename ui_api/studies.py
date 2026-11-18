@@ -613,10 +613,10 @@ def last_changed(session: Path) -> str | None:
 
 
 def running_since(dtxsid: str) -> str | None:
-    """When the Process run in flight on this study started, None when none is.
-    C5 serves the run lock; until it does, no run is known here (the read
-    model serves no ``run`` either), so this answers None."""
-    return None
+    """When the long act in flight on this study started, None when none is
+    (ui_api.runs: this process's record, until C5 serves a run lock)."""
+    from ui_api import runs
+    return runs.running_since(dtxsid)
 
 
 def _bookshelf(dtxsid: str, kind: str, relations: dict) -> dict:
@@ -758,12 +758,34 @@ _KIND_ORDER = {"study": 0, "report": 0, "member": 1, "companion": 2, "other": 3}
 def list_studies() -> dict:
     """Every session, grouped by the chemical it is about (the M1 contract
     §2.1): ``{chemicals: [{dtxsid, name, casrn, primary, can_create,
-    sessions}], unassigned, generated_at}``. Chemicals by their newest change,
-    most recent first; within one, the primary session (the study, or the
-    report), then its member studies, its published content, other sessions.
-    Free of side effects."""
+    sessions}], unassigned, partitions, generated_at}``. Chemicals by their
+    newest change, most recent first; within one, the primary session (the
+    study, or the report), then its member studies, its published content,
+    other sessions.
+
+    ``partitions``: the sessions a person set apart (ui_api.demo: a finished
+    report and its live copy, as "Demo"), ``[{name, sessions: [{id, role,
+    session, members}]}]``. A session listed there, and its member studies,
+    are not listed again under their chemical. Free of side effects."""
+    from ui_api.demo import pair_of, partitions
+
     index = StoreIndex()
     rows = [study_row(i, index) for i in index.ids]
+    by_id = {r["id"]: r for r in rows}
+    set_apart: list[dict] = []
+    taken: set[str] = set()
+    for part in partitions(index.root):
+        entries = []
+        for sid in part["sessions"]:
+            row = by_id.get(sid)
+            members = [by_id[m["id"]] for m in (row or {}).get("relations", {}).get("members", [])
+                       if m["id"] in by_id]
+            pair = pair_of(sid, index.root) if row else None
+            entries.append({"id": sid, "role": pair["role"] if pair else None,
+                            "session": row, "members": members})
+            taken |= {sid, *(m["id"] for m in members)}
+        set_apart.append({"name": part["name"], "sessions": entries})
+    rows = [r for r in rows if r["id"] not in taken]
     groups: dict[str, list[dict]] = {}
     unassigned: list[dict] = []
     for row in rows:
@@ -782,13 +804,13 @@ def list_studies() -> dict:
             "name": (named or {}).get("identity", {}).get("name"),
             "casrn": (named or {}).get("identity", {}).get("casrn"),
             "primary": primary["id"] if primary else None,
-            "can_create": chem not in index.ids,
+            "can_create": chem not in index.ids,  # the store's ids, set apart or not
             "sessions": sessions,
         })
     newest = lambda rs: max((r["last_changed"] or "" for r in rs), default="")  # noqa: E731
     chemicals.sort(key=lambda c: newest(c["sessions"]), reverse=True)
     unassigned.sort(key=lambda r: r["last_changed"] or "", reverse=True)
-    return {"chemicals": chemicals, "unassigned": unassigned,
+    return {"chemicals": chemicals, "unassigned": unassigned, "partitions": set_apart,
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 

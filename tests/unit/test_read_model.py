@@ -268,7 +268,8 @@ def test_publish_readiness_is_a_checklist_of_stale_llm_sections(session):
     assert by_section["summary"]["say"] != by_section["methods"]["say"]
     # Not served yet: absent, never guessed.
     assert "data_approval" not in state["readiness"]
-    assert "run" not in state
+    # The run is this process's record (ui_api.runs); none is under way.
+    assert state["run"] == {"in_flight": False, "started_at": None, "what": None}
 
 
 # ---------------------------------------------------------------------------

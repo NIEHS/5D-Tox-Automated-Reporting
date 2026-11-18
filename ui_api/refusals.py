@@ -63,6 +63,12 @@ STUDY_REFUSALS: dict[str, Refusal] = {
         "unreadable. Tell the maintainer."), None),
     "structure_unavailable": Refusal(404, (
         "PubChem did not return a structure picture."), None),
+    # A finished report and its live copy, kept as a pair (ui_api.demo).
+    "demo_reference": Refusal(409, (
+        "This is the finished report of a pair, kept as it is for comparison. The "
+        "act is done on its live copy ({counterpart})."), "study"),
+    "demo_copy_refused": Refusal(409, (
+        "The live copy was not reset: {why}."), "study"),
 }
 register(STUDY_REFUSALS)
 

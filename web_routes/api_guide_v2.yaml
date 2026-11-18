@@ -47,6 +47,20 @@ groups:
           Accepted only with the study's identifier typed out and the token of
           the rehearsal above, so that what is deleted is what was shown.
 
+      - op: POST /api/v2/demo/{report}/reset
+        title: Put a report's live copy back to its start state
+        does: >
+          For a demonstration, a finished report can have a live copy: the
+          same files, checked, with the same study facts stated, and nothing
+          combined or computed yet. This deletes the live copy and builds it
+          again from the finished report, which is only read. It is refused
+          while a long act is running on the copy.
+        reads: the finished report's files and declarations.
+        writes: the live copy's folders.
+        code:
+          - ui_api.demo.reset_live_copy
+          - tooling.demo_copy.reset
+
   - key: facts
     operations:
       - op: GET /api/v2/vocabularies

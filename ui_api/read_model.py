@@ -598,6 +598,16 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     members = members_state(dtxsid, store)
     if members is not None:
         state["members"] = members
+    # A long act under way on the study, known to this process (ui_api.runs).
+    from ui_api import runs
+    run = runs.current(dtxsid)
+    state["run"] = {"in_flight": bool(run), "started_at": run["started_at"] if run else None,
+                    "what": run["what"] if run else None}  # no "last": C5
+    # A finished report and its live copy (ui_api.demo): absent for any other.
+    from ui_api.demo import pair_of
+    pair = pair_of(dtxsid, session.parent)
+    if pair:
+        state["demo"] = pair
     state["stands"] = stands(state["kind"], state["phase"], state["processed"],
                              member_states=members, publish=state["readiness"]["publish"])
     return state
