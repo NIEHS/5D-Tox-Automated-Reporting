@@ -50,6 +50,12 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# The API page (/docs) is drawn from a declared guide: operations grouped by
+# workflow step, each under a plain title with what it reads, writes and where
+# its code is (web_routes/api_guide.py).  The routes themselves are unchanged.
+from web_routes import api_guide
+api_guide.install(app)
+
 
 # ---------------------------------------------------------------------------
 # Schema-validation error handler — ADR-0001 (BMDProject load barrier).
