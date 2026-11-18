@@ -1,7 +1,10 @@
 # The demo path: one spec for the screens the walkthrough needs
 
-**Draft, 2026-11-18, by the orchestrator. Not signed. Nothing in it is built, and
-nothing is to be built until the maintainer says so.**
+**Written 2026-11-18 by the orchestrator. The maintainer said "proceed" the same
+day: the spec stands as written, with the recommendations of §9 taken until the
+maintainer says otherwise. S5 (the review page) still waits for its own release.
+§8 records what the first checks found; where a finding changed the plan, the
+section says "As built".**
 
 The maintainer's goal for the two weeks to about 2026-12-02 is a **demo of this
 interface** to the study team, on the 1,2-dichlorobenzene inhalation report
@@ -78,54 +81,66 @@ spec.
 
 ### 3.2 The live copy's start state
 
-The start state is defined by what must be true, not by a list of files:
+The start state is what a study holds once its files are checked and what the
+files do not record has been stated:
 
 - each live study is in phase **VALIDATED** with no validation error, and
   INTEGRATE is its legal next action;
 - the study facts no file records (dosing days, dosing schedule) are stated, the
-  analysis method and the report definition are pinned, and the knowledge base is
-  assigned, each exactly as in the finished study;
+  analysis method is pinned and the knowledge base is assigned, each exactly as in
+  the finished study;
+- the report definition is **fixed** to the one the finished report renders from;
 - there is no combined dataset, no result, no written section and no reference
-  list;
-- the live report has no Background.
+  list; the live report has no Background.
 
-**[verify first]** whether the workflow can hold stated facts and pins before
-integration (stating a fact is legal only from INTEGRATED on). If it cannot, the
-start state is rebuilt by the tool below from the finished study's own stated-fact
-and pin files, and the acceptance criteria of §3.4 decide whether that is sound.
+**As built.** The copy is the finished study's artifacts of workflow steps 1 to 4
+(`files/`, `_fingerprints.json`, `validation_report.json`, `precedence.json`) and
+its declarations of steps 6 and 7, copied whole (HANDOFF §5 is the list). Stated
+facts do sit in a study before integration without harm: integration applies
+them again, as it does on every re-integration.
+
+**Found:** a study's own report definition is looked up by its session id
+(`studies/<id>/document`), so a copy under another id would render from the
+default definition. `document_model.definition_pin.pin_like` (new, on `main`)
+fixes the copy to the definition its source renders from.
 
 ### 3.3 The tool
 
-`tooling/demo_copy.py` (new, on `main`: it is about sessions, not the interface):
+`tooling/demo_copy.py` (on `main`, `0a80fa7`):
 
-- `make`: builds the three live sessions from the finished study's **input
-  files**, by running the workflow's own steps (import, validate, confirm) through
-  `safeguards.guarded`, then carrying over the stated facts, the pins and the
-  knowledge-base assignment. It refuses when a live session already exists.
-- `reset`: puts the three live sessions back to the start state from a snapshot
-  `make` took (kept outside `sessions/`). Two strengths:
-  - `reset` (default): the results cache is kept beside the snapshot and put back,
-    so a live Process reuses what did not change and finishes fast;
-  - `reset --cold`: no cache. Process computes everything and calls the language
-    model again.
-- `remove`: deletes the three live sessions and the snapshot, after listing them.
-- It never writes a session whose id is not one of the three live ids. No file of
-  a session is deleted by hand-picked name: the tool uses the core's own
-  invalidation, or replaces a whole session folder from the snapshot.
+- `make REPORT`: builds the live sessions and names the pair in the partition.
+  Refused when a live session already exists, and for a copy of a copy.
+- `reset REPORT`: deletes the live sessions and builds them again.
+- `remove REPORT`: deletes them and takes the pair out of the partition.
+- `status REPORT`: what each live session holds beyond its start state.
+- Only a folder that carries the tool's marker (`demo_copy.json`) is ever
+  deleted; the finished report is only read.
+- A running server holds part of a session in memory, so the interface resets
+  through the server: `POST /api/v2/demo/{report}/reset` (with its dry run,
+  `…/reset-preview`), refused while a long act runs on the copy.
 
-### 3.4 Acceptance criteria for the copy
+**As built: no warm reset.** Integration clears every results cache of a study
+(`workflow.steps.integrate_step`), so a cache put into the copy before a live
+Integrate is never read: the second live run of the rat study took the same 170 s
+as the first. The tool has no warm option; the way out of a slow live step is the
+switch to the finished report.
 
-- The state read model reports the live report as `kind: report` with two members,
-  and each live study as `kind: member` of it, phase VALIDATED, `processed: false`.
-- After a live Integrate and Process of both studies, every results table of the
-  live report equals the finished report's, cell for cell. (The written sections
-  differ: a model writes them again.)
-- The live report's Bookshelf page uses NIEHS-12's own report definition and prints
-  the substance's DTXSID without the suffix.
-- `reset` after a full live run restores the start state; a second live run gives
-  the same tables.
-- Run on a scratch store first; the real store is written only by the orchestrator,
-  once, with the maintainer's go.
+### 3.4 Acceptance criteria for the copy (checked 2026-11-18 on a scratch store)
+
+- ✓ The state read model reports the live report as `kind: report` with two
+  members, each live study as `kind: member`, phase VALIDATED, `processed: false`.
+- ✓ After a live Integrate and Process of both studies, every results table of the
+  live studies equals the finished studies', cell for cell (the five result
+  sections of each, the gene-set results, the statistics and benchmark dose
+  results). The model-written text differs, as expected, and with it the reference
+  list; the charts' data are the same and their drawings differ only in generated
+  ids.
+- ✓ The live report's Bookshelf page has the finished report's 205 headings and 46
+  identical tables. The suffixed id appears once, in the address of the session's
+  supplemental-data folder, which is the session's own.
+- ✓ `reset` after a full live run restores the start state.
+- ✓ Built in the real store on 2026-11-18 (`DTXSID6020430_live`, `_live_rat`,
+  `_live_mouse`; 33 MB).
 
 ### 3.5 The "Demo" partition in the Studies list
 
@@ -133,9 +148,16 @@ and pin files, and the acceptance criteria of §3.4 decide whether that is sound
   `{"Demo": ["DTXSID6020430", "DTXSID6020430_live"]}`. It is a person's
   declaration, not a derived state; `demo_copy.py make` writes the entry and
   `remove` takes it out.
-- `GET /api/v2/studies` gains `partitions: [{name, sessions: [id, …]}]`. A session
-  named in a partition is listed there (with its member studies under it) and not
-  again under its chemical.
+- `GET /api/v2/studies` gains `partitions: [{name, sessions: [{id, role, session,
+  members}]}]`. A session named in a partition is listed there (with its member
+  studies under it) and not again under its chemical. Which side a session is
+  (`finished` or `live`) is read from the copy's marker, and the state read model
+  carries it for every session of the pair (`demo {partition, role, counterpart,
+  counterpart_exists, report}`), so no page works it out.
+- **The finished side is left as it is:** every act of the interface is refused
+  on it (`demo_reference`), and its pages offer none.
+- **Built** (`ui-redesign` `1ab7cd7`, `3f9963a`): the block, the switch link in
+  every study page's header, the reset with its consequences from the backend.
 - The Studies list shows a partition as a titled block above the chemicals, with
   the two reports side by side: **"Finished"** and **"Live"**, each with where it
   stands and its next step. The study header of either carries a **"Switch to the
@@ -174,10 +196,9 @@ Backend:
   files, from `integrated.json`.
 - `GET /api/v2/studies/{id}/sections/{key}/sources` (new): for a results section,
   its rows → endpoints → experiments → source files, and the benchmark dose source
-  per assay and sex. **[verify first]** that the session database written by
-  Process (`source_file`, `experiment`, `endpoint`, `apical_result`) carries the
-  chain end to end; if a link is missing, the page shows the chain as far as it is
-  recorded and says where it stops.
+  per assay and sex. The chain is recorded per assay (§8, 3); where a link is
+  missing, the page shows the chain as far as it is recorded and says where it
+  stops.
 
 ### S2. Process (`process`): the analysis
 
@@ -214,7 +235,7 @@ A list of the written parts of the report, each marked **built from the data** o
 
 | Part | How it is written | What the page shows |
 |---|---|---|
-| Background (report) | model, from gathered public sources | the sources gathered, the model, the reference list, the citation check's result; the prompt as rebuilt from the same sources **[verify first]** |
+| Background (report) | model, from gathered public sources | the sources gathered, the model, the reference list, the citation check's result; the exact prompt for a Background written from 2026-11-18 on, "not recorded" for an earlier one (§8, 4) |
 | Materials and Methods | study design, dose selection, chemistry, benchmark dose analysis and eFDR built from the data; the rest by a model | per subsection, which of the two; the facts the model was given (the recorded Methods context) |
 | Results tables and their sentences | built from the data | says so; links to S1's "Follow a table back" |
 | Gene-level interpretation, per organ and sex | model, from the knowledge base | the text given to the model (recorded with the result), the papers offered to it, the knowledge base's name, the model |
@@ -300,7 +321,7 @@ guide's test does.
   live sessions: every act at the wrong moment, a reload in every wait, both
   studies, the switch link on every page.
 - **Rehearsal** replaces the per-module done sign-offs: the orchestrator runs the
-  path end to end on the live copy, cold and warm, and records the time of every
+  path end to end on the live copy and records the time of every
   wait. The maintainer's done sign-off is a rehearsal of their own.
 - **Dates:**
 
@@ -308,27 +329,45 @@ guide's test does.
 |---|---|
 | 2026-11-20 | the live copy, the Demo partition and the switch; S1 and S2 on the live copy |
 | 2026-11-24 (check-in with Scott) | S3 and S4; the path walkable end to end on the finished report, with the Bookshelf and the Word download reached by link; one timed live run |
-| 2026-12-01 | S5 (if released); fixes from the check-in; cold and warm rehearsals; the fallbacks of §7 tried |
+| 2026-12-01 | S5 (if released); fixes from the check-in; rehearsals; the fallbacks of §7 tried |
 
 ## 7. What can go wrong in front of the room, and the way out
 
 | What | The way out |
 |---|---|
-| A live Process or generation takes too long or fails | the switch link opens the same page of the finished report |
-| The language model gateway or a public source is unreachable | the same. A warm `reset` is meant to let Process reuse the model's earlier answers for what did not change; whether it does after a fresh Integrate is checked at rehearsal (§8, 5) |
+| A live Process (about three minutes a study) or a generation takes too long or fails | the switch link opens the same page of the finished report |
+| The language model gateway or a public source is unreachable | the same |
 | A live act left the copy in a state the next step refuses | `demo_copy.py reset` (seconds), then continue from Integrate |
-| The first load of a report's Bookshelf page is slow (about 50 s today) | both reports are opened once before the demo; **[verify first]** whether the second load is fast |
+| A report's Bookshelf page takes about 50 s every time it is opened | it is opened in its own tab before the demo and left open; a kept copy of the page is a possible fix (§9) |
 | A page shows a refusal | the refusal is the demonstration: it says why, and where it is cleared |
 
-## 8. To verify first (before anything rests on it)
+## 8. What was verified first (2026-11-18, on a scratch store)
 
-1. Stated facts and pins before integration (§3.2).
-2. The live ids: `kind`, members, the report definition and the printed DTXSID
-   come out right for `…_live`, `…_live_rat`, `…_live_mouse` (§3.4).
-3. The session database carries the row → endpoint → experiment → file chain (S1).
-4. What is recorded of the Background's and the Methods' prompts (S3).
-5. Times: Integrate and Process of each study, cold and warm; Background; the
-   Bookshelf page and the Word document, first and second load.
+1. **Stated facts and pins before integration:** hold (§3.2).
+2. **The live ids:** kind and members come out right; the report definition did
+   not, and is now fixed to the source's (§3.2, `pin_like`).
+3. **The chain from a table to its files** is recorded at the level of the assay:
+   the check's coverage matrix names, per assay, the workbook, the table converted
+   from it and the BMDExpress project; each converted table's sidecar names its
+   workbook; the dataset records which file each assay was taken from. A row of a
+   table maps to its assay and sex, so every row of one table has the same files.
+4. **Prompts:** recorded for the Summary (every run) and, from `0a80fa7` on, for
+   the Background (`narrative_runs/background/`); the finished NIEHS-12's
+   Background has none. The gene-level interpretations record the text given to the
+   model and the papers offered. The Methods record the facts the model was given,
+   not the prompt. The results narrative records its text and model only.
+5. **Times, NIEHS-12, one run each unless noted:**
+
+| Step | Rat study | Mouse study |
+|---|---|---|
+| Integrate | 28 s, 22 s | 28 s |
+| Accounting of the animals | 5 s, 2 s | 4 s |
+| Process (with the result sections) | 170 s, 170 s | 132 s |
+| Summary (by rule) | 2 s | 2 s |
+
+   The report's Bookshelf page: 45 to 54 s each time it is opened (it is built on
+   request and not kept). Of a Process run, about a minute is the drawing of the
+   charts and about a minute and a half the model's writing.
 
 ## 9. Open for the maintainer
 
@@ -349,7 +388,13 @@ guide's test does.
 5. **Scott's extras**, only if time is left, in this order: the assertion check
    on citations; the notebook that recapitulates a report's tables and figures;
    the overall integrity check.
-6. **The two workflow steps without a page** (BMD review, knowledge base; BOARD,
+6. **The Bookshelf page is built on every opening (about 50 s for NIEHS-12).** A
+   kept copy, rebuilt when the report's content changes, would open at once. Not
+   in the path; say if it should be.
+7. **The Studies list shows every study in the store**, the unpublished ones
+   (Bisphenol AF, Triclosan) among them, below the Demo block. Say if the demo's
+   screen should show the Demo block alone.
+8. **The two workflow steps without a page** (BMD review, knowledge base; BOARD,
    2026-11-18): not in the path. The Process page shows the knowledge base
    read-only; a flagged benchmark dose appears in the review rail as something
    that blocks publishing.
