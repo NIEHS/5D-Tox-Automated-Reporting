@@ -69,7 +69,7 @@ def test_the_copy_holds_the_checked_files_and_the_declarations_and_nothing_made_
 
 
 def test_the_copy_is_fixed_to_its_sources_report_definition(store):
-    from document_model.definition_pin import read_pin
+    from document_model.definition_pin import drift, read_pin
     from document_model.document_definition import current_definition_name, definition_name
 
     dc.make(REPORT)
@@ -77,6 +77,9 @@ def test_the_copy_is_fixed_to_its_sources_report_definition(store):
         pin = read_pin(copy)
         assert (pin["mode"], pin["name"]) == ("fixed", current_definition_name(source))
         assert definition_name(copy) == f"@pinned/{copy}"
+        # The copy's own id names no definition; that is not a change of the
+        # definition it was fixed to.
+        assert pin["like"] == source and drift(copy) is None
 
 
 def test_the_copy_reads_as_checked_with_integrate_next(store):
