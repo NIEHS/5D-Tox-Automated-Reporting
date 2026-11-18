@@ -69,6 +69,10 @@ STUDY_REFUSALS: dict[str, Refusal] = {
         "act is done on its live copy ({counterpart})."), "study"),
     "demo_copy_refused": Refusal(409, (
         "The live copy was not reset: {why}."), "study"),
+    # Following a results table back to its files (ui_api.dataset).
+    "table_not_found": Refusal(404, (
+        "This study's report has no results table {key}. The tables are written "
+        "when the analysis is run."), "process"),
 }
 register(STUDY_REFUSALS)
 
