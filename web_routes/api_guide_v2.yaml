@@ -70,6 +70,101 @@ groups:
           the rest) a study fact must be chosen from, and the form an
           identifier must have.
 
+  - key: writing
+    operations:
+      - op: GET /api/v2/studies/{dtxsid}/writing
+        title: List the written parts of a report, and who wrote each
+        does: >
+          Each part is marked as built from the study's data by the program,
+          written by a language model, or both (the Materials and Methods,
+          subsection by subsection). For a model's text it says what was
+          recorded about how it was written: the prompt, the inputs, or
+          nothing. A report over several studies lists its Background and,
+          per study, that study's parts.
+        reads: >
+          the section files, the Process results (the current file of each
+          kind) and the recorded runs.
+        code: ui_api.writing.writing_overview
+      - op: GET /api/v2/studies/{dtxsid}/writing/{part}
+        title: Show one written part and what the model was given
+        does: >
+          The text, the model, and what the model was given, each labeled as
+          what it is: as sent to the model, recorded with the result, rebuilt
+          from the recorded facts, or not recorded. Nothing that was not
+          recorded is reconstructed and shown as the record. For the Summary:
+          the prompt template and its version, the runs with their prompts,
+          and the numbers in the text that were not among the facts given.
+          For a gene-level interpretation: the knowledge base and the papers
+          offered.
+        reads: >
+          `background.json`, `summary.json`, the Process results for the
+          Methods, the benchmark dose summary and the interpretations, and
+          the recorded runs (`narrative_runs/`).
+        code:
+          - ui_api.writing.writing_part
+          - narrative.methods_prompt.build_methods_prompt
+          - narrative.summary_llm.render_for_session
+      - op: POST /api/v2/studies/{dtxsid}/writing/background
+        title: Write the Background and save it as a draft (new interface)
+        does: >
+          Public sources about the chemical are gathered; the writing is
+          refused when the hazard assessments (ATSDR, IRIS) could not be
+          reached. The model writes; a text with no references is refused.
+          The text is saved as a draft, never over a Background a person
+          approved, and the run is kept with the exact prompt sent. The
+          answer is a stream of the steps as they happen. Refused on the
+          finished report of a demonstration pair.
+        reads: PubChem, EPA, ATSDR and the other public sources; `identity.json`.
+        writes: "`background.json` (a new version) and a run under `narrative_runs/background/`."
+        code:
+          - ui_api.writing_acts.write_background
+          - narrative.data_gatherer.gather_all
+          - safeguards.sources.require_sources
+          - narrative.background_writer.generate_background
+          - workflow.section_writes.write_section
+      - op: POST /api/v2/studies/{dtxsid}/writing/summary
+        title: Have the model word the Summary, as a run (new interface)
+        does: >
+          The facts are picked from the study's results by rule; the model
+          words them under the current prompt template. The run is kept with
+          the exact prompt sent and the numbers in its text that were not
+          among the facts given. The report's Summary is not changed.
+        reads: the Process results and the current prompt template.
+        writes: a run under `narrative_runs/summary/`.
+        code:
+          - ui_api.writing_acts.run_summary
+          - narrative.summary_llm.generate_summary
+      - op: POST /api/v2/studies/{dtxsid}/writing/summary/runs/{run_id}/use
+        title: Take a Summary run's text into the report (new interface)
+        does: >
+          The run's text becomes the Summary, as a new version that is not
+          approved. A Summary a person approved is never replaced.
+        writes: "`summary.json` (a new version)."
+        code:
+          - ui_api.writing_acts.use_summary_run
+          - workflow.section_writes.write_section
+
+  - key: citations
+    operations:
+      - op: GET /api/v2/studies/{dtxsid}/references
+        title: Show the reference list, what cites each entry and where each paper came from
+        does: >
+          The list as the report prints it: the Background's sources, then
+          the papers the gene-level interpretations cite. For each entry: the
+          sentences that cite it, the genes a paper was offered for, and the
+          statements the knowledge base extracted from the paper. With it,
+          the citation check's result: how many citations could not be traced
+          to a supplied source. The check establishes that a citation points
+          at a source; it does not judge whether the source supports the
+          sentence.
+        reads: >
+          `background.json`, the interpretations with the papers offered to
+          each, and the study's knowledge base.
+        code:
+          - ui_api.writing_references.references
+          - narrative.references_builder.build_session_references
+          - knowledge_base.registry.kb_for
+
   - key: review
     operations:
       - op: GET /api/v2/studies/{dtxsid}/state
