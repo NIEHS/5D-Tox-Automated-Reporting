@@ -49,7 +49,10 @@ class TestStudyState:
         assert {"method", "definition"} <= set(state["pins"])
         assert state["pins"]["definition"]["source"] == "study"   # NIEHS-10's own definition
         assert state["readiness"]["publish"]["ready"] is True
-        assert "data_approval" not in state["readiness"] and "run" not in state
+        assert "data_approval" not in state["readiness"]
+    # No long act is under way (ui_api.runs), and the study is no demo pair's.
+    assert state["run"] == {"in_flight": False, "started_at": None, "what": None}
+    assert "demo" not in state
         keys = [s["key"] for s in state["sections"]]
         assert "summary" in keys and "background" in keys
 

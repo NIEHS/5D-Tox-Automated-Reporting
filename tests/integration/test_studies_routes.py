@@ -156,7 +156,8 @@ class TestReads:
         resp = api.get("/api/v2/studies")
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert set(body) == {"chemicals", "unassigned", "generated_at"}
+        assert set(body) == {"chemicals", "unassigned", "partitions", "generated_at"}
+    assert body["partitions"] == []  # nothing is set apart in this store
         chems = {c["dtxsid"]: c for c in body["chemicals"]}
         assert set(chems) == {"DTXSID1", "DTXSID2"}
         assert [r["kind"] for r in chems["DTXSID1"]["sessions"]] == [
