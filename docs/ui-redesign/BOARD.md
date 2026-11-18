@@ -101,6 +101,30 @@ What the content branch added that the plan below does not yet cover:
   are checked against the vocabulary). **Each needs a re-check against today's
   code before it is signed.**
 
+## The demo path (2026-11-18): the two weeks to about 2026-12-02
+
+The maintainer's goal: a **demo of this interface** to the study team on NIEHS-12
+(1,2-dichlorobenzene), data brought in and checked beforehand. Decided by the
+maintainer on 2026-11-18:
+
+- one **demo path spec** stands in for the per-module specs and sign-offs:
+  `modules/demo/spec.md` (**draft, awaiting the maintainer; nothing is built, and
+  nothing is to be started until the maintainer says so**);
+- two setups to switch between, a finished report and a live copy; the live copy
+  is **in the same store under another id**, and the pair is set apart in the
+  Studies list as **"Demo"**;
+- the review page follows the maintainer's idea (the Bookshelf view with controls
+  beside it, and a "make the Word document" button): **yes, but not started yet**;
+- source files and code paths are shown on the API page (`/docs`, by workflow
+  step and in plain words since main `54de38d`; this branch adds
+  `web_routes/api_guide_v2.yaml`, `1be3f31`) and in the notebook.
+
+A route added from now on needs an entry in `web_routes/api_guide*.yaml`
+(`tests/unit/test_api_guide.py` refuses one without).
+
+The module table below is the long plan; for these two weeks the demo path
+outranks it.
+
 ## Modules
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
