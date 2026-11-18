@@ -30,14 +30,13 @@ reference list, no history.  The phase is derived from what is there
 
     python -m tooling.demo_copy make   DTXSID6020430          # refuses if a copy exists
     python -m tooling.demo_copy reset  DTXSID6020430          # back to the start state
-    python -m tooling.demo_copy reset  DTXSID6020430 --cold   # … without the results cache
     python -m tooling.demo_copy remove DTXSID6020430
     python -m tooling.demo_copy status DTXSID6020430
 
-``reset`` (and ``make --warm``) also puts the finished studies' results cache
-(_cache_*.json) into the copy.  The cache is keyed by the content of its inputs
-(HANDOFF §4.6), so a live Process over the same data reuses it and calls no
-model; ``--cold`` leaves it out and Process computes and writes everything.
+No results cache is carried into the copy: integration clears a study's
+cache (workflow.steps.integrate_step), so a live run computes everything and
+the model writes its text again.  Measured on NIEHS-12's rat study
+(2026-11-18): Integrate about 25 s, Process about 3 minutes.
 
 The pair is named in the store's partitions (sessions/_partitions.json,
 {"Demo": [<report>, <report>_live]}), which a front end may list apart.
@@ -71,7 +70,6 @@ CHECKED = ("files", "_originals", "_fingerprints.json", "validation_report.json"
 DECLARED = ("identity.json", "study_design.json", "metadata_approved.json",
             "front_matter.json", "method_profile.json", "knowledge_base.json", "meta.json",
             "bmd_reviews.json", "deposit.json", "efdr.json", "supplemental")
-RESULTS_CACHE = "_cache_*.json"
 
 
 class DemoCopyError(RuntimeError):
@@ -131,8 +129,8 @@ def _is_copy(session: Path, of: str | None = None) -> bool:
     return isinstance(marker, dict) and (of is None or marker.get("of") == of)
 
 
-def _build(source_id: str, copy_id: str, *, report: str, members: dict[str, str] | None,
-           warm: bool) -> dict:
+def _build(source_id: str, copy_id: str, *, report: str,
+           members: dict[str, str] | None) -> dict:
     source, target = _root() / source_id, _root() / copy_id
     if not source.is_dir():
         raise DemoCopyError(f"there is no session {source_id} to copy")
@@ -146,15 +144,9 @@ def _build(source_id: str, copy_id: str, *, report: str, members: dict[str, str]
     from document_model.definition_pin import pin_like
     pin = pin_like(copy_id, source_id, by="demo_copy")
     copied.append(f"report definition {pin['name']} (fixed)")
-    cache = 0
-    if warm:
-        for file in sorted(source.glob(RESULTS_CACHE)):
-            shutil.copy2(file, target / file.name)
-            cache += 1
-    marker = {"of": report, "source": source_id, "made_at": now_iso(),
-              "results_cache": "copied" if warm else "none"}
+    marker = {"of": report, "source": source_id, "made_at": now_iso()}
     (target / MARKER).write_text(json.dumps(marker, indent=2), encoding="utf-8")
-    return {"id": copy_id, "source": source_id, "copied": copied, "cache_files": cache}
+    return {"id": copy_id, "source": source_id, "copied": copied}
 
 
 def _read_partitions() -> dict:
@@ -195,8 +187,7 @@ def _drop_from_partitions(ids: list[str]) -> None:
     _write_partitions(data)
 
 
-def make(report: str, *, suffix: str = "live", partition: str = "Demo",
-         warm: bool = False) -> dict:
+def make(report: str, *, suffix: str = "live", partition: str = "Demo") -> dict:
     """Build the live copy of ``report`` and name the pair in ``partition``.
     Refused when any session of the copy already exists."""
     p = plan(report, suffix)
@@ -207,12 +198,12 @@ def make(report: str, *, suffix: str = "live", partition: str = "Demo",
         raise DemoCopyError(f"a copy already exists ({', '.join(existing)}); "
                             "reset it, or remove it first")
     members = {key: copy for key, (_, copy) in p["members"].items()}
-    built = [_build(*p["report"], report=report, members=members or None, warm=warm)]
-    built += [_build(source, copy, report=report, members=None, warm=warm)
+    built = [_build(*p["report"], report=report, members=members or None)]
+    built += [_build(source, copy, report=report, members=None)
               for source, copy in p["members"].values()]
     _name_in_partition(partition, [report, p["report"][1]])
     return {"report": report, "copy": p["report"][1], "sessions": built,
-            "partition": partition, "results_cache": "copied" if warm else "none"}
+            "partition": partition}
 
 
 def _existing_copies(report: str, suffix: str) -> list[str]:
@@ -240,33 +231,15 @@ def remove(report: str, *, suffix: str = "live") -> dict:
     return {"report": report, "removed": copies}
 
 
-def reset(report: str, *, suffix: str = "live", partition: str = "Demo",
-          warm: bool = True) -> dict:
+def reset(report: str, *, suffix: str = "live", partition: str = "Demo") -> dict:
     """Put the live copy back to its start state: the copy is deleted and built
-    again from the finished report.  ``warm``: the results cache the copy's
-    own runs wrote is carried over (some units' keys name the session, so only
-    the copy's own cache serves them), on top of the finished studies'."""
-    import tempfile
-
+    again from the finished report."""
     copies = _existing_copies(report, suffix)
     if not copies:
         raise DemoCopyError(f"{report} has no live copy to reset; make one first")
-    with tempfile.TemporaryDirectory(dir=_root(), prefix="_demo_reset_") as stash:
-        kept: dict[str, list[Path]] = {}
-        for copy in copies:
-            if warm:
-                hold = Path(stash) / copy
-                hold.mkdir()
-                kept[copy] = [Path(shutil.move(str(f), str(hold / f.name)))
-                              for f in sorted((_root() / copy).glob(RESULTS_CACHE))]
-            shutil.rmtree(_root() / copy)
-        out = make(report, suffix=suffix, partition=partition, warm=warm)
-        for copy, files in kept.items():
-            for f in files:
-                shutil.move(str(f), str(_root() / copy / f.name))
-    for session in out["sessions"]:
-        session["cache_files"] = len(list((_root() / session["id"]).glob(RESULTS_CACHE)))
-    return out
+    for copy in copies:
+        shutil.rmtree(_root() / copy)
+    return make(report, suffix=suffix, partition=partition)
 
 
 def status(report: str, *, suffix: str = "live") -> dict:
@@ -279,12 +252,10 @@ def status(report: str, *, suffix: str = "live") -> dict:
     for source, copy in _pairs(p):
         folder = _root() / copy
         exists = folder.is_dir()
-        beyond = sorted(e.name for e in folder.iterdir()
-                        if e.name not in start and not e.name.startswith("_cache_")) if exists else []
+        beyond = sorted(e.name for e in folder.iterdir() if e.name not in start) if exists else []
         sessions.append({"id": copy, "source": source, "exists": exists,
                          "is_copy": exists and _is_copy(folder, of=report),
-                         "beyond_start": beyond,
-                         "cache_files": len(list(folder.glob(RESULTS_CACHE))) if exists else 0})
+                         "beyond_start": beyond})
     partitions = {name: ids for name, ids in _read_partitions().items()
                   if p["report"][1] in ids or report in ids}
     return {"report": report, "copy": p["report"][1], "sessions": sessions,
@@ -298,16 +269,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("report", help="the finished report's session id")
     ap.add_argument("--suffix", default="live")
     ap.add_argument("--partition", default="Demo")
-    ap.add_argument("--warm", action="store_true",
-                    help="make: also copy the finished studies' results cache")
-    ap.add_argument("--cold", action="store_true",
-                    help="reset: leave the results cache out")
     a = ap.parse_args(argv)
     try:
         if a.act == "make":
-            out = make(a.report, suffix=a.suffix, partition=a.partition, warm=a.warm)
+            out = make(a.report, suffix=a.suffix, partition=a.partition)
         elif a.act == "reset":
-            out = reset(a.report, suffix=a.suffix, partition=a.partition, warm=not a.cold)
+            out = reset(a.report, suffix=a.suffix, partition=a.partition)
         elif a.act == "remove":
             out = remove(a.report, suffix=a.suffix)
         else:
