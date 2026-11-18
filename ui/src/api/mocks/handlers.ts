@@ -12,6 +12,7 @@ import {
   stateNotFound,
 } from './fixtures'
 import { createDemoWritingHandlers } from './demoWriting'
+import { createDemoDataHandlers, resetDemoDataDb } from './demoData'
 import { createM1Handlers, resetM1Db } from './m1'
 import { running } from './runs'
 
@@ -37,6 +38,7 @@ export interface MockOptions {
 export function resetMockDb(): void {
   running.clear()
   resetM1Db()
+  resetDemoDataDb()
 }
 
 export function envelope(body: ErrorEnvelope): Response {
@@ -75,6 +77,10 @@ export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptio
     // answers the state of the sessions it creates, deletes or adds.
     ...createM1Handlers({ lookupDelayMs }),
 
+    // Combined data and Process (the demo path): the NIEHS-12 pair's studies.
+    // Before the shared state and the proposed Process mock below, which
+    // answer for every other study.
+    ...createDemoDataHandlers({ stepDelayMs }),
     // The Written sections page and its citations (the demo path): the finished
     // NIEHS-12 report and its live copy, with their own state.
     ...createDemoWritingHandlers({ stepDelayMs }),

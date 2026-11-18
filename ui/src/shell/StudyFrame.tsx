@@ -24,6 +24,12 @@ function groupsFor(kind: SessionKind | (string & {})): readonly ('data' | 'compu
   return ['data', 'computation', 'document']
 }
 
+/**
+ * Pages of a study's data that answer for a report themselves: reached on a
+ * report, they offer the choice of its studies (the demo path, spec §4).
+ */
+const REPORT_OFFERS_ITS_STUDIES = new Set(['dataset', 'process'])
+
 function StudyMenu({ studyId, kind, current, onPick }: { studyId: string; kind: string; current?: string; onPick?: () => void }) {
   const groups = groupsFor(kind).map((g) => ({
     type: 'group' as const,
@@ -92,7 +98,10 @@ export function StudyFrame() {
   if (!data.exists) return <NoSuchStudy id={id} reason={seenId === id ? 'deleted' : 'not_found'} />
   // A page a kind of session does not have (R1) is not offered, even by its address.
   const pageModule = module ? MODULES.find((m) => m.slug === module) : undefined
-  const pageHidden = pageModule !== undefined && !groupsFor(data.kind).includes(pageModule.group)
+  const pageHidden =
+    pageModule !== undefined &&
+    !groupsFor(data.kind).includes(pageModule.group) &&
+    !(data.kind === 'report' && REPORT_OFFERS_ITS_STUDIES.has(pageModule.slug))
 
   return (
     <Layout style={{ background: 'transparent' }}>

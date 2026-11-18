@@ -1,0 +1,41 @@
+{
+  "captured": "POST /api/v2/studies/DTXSID6020430_live_rat/integrate after a reset.",
+  "events": [
+    {
+      "event": "step",
+      "unit": "integrate",
+      "status": "computing",
+      "say": "Combining the files into one dataset"
+    },
+    {
+      "event": "step",
+      "unit": "integrate",
+      "status": "done",
+      "say": "Combining the files into one dataset",
+      "ms": 27713
+    },
+    {
+      "event": "step",
+      "unit": "accounting",
+      "status": "computing",
+      "say": "Accounting for every animal"
+    },
+    {
+      "event": "step",
+      "unit": "accounting",
+      "status": "done",
+      "say": "Accounting for every animal",
+      "ms": 741
+    },
+    {
+      "event": "result",
+      "ok": true,
+      "summary": {
+        "experiments": 9,
+        "own_bmd_analyses": 5,
+        "data_approval_withdrawn": false,
+        "accounting_problems": 0
+      }
+    }
+  ]
+}

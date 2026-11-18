@@ -1,0 +1,215 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_live_rat",
+    "key": "bm2_clinical-chemistry",
+    "title": "Clinical Chemistry",
+    "assay": "Clinical Chemistry",
+    "caption": "Summary of Select Clinical Chemistry Data for Female Rats Exposed to 1,2-DCB for Five Days",
+    "has_benchmark_doses": true,
+    "benchmark_dose_recorded": true,
+    "sexes": [
+      {
+        "sex": "Female",
+        "experiments": [
+          {
+            "name": "clin_chem_truth_female",
+            "organ": "blood",
+            "endpoints": 16,
+            "animals": 40,
+            "endpoint_names": [
+              "Alanine aminotransferase",
+              "Albumin",
+              "Alkaline phosphatase",
+              "Aspartate Aminotransferase",
+              "Bile salts/acids",
+              "Cholesterol",
+              "Creatine kinase",
+              "Creatinine",
+              "Direct Bilirubin",
+              "Globulin",
+              "Glucose",
+              "Sorbitol dehydrogenase",
+              "Total Bilirubin",
+              "Total protein",
+              "Triglycerides",
+              "Urea Nitrogen"
+            ]
+          }
+        ],
+        "files": [
+          {
+            "filename": "clin_chem_truth_female.txt",
+            "kind": "txt_csv",
+            "file_type": "txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "stops": null,
+        "benchmark_dose": {
+          "source": "inferred",
+          "bmr": {
+            "type": "SD",
+            "factor": 1
+          },
+          "constant_variance": true,
+          "models": [
+            "Hill",
+            "Power",
+            "Exponential 3",
+            "Exponential 5"
+          ]
+        },
+        "rows": [
+          {
+            "label": "n",
+            "heading": false,
+            "count_row": true,
+            "endpoint_in_dataset": null,
+            "bmd": "NA",
+            "bmdl": "NA"
+          },
+          {
+            "label": "Alanine aminotransferase",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Albumin",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Alkaline phosphatase",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Aspartate Aminotransferase",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Bile salts/acids",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "141.0",
+            "bmdl": "47.1"
+          },
+          {
+            "label": "Cholesterol",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "238.4",
+            "bmdl": "147.3"
+          },
+          {
+            "label": "Creatine kinase",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Creatinine",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Direct Bilirubin",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Globulin",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Glucose",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "360.3",
+            "bmdl": "184.0"
+          },
+          {
+            "label": "Sorbitol dehydrogenase",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Total Bilirubin",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Total protein",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Triglycerides",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Urea Nitrogen",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "A/G Ratio",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "182.3",
+            "bmdl": "99.4"
+          }
+        ]
+      }
+    ]
+  }
+}

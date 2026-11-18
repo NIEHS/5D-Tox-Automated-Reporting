@@ -349,6 +349,8 @@ app.include_router(studies_routes.router)
 
 import web_routes.demo_routes as demo_routes  # a finished report and its live copy
 app.include_router(demo_routes.router)
+import web_routes.v2_data_routes as v2_data_routes  # Combined data and Process (the demo path)
+app.include_router(v2_data_routes.router)
 
 import web_routes.v2_writing_routes as v2_writing_routes  # the written sections, the citations
 app.include_router(v2_writing_routes.router)

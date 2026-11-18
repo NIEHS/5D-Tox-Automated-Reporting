@@ -1,0 +1,31 @@
+{
+  "status": 200,
+  "body": {
+    "complete": true,
+    "values": {
+      "species": "rat",
+      "strain": "Sprague-Dawley",
+      "route": "inhaled",
+      "vehicle": null,
+      "duration_days": 5,
+      "dosing_days": 5,
+      "dosing_schedule": "6 hours plus T90 per day",
+      "dose_unit": "ppm"
+    },
+    "sources": {
+      "species": "stated",
+      "strain": "stated",
+      "route": "stated",
+      "duration_days": "stated",
+      "dose_unit": "recorded",
+      "dosing_days": "stated",
+      "dosing_schedule": "stated"
+    },
+    "missing": [],
+    "conflicting": {},
+    "not_applicable": [
+      "vehicle"
+    ],
+    "problems": []
+  }
+}

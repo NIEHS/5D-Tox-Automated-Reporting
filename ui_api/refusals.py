@@ -89,6 +89,10 @@ STUDY_REFUSALS: dict[str, Refusal] = {
     "writing_failed": Refusal(502, (
         "The language model returned no text. Nothing in the report was changed; "
         "try again."), None),
+    # Following a results table back to its files (ui_api.dataset).
+    "table_not_found": Refusal(404, (
+        "This study's report has no results table {key}. The tables are written "
+        "when the analysis is run."), "process"),
 }
 register(STUDY_REFUSALS)
 

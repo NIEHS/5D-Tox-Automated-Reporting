@@ -64,6 +64,97 @@ groups:
           - ui_api.demo.reset_live_copy
           - tooling.demo_copy.reset
 
+  - key: dataset
+    operations:
+      - op: GET /api/v2/studies/{dtxsid}/dataset
+        title: Show a study's files and the dataset combined from them (new interface)
+        does: >
+          Before the files are combined: each file with what the file check
+          recognized in it, and for each assay the workbook, the table
+          converted from it and the BMDExpress project. After: the
+          experiments of the dataset, the file each assay's data was taken
+          from, whether the study's own benchmark dose analysis is in the
+          dataset, and the summary of the animal accounting. Nothing is
+          changed by asking.
+        reads: >
+          `_fingerprints.json`, `validation_report.json`, the converted
+          tables' `.sidecar.json` files, `integrated.json` (through the
+          loader that checks its form), `animal_report.json`.
+        code: ui_api.dataset.study_dataset
+        notebook: 8. Integrate
+      - op: POST /api/v2/studies/{dtxsid}/integrate
+        title: Combine the files into one dataset, then account for every animal (new interface)
+        does: >
+          The two steps run one after the other, as one act, and the answer
+          arrives as a stream of lines: a line when each step starts and
+          ends, then the result. It is refused before it starts when the
+          files have not passed the check, while another long act runs on
+          the study, and on the finished report of a demonstration pair.
+        reads: the checked files, and the study's recorded chemical identity (`identity.json`).
+        writes: >
+          `integrated.json` and the per-animal details beside it,
+          `integration_basis.json`, `animal_report.json`. Results computed
+          from an earlier dataset are removed.
+        code:
+          - ui_api.dataset.start_integrate
+          - workflow.steps.integrate_step
+          - workflow.steps.generate_animal_report_step
+        notebook: 8. Integrate
+      - op: GET /api/v2/studies/{dtxsid}/tables
+        title: List the results tables of a study's report (new interface)
+        does: >
+          One entry for each results section the analysis wrote, with its
+          assay, its sexes and whether it prints benchmark doses.
+        reads: the results sections (`bm2_*.json`).
+        code: ui_api.dataset.result_tables
+      - op: GET /api/v2/studies/{dtxsid}/tables/{key}/sources
+        title: Follow one results table back to the files it was built from (new interface)
+        does: >
+          For each sex of the table: its rows, the experiment of that assay
+          and sex in the dataset, the file the dataset says the data was
+          taken from, and the workbook that file was converted from. For the
+          benchmark doses it says whether they are the study's own analysis
+          or were fit by this application, at which benchmark response.
+          Every link is a record read as written; where a record is missing,
+          the answer says at which link the chain stops.
+        reads: >
+          the results section, `integrated.json` (through the loader that
+          checks its form), `_fingerprints.json`, the converted tables'
+          `.sidecar.json` files, and the record of the benchmark dose method
+          the last analysis kept.
+        code:
+          - ui_api.dataset.table_sources
+          - tables.apical_bmds.apical_bmd_method
+
+  - key: process
+    operations:
+      - op: POST /api/v2/studies/{dtxsid}/process
+        title: Run the analysis, then write the results sections and the Summary (new interface)
+        does: >
+          Runs the whole analysis under the method and the study facts
+          already fixed for the study; no setting is taken from the request.
+          The answer arrives as a stream of lines: each unit of work as it
+          is computed or reused, then the result, which names what was
+          computed and what was reused, the sections written, the approvals
+          the new numbers withdrew, and how many citations the check
+          removed. It is refused before it starts when the data has not been
+          reviewed, when no person has chosen the method, when a study fact
+          is missing, while another long act runs on the study, and on the
+          finished report of a demonstration pair.
+        reads: >
+          `integrated.json`, the per-animal details beside it, the pinned
+          method, the stated study facts, the knowledge base.
+        writes: >
+          the results of each unit of work, the results sections
+          (`bm2_*.json`), `summary.json`, `references.json`, the study's
+          database.
+        code:
+          - ui_api.process_run.start_process
+          - workflow.steps.process_step
+          - workflow.steps.materialize_result_sections
+          - workflow.steps.materialize_summary
+        notebook: 12. Process
+
   - key: facts
     operations:
       - op: GET /api/v2/vocabularies
