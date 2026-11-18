@@ -1,0 +1,88 @@
+# The new interface's own routes (/api/v2/…), added to the API page's guide
+# (web_routes/api_guide.yaml; the format is described there).
+
+groups:
+
+  - key: studies
+    order: 5
+    title: Studies
+    about: >
+      The list of studies the server holds, and creating, opening and deleting
+      one. A study is filed under its test article's identifier (DTXSID).
+    operations:
+      - op: GET /api/v2/studies
+        title: List every study, grouped by chemical
+        does: >
+          Under each chemical: the study or the report first, then a report's
+          member studies and its published content. The chemical changed most
+          recently comes first.
+        reads: the study store, one folder per study.
+        code: ui_api.studies.list_studies
+      - op: GET /api/v2/studies/{dtxsid}
+        title: Show one study's entry in the list, with its details
+        code: ui_api.studies.study_summary
+      - op: GET /api/v2/chemicals/{dtxsid}
+        title: Look up the chemical a DTXSID names
+        does: Asks PubChem; it takes a few seconds. Nothing is saved.
+      - op: GET /api/v2/chemicals/{dtxsid}/structure.png
+        title: Show the chemical's structure drawing
+      - op: GET /api/v2/studies/{dtxsid}/creation-check
+        title: Check whether a study can be created under a DTXSID
+      - op: POST /api/v2/studies
+        title: Create a study
+        does: >
+          A study is created with the chemical identity a person confirmed
+          from the lookup, or with its identity marked as still to be
+          confirmed.
+        writes: a new folder in the study store.
+      - op: PUT /api/v2/studies/{dtxsid}/identity
+        title: Fill in a study's missing chemical identity from a confirmed lookup
+        writes: "`identity.json`."
+      - op: GET /api/v2/studies/{dtxsid}/delete-preview
+        title: Show what deleting a study would delete, keep and lose
+        does: A rehearsal; nothing is deleted.
+      - op: POST /api/v2/studies/{dtxsid}/delete
+        title: Delete a study for good
+        does: >
+          Accepted only with the study's identifier typed out and the token of
+          the rehearsal above, so that what is deleted is what was shown.
+
+  - key: facts
+    operations:
+      - op: GET /api/v2/vocabularies
+        title: List the permitted values for study facts
+        does: >
+          The controlled lists (species, strains, routes, vehicles, organs and
+          the rest) a study fact must be chosen from, and the form an
+          identifier must have.
+
+  - key: review
+    operations:
+      - op: GET /api/v2/studies/{dtxsid}/state
+        title: Show everything the interface knows about a study, in one answer
+        does: >
+          The study's phase, the actions permitted in it, its chemical, the
+          analysis method and report definition fixed for it, every section
+          with its state, and whether the report may be published. All of it
+          is worked out from the study's files each time it is asked; nothing
+          is changed by asking.
+        code: ui_api.read_model.study_state
+        notebook: 17. Where things stand
+      - op: POST /api/v2/studies/{dtxsid}/sections/{key}/accept
+        title: Approve a section as it stands (new interface)
+        does: The section's text is never changed by approving it.
+        code: workflow.steps.accept_section_step
+        notebook: 14. Sections and the publish gate
+      - op: POST /api/v2/studies/{dtxsid}/sections/{key}/release
+        title: Reopen an approved section, with a reason (new interface)
+        does: The reason is kept in the section's history.
+        code: workflow.steps.release_section_step
+      - op: POST /api/v2/studies/{dtxsid}/sections/{key}/restore
+        title: Bring back an earlier version of a section (new interface)
+        does: The earlier text returns as a new version, not approved; approving it is a separate act.
+        code: workflow.steps.restore_section_step
+      - op: GET /api/v2/studies/{dtxsid}/sections/{key}/history
+        title: List a section's versions and what happened to each
+        code: workflow.section_writes.section_history
+      - op: GET /api/v2/studies/{dtxsid}/sections/{key}/history/{version}
+        title: Show one version of a section

@@ -100,9 +100,12 @@ def test_the_wording_addresses_nobody_and_is_american(guide):
 
 def test_the_page_lists_the_workflow_in_order(schema, guide):
     tags = [t["name"] for t in schema["tags"]]
-    assert tags[:4] == ["1. Study files", "2. Combined data: one dataset from all the files",
-                        "3. Study facts the report states",
-                        "4. Process: statistics, benchmark doses, tables and figures"]
+    # On this branch the new interface's guide (api_guide_v2.yaml) puts its
+    # Studies group first.
+    assert tags[:5] == ["1. Studies", "2. Study files",
+                        "3. Combined data: one dataset from all the files",
+                        "4. Study facts the report states",
+                        "5. Process: statistics, benchmark doses, tables and figures"]
     assert tags[-1] == "Not described on this page"
     # One group for every operation, and no operation left with FastAPI's
     # title from the function's name.
