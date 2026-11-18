@@ -138,6 +138,35 @@ def pin_definition(dtxsid: str, mode: str = FIXED, *, by: str = "user") -> dict:
     return pin
 
 
+def pin_like(dtxsid: str, source: str, *, by: str = "copy") -> dict:
+    """Pin ``dtxsid`` FIXED to the definition ``source`` renders from now.
+
+    For a copy of a session under another id: a study's own definition is
+    found by its id (``studies/<id>/document``), so the copy's files would
+    give it the default.  The pin keeps the source's definition name; the
+    snapshot is the source's composed definition (its own snapshot when the
+    source is FIXED)."""
+    old_source = read_pin(source)
+    if old_source and old_source.get("mode") == FIXED:
+        name, raw = old_source.get("name"), load_snapshot(source)
+    else:
+        name, raw = _current(source)
+    session = _session(dtxsid)
+    pin = {"name": name, "hash": definition_hash(raw), "mode": FIXED,
+           "pinned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "pinned_by": by}
+    old = read_pin(dtxsid)
+    if old:
+        if (old.get("name"), old.get("hash"), old.get("mode")) == (name, pin["hash"], FIXED):
+            return old
+        _archive(session, old)
+    session.mkdir(parents=True, exist_ok=True)
+    (session / SNAPSHOT_FILE).write_text(
+        yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    (session / PIN_FILE).write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
+    return pin
+
+
 def ensure_pin(dtxsid: str) -> dict:
     """The study's pin, made current: a study with none TRACKS (the default);
     a TRACK pin whose definition changed is re-pinned (the change recorded in

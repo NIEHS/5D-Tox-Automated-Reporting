@@ -517,6 +517,11 @@ def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = 
     except StepError as e:
         _log(f"  REFUSED ({getattr(e, 'code', e.status_code)}): {e.message} — nothing saved")
         return
+    # The run is kept with the exact prompt sent, as the Summary's runs are.
+    from narrative.background_writer import background_run_record
+    from pipeline import prompt_store
+    prompt_store.save_run(dtxsid, "background",
+                          background_run_record(dtxsid, result, version=out.get("version")))
     _log(f"  {len(paragraphs)} paragraph(s), {len(result.get('references', []))} reference(s)"
          f" — {out['outcome']}, version {out['version']}")
 

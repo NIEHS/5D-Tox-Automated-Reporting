@@ -485,6 +485,8 @@ def generate_background(data: BackgroundData,
             when the LLM omits the block.
           - "model_used": Which LLM model was used
           - "prompt_tokens_approx": Approximate input token count
+          - "prompt": {"system", "user"} — the exact text sent to the model
+            (kept with the run: background_run_record)
     """
     prompt = build_prompt(data)
     system = (
@@ -550,6 +552,25 @@ def generate_background(data: BackgroundData,
         "abstract_background": abstract_background,
         "model_used": model_used,
         "prompt_tokens_approx": prompt_tokens_approx,
+        "prompt": {"system": system, "user": prompt},
+    }
+
+
+def background_run_record(dtxsid: str, result: dict, *, version: int | None = None) -> dict:
+    """The record of one Background generation, to keep beside the section
+    (pipeline.prompt_store.save_run(dtxsid, "background", …)): the exact prompt
+    sent, the model, the text it wrote, the references the text was reconciled
+    to and the citation check's report.  ``version``: the section version the
+    text was saved as, when it was saved."""
+    return {
+        "section": "background",
+        "dtxsid": dtxsid,
+        "prompt": result.get("prompt"),
+        "model_used": result.get("model_used"),
+        "paragraphs": result.get("paragraphs") or [],
+        "references": result.get("references") or [],
+        "citation_report": result.get("citation_report"),
+        "section_version": version,
     }
 
 
