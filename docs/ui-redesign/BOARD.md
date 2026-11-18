@@ -61,6 +61,46 @@ skeleton, core track, 18 merged questions). **Signed 2026-10-14** (decisions in 
   - The bookshelf and prompt-workshop relation predicates are the content's
     again; `ui_api.studies` keeps its own strict readers.
 
+## Picked up again (2026-11-18)
+
+No interface work since 2026-10-24. The content branch moved on meanwhile; `main`
+(through `9b28fa3`) was merged here on 2026-11-18 with no conflict and no change
+to `ui/` or `ui_api/` (tag `pre-merge-main-2026-11-18` is the state before). The
+app runs from this worktree on 9000; 9100 opens the interface and 9300 the
+Bookshelf (`tooling/port_alias.py`); the notebook is on 9200. The port list in
+`TEAM.md` is out of date on this point.
+
+What the content branch added that the plan below does not yet cover:
+
+- **Two workflow places have no module** (`safeguards.refusals.PLACES` gained
+  `bmd_review` and `knowledge_base`; `ui_api.refusals.PLACE_MODULE` has neither).
+  `tests/unit/test_ui_api_layering.py::test_every_place_has_a_module` fails on it.
+  - BMD review: a reviewer rejects a flagged apical BMD (UREP); the publish gate
+    waits on a pending flag (ADR-0033).
+  - Knowledge base: which named knowledge base a study's interpretation reads
+    (ADR-0034).
+  - **Open for the maintainer:** a module each, or folded into D1 and M5.
+- **Study parameters are recorded or stated, never assumed** (ADR-0035). Process
+  is refused (`study_parameters_incomplete`, fix: the facts place, so M4) until
+  species, strain, route, vehicle, duration, dosing days, dosing schedule and dose
+  unit are each recorded by the data or stated. The engine derives them
+  (`GET /api/workflow/{id}/study-parameters`); stating merges, and null withdraws
+  (`workflow.steps.record_study_design`). M4 has no screen, so today a fact can
+  be stated only from the command line or the notebook. BPAF and Triclosan are
+  stopped on dosing days and schedule.
+- **The read model does not know about them.** `stands.next` for BPAF reads
+  "Review the report's sections" while its report is refused and two facts are
+  missing.
+- **A report states the computation that ran** (ADR-0036); a study processed
+  before it is refused until processed again. The Bookshelf shows the reason.
+- `tests/unit/test_read_model.py::test_a_broken_snapshot_is_reported_and_the_sections_still_list`
+  fails: the engine's knowledge-base check raises on a broken definition pin
+  before the read model can report it.
+- The C3, C4 and M2 specs were written on 2026-10-15/16 against the code of that
+  day. ADR-0031, 0032 and 0035 have since done part of C3 (design saves merge and
+  are checked against the vocabulary). **Each needs a re-check against today's
+  code before it is signed.**
+
 ## Modules
 
 | Module | Stage | On it | Spec signed | Done signed | Blocked by |
