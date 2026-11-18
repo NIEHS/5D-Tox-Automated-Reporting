@@ -275,6 +275,18 @@ export interface MemberStudy {
   readiness?: { publish?: Readiness }
 }
 
+/** A finished report and its live copy (ui_api.demo); served only for a session of such a pair. */
+export interface DemoPair {
+  /** the partition of the studies list that names the pair ("Demo") */
+  partition: string | null
+  role: 'finished' | 'live' | (string & {})
+  /** the session that corresponds to this one on the other side */
+  counterpart: string
+  counterpart_exists: boolean
+  /** the report of this session's own side (itself, for a report) */
+  report: string
+}
+
 /** A study that exists. */
 export interface ExistingStudyState {
   id: string
@@ -298,6 +310,8 @@ export interface ExistingStudyState {
   }
   /** only for a report over several studies */
   members?: MemberStudy[]
+  /** only for a session of a finished report and its live copy */
+  demo?: DemoPair
   /** the chemical's DTXSID, null when the id names none (M1 R1) */
   chemical_dtxsid: string | null
   /** how it was read from the id: the id itself, or its prefix before a suffix */

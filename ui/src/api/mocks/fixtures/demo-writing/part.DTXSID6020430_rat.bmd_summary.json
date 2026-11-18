@@ -1,0 +1,37 @@
+{
+  "status": 200,
+  "body": {
+    "key": "bmd_summary",
+    "study": "DTXSID6020430_rat",
+    "title": "Benchmark dose summary: the interpreting paragraphs",
+    "written_by": "model",
+    "written_by_say": "The summary's table and its describing sentences are built from the data. These paragraphs, which interpret the pattern of benchmark doses, are written by a language model.",
+    "model": "claude-sonnet-4-6",
+    "exists": true,
+    "approved": false,
+    "recorded": {
+      "prompt": "not_recorded",
+      "inputs": "not_recorded",
+      "say": "Neither the prompt nor the findings given to the model were recorded."
+    },
+    "text": [
+      {
+        "heading": null,
+        "paragraphs": [
+          "In female Sprague Dawley rats, the apical endpoint benchmark dose (BMD) results for 1,2-Dichlorobenzene (1,2-DCB) indicated that the liver and kidneys were the most sensitive target organs following a 5-day inhalation exposure. Relative liver weight showed the lowest BMD of all endpoints modeled, with a benchmark response occurring at approximately 58 ppm, followed closely by relative right and left kidney weights at approximately 93 and 101 ppm, respectively. These organ weight increases preceded effects on absolute liver weight (BMD approximately 114 ppm) and clinical chemistry endpoints, indicating that adaptive or early toxic responses in hepatic and renal tissue were detectable at substantially lower concentrations than systemic indicators of metabolic disruption. The clustering of liver- and kidney-related BMDs well below 150 ppm, compared with body weight-related endpoints that did not reach benchmark magnitude until approximately 227–273 ppm, strongly implicated the liver as the primary target organ and the kidney as a co-target of 1,2-DCB toxicity in female rats.",
+          "The pattern of directional changes across endpoints in female rats was biologically coherent and consistent with hepatotoxicity driven by 1,2-DCB exposure. Increases in relative and absolute liver weight were accompanied by elevations in bile salts/acids (BMD approximately 141 ppm) and cholesterol (BMD approximately 238 ppm), as well as an increase in the albumin-to-globulin (A/G) ratio, together suggesting altered hepatic lipid metabolism and biliary function at concentrations well within the tested range. The decrease in glucose at approximately 360 ppm was consistent with impaired hepatic metabolic function at higher concentrations, further reinforcing the liver as a central target. The progressive separation of BMDs across the full range of approximately 58 to 360 ppm indicated a relatively shallow dose-response relationship across the endpoint spectrum rather than a steep, threshold-like transition, with early organomegaly giving way to systemic metabolic perturbation only at higher concentrations. Because only female rat data were provided, formal sex comparisons could not be made; however, the internally consistent biological narrative in female rats — spanning organ weight increases, biliary biomarkers, and downstream metabolic effects — suggests that 1,2-DCB is a moderately potent hepatorenal toxicant in this species and sex, with apical effects emerging across a broad but biologically meaningful concentration range beginning at approximately 58 ppm."
+        ]
+      }
+    ],
+    "given": [
+      {
+        "id": "prompt",
+        "title": "The prompt",
+        "record": "not_recorded",
+        "say": "Only the text and the model's name were recorded. The prompt, and the list of findings it stated, were not.",
+        "text": null,
+        "chars": 0
+      }
+    ]
+  }
+}

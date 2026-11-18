@@ -69,6 +69,26 @@ STUDY_REFUSALS: dict[str, Refusal] = {
         "act is done on its live copy ({counterpart})."), "study"),
     "demo_copy_refused": Refusal(409, (
         "The live copy was not reset: {why}."), "study"),
+    # The written sections and their acts (ui_api.writing, ui_api.writing_acts).
+    "writing_part_not_found": Refusal(404, (
+        "This study has no written part called “{part}”."), None),
+    "background_is_the_reports": Refusal(409, (
+        "The Background belongs to the report ({parent}), not to one of its studies. "
+        "It is written on the report's page."), None),
+    "summary_is_a_studys": Refusal(409, (
+        "A Summary is written for each study of a report, from that study's results. "
+        "It is written on the study's page."), None),
+    "summary_not_ready": Refusal(409, (
+        "The Summary can't be worded now: {why}"), None),
+    "summary_run_not_found": Refusal(404, (
+        "This study has no such Summary run. It may belong to another study."), None),
+    "model_not_allowed": Refusal(403, (
+        "The language model this needs is not one this study's data may be sent to. "
+        "Nothing was sent. Tell the maintainer: the model allowed for unpublished data "
+        "is set in the model policy."), None),
+    "writing_failed": Refusal(502, (
+        "The language model returned no text. Nothing in the report was changed; "
+        "try again."), None),
 }
 register(STUDY_REFUSALS)
 

@@ -1,0 +1,88 @@
+{
+  "status": 200,
+  "body": {
+    "key": "results",
+    "study": "DTXSID6020430_rat",
+    "title": "Results tables and their sentences",
+    "written_by": "data",
+    "written_by_say": "The tables, their footnotes and the sentences under them are built from the study's data by the program. No language model is involved.",
+    "model": null,
+    "exists": true,
+    "approved": false,
+    "subsections": [
+      {
+        "key": "bm2_body-weight",
+        "heading": "Body Weight",
+        "written_by": "data"
+      },
+      {
+        "key": "bm2_clinical-chemistry",
+        "heading": "Clinical Chemistry",
+        "written_by": "data"
+      },
+      {
+        "key": "bm2_clinical-observations",
+        "heading": "Clinical Observations",
+        "written_by": "data"
+      },
+      {
+        "key": "bm2_organ-weight",
+        "heading": "Organ Weight",
+        "written_by": "data"
+      },
+      {
+        "key": "bm2_tissue-concentration",
+        "heading": "Tissue Concentration",
+        "written_by": "data"
+      }
+    ],
+    "recorded": null,
+    "text": [
+      {
+        "key": "bm2_body-weight",
+        "heading": "Body Weight",
+        "written_by": "data",
+        "caption": "Summary of Body Weights and Body Weight Gain of Female Rats Exposed to 1,2-DCB for Five Days",
+        "paragraphs": [
+          "Body weight gain was significantly decreased in female rats at ≥500 ppm with a negative trend (Table 2). The BMD and BMDL were 273.4 and 215.4 ppm, respectively. Terminal body weight was significantly decreased in female rats at ≥500 ppm with a negative trend (Table 2). The BMD and BMDL were 298.1 and 133.7 ppm, respectively. Terminal body weight was significantly decreased in female rats at ≥500 ppm with a negative trend (Table 2). The BMD and BMDL were 227.1 and 116.4 ppm, respectively."
+        ]
+      },
+      {
+        "key": "bm2_clinical-chemistry",
+        "heading": "Clinical Chemistry",
+        "written_by": "data",
+        "caption": "Summary of Select Clinical Chemistry Data for Female Rats Exposed to 1,2-DCB for Five Days",
+        "paragraphs": [
+          "In female rats, Bile salts/acids was significantly increased at ≥250 ppm with a positive trend. The BMD and BMDL were 141.0 and 47.1 ppm, respectively. Cholesterol was significantly increased at ≥500 ppm with a positive trend. The BMD and BMDL were 238.4 and 147.3 ppm, respectively. Glucose was significantly decreased at ≥500 ppm with a negative trend. The BMD and BMDL were 360.3 and 184.0 ppm, respectively. A/G Ratio was significantly increased at ≥500 ppm with a positive trend. The BMD and BMDL were 182.3 and 99.4 ppm, respectively."
+        ]
+      },
+      {
+        "key": "bm2_clinical-observations",
+        "heading": "Clinical Observations",
+        "written_by": "data",
+        "caption": null,
+        "paragraphs": []
+      },
+      {
+        "key": "bm2_organ-weight",
+        "heading": "Organ Weight",
+        "written_by": "data",
+        "caption": "Summary of Select Organ Weights of Female Rats Exposed to 1,2-DCB for Five Days",
+        "paragraphs": [
+          "In female rats at study termination, a significant increase in Liver absolute and relative weight occurred in dose groups ≥100 ppm; these endpoints had positive trends (Table 3). The BMDs (BMDLs) were 113.9 (41.8) ppm (absolute weight) and 57.9 (29.9) ppm (relative weight), respectively. a significant increase in Kidney-Left relative weight occurred in dose groups ≥100 ppm; these endpoints had positive trends (Table 3). The BMD (BMDL) was 101.2 (40.9) ppm (relative weight). a significant increase in Kidney-Right relative weight occurred in dose groups ≥100 ppm; these endpoints had positive trends (Table 3). The BMD (BMDL) was 93.2 (43.2) ppm (relative weight)."
+        ]
+      },
+      {
+        "key": "bm2_tissue-concentration",
+        "heading": "Tissue Concentration",
+        "written_by": "data",
+        "caption": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,2-DCB for Five Days",
+        "paragraphs": [
+          "Blood, lung, and liver concentrations of 1,2-DCB were measured on study days 4 and 5."
+        ]
+      }
+    ],
+    "given": [],
+    "say": null
+  }
+}

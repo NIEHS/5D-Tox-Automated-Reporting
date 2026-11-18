@@ -1,0 +1,303 @@
+{
+  "status": 200,
+  "body": {
+    "key": "methods",
+    "study": "DTXSID6020430_rat",
+    "title": "Materials and Methods",
+    "written_by": "mixed",
+    "written_by_say": "Some subsections are built from the study's data; a language model words the others from facts taken from the data.",
+    "model": "claude-sonnet-4-6",
+    "exists": true,
+    "approved": false,
+    "subsections": [
+      {
+        "key": "study_design",
+        "heading": "Study Design",
+        "written_by": "data"
+      },
+      {
+        "key": "dose_selection",
+        "heading": "Dose Selection Rationale",
+        "written_by": "data"
+      },
+      {
+        "key": "chemistry",
+        "heading": "Chemistry",
+        "written_by": "data"
+      },
+      {
+        "key": "clinical_exams",
+        "heading": "Clinical Examinations and Sample Collection",
+        "written_by": "model"
+      },
+      {
+        "key": "clinical_obs",
+        "heading": "Clinical Observations",
+        "written_by": "model"
+      },
+      {
+        "key": "body_organ_weights",
+        "heading": "Body and Organ Weights",
+        "written_by": "model"
+      },
+      {
+        "key": "clinical_pathology",
+        "heading": "Clinical Pathology",
+        "written_by": "model"
+      },
+      {
+        "key": "internal_dose",
+        "heading": "Internal Dose Assessment",
+        "written_by": "model"
+      },
+      {
+        "key": "transcriptomics",
+        "heading": "Transcriptomics",
+        "written_by": "model"
+      },
+      {
+        "key": "txomics_sample",
+        "heading": "Sample Collection for Transcriptomics",
+        "written_by": "model"
+      },
+      {
+        "key": "txomics_rna",
+        "heading": "RNA Isolation, Library Creation, and Sequencing",
+        "written_by": "model"
+      },
+      {
+        "key": "txomics_seq_processing",
+        "heading": "Sequence Data Processing",
+        "written_by": "model"
+      },
+      {
+        "key": "txomics_qc",
+        "heading": "Sequencing Quality Checks and Outlier Removal",
+        "written_by": "model"
+      },
+      {
+        "key": "txomics_normalization",
+        "heading": "Data Normalization",
+        "written_by": "model"
+      },
+      {
+        "key": "data_analysis",
+        "heading": "Data Analysis",
+        "written_by": "model"
+      },
+      {
+        "key": "stat_analysis",
+        "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "written_by": "model"
+      },
+      {
+        "key": "bmd_apical",
+        "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "written_by": "data"
+      },
+      {
+        "key": "bmd_genomics",
+        "heading": "Benchmark Dose Analysis of Transcriptomics Data",
+        "written_by": "model"
+      },
+      {
+        "key": "efdr",
+        "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+        "written_by": "data"
+      },
+      {
+        "key": "data_accessibility",
+        "heading": "Data Accessibility",
+        "written_by": "model"
+      }
+    ],
+    "recorded": {
+      "prompt": "rebuilt",
+      "inputs": "recorded",
+      "say": "The facts given to the model are recorded. The prompt is not; it can be rebuilt from the recorded facts."
+    },
+    "text": [
+      {
+        "key": "study_design",
+        "heading": "Study Design",
+        "written_by": "data",
+        "paragraphs": [
+          "Female Sprague Dawley rats were exposed to 1,2-DCB by whole-body inhalation for 6 hours plus T90 per day for 5 consecutive days (study days 0–4) at exposure concentrations of 0 (chamber control), 1, 10, 30, 100, 250, and 500 ppm. There were 8 core female animals in each treated group and 13 in the chamber control group. Additional animals in the 0, 1, 10, 30, 100, 250, and 500 ppm groups were dedicated to internal concentration assessment. Core animals were euthanized on study day 5, the day after the final exposure. [Placeholder: the animal source, age at receipt, quarantine, and the randomization procedure are not in the study data]"
+        ]
+      },
+      {
+        "key": "dose_selection",
+        "heading": "Dose Selection Rationale",
+        "written_by": "data",
+        "paragraphs": [
+          "The study used 6 exposure concentrations from 1 to 500 ppm, with approximately half-log spacing between consecutive concentrations. [Placeholder: the rationale for the top dose, the lowest dose and the dose spacing is not in the study data]"
+        ]
+      },
+      {
+        "key": "chemistry",
+        "heading": "Chemistry",
+        "written_by": "data",
+        "paragraphs": [
+          "The test article was 1,2-Dichlorobenzene (1,2-DCB; CASRN 95-50-1; DTXSID6020430). [Placeholder: the test article source and lot, identity and purity analyses, storage conditions, and exposure generation and chamber concentration monitoring are not in the study data]"
+        ]
+      },
+      {
+        "key": "clinical_exams",
+        "heading": "Clinical Examinations and Sample Collection",
+        "written_by": "model",
+        "paragraphs": [
+          "Female Sprague Dawley rats were examined across several endpoints during the 5-day inhalation study with 1,2-Dichlorobenzene (1,2-DCB). Examinations included recording of body weights, collection of blood for clinical pathology, collection of samples from animals dedicated to internal concentration assessment, and collection of tissue samples for transcriptomic profiling."
+        ]
+      },
+      {
+        "key": "clinical_obs",
+        "heading": "Clinical Observations",
+        "written_by": "model",
+        "paragraphs": [
+          "Clinical observations were recorded for each animal throughout the study period. [Placeholder: the clinical observation schedule is not in the study data]"
+        ]
+      },
+      {
+        "key": "body_organ_weights",
+        "heading": "Body and Organ Weights",
+        "written_by": "model",
+        "paragraphs": [
+          "Body weights were recorded for all female Sprague Dawley rats on study day 0 and again at necropsy on study day 5. Organs were weighed at necropsy, and both absolute organ weights and relative organ weights, expressed as the ratio of organ weight to body weight, were calculated for each animal."
+        ]
+      },
+      {
+        "key": "clinical_pathology",
+        "heading": "Clinical Pathology",
+        "written_by": "model",
+        "paragraphs": [
+          "Blood was collected from female Sprague Dawley rats for clinical pathology evaluation. The following clinical chemistry parameters were measured: alanine aminotransferase, albumin, alkaline phosphatase, aspartate aminotransferase, bile salts/acids, cholesterol, creatine kinase, creatinine, direct bilirubin, globulin, glucose, sorbitol dehydrogenase, total bilirubin, total protein, triglycerides, urea nitrogen, and indirect bilirubin. [Placeholder: the blood collection method and analyzers are not in the study data]"
+        ]
+      },
+      {
+        "key": "internal_dose",
+        "heading": "Internal Dose Assessment",
+        "written_by": "model",
+        "paragraphs": [
+          "Samples were collected from female Sprague Dawley rats dedicated for internal concentration assessment in the 0.0, 1.0, 10.0, 30.0, 100.0, 250.0, and 500.0 ppm dose groups; a total of 21 animals were designated for this purpose. These samples were used to characterize the internal dose of 1,2-DCB in the context of the dose-response analysis. [Placeholder: the internal dose sample handling and analytical method are not in the study data]"
+        ]
+      },
+      {
+        "key": "transcriptomics",
+        "heading": "Transcriptomics",
+        "written_by": "model",
+        "paragraphs": [
+          "Transcriptomic profiling was performed on target organs collected from female Sprague Dawley rats exposed to 1,2-DCB across the full dose range. Profiling was conducted using the TempO-Seq targeted RNA sequencing platform (BioSpyder Technologies, Carlsbad, CA)."
+        ]
+      },
+      {
+        "key": "txomics_sample",
+        "heading": "Sample Collection for Transcriptomics",
+        "written_by": "model",
+        "paragraphs": [
+          "Samples of the target organs were collected at necropsy on study day 5 for transcriptomic analysis. [Placeholder: the transcriptomic sample collection and storage are not in the study data]"
+        ]
+      },
+      {
+        "key": "txomics_rna",
+        "heading": "RNA Isolation, Library Creation, and Sequencing",
+        "written_by": "model",
+        "paragraphs": [
+          "Gene expression profiling was performed using the TempO-Seq S1500+ platform (BioSpyder Technologies). In this approach, detector oligos targeting the S1500+ gene set were hybridized to the RNA present in each sample, followed by ligation of hybridized probe pairs and amplification of the resulting products. The amplified libraries were then subjected to multiplexed sequencing on an Illumina sequencing platform, generating read counts corresponding to the targeted transcripts."
+        ]
+      },
+      {
+        "key": "txomics_seq_processing",
+        "heading": "Sequence Data Processing",
+        "written_by": "model",
+        "paragraphs": [
+          "Raw sequencing data were processed through the TempO-SeqR pipeline. Reads were demultiplexed to assign sequences to individual samples, and the resulting reads were aligned to the TempO-Seq probe reference sequences. A count table was generated from the alignment output, providing per-probe read counts for each sample for use in downstream analyses."
+        ]
+      },
+      {
+        "key": "txomics_qc",
+        "heading": "Sequencing Quality Checks and Outlier Removal",
+        "written_by": "model",
+        "paragraphs": [
+          "[Placeholder: the sequencing quality checks and outlier criteria are not in the study data]"
+        ]
+      },
+      {
+        "key": "txomics_normalization",
+        "heading": "Data Normalization",
+        "written_by": "model",
+        "paragraphs": [
+          "Aligned read counts were normalized according to the current NIEHS TempO-Seq normalization procedure. Counts corresponding to attenuated probes were first readjusted to their unattenuated equivalents using the attenuation factors provided in the platform manifest. The readjusted counts were then normalized on a per-probe basis to reads per million to account for differences in sequencing depth across samples. A pseudo-count of 1.0 was subsequently added to each normalized value, and the resulting values were log2-transformed to yield the final expression matrix used in downstream analyses."
+        ]
+      },
+      {
+        "key": "data_analysis",
+        "heading": "Data Analysis",
+        "written_by": "model",
+        "paragraphs": [
+          "Statistical analyses and dose-response modeling were applied to both apical endpoints and transcriptomic data generated from female Sprague Dawley rats exposed to 1,2-DCB at concentrations of 0.0, 1.0, 10.0, 30.0, 100.0, 250.0, and 500.0 ppm for 5 days. Apical endpoints were evaluated using multiple-comparison and trend-testing procedures, while transcriptomic data were subjected to benchmark dose modeling to characterize concentration-response relationships at the gene and gene-set levels."
+        ]
+      },
+      {
+        "key": "stat_analysis",
+        "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "written_by": "model",
+        "paragraphs": [
+          "Body weight and organ weight data, which are approximately normally distributed, were analyzed using the parametric multiple-comparison procedures of Williams and Dunnett. Clinical pathology data, which are typically skewed, were analyzed using the nonparametric multiple-comparison procedures of Shirley and Dunn. For each endpoint, the Jonckheere test was applied to assess the presence of a dose-response trend; when the Jonckheere test was significant at p ≤ 0.01, the trend-sensitive procedure (Williams for approximately normal data; Shirley for skewed data) was selected, otherwise the test without a trend assumption (Dunnett for approximately normal data; Dunn for skewed data) was used.",
+          "The no-observed-effect level (NOEL) was defined as the highest dose below the lowest-observed-effect level (LOEL). The LOEL was defined as the lowest dose at which a statistically significant (p ≤ 0.05) pairwise difference from the control group was observed. The NOEL was considered not determined when the LOEL was the lowest dose tested or when no LOEL was identified."
+        ]
+      },
+      {
+        "key": "bmd_apical",
+        "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "written_by": "data",
+        "paragraphs": [
+          "The data integrated for this report record no benchmark dose (BMD) analysis of the body weight, organ weight, and clinical chemistry endpoints. They were modeled for this report from the nontransformed individual-animal data by ToxicR Laplace model averaging of the Hill, Power, Exponential 3, and Exponential 5 models with constant variance, at a benchmark response (BMR) of 1 standard deviation; a BMD is reported for an endpoint that showed a significant trend and at least one significant pairwise difference. A modeled response was not accepted when its R² was below 0.6, its BMD/BMDL ratio was above 10, or its BMD was above the highest dose; an endpoint without an accepted model is reported as having no viable model (NVM). A BMD below one third of the lowest nonzero dose is reported as less than that value, without a BMDL. For body weight, the BMD and benchmark dose lower confidence limit (BMDL) are presented as not determined (ND) when there were no significant results."
+        ]
+      },
+      {
+        "key": "bmd_genomics",
+        "heading": "Benchmark Dose Analysis of Transcriptomics Data",
+        "written_by": "model",
+        "paragraphs": [
+          "Transcriptomic benchmark dose (BMD) modeling was performed using BMDExpress 3.20.0119 BETA. Prior to modeling, probes with a zero count in any sample were excluded from the analysis. A Williams trend prefilter at p < 0.05 was applied to identify probes with a statistically significant dose-response trend, followed by the Curve Fit Prefilter at a p-value cutoff of 0.05 to further restrict probes to those exhibiting an adequate model fit. BMD modeling was conducted using Laplace Model Averaging (ToxicR), fitting the hill, power, exponential 3, and exponential 5 models with a benchmark response (BMR) of 25% relative deviation and assuming constant variance. Individual-gene results were summarized as the median value across all probes mapped to each gene.",
+          "Gene-set analysis was performed using Gene Ontology (GO) biological process annotations with the following settings: Deduplicate Gene Sets: false; Remove BMD > Highest Dose from Category Descriptive Statistics: true; Remove BMD with R² < Cutoff: 0.6; Remove genes with BMD/BMDL > 10.0; Identify conflicting probe sets: 0.5; minimum number of genes in a gene set: 40; maximum number of genes in a gene set: 500; Remove Genes With Step Function Lower Than First Dose: true. A gene set was reported when at least 3 genes passed all filters and at least 5% of the gene set was populated. The BMD, BMDL, and BMDU at the 5th percentile of the distribution of gene BMDs within each set were used as the potency metrics for that gene set."
+        ]
+      },
+      {
+        "key": "efdr",
+        "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+        "written_by": "data",
+        "paragraphs": [
+          "No empirical false discovery rate analysis of the genomic dose-response modeling is among the data integrated for this report."
+        ]
+      },
+      {
+        "key": "data_accessibility",
+        "heading": "Data Accessibility",
+        "written_by": "model",
+        "paragraphs": [
+          "All raw and processed data generated in this study, including transcriptomic count tables, normalized expression matrices, BMD modeling outputs, and apical endpoint data, are available through the NIEHS Chemical Effects in Biological Systems (CEBS) database or the study's designated data repository. [Placeholder: DOI or accession number to be inserted upon data deposition]"
+        ]
+      }
+    ],
+    "text_say": "The subsections built from the data are shown as the report prints them: built from the recorded facts each time the report is made.",
+    "given": [
+      {
+        "id": "facts",
+        "title": "The facts taken from the study's data",
+        "record": "recorded",
+        "say": "Recorded with the result. The subsections built from the data are assembled from these facts; the prompt for the others states them to the model.",
+        "text": "chemical_name: 1,2-Dichlorobenzene\nabbreviation: 1,2-DCB\ncasrn: 95-50-1\ndtxsid: DTXSID6020430_rat\nspecies: rat\nstrain: Sprague Dawley\ndose_groups: [0.0, 1.0, 10.0, 30.0, 100.0, 250.0, 500.0]\ndose_unit: ppm\ndose_unit_source: recorded\nn_per_group: 8\nn_control: 13\nn_biosampling: 21\nsexes: [\"Female\"]\nvehicle: null\nroute: inhaled\ninhalation: whole-body\nduration_days: 5\ndosing_days: 5\ndosing_schedule: 6 hours plus T90 per day\nhas_body_weight: true\nhas_organ_weights: false\nhas_clin_chem: true\nhas_hematology: false\nhas_hormones: false\nhas_tissue_conc: true\nhas_gene_expression: true\norgan_weight_endpoints: []\nclin_chem_endpoints: [\"Alanine aminotransferase\", \"Albumin\", \"Alkaline phosphatase\", \"Aspartate Aminotransferase\", \"Bile salts/acids\", \"Cholesterol\", \"Creatine kinase\", \"Creatinine\", \"Direct Bilirubin\", \"Globulin\", \"Glucose\", \"Sorbitol dehydrogenase\", \"Total Bilirubin\", \"Total protein\", \"Triglycerides\", \"Urea Nitrogen\", \"Indirect Bilirubin\"]\nhematology_endpoints: []\nhormone_endpoints: []\nge_organs: []\nbiosampling_doses: [0.0, 1.0, 10.0, 30.0, 100.0, 250.0, 500.0]\npk_concentrations: null\npk_half_lives: null\npk_timepoints: []\ngenomics_assay: TempO-Seq\ngenomics_chip: S1500_Plus_Rat\nbmdexpress_version: BMDExpress 3.20.0119 BETA\nbmds_version: 3.x with shared library/DLL\nbmr_type: Relative Deviation\nbmr_factor: 0.25\napical_bmr: null\napical_bmrs: null\nmodels_fit: [\"hill\", \"power\", \"exponential 3\", \"exponential 5\"]\nconstant_variance: true\nprefilter_method: Curve Fit Prefilter\nprefilter_pvalue: 0.05\nfold_change_filter: 2.0\ngo_filter_settings: [\"Deduplicate Gene Sets: false\", \"Remove BMD > Highest Dose from Category Descriptive Statistics: true\", \"Remove BMD with R^2 < Cutoff: 0.6\", \"Remove genes with BMD/BMDL >: 10.0\", \"Identify conflicting probe sets: 0.5\", \"Min # of Genes in Gene Set: 40\", \"Max # of Genes in Gene Set: 500\", \"Remove Genes With Step Function Lower Than First Dose: true\"]\nmodel_averaging: Laplace Model Averaging\nbest_model_selection: null\ncurve_fit_prefilter: true\nprefilter_fold_change: null\nzero_count_excluded: true\ngenomics_sample_counts: {\"Heart\": {\"Female\": {\"0.0\": 10, \"1.0\": 5, \"10.0\": 5, \"30.0\": 5, \"100.0\": 5, \"250.0\": 5, \"500.0\": 5}}, \"Kidney\": {\"Female\": {\"0.0\": 9, \"1.0\": 5, \"10.0\": 5, \"30.0\": 5, \"100.0\": 5, \"250.0\": 5, \"500.0\": 5}}, \"Liver\": {\"Female\": {\"0.0\": 10, \"1.0\": 5, \"10.0\": 5, \"30.0\": 5, \"100.0\": 5, \"250.0\": 5, \"500.0\": 5}}, \"Lung\": {\"Female\": {\"0.0\": 10, \"1.0\": 5, \"10.0\": 5, \"30.0\": 5, \"100.0\": 5, \"250.0\": 5, \"500.0\": 4}}, \"Ovary\": {\"Female\": {\"0.0\": 10, \"1.0\": 5, \"10.0\": 5, \"30.0\": 5, \"100.0\": 5, \"250.0\": 5, \"500.0\": 5}}}\nmethod_profile: ntp-5day-2025\nmethod_settings: {\"apical.statistics.trend_test\": \"jonckheere\", \"apical.statistics.trend_select_p\": 0.01, \"apical.statistics.alpha\": 0.05, \"apical.statistics.alpha_strong\": 0.01, \"apical.statistics.min_group_n\": 2, \"apical.statistics.pairwise.Body Weight\": \"williams_or_dunnett\", \"apical.statistics.pairwise.Clinical Chemistry\": \"shirley_or_dunn\", \"apical.statistics.pairwise.Hematology\": \"shirley_or_dunn\", \"apical.statistics.pairwise.Hormones\": \"shirley_or_dunn\", \"apical.statistics.pairwise.Organ Weight\": \"williams_or_dunnett\", \"apical.statistics.pairwise.Urinalysis\": \"shirley_or_dunn\", \"apical.statistics.outliers\": null, \"apical.derived_endpoints\": [\"globulin\", \"ag_ratio\"], \"apical.terminal_body_weight_tested\": true, \"apical.bmd.engine\": \"toxicr_model_average\", \"apical.bmd.eligibility\": \"trend_and_pairwise\", \"apical.bmd.bmr_when_unrecorded.default\": {\"type\": \"sd\", \"factor\": 1.0}, \"apical.bmd.acceptance.r2_min\": 0.6, \"apical.bmd.acceptance.bmd_bmdl_max\": 10.0, \"apical.bmd.acceptance.bmd_above_highest_dose\": \"nvm\", \"apical.bmd.acceptance.not_reportable_fraction\": 0.3333333333333333, \"internal_dose.pairwise\": \"shirley_or_dunn\", \"internal_dose.below_limit\": \"half_limit\", \"internal_dose.bd_if_detected_share_at_most\": 0.2, \"internal_dose.outliers\": {\"test\": \"dixon_r10\", \"alpha\": 0.01}, \"internal_dose.sig_figs\": 3, \"genomics.go_ranking\": [\"fifth_pct\", \"median\"], \"genomics.go_display\": {\"pct\": 5, \"min_genes\": 20, \"max_genes\": 500, \"min_bmd\": 3}, \"genomics.gene_min_fold_change\": null, \"genomics.recorded.bmr\": {\"type\": \"rel_dev\", \"factor\": 0.25}, \"genomics.recorded.model_selection\": \"model_average\", \"genomics.efdr.generator\": null, \"genomics.efdr.generator_abbreviation\": null, \"genomics.efdr.generator_url\": null, \"genomics.efdr.distribution\": null, \"genomics.efdr.resamples_per_probe\": null}\nmethod_substitutions: []\napical_bmd_method: {\"engine\": \"toxicr_model_average\", \"settings\": [{\"source\": \"inferred\", \"bmr\": {\"type\": \"SD\", \"factor\": 1.0}, \"constant_variance\": true, \"models\": [\"Hill\", \"Power\", \"Exponential 3\", \"Exponential 5\"], \"platforms\": {\"Body Weight\": [\"Female\"], \"Organ Weight\": [\"Female\"], \"Clinical Chemistry\": [\"Female\"]}}]}\nhas_clin_path: true",
+        "chars": 4799
+      },
+      {
+        "id": "prompt",
+        "title": "The prompt",
+        "record": "rebuilt",
+        "say": "The prompt itself was not recorded. This one is built again from the recorded facts by the program as it stands now; it differs from what was sent wherever the program has changed since.",
+        "text": "SYSTEM INSTRUCTIONS\n\nYou are a toxicology report writer specializing in NTP/NIEHS-style technical reports for 5-day genomic dose-response studies. Write precise, formal scientific text. State only what the study context and the guidelines give; never supply a procedure, instrument, kit, schedule, storage condition or analytical method they do not name. Return ONLY valid JSON with no markdown formatting.\n\nPROMPT\n\nGenerate the Materials and Methods section for a 5-day genomic dose-response study report.\n\n## Study Context\n- Chemical: 1,2-Dichlorobenzene (CASRN: 95-50-1, DTXSID: DTXSID6020430_rat)\n- Naming: Name the test article \"1,2-Dichlorobenzene\" at its first mention, followed by its abbreviation in parentheses — \"1,2-Dichlorobenzene (1,2-DCB)\" — and \"1,2-DCB\" after that. Use no other abbreviation or short form for it.\n- Animals: Sprague Dawley rats\n- Sexes: Female\n- Route of administration: inhaled\n- Vehicle: none (inhalation)\n- Study duration: 5 days\n- Dosing: 6 hours plus T90 per day, on 5 consecutive days (study days 0–4); necropsy on study day 5\n- Dose groups (ppm): 0.0, 1.0, 10.0, 30.0, 100.0, 250.0, 500.0\n- Animals per treatment group: 8 Female per dose\n- Animals in chamber control group: 13 Female\n- Biosampling animals: 21 total\n- Clinical chemistry parameters: Alanine aminotransferase, Albumin, Alkaline phosphatase, Aspartate Aminotransferase, Bile salts/acids, Cholesterol, Creatine kinase, Creatinine, Direct Bilirubin, Globulin, Glucose, Sorbitol dehydrogenase, Total Bilirubin, Total protein, Triglycerides, Urea Nitrogen, Indirect Bilirubin\n- Internal dose assessment: tissue concentration data available\n- BMDExpress version: BMDExpress 3.20.0119 BETA\n- BMDS version: 3.x with shared library/DLL\n- BMD models fit: hill, power, exponential 3, exponential 5\n- BMR type: Relative Deviation\n- BMR factor: 0.25\n- Pre-filter method: Curve Fit Prefilter\n- Pre-filter p-value cutoff: 0.05\n- Constant variance: yes\n\n## Required Subsections\nGenerate content for ONLY the following subsections (in order).\nReturn your response as a JSON object where each key is a subsection identifier\nand the value is a string containing 1-3 paragraphs of prose.\n\nKeys to generate: ['clinical_exams', 'clinical_obs', 'body_organ_weights', 'clinical_pathology', 'internal_dose', 'transcriptomics', 'txomics_sample', 'txomics_rna', 'txomics_seq_processing', 'txomics_qc', 'txomics_normalization', 'data_analysis', 'stat_analysis', 'bmd_genomics', 'data_accessibility']\n\n## Guidelines per subsection:\n- clinical_exams: Brief introductory paragraph naming the examinations this study's data record: body weights, clinical pathology, samples for internal concentration assessment, tissue samples for transcriptomics. Name no other.\n- clinical_obs: One or two sentences: clinical observations were recorded for each animal. How often animals were observed and what each observation assessed are not in the study data: write exactly '[Placeholder: the clinical observation schedule is not in the study data]'.\n- body_organ_weights: One paragraph. Body weights recorded on study day 0 and at necropsy on study day 5 (do not state any other necropsy day). Organs were weighed at necropsy. Absolute and relative (organ-to-body-weight ratio) weights calculated.\n- clinical_pathology: One paragraph: blood was collected for clinical pathology and these parameters were measured. Clinical chemistry parameters: Alanine aminotransferase, Albumin, Alkaline phosphatase, Aspartate Aminotransferase, Bile salts/acids, Cholesterol, Creatine kinase, Creatinine, Direct Bilirubin, Globulin. The collection method, anesthesia, sample processing and analyzers are not in the study data: write exactly '[Placeholder: the blood collection method and analyzers are not in the study data]'. Name no instrument.\n- internal_dose: One paragraph: samples were collected from animals dedicated for internal concentration assessment in the 0, 1, 10, 30, 100, 250, 500 ppm groups. State only these facts. The sample handling, storage and analytical method are not in the study data: write exactly '[Placeholder: the internal dose sample handling and analytical method are not in the study data]'. Name no instrument, temperature or assay.\n- transcriptomics: Brief introductory paragraph: transcriptomic profiling was performed on target organs using the TempO-Seq targeted RNA sequencing platform (BioSpyder Technologies).\n- txomics_sample: One or two sentences: samples of the target organs were collected for transcriptomics. How they were collected, preserved and stored is not in the study data: write exactly '[Placeholder: the transcriptomic sample collection and storage are not in the study data]'. Name no kit.\n- txomics_rna: One paragraph. TempO-Seq S1500+ platform (BioSpyder Technologies), library preparation with detector oligos, ligation, amplification, multiplexed sequencing on Illumina platform.\n- txomics_seq_processing: One paragraph. Demultiplexing, alignment to probe reference sequences, count table generation using the TempO-SeqR pipeline.\n- txomics_qc: One sentence: '[Placeholder: the sequencing quality checks and outlier criteria are not in the study data]'. State no threshold and no excluded sample.\n- txomics_normalization: One paragraph. The current NIEHS TempO-Seq normalization: aligned read counts of attenuated probes were readjusted to unattenuated equivalents using the platform manifest's attenuation factors; counts were normalized per probe to reads per million; a pseudo-count of 1.0 was added and values were log2-transformed. Do NOT mention DESeq2, TMM or differential-expression models.\n- data_analysis: Brief introductory paragraph: overview of the statistical and dose-response modeling approaches applied to both apical and transcriptomic endpoints.\n- stat_analysis: One or two paragraphs, the NIEHS method: organ and body weight data (approximately normal) were analyzed with the parametric multiple-comparison procedures of Williams and Dunnett; clinical pathology data (typically skewed) were analyzed with the nonparametric multiple-comparison procedures of Shirley and Dunn. The Jonckheere test assessed dose-response trends and selected the trend-sensitive test (Williams or Shirley) when significant at p <= 0.01, otherwise Dunnett or Dunn. Do not describe any outlier test or exclusion of values. LOEL = the lowest dose with a significant (p <= 0.05) pairwise difference from the control group; NOEL = the highest dose below the LOEL, not determined when the LOEL is the lowest dose tested or there is no LOEL. State both exactly so. Do not mention normality or variance-homogeneity tests (Shapiro-Wilk, Levene). Only mention clinical pathology if it is in the context.\n- bmd_genomics: One or two paragraphs. Transcriptomic BMD analysis in BMDExpress 3.20.0119 BETA: probes with a zero count in any sample were excluded; a Williams trend prefilter (p < 0.05) followed by the Curve Fit Prefilter; BMD modeling by Laplace Model Averaging (ToxicR) of hill, power, exponential 3, exponential 5, BMR 25% relative deviation, constant variance. GO biological process gene-set analysis with these recorded settings: Deduplicate Gene Sets: false; Remove BMD > Highest Dose from Category Descriptive Statistics: true; Remove BMD with R^2 < Cutoff: 0.6; Remove genes with BMD/BMDL >: 10.0; Identify conflicting probe sets: 0.5; Min # of Genes in Gene Set: 40; Max # of Genes in Gene Set: 500; Remove Genes With Step Function Lower Than First Dose: true. Gene sets were reported when at least 3 genes passed all filters and at least 5% of the set was populated. BMD, BMDL and BMDU at the 5th percentile of the set's gene BMDs were the potency metrics. Individual-gene results were the median over the probes mapped to each gene. Use ONLY these settings; do not invent others.\n- data_accessibility: One paragraph. Data availability statement: all raw and processed data are available through the NIEHS Chemical Effects in Biological Systems (CEBS) database or the study's data repository. Provide placeholder for DOI or accession number.\n\n## Important formatting notes:\n- Do NOT include section headers in the text — they will be added by the template.\n- Write in past tense, third person, formal NIEHS/NTP technical report style.\n- Reference exact study parameters from the context above (dose groups, species, etc.).\n- Each value should be a single string. Use \\n\\n to separate multiple paragraphs within a subsection.\n- Return ONLY the JSON object, no markdown code fences.",
+        "chars": 8498
+      }
+    ]
+  }
+}

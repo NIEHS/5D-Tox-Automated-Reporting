@@ -1,0 +1,16 @@
+{
+  "status": 404,
+  "body": {
+    "error": {
+      "code": "writing_part_not_found",
+      "status": 404,
+      "message": "DTXSID6020430 has no written part 'methods': a report's other parts are its studies'",
+      "say": "This study has no written part called “methods”.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID6020430",
+        "part": "methods"
+      }
+    }
+  }
+}

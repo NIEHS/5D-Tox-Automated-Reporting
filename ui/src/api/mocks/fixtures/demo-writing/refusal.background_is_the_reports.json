@@ -1,0 +1,16 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "background_is_the_reports",
+      "status": 409,
+      "message": "DTXSID6020430_live_rat is a study of the report DTXSID6020430_live; the Background is the report's",
+      "say": "The Background belongs to the report (DTXSID6020430_live), not to one of its studies. It is written on the report's page.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID6020430_live_rat",
+        "parent": "DTXSID6020430_live"
+      }
+    }
+  }
+}
