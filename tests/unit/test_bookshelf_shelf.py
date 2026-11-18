@@ -93,3 +93,35 @@ def test_the_shelf_orders_published_reports_by_date_and_puts_unpublished_below(
         < page.index("2023 Mar · NIEHS-10") < page.index("2026 Apr · NIEHS-13") \
         < page.index("Unpublished") < page.index("Bisphenol AF")
     assert "DTXSID4_rat" not in page
+
+
+def test_a_refused_report_says_why(sessions_dir, monkeypatch):
+    """A study processed before a rule its report now needs is refused with a
+    reason ("run Process again").  The shelf showed "failed to render. Check
+    the server log" for it, as for a crash."""
+    from web_routes import bookshelf_routes
+    from web_routes.background_server import app
+    from workflow.errors import StepError
+
+    _session(sessions_dir, "DTXSID7037717", integrated=True, processed=True, name="Bisphenol AF")
+
+    def refuse(*args, **kwargs):
+        raise StepError("the Materials and Methods were built before the study's parameters "
+                        "were required; run Process again", 409)
+
+    monkeypatch.setattr(bookshelf_routes, "render_preview", refuse)
+    client = TestClient(app)
+
+    page = client.get("/Bookshelf/DTXSID7037717")
+    assert page.status_code == 409
+    assert "This report cannot be shown yet" in page.text
+    assert "The Materials and Methods were built before" in page.text
+    assert "run Process again." in page.text and "server log" not in page.text
+    for name in ("report.docx", "report.pdf"):
+        answer = client.get(f"/Bookshelf/DTXSID7037717/{name}")
+        assert answer.status_code == 409 and "run Process again" in answer.json()["error"]
+
+    # A crash is still a failure, not a refusal.
+    monkeypatch.setattr(bookshelf_routes, "render_preview",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert client.get("/Bookshelf/DTXSID7037717").status_code == 500

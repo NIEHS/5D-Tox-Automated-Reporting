@@ -36,6 +36,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 import common.paths
 from rendering.latex_export import _load_json
 from rendering.preview_surface import render_preview
+from workflow.errors import StepError
 from web_routes.dtxsid_param import Dtxsid
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,11 @@ def bookshelf_facsimile(dtxsid: Dtxsid):
     try:
         page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid),
                               shelf="/Bookshelf")
+    except StepError as e:
+        # A refusal with a reason (a study processed before a rule its report
+        # now needs: "run Process again"), not a failure: the page says why.
+        logger.info("Bookshelf facsimile refused for %s: %s", dtxsid, e.message)
+        return HTMLResponse(_refused_page(dtxsid, e.message), status_code=e.status_code)
     except Exception:
         logger.exception("Bookshelf facsimile render failed for %s", dtxsid)
         return HTMLResponse(_error_page(dtxsid), status_code=500)
@@ -222,6 +228,8 @@ def bookshelf_docx(dtxsid: Dtxsid):
         return JSONResponse({"error": f"No generated report for {dtxsid}"}, status_code=404)
     try:
         docx = render_preview(dtxsid, surface="docx")
+    except StepError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
     except Exception:
         logger.exception("Bookshelf docx render failed for %s", dtxsid)
         return JSONResponse({"error": "Could not render the DOCX preview."}, status_code=500)
@@ -243,6 +251,8 @@ def bookshelf_pdf(dtxsid: Dtxsid):
         docx = render_preview(dtxsid, surface="docx")
         assert isinstance(docx, bytes)
         pdf = _docx_to_pdf(docx)
+    except StepError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
     except Exception:
         logger.exception("Bookshelf pdf render failed for %s", dtxsid)
         return JSONResponse({"error": "Could not render the PDF preview."}, status_code=500)
@@ -366,6 +376,19 @@ def _not_found_page(dtxsid: str) -> str:
 <body><div class="wrap"><h1>No report</h1>
 <p class="sub">There is no generated report for <code>{_html.escape(dtxsid)}</code>.
 <a class="home" href="/Bookshelf">← back to the shelf</a></p></div></body></html>"""
+
+
+def _refused_page(dtxsid: str, reason: str) -> str:
+    """The page for a report the system refuses to show, with its reason."""
+    reason = reason[:1].upper() + reason[1:]
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not shown yet — Bookshelf</title><style>{_SHELF_CSS}</style></head>
+<body><div class="wrap"><h1>This report cannot be shown yet</h1>
+<p class="sub">The report for <code>{_html.escape(dtxsid)}</code> is not shown:</p>
+<p>{_html.escape(reason)}{"" if reason.endswith(".") else "."}</p>
+<p class="sub"><a class="home" href="/Bookshelf">← back to the shelf</a></p></div></body></html>"""
 
 
 def _error_page(dtxsid: str) -> str:
