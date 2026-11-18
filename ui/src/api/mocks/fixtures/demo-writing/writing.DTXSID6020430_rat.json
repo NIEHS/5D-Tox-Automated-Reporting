@@ -1,0 +1,298 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_rat",
+    "kind": "member",
+    "check_says": "The check establishes that a citation points at a source. It does not judge whether the source supports the sentence.",
+    "api_page": [
+      {
+        "group": "writing",
+        "title": "Written sections and their prompts",
+        "href": "/docs#/6.%20Written%20sections%20and%20their%20prompts"
+      },
+      {
+        "group": "citations",
+        "title": "Citations and the literature behind them",
+        "href": "/docs#/7.%20Citations%20and%20the%20literature%20behind%20them"
+      }
+    ],
+    "acts": {
+      "background": {
+        "allowed": false,
+        "say": "This is the finished report of a pair, kept as it is for comparison. The act is done on its live copy (DTXSID6020430_live_rat).",
+        "counterpart": "DTXSID6020430_live_rat"
+      },
+      "summary": {
+        "allowed": false,
+        "say": "This is the finished report of a pair, kept as it is for comparison. The act is done on its live copy (DTXSID6020430_live_rat).",
+        "counterpart": "DTXSID6020430_live_rat"
+      }
+    },
+    "parts": [
+      {
+        "key": "methods",
+        "study": "DTXSID6020430_rat",
+        "title": "Materials and Methods",
+        "written_by": "mixed",
+        "written_by_say": "Some subsections are built from the study's data; a language model words the others from facts taken from the data.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "subsections": [
+          {
+            "key": "study_design",
+            "heading": "Study Design",
+            "written_by": "data"
+          },
+          {
+            "key": "dose_selection",
+            "heading": "Dose Selection Rationale",
+            "written_by": "data"
+          },
+          {
+            "key": "chemistry",
+            "heading": "Chemistry",
+            "written_by": "data"
+          },
+          {
+            "key": "clinical_exams",
+            "heading": "Clinical Examinations and Sample Collection",
+            "written_by": "model"
+          },
+          {
+            "key": "clinical_obs",
+            "heading": "Clinical Observations",
+            "written_by": "model"
+          },
+          {
+            "key": "body_organ_weights",
+            "heading": "Body and Organ Weights",
+            "written_by": "model"
+          },
+          {
+            "key": "clinical_pathology",
+            "heading": "Clinical Pathology",
+            "written_by": "model"
+          },
+          {
+            "key": "internal_dose",
+            "heading": "Internal Dose Assessment",
+            "written_by": "model"
+          },
+          {
+            "key": "transcriptomics",
+            "heading": "Transcriptomics",
+            "written_by": "model"
+          },
+          {
+            "key": "txomics_sample",
+            "heading": "Sample Collection for Transcriptomics",
+            "written_by": "model"
+          },
+          {
+            "key": "txomics_rna",
+            "heading": "RNA Isolation, Library Creation, and Sequencing",
+            "written_by": "model"
+          },
+          {
+            "key": "txomics_seq_processing",
+            "heading": "Sequence Data Processing",
+            "written_by": "model"
+          },
+          {
+            "key": "txomics_qc",
+            "heading": "Sequencing Quality Checks and Outlier Removal",
+            "written_by": "model"
+          },
+          {
+            "key": "txomics_normalization",
+            "heading": "Data Normalization",
+            "written_by": "model"
+          },
+          {
+            "key": "data_analysis",
+            "heading": "Data Analysis",
+            "written_by": "model"
+          },
+          {
+            "key": "stat_analysis",
+            "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+            "written_by": "model"
+          },
+          {
+            "key": "bmd_apical",
+            "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+            "written_by": "data"
+          },
+          {
+            "key": "bmd_genomics",
+            "heading": "Benchmark Dose Analysis of Transcriptomics Data",
+            "written_by": "model"
+          },
+          {
+            "key": "efdr",
+            "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+            "written_by": "data"
+          },
+          {
+            "key": "data_accessibility",
+            "heading": "Data Accessibility",
+            "written_by": "model"
+          }
+        ],
+        "recorded": {
+          "prompt": "rebuilt",
+          "inputs": "recorded",
+          "say": "The facts given to the model are recorded. The prompt is not; it can be rebuilt from the recorded facts."
+        }
+      },
+      {
+        "key": "results",
+        "study": "DTXSID6020430_rat",
+        "title": "Results tables and their sentences",
+        "written_by": "data",
+        "written_by_say": "The tables, their footnotes and the sentences under them are built from the study's data by the program. No language model is involved.",
+        "model": null,
+        "exists": true,
+        "approved": false,
+        "subsections": [
+          {
+            "key": "bm2_body-weight",
+            "heading": "Body Weight",
+            "written_by": "data"
+          },
+          {
+            "key": "bm2_clinical-chemistry",
+            "heading": "Clinical Chemistry",
+            "written_by": "data"
+          },
+          {
+            "key": "bm2_clinical-observations",
+            "heading": "Clinical Observations",
+            "written_by": "data"
+          },
+          {
+            "key": "bm2_organ-weight",
+            "heading": "Organ Weight",
+            "written_by": "data"
+          },
+          {
+            "key": "bm2_tissue-concentration",
+            "heading": "Tissue Concentration",
+            "written_by": "data"
+          }
+        ],
+        "recorded": null
+      },
+      {
+        "key": "bmd_summary",
+        "study": "DTXSID6020430_rat",
+        "title": "Benchmark dose summary: the interpreting paragraphs",
+        "written_by": "model",
+        "written_by_say": "The summary's table and its describing sentences are built from the data. These paragraphs, which interpret the pattern of benchmark doses, are written by a language model.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "not_recorded",
+          "say": "Neither the prompt nor the findings given to the model were recorded."
+        }
+      },
+      {
+        "key": "genomics_heart_female",
+        "study": "DTXSID6020430_rat",
+        "title": "Gene-level interpretation: heart, female",
+        "written_by": "model",
+        "written_by_say": "Written by a language model from the study's gene-level results and the literature in the knowledge base.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "recorded",
+          "say": "The text given to the model and the papers offered to it are recorded. The fixed instructions around them are not."
+        }
+      },
+      {
+        "key": "genomics_kidney_female",
+        "study": "DTXSID6020430_rat",
+        "title": "Gene-level interpretation: kidney, female",
+        "written_by": "model",
+        "written_by_say": "Written by a language model from the study's gene-level results and the literature in the knowledge base.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "recorded",
+          "say": "The text given to the model and the papers offered to it are recorded. The fixed instructions around them are not."
+        }
+      },
+      {
+        "key": "genomics_liver_female",
+        "study": "DTXSID6020430_rat",
+        "title": "Gene-level interpretation: liver, female",
+        "written_by": "model",
+        "written_by_say": "Written by a language model from the study's gene-level results and the literature in the knowledge base.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "recorded",
+          "say": "The text given to the model and the papers offered to it are recorded. The fixed instructions around them are not."
+        }
+      },
+      {
+        "key": "genomics_lung_female",
+        "study": "DTXSID6020430_rat",
+        "title": "Gene-level interpretation: lung, female",
+        "written_by": "model",
+        "written_by_say": "Written by a language model from the study's gene-level results and the literature in the knowledge base.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "recorded",
+          "say": "The text given to the model and the papers offered to it are recorded. The fixed instructions around them are not."
+        }
+      },
+      {
+        "key": "genomics_ovary_female",
+        "study": "DTXSID6020430_rat",
+        "title": "Gene-level interpretation: ovary, female",
+        "written_by": "model",
+        "written_by_say": "Written by a language model from the study's gene-level results and the literature in the knowledge base.",
+        "model": "claude-sonnet-4-6",
+        "exists": true,
+        "approved": false,
+        "recorded": {
+          "prompt": "not_recorded",
+          "inputs": "recorded",
+          "say": "The text given to the model and the papers offered to it are recorded. The fixed instructions around them are not."
+        }
+      },
+      {
+        "key": "summary",
+        "study": "DTXSID6020430_rat",
+        "title": "Summary",
+        "written_by": "data",
+        "written_by_say": "The text now in the report is the facts picked by rule, in the program's fixed wording. No language model has worded it. The facts are picked from the study's results by rule. A language model words them only when a run is made under the Summary's prompt template and its text is taken into the report.",
+        "model": null,
+        "exists": true,
+        "approved": false,
+        "recorded": null,
+        "run_count": 0
+      }
+    ],
+    "report": {
+      "id": "DTXSID6020430",
+      "part": {
+        "key": "background",
+        "title": "Background"
+      }
+    }
+  }
+}

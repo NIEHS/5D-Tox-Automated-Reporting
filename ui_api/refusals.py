@@ -74,10 +74,10 @@ STUDY_REFUSALS: dict[str, Refusal] = {
         "This study has no written part called “{part}”."), None),
     "background_is_the_reports": Refusal(409, (
         "The Background belongs to the report ({parent}), not to one of its studies. "
-        "It is written on the report's page."), "study"),
+        "It is written on the report's page."), None),
     "summary_is_a_studys": Refusal(409, (
         "A Summary is written for each study of a report, from that study's results. "
-        "It is written on the study's page."), "study"),
+        "It is written on the study's page."), None),
     "summary_not_ready": Refusal(409, (
         "The Summary can't be worded now: {why}"), None),
     "summary_run_not_found": Refusal(404, (

@@ -1,7 +1,7 @@
 import { MenuOutlined } from '@ant-design/icons'
 import { Alert, Button, Drawer, Grid, Layout, Menu, Spin } from 'antd'
 import { useState } from 'react'
-import { Link, Outlet, useParams } from 'react-router'
+import { Link, Outlet, useLocation, useParams } from 'react-router'
 import { MODULES, moduleRoute, studyRoute } from '../kit/modules'
 import { Refusal } from '../kit/Refusal'
 import { useStudyState } from '../kit/useStudyState'
@@ -47,7 +47,11 @@ function StudyMenu({ studyId, kind, current, onPick }: { studyId: string; kind: 
 
 /** The frame around every study page: the menu, the header, the "already running" wait. */
 export function StudyFrame() {
-  const { id = '', module } = useParams()
+  const { id = '', module: moduleParam } = useParams()
+  // A page mounted under its own path (routes.tsx: "writing") has no :module
+  // parameter; its slug is then the part of the address after the study's id.
+  const { pathname } = useLocation()
+  const module = moduleParam ?? /\/studies\/[^/]+\/([^/]+)\/?$/.exec(pathname)?.[1]
   // An id the backend's own session-id rule (served with the vocabularies)
   // refuses is never sent: the person is told at once, in the backend's words.
   // If the rule cannot be loaded, the backend is asked and decides.

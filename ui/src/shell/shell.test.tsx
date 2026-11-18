@@ -233,7 +233,8 @@ describe('the study frame', () => {
 })
 
 describe('the routes', () => {
-  it.each(MODULES.filter((m) => m.slug).map((m) => [m.id, m.slug, m.title] as const))(
+  // The pages that are built have their own tests (modules/d2 for "writing").
+  it.each(MODULES.filter((m) => m.slug && m.slug !== 'writing').map((m) => [m.id, m.slug, m.title] as const))(
     '%s has a placeholder page at /studies/:id/%s',
     async (_id, slug, title) => {
       renderApp(`/studies/DTXSID50469320/${slug}`)

@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router'
 import { Navigate } from 'react-router'
 import { AppFrame } from './AppFrame'
 import { ModulePlaceholder } from './ModulePlaceholder'
+import { WritingPage } from '../modules/d2'
 import { NewStudy, StudiesList, StudyPage } from '../modules/m1'
 import { NotFound } from './NotFound'
 import { StudyFrame } from './StudyFrame'
@@ -27,6 +28,7 @@ export const routes: RouteObject[] = [
         element: <StudyFrame />,
         children: [
           { index: true, element: <StudyPage /> },
+          { path: 'writing', element: <WritingPage /> },
           { path: ':module', element: <ModulePlaceholder /> },
         ],
       },

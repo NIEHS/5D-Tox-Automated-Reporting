@@ -1,0 +1,64 @@
+{
+  "status": 200,
+  "body": {
+    "key": "summary",
+    "study": "DTXSID6020430_live_rat",
+    "title": "Summary",
+    "written_by": "data",
+    "written_by_say": "The text now in the report is the facts picked by rule, in the program's fixed wording. No language model has worded it. The facts are picked from the study's results by rule. A language model words them only when a run is made under the Summary's prompt template and its text is taken into the report.",
+    "model": null,
+    "exists": true,
+    "approved": false,
+    "recorded": null,
+    "run_count": 0,
+    "text": [
+      {
+        "heading": null,
+        "paragraphs": [
+          "This study used a transcriptomic approach and standard toxicological endpoints to estimate the in vivo biological potency of 1,2-Dichlorobenzene (1,2-DCB).",
+          "The most sensitive apical endpoint in female rats was increased relative liver weight, with an estimated BMD and benchmark dose lower confidence limit (BMDL) of 57.9 (29.9) ppm. Increased relative right kidney weight was the next most sensitive apical endpoint in female rats, with a BMD (BMDL) of 93.2 (43.2) ppm.",
+          "Gene set-level transcriptional changes in the heart were estimated to occur at a BMD (BMDL) as low as 148.7 (58.2) ppm in female rats, corresponding to cellular response to hydrogen peroxide (GO:0070301). The most sensitive heart gene for which a reliable BMD could be determined was Prc1 with a BMD (BMDL) of 3.0 (0.7) ppm in female rats.",
+          "Gene set-level transcriptional changes in the kidney were estimated to occur at a BMD (BMDL) as low as 114.0 (73.9) ppm in female rats, corresponding to embryonic organ development (GO:0048568). The most sensitive kidney gene for which a reliable BMD could be determined was Slc51a with a BMD (BMDL) of 36.3 (8.9) ppm in female rats.",
+          "Gene set-level transcriptional changes in the liver were estimated to occur at a BMD (BMDL) as low as 29.8 (25.3) ppm in female rats, corresponding to xenobiotic metabolic process (GO:0006805). The most sensitive liver gene for which a reliable BMD could be determined was Sult1c3 with a BMD (BMDL) of 16.4 (3.3) ppm in female rats.",
+          "Gene set-level transcriptional changes in the lung were estimated to occur at a BMD (BMDL) as low as 175.9 (109.3) ppm in female rats, corresponding to detoxification (GO:0098754). The most sensitive lung gene for which a reliable BMD could be determined was Akr1b8 with a BMD (BMDL) of 118.9 (36.3) ppm in female rats.",
+          "Gene set-level transcriptional changes in the ovary were estimated to occur at a BMD (BMDL) as low as 156.7 (50.8) ppm in female rats, corresponding to kidney development (GO:0001822). The most sensitive ovary gene for which a reliable BMD could be determined was Ddit4 with a BMD (BMDL) of 102.9 (27.9) ppm in female rats.",
+          "Under the conditions of this short-duration study, in female rats, the most sensitive point of departure with a reliable estimate was a transcriptional change in the gene Prc1 in the heart with a BMD (BMDL) of 3.0 (0.7) ppm. Gene set changes provided potency estimates higher than that value. Apical endpoints provided potency estimates higher than that value."
+        ]
+      }
+    ],
+    "say": null,
+    "given": [
+      {
+        "id": "prompt",
+        "title": "The prompt",
+        "record": "not_recorded",
+        "say": "No prompt was sent for the text now in the report: no language model has worded it.",
+        "text": null,
+        "chars": 0
+      },
+      {
+        "id": "prompt_now",
+        "title": "The prompt a run would send now",
+        "record": "rebuilt",
+        "say": "Built now from the current template (version 1) and the study's results. It is not the record of a run.",
+        "text": "SYSTEM INSTRUCTIONS\n\nYou are a toxicology report writer for NIEHS/NTP biological potency reports.\nYou rewrite a correct but mechanical draft of a report's Summary into clear,\nconventional NIEHS prose. You never add, drop, change or round a number, an\nendpoint, a gene, a gene set, a sex or a species; the draft's facts are final.\nReturn ONLY valid JSON with no markdown formatting.\n\nPROMPT\n\nBelow is the Summary of a 5-day study of\n1,2-Dichlorobenzene in rats (inhaled), built from the\nstudy's results. Code chose every fact in it: the most sensitive\nendpoints, the gene sets and genes, and the points of departure. Doses and BMDs\nare in ppm.\n\nDRAFT\n\n[1] This study used a transcriptomic approach and standard toxicological endpoints to estimate the in vivo biological potency of 1,2-Dichlorobenzene (1,2-DCB).\n\n[2] The most sensitive apical endpoint in female rats was increased relative liver weight, with an estimated BMD and benchmark dose lower confidence limit (BMDL) of 57.9 (29.9) ppm. Increased relative right kidney weight was the next most sensitive apical endpoint in female rats, with a BMD (BMDL) of 93.2 (43.2) ppm.\n\n[3] Gene set-level transcriptional changes in the heart were estimated to occur at a BMD (BMDL) as low as 148.7 (58.2) ppm in female rats, corresponding to cellular response to hydrogen peroxide (GO:0070301). The most sensitive heart gene for which a reliable BMD could be determined was Prc1 with a BMD (BMDL) of 3.0 (0.7) ppm in female rats.\n\n[4] Gene set-level transcriptional changes in the kidney were estimated to occur at a BMD (BMDL) as low as 114.0 (73.9) ppm in female rats, corresponding to embryonic organ development (GO:0048568). The most sensitive kidney gene for which a reliable BMD could be determined was Slc51a with a BMD (BMDL) of 36.3 (8.9) ppm in female rats.\n\n[5] Gene set-level transcriptional changes in the liver were estimated to occur at a BMD (BMDL) as low as 29.8 (25.3) ppm in female rats, corresponding to xenobiotic metabolic process (GO:0006805). The most sensitive liver gene for which a reliable BMD could be determined was Sult1c3 with a BMD (BMDL) of 16.4 (3.3) ppm in female rats.\n\n[6] Gene set-level transcriptional changes in the lung were estimated to occur at a BMD (BMDL) as low as 175.9 (109.3) ppm in female rats, corresponding to detoxification (GO:0098754). The most sensitive lung gene for which a reliable BMD could be determined was Akr1b8 with a BMD (BMDL) of 118.9 (36.3) ppm in female rats.\n\n[7] Gene set-level transcriptional changes in the ovary were estimated to occur at a BMD (BMDL) as low as 156.7 (50.8) ppm in female rats, corresponding to kidney development (GO:0001822). The most sensitive ovary gene for which a reliable BMD could be determined was Ddit4 with a BMD (BMDL) of 102.9 (27.9) ppm in female rats.\n\n[8] Under the conditions of this short-duration study, in female rats, the most sensitive point of departure with a reliable estimate was a transcriptional change in the gene Prc1 in the heart with a BMD (BMDL) of 3.0 (0.7) ppm. Gene set changes provided potency estimates higher than that value. Apical endpoints provided potency estimates higher than that value.\n\n\nRewrite the draft as the report's Summary.\n- Keep every fact and every number exactly as written, including its decimals.\n- Keep the order: what the study did, any unreliable BMDs, the most sensitive\n  apical endpoints, the transcriptomic changes, the point of departure.\n- Keep one paragraph per draft paragraph unless two are clearer combined.\n- Write for a toxicologist: plain, precise, past tense, no hype, no speculation\n  beyond the draft.\n- Name the test article \"1,2-Dichlorobenzene\" at its first mention, followed by its abbreviation in parentheses — \"1,2-Dichlorobenzene (1,2-DCB)\" — and \"1,2-DCB\" after that. Use no other abbreviation or short form for it.\n\nReturn a JSON array of paragraph strings: [\"paragraph 1\", \"paragraph 2\", ...]",
+        "chars": 3921
+      },
+      {
+        "id": "template",
+        "title": "The prompt template, version 1",
+        "record": "recorded",
+        "say": "The template in use: the fixed wording of the prompt, with places for the study's facts. Each change to it is kept as a new version.",
+        "text": "---\nsystem: |\n  You are a toxicology report writer for NIEHS/NTP biological potency reports.\n  You rewrite a correct but mechanical draft of a report's Summary into clear,\n  conventional NIEHS prose. You never add, drop, change or round a number, an\n  endpoint, a gene, a gene set, a sex or a species; the draft's facts are final.\n  Return ONLY valid JSON with no markdown formatting.\ntemperature: 0.3\nmax_tokens: 4096\n---\nBelow is the Summary of a{% if duration_days %} {{ duration_days }}-day{% endif %} study of\n{{ chemical_name }} in {{ species }}{% if route %} ({{ route }}){% endif %}, built from the\nstudy's results. Code chose every fact in it: the most sensitive\nendpoints, the gene sets and genes, and the points of departure. Doses and BMDs\nare in {{ dose_unit }}.\n\nDRAFT\n{% for p in draft_paragraphs %}\n[{{ loop.index }}] {{ p }}\n{% endfor %}\n\nRewrite the draft as the report's Summary.\n- Keep every fact and every number exactly as written, including its decimals.\n- Keep the order: what the study did, any unreliable BMDs, the most sensitive\n  apical endpoints, the transcriptomic changes, the point of departure.\n- Keep one paragraph per draft paragraph unless two are clearer combined.\n- Write for a toxicologist: plain, precise, past tense, no hype, no speculation\n  beyond the draft.\n- {{ naming }}\n{% if not apical_evaluated %}- The study measured no apical endpoints; do not imply that it did.\n{% endif %}{% if not has_genomics %}- The study has no transcriptomic results; do not imply that it did.\n{% endif %}\nReturn a JSON array of paragraph strings: [\"paragraph 1\", \"paragraph 2\", ...]\n",
+        "chars": 1609
+      }
+    ],
+    "template": {
+      "version": 1,
+      "in_use_version": null
+    },
+    "unmatched_numbers": null,
+    "unmatched_say": "The text now in the report was not worded by a model, so there is nothing to compare: every number in it is one the program picked.",
+    "runs": []
+  }
+}

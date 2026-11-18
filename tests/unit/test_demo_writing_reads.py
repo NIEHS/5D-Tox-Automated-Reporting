@@ -135,6 +135,7 @@ def test_a_report_lists_its_background_and_each_studys_parts(store):
     assert [g["title"] for g in out["api_page"]] == [
         "Written sections and their prompts", "Citations and the literature behind them"]
     assert all(g["href"].startswith("/docs#/") for g in out["api_page"])
+    assert out["check_says"].startswith("The check establishes that a citation points at a source.")
 
 
 def test_what_is_recorded_is_flagged_per_part(store):

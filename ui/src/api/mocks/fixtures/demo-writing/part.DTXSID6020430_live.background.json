@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "body": {
+    "key": "background",
+    "study": "DTXSID6020430_live",
+    "title": "Background",
+    "written_by": "model",
+    "written_by_say": "Written by a language model from public sources gathered about the chemical.",
+    "model": null,
+    "exists": false,
+    "approved": false,
+    "recorded": null,
+    "text": [],
+    "given": [],
+    "say": "No Background has been written yet."
+  }
+}

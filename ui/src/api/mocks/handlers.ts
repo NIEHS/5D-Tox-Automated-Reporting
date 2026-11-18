@@ -11,6 +11,7 @@ import {
   VOCABULARIES,
   stateNotFound,
 } from './fixtures'
+import { createDemoWritingHandlers } from './demoWriting'
 import { createM1Handlers, resetM1Db } from './m1'
 import { running } from './runs'
 
@@ -73,6 +74,10 @@ export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptio
     // M1 Studies (docs/ui-redesign/modules/m1/contract.md); first, because it also
     // answers the state of the sessions it creates, deletes or adds.
     ...createM1Handlers({ lookupDelayMs }),
+
+    // The Written sections page and its citations (the demo path): the finished
+    // NIEHS-12 report and its live copy, with their own state.
+    ...createDemoWritingHandlers({ stepDelayMs }),
 
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)

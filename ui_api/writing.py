@@ -643,8 +643,9 @@ def writing_overview(dtxsid: str) -> dict:
     session = session_of(dtxsid)
     kind = _kind(dtxsid)
     titles = _titles(dtxsid)
-    out: dict = {"id": dtxsid, "kind": kind["kind"], "api_page": api_page_links(),
-                 "acts": act_verdicts(dtxsid, kind)}
+    from ui_api.writing_references import CHECK_SAYS
+    out: dict = {"id": dtxsid, "kind": kind["kind"], "check_says": CHECK_SAYS,
+                 "api_page": api_page_links(), "acts": act_verdicts(dtxsid, kind)}
     if kind["kind"] == "report":
         out["parts"] = [_background_summary(dtxsid, session, titles.get("background"))]
         out["studies"] = []
