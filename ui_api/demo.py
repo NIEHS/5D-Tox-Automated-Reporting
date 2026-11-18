@@ -90,6 +90,58 @@ def require_not_reference(dtxsid: str) -> None:
             {"id": dtxsid, "counterpart": pair["counterpart"]})
 
 
+_MADE_FROM = {
+    "integrated.json": "the combined dataset",
+    "animal_report.json": "the accounting of the animals",
+    "references.json": "the reference list",
+    "background.json": "the Background",
+    "summary.json": "the Summary",
+    "history": "the earlier versions of its sections",
+    "narrative_runs": "the record of what the language model was sent",
+}
+
+
+def _made_words(names: list[str]) -> str:
+    """What a live session holds beyond its start state, in plain words."""
+    words = [w for name, w in _MADE_FROM.items() if name in names]
+    tables = sum(1 for n in names if n.startswith("bm2_"))
+    if tables:
+        words.append(f"{tables} results section{'s' if tables != 1 else ''}")
+    if any(n.startswith("_cache_") or n.startswith("session") for n in names):
+        words.append("the results of Process")
+    return ", ".join(words)
+
+
+def reset_preview(report: str) -> dict:
+    """What a reset of the live copy would delete and keep (MODULES.md §4.3)."""
+    from tooling import demo_copy
+    from ui_api.studies import StudyRefusal
+
+    try:
+        status = demo_copy.status(report)
+    except demo_copy.DemoCopyError as e:
+        raise StudyRefusal("study_not_found", str(e), 404, {"id": report}) from None
+    live = [s for s in status["sessions"] if s["exists"] and s["is_copy"]]
+    if not live:
+        raise StudyRefusal("demo_copy_refused", f"{report} has no live copy", 409,
+                           {"id": report, "why": "this report has no live copy"})
+    deletes = [{"what": s["id"], "say": f"{s['id']}: {_made_words(s['beyond_start'])}"}
+               for s in live if _made_words(s["beyond_start"])]
+    return {
+        "act": "reset_live_copy", "strength": "costly", "deletes": deletes,
+        "keeps": [
+            {"what": report, "say": f"The finished report {report} and its studies: they "
+                                    "are only read."},
+            {"what": "start", "say": "The live copy's files, as checked, with the study "
+                                     "facts, the analysis method and the report definition "
+                                     "already stated."}],
+        "approvals_lost": [],
+        "cost": {"say": "To come back to where the live copy is now, each study is "
+                        "combined and processed again."} if deletes else None,
+        "reason_required": False,
+    }
+
+
 def reset_live_copy(report: str) -> dict:
     """Put the live copy of ``report`` back to its start state, and drop what
     this process holds in memory of its sessions.  Refused while a long act

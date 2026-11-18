@@ -28,6 +28,8 @@ export const m1Paths = {
   identity: (id: string) => `${API_V2}/studies/${enc(id)}/identity`,
   deletePreview: (id: string) => `${API_V2}/studies/${enc(id)}/delete-preview`,
   delete: (id: string) => `${API_V2}/studies/${enc(id)}/delete`,
+  resetPreview: (report: string) => `${API_V2}/demo/${enc(report)}/reset-preview`,
+  reset: (report: string) => `${API_V2}/demo/${enc(report)}/reset`,
 }
 
 /** §2.1 every session, grouped by chemical. */
@@ -78,4 +80,14 @@ export async function getDeleteDryRun(id: string, signal?: AbortSignal): Promise
 /** §2.9 delete, with the id the person typed and the token of the list they reviewed. */
 export function deleteStudy(id: string, confirmId: string, previewToken: string): Promise<DeleteResult> {
   return sendJson<DeleteResult>('POST', m1Paths.delete(id), { confirm_id: confirmId, preview_token: previewToken })
+}
+
+/** What putting a report's live copy back to its start state would delete and keep (§4.3). */
+export function getResetPreview(report: string, signal?: AbortSignal): Promise<DryRun> {
+  return getJson<DryRun>(m1Paths.resetPreview(report), signal)
+}
+
+/** Put a report's live copy back to its start state. */
+export function resetLiveCopy(report: string): Promise<unknown> {
+  return sendJson<unknown>('POST', m1Paths.reset(report), {})
 }

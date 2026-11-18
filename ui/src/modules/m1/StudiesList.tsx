@@ -7,6 +7,7 @@ import { moduleById, moduleRoute, studyRoute } from '../../kit/modules'
 import { Pending } from '../../kit/Pending'
 import { PhaseTag } from '../../kit/PhaseTag'
 import { Refusal } from '../../kit/Refusal'
+import { Partitions } from './Partitions'
 import { useStudies } from './queries'
 import { UNASSIGNED_KEY, buildRows, searchRows, type ListRow } from './rows'
 import { KIND_COLOURS, childCount, exactTime, formatUnreadSay, kindLabel, publishedLabel, relativeTime } from './words'
@@ -213,7 +214,8 @@ export function StudiesList() {
     },
   ]
 
-  const empty = data && data.chemicals.length === 0 && data.unassigned.length === 0
+  const partitions = data?.partitions ?? []
+  const empty = data && data.chemicals.length === 0 && data.unassigned.length === 0 && partitions.length === 0
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -238,6 +240,7 @@ export function StudiesList() {
         </Empty>
       ) : (
         <>
+          <Partitions partitions={partitions} />
           <Input.Search
             allowClear
             aria-label="Find a study"

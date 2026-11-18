@@ -1,7 +1,8 @@
 """
 web_routes/demo_routes.py — a finished report and its live copy (ui_api.demo).
 
-  POST /api/v2/demo/{report}/reset    put the report's live copy back to its start state
+  GET  /api/v2/demo/{report}/reset-preview   what the reset would delete and keep
+  POST /api/v2/demo/{report}/reset           put the report's live copy back to its start state
 
 The copy is made and removed from the command line (tooling.demo_copy); the
 reset is here because a running server holds part of a session in memory, and
@@ -16,6 +17,14 @@ from fastapi.responses import JSONResponse
 from web_routes.v2_routes import V2Route
 
 router = APIRouter(prefix="/api/v2", route_class=V2Route)
+
+
+@router.get("/demo/{report}/reset-preview")
+def api_v2_demo_reset_preview(report: str):
+    """What putting the live copy of ``report`` back to its start state would
+    delete and keep. Nothing is changed."""
+    from ui_api.demo import reset_preview
+    return JSONResponse(reset_preview(report))
 
 
 @router.post("/demo/{report}/reset")

@@ -121,11 +121,30 @@ export interface RunLast {
   content_errors: string[]
 }
 
-/** NOT SERVED YET (C5). */
+/**
+ * The long act under way on the study, as the server process knows it
+ * (ui_api.runs). `last` is NOT SERVED YET (C5).
+ */
 export interface RunState {
   in_flight: boolean
   started_at: string | null
-  last: RunLast | null
+  /** what is running, in plain words ("Process") */
+  what?: string | null
+  last?: RunLast | null
+}
+
+/**
+ * A finished report and its live copy, kept as a pair for a demonstration
+ * (ui_api.demo): this session's side, and the session that corresponds to it
+ * on the other side.
+ */
+export interface DemoPair {
+  partition: string | null
+  role: 'finished' | 'live' | (string & {})
+  counterpart: string
+  counterpart_exists: boolean
+  /** the report of this session's own side (itself, for a report) */
+  report: string
 }
 
 /**
@@ -268,8 +287,9 @@ export interface ExistingStudyState {
   identity: Identity | null
   pins: Pins
   processed: boolean
-  /** NOT SERVED YET (C5) */
   run?: RunState
+  /** only for a session of a finished report / live copy pair */
+  demo?: DemoPair
   sections: SectionState[]
   readiness: {
     /** NOT SERVED YET (C6) */
@@ -547,7 +567,23 @@ export interface StudiesList {
   chemicals: ChemicalGroup[]
   /** sessions whose id names no chemical */
   unassigned: StudyRow[]
+  /** sessions a person set apart; they are not listed again under their chemical */
+  partitions?: Partition[]
   generated_at: string
+}
+
+export interface Partition {
+  name: string
+  sessions: PartitionEntry[]
+}
+
+export interface PartitionEntry {
+  id: string
+  /** `finished` or `live` for a pair; null when the session is neither */
+  role: 'finished' | 'live' | (string & {}) | null
+  /** null when the partition names a session that does not exist */
+  session: StudyRow | null
+  members: StudyRow[]
 }
 
 /**

@@ -47,6 +47,9 @@ groups:
           Accepted only with the study's identifier typed out and the token of
           the rehearsal above, so that what is deleted is what was shown.
 
+      - op: GET /api/v2/demo/{report}/reset-preview
+        title: Show what putting a report's live copy back would delete and keep
+        code: ui_api.demo.reset_preview
       - op: POST /api/v2/demo/{report}/reset
         title: Put a report's live copy back to its start state
         does: >

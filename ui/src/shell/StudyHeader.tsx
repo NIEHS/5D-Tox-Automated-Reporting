@@ -1,6 +1,6 @@
 import { ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
-import { Link } from 'react-router'
+import { Link, useParams } from 'react-router'
 import type { ExistingStudyState, ModuleId } from '../api/types'
 import { nextStepOf } from './nextStep'
 import { moduleById, moduleRoute, studyRoute } from '../kit/modules'
@@ -79,6 +79,46 @@ function KindNote({ state }: { state: ExistingStudyState }) {
   return null
 }
 
+/**
+ * For a session of a finished report / live copy pair: which side this is,
+ * and the link to the same page of the other side. The backend names the
+ * side and the counterpart (ui_api.demo).
+ */
+function PairNote({ state }: { state: ExistingStudyState }) {
+  const { module } = useParams<{ module?: string }>()
+  const pair = state.demo
+  if (!pair) return null
+  const live = pair.role === 'live'
+  const other = `${studyRoute(pair.counterpart)}${module ? `/${module}` : ''}`
+  return (
+    <Alert
+      type={live ? 'warning' : 'success'}
+      showIcon
+      data-testid="pair-note"
+      title={
+        <Space wrap size="small">
+          <Tag color={live ? 'volcano' : 'green'}>
+            {pair.partition ? `${pair.partition}: ` : ''}
+            {live ? 'live copy' : 'finished report'}
+          </Tag>
+          <span>
+            {live
+              ? 'This is the live copy: the workflow is stepped through here.'
+              : 'This is the finished report. It is kept as it is; acts are done on the live copy.'}
+          </span>
+          {pair.counterpart_exists ? (
+            <Link to={other}>
+              <Button size="small">{live ? 'Switch to the finished report' : 'Switch to the live copy'}</Button>
+            </Link>
+          ) : (
+            <Typography.Text type="secondary">Its counterpart ({pair.counterpart}) does not exist.</Typography.Text>
+          )}
+        </Space>
+      }
+    />
+  )
+}
+
 export function StudyHeader({ state }: { state: ExistingStudyState }) {
   const id = state.id
   const words = phaseWords(state.phase)
@@ -128,6 +168,8 @@ export function StudyHeader({ state }: { state: ExistingStudyState }) {
             </Descriptions.Item>
           )}
         </Descriptions>
+
+        <PairNote state={state} />
 
         <KindNote state={state} />
 

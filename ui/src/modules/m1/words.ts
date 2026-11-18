@@ -32,6 +32,20 @@ export function kindLabel(row: Pick<StudyRow, 'kind' | 'relations'>, memberKey?:
   }
 }
 
+/** The two sides of a finished report / live copy pair, in plain words. */
+export const ROLE_WORDS: Record<string, { label: string; color: string; say: string }> = {
+  finished: {
+    label: 'Finished',
+    color: 'green',
+    say: 'The report as it was completed. It is kept as it is, for comparison.',
+  },
+  live: {
+    label: 'Live',
+    color: 'volcano',
+    say: 'A copy of the same study files, checked, for stepping through the workflow.',
+  },
+}
+
 export const KIND_COLOURS: Record<string, string> = {
   study: 'blue',
   report: 'purple',

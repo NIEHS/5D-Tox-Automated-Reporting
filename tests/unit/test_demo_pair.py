@@ -104,6 +104,14 @@ def test_the_reset_route_answers_in_the_envelope(pair):
     from web_routes.background_server import app
 
     client = TestClient(app)
+    _write(pair / f"{REPORT}_live_rat", "integrated.json")
+    _write(pair / f"{REPORT}_live_rat", "bm2_body-weight.json")
+    dry = client.get(f"/api/v2/demo/{REPORT}/reset-preview").json()
+    assert (dry["act"], dry["strength"], dry["reason_required"]) == (
+        "reset_live_copy", "costly", False)
+    assert dry["deletes"] == [{"what": f"{REPORT}_live_rat", "say": (
+        f"{REPORT}_live_rat: the combined dataset, 1 results section")}]
+    assert (pair / f"{REPORT}_live_rat" / "integrated.json").exists()  # a preview changes nothing
     ok = client.post(f"/api/v2/demo/{REPORT}/reset")
     assert ok.status_code == 200 and ok.json()["copy"] == f"{REPORT}_live"
     no = client.post("/api/v2/demo/DTXSID0000888/reset")
