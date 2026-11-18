@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "name": "baseline-2026-05",
+    "source": "default",
+    "usable": true,
+    "problem": null,
+    "capabilities": [
+      "claims",
+      "genes",
+      "go",
+      "organs",
+      "papers",
+      "pathways"
+    ],
+    "processed_with": {
+      "name": "baseline-2026-05",
+      "sha256": "77276726b6b5ac6b6225055c6de0dcea4bcef52e281d597bac1972e5226026ee"
+    }
+  }
+}

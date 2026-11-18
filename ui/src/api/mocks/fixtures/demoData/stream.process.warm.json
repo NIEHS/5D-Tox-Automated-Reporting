@@ -1,0 +1,170 @@
+{
+  "captured": "The same act again on the processed study (no reset): what did not change is reused.",
+  "events": [
+    {
+      "event": "step",
+      "unit": "process",
+      "status": "computing",
+      "say": "The analysis"
+    },
+    {
+      "event": "step",
+      "unit": "unit:ntp",
+      "status": "reused",
+      "say": "Statistics of the apical endpoints"
+    },
+    {
+      "event": "step",
+      "unit": "unit:bmds",
+      "status": "reused",
+      "say": "Benchmark dose modeling of the apical endpoints"
+    },
+    {
+      "event": "step",
+      "unit": "unit:sections",
+      "status": "computing",
+      "say": "Results tables"
+    },
+    {
+      "event": "step",
+      "unit": "unit:genomics",
+      "status": "reused",
+      "say": "Gene expression results"
+    },
+    {
+      "event": "step",
+      "unit": "unit:methods",
+      "status": "reused",
+      "say": "Materials and Methods"
+    },
+    {
+      "event": "step",
+      "unit": "unit:sections",
+      "status": "done",
+      "say": "Results tables",
+      "ms": 226
+    },
+    {
+      "event": "step",
+      "unit": "unit:charts",
+      "status": "reused",
+      "say": "Figures"
+    },
+    {
+      "event": "step",
+      "unit": "unit:bmd_summary",
+      "status": "reused",
+      "say": "Benchmark dose summary"
+    },
+    {
+      "event": "step",
+      "unit": "unit:content",
+      "status": "reused",
+      "say": "Drafted text: the results sentences and the gene-level interpretation"
+    },
+    {
+      "event": "step",
+      "unit": "process",
+      "status": "done",
+      "say": "The analysis",
+      "ms": 22686
+    },
+    {
+      "event": "step",
+      "unit": "result_sections",
+      "status": "computing",
+      "say": "Writing the results sections"
+    },
+    {
+      "event": "step",
+      "unit": "result_sections",
+      "status": "done",
+      "say": "Writing the results sections",
+      "ms": 70
+    },
+    {
+      "event": "step",
+      "unit": "summary",
+      "status": "computing",
+      "say": "Writing the Summary"
+    },
+    {
+      "event": "step",
+      "unit": "summary",
+      "status": "done",
+      "say": "Writing the Summary",
+      "ms": 2517
+    },
+    {
+      "event": "result",
+      "ok": true,
+      "summary": {
+        "test_article": "1,2-DCB",
+        "units": {
+          "recorded": true,
+          "computed": [
+            {
+              "unit": "sections",
+              "say": "Results tables"
+            }
+          ],
+          "reused": [
+            {
+              "unit": "ntp",
+              "say": "Statistics of the apical endpoints"
+            },
+            {
+              "unit": "bmds",
+              "say": "Benchmark dose modeling of the apical endpoints"
+            },
+            {
+              "unit": "genomics",
+              "say": "Gene expression results"
+            },
+            {
+              "unit": "methods",
+              "say": "Materials and Methods"
+            },
+            {
+              "unit": "charts",
+              "say": "Figures"
+            },
+            {
+              "unit": "bmd_summary",
+              "say": "Benchmark dose summary"
+            },
+            {
+              "unit": "content",
+              "say": "Drafted text: the results sentences and the gene-level interpretation"
+            }
+          ]
+        },
+        "analysis": {
+          "apical_sections": 5,
+          "genomics_sections": 5,
+          "methods": true
+        },
+        "result_sections": {
+          "written": [],
+          "unchanged": [
+            "bm2_body-weight",
+            "bm2_clinical-chemistry",
+            "bm2_organ-weight",
+            "bm2_clinical-observations",
+            "bm2_tissue-concentration"
+          ]
+        },
+        "approvals_affected": {
+          "needs_review": [],
+          "held": []
+        },
+        "summary": {
+          "written": false,
+          "paragraphs": 0,
+          "held": null
+        },
+        "citations_removed": 0
+      }
+    }
+  ]
+}

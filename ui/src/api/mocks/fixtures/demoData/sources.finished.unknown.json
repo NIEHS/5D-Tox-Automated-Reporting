@@ -1,0 +1,16 @@
+{
+  "status": 404,
+  "body": {
+    "error": {
+      "code": "table_not_found",
+      "status": 404,
+      "message": "DTXSID6020430_rat has no results table bm2_hematology",
+      "say": "This study's report has no results table bm2_hematology. The tables are written when the analysis is run.",
+      "fix": "P1",
+      "details": {
+        "id": "DTXSID6020430_rat",
+        "key": "bm2_hematology"
+      }
+    }
+  }
+}

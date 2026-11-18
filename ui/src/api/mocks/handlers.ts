@@ -11,6 +11,7 @@ import {
   VOCABULARIES,
   stateNotFound,
 } from './fixtures'
+import { createDemoDataHandlers, resetDemoDataDb } from './demoData'
 import { createM1Handlers, resetM1Db } from './m1'
 import { running } from './runs'
 
@@ -36,6 +37,7 @@ export interface MockOptions {
 export function resetMockDb(): void {
   running.clear()
   resetM1Db()
+  resetDemoDataDb()
 }
 
 export function envelope(body: ErrorEnvelope): Response {
@@ -73,6 +75,11 @@ export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptio
     // M1 Studies (docs/ui-redesign/modules/m1/contract.md); first, because it also
     // answers the state of the sessions it creates, deletes or adds.
     ...createM1Handlers({ lookupDelayMs }),
+
+    // Combined data and Process (the demo path): the NIEHS-12 pair's studies.
+    // Before the shared state and the proposed Process mock below, which
+    // answer for every other study.
+    ...createDemoDataHandlers({ stepDelayMs }),
 
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)

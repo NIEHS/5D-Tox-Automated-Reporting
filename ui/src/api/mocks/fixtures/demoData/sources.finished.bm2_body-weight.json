@@ -1,0 +1,102 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_rat",
+    "key": "bm2_body-weight",
+    "title": "Body Weight",
+    "assay": "Body Weight",
+    "caption": "Summary of Body Weights and Body Weight Gain of Female Rats Exposed to 1,2-DCB for Five Days",
+    "has_benchmark_doses": true,
+    "benchmark_dose_recorded": true,
+    "sexes": [
+      {
+        "sex": "Female",
+        "experiments": [
+          {
+            "name": "body_weight_truth_female",
+            "organ": "Whole Body",
+            "endpoints": 7,
+            "animals": 40,
+            "endpoint_names": [
+              "Body Weight Gain",
+              "SD0",
+              "SD1",
+              "SD2",
+              "SD3",
+              "SD4",
+              "SD5"
+            ]
+          }
+        ],
+        "files": [
+          {
+            "filename": "body_weight_truth_female.txt",
+            "kind": "txt_csv",
+            "file_type": "txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "stops": null,
+        "benchmark_dose": {
+          "source": "inferred",
+          "bmr": {
+            "type": "SD",
+            "factor": 1
+          },
+          "constant_variance": true,
+          "models": [
+            "Hill",
+            "Power",
+            "Exponential 3",
+            "Exponential 5"
+          ]
+        },
+        "rows": [
+          {
+            "label": "n",
+            "heading": false,
+            "count_row": true,
+            "endpoint_in_dataset": null,
+            "bmd": "NA",
+            "bmdl": "NA"
+          },
+          {
+            "label": "0",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "ND",
+            "bmdl": "ND"
+          },
+          {
+            "label": "4",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "298.1",
+            "bmdl": "133.7"
+          },
+          {
+            "label": "5",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "227.1",
+            "bmdl": "116.4"
+          },
+          {
+            "label": "Body Weight Gain",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": true,
+            "bmd": "273.4",
+            "bmdl": "215.4"
+          }
+        ]
+      }
+    ]
+  }
+}

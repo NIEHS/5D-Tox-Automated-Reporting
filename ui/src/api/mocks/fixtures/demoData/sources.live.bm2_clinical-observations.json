@@ -1,0 +1,47 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_live_rat",
+    "key": "bm2_clinical-observations",
+    "title": "Clinical Observations",
+    "assay": "Clinical Observations",
+    "caption": null,
+    "has_benchmark_doses": false,
+    "benchmark_dose_recorded": true,
+    "sexes": [
+      {
+        "sex": "Female",
+        "experiments": [],
+        "files": [],
+        "stops": "experiment",
+        "benchmark_dose": null,
+        "rows": [
+          {
+            "label": "Ataxia (Mild)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Coat Ruffled",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Lethargic",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "report_has_no_data",
+      "status": 409,
+      "message": "DTXSID6020430_live is a report over several studies (DTXSID6020430_live_rat, DTXSID6020430_live_mouse); its data is in those studies",
+      "say": "This is a report over several studies: it has no files or data of its own. Its data is prepared in each of its studies; open one of them.",
+      "fix": "M1",
+      "details": {
+        "id": "DTXSID6020430_live",
+        "members": [
+          "DTXSID6020430_live_rat",
+          "DTXSID6020430_live_mouse"
+        ]
+      }
+    }
+  }
+}

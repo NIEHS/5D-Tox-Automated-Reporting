@@ -1,0 +1,157 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_rat",
+    "key": "bm2_organ-weight",
+    "title": "Organ Weight",
+    "assay": "Organ Weight",
+    "caption": "Summary of Select Organ Weights of Female Rats Exposed to 1,2-DCB for Five Days",
+    "has_benchmark_doses": true,
+    "benchmark_dose_recorded": true,
+    "sexes": [
+      {
+        "sex": "Female",
+        "experiments": [
+          {
+            "name": "organ_weights_truth_female",
+            "organ": "heart, kidney, liver, lungs",
+            "endpoints": 6,
+            "animals": 40,
+            "endpoint_names": [
+              "Heart",
+              "Kidney-Left",
+              "Kidney-Right",
+              "Liver",
+              "Lungs",
+              "Terminal Body Weight"
+            ]
+          }
+        ],
+        "files": [
+          {
+            "filename": "organ_weights_truth_female.txt",
+            "kind": "txt_csv",
+            "file_type": "txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "stops": null,
+        "benchmark_dose": {
+          "source": "inferred",
+          "bmr": {
+            "type": "SD",
+            "factor": 1
+          },
+          "constant_variance": true,
+          "models": [
+            "Hill",
+            "Power",
+            "Exponential 3",
+            "Exponential 5"
+          ]
+        },
+        "rows": [
+          {
+            "label": "n",
+            "heading": false,
+            "count_row": true,
+            "endpoint_in_dataset": null,
+            "bmd": "NA",
+            "bmdl": "NA"
+          },
+          {
+            "label": "Terminal Body Weight (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "227.1",
+            "bmdl": "116.4"
+          },
+          {
+            "label": "Heart Absolute (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Heart Relative (mg/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Kidney-Left Absolute (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Kidney-Left Relative (mg/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "101.2",
+            "bmdl": "40.9"
+          },
+          {
+            "label": "Kidney-Right Absolute (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Kidney-Right Relative (mg/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "93.2",
+            "bmdl": "43.2"
+          },
+          {
+            "label": "Liver Absolute (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "113.9",
+            "bmdl": "41.8"
+          },
+          {
+            "label": "Liver Relative (mg/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "57.9",
+            "bmdl": "29.9"
+          },
+          {
+            "label": "Lungs Absolute (g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          },
+          {
+            "label": "Lungs Relative (mg/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": "—",
+            "bmdl": "—"
+          }
+        ]
+      }
+    ]
+  }
+}

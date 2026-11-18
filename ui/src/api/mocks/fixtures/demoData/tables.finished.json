@@ -1,0 +1,63 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_rat",
+    "tables": [
+      {
+        "key": "bm2_body-weight",
+        "title": "Body Weight",
+        "assay": "Body Weight",
+        "caption": "Summary of Body Weights and Body Weight Gain of Female Rats Exposed to 1,2-DCB for Five Days",
+        "sexes": [
+          "Female"
+        ],
+        "rows": 5,
+        "has_benchmark_doses": true
+      },
+      {
+        "key": "bm2_clinical-chemistry",
+        "title": "Clinical Chemistry",
+        "assay": "Clinical Chemistry",
+        "caption": "Summary of Select Clinical Chemistry Data for Female Rats Exposed to 1,2-DCB for Five Days",
+        "sexes": [
+          "Female"
+        ],
+        "rows": 18,
+        "has_benchmark_doses": true
+      },
+      {
+        "key": "bm2_clinical-observations",
+        "title": "Clinical Observations",
+        "assay": "Clinical Observations",
+        "caption": null,
+        "sexes": [
+          "Female"
+        ],
+        "rows": 3,
+        "has_benchmark_doses": false
+      },
+      {
+        "key": "bm2_organ-weight",
+        "title": "Organ Weight",
+        "assay": "Organ Weight",
+        "caption": "Summary of Select Organ Weights of Female Rats Exposed to 1,2-DCB for Five Days",
+        "sexes": [
+          "Female"
+        ],
+        "rows": 12,
+        "has_benchmark_doses": true
+      },
+      {
+        "key": "bm2_tissue-concentration",
+        "title": "Tissue Concentration",
+        "assay": "Tissue Concentration",
+        "caption": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,2-DCB for Five Days",
+        "sexes": [
+          "Female"
+        ],
+        "rows": 22,
+        "has_benchmark_doses": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "run_in_flight",
+      "status": 409,
+      "message": "DTXSID6020430_live_rat: the analysis (Process) is running since 2026-11-18T17:41:24Z",
+      "say": "Process is running on this study (since 2026-11-18T17:41:24Z). Wait for it to finish.",
+      "fix": "P1",
+      "details": {
+        "id": "DTXSID6020430_live_rat",
+        "time": "2026-11-18T17:41:24Z",
+        "what": "the analysis (Process)"
+      }
+    }
+  }
+}

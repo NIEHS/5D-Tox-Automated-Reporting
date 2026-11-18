@@ -1,0 +1,27 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "phase_not_allowed",
+      "status": 409,
+      "message": "PROCESS refused for DTXSID6020430_live_rat: the study is in phase VALIDATED (allowed now: ADD_FILES, CONFIRM_CLASSIFICATION, INTEGRATE, REMOVE_FILE, RESET, RESOLVE, VALIDATE). Integrate first.",
+      "say": "Processing isn't possible yet. The study's files have been checked but not yet combined into one dataset. Integrate the study first.",
+      "fix": "M3",
+      "details": {
+        "action": "PROCESS",
+        "phase": "VALIDATED",
+        "legal_actions": [
+          "ADD_FILES",
+          "CONFIRM_CLASSIFICATION",
+          "INTEGRATE",
+          "REMOVE_FILE",
+          "RESET",
+          "RESOLVE",
+          "VALIDATE"
+        ],
+        "integration": null,
+        "next_action": "INTEGRATE"
+      }
+    }
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_live_rat",
+    "key": "bm2_tissue-concentration",
+    "title": "Tissue Concentration",
+    "assay": "Tissue Concentration",
+    "caption": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,2-DCB for Five Days",
+    "has_benchmark_doses": false,
+    "benchmark_dose_recorded": true,
+    "sexes": [
+      {
+        "sex": "Female",
+        "experiments": [
+          {
+            "name": "tissue_conc_truth_female",
+            "organ": null,
+            "endpoints": 6,
+            "animals": 42,
+            "endpoint_names": [
+              "Blood 1,2-DCB Concentration",
+              "Blood 1,2-DCB LOD",
+              "Liver 1,2-DCB Concentration",
+              "Liver 1,2-DCB LOD",
+              "Lung 1,2-DCB Concentration",
+              "Lung 1,2-DCB LOD"
+            ]
+          }
+        ],
+        "files": [
+          {
+            "filename": "tissue_conc_truth_female.txt",
+            "kind": "txt_csv",
+            "file_type": "txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "stops": null,
+        "benchmark_dose": null,
+        "rows": [
+          {
+            "label": "Study Day 4",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "n",
+            "heading": false,
+            "count_row": true,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Blood",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Blood concentration (ng/mL)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized blood concentration [(ng/mL)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Liver",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Liver concentration (ng/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized liver concentration [(ng/g)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Lung",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Lung concentration (ng/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized lung concentration [(ng/g)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Study Day 5",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "n",
+            "heading": false,
+            "count_row": true,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Blood",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Blood concentration (ng/mL)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized blood concentration [(ng/mL)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Liver",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Liver concentration (ng/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized liver concentration [(ng/g)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Lung",
+            "heading": true,
+            "count_row": false,
+            "endpoint_in_dataset": null,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Lung concentration (ng/g)",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          },
+          {
+            "label": "Normalized lung concentration [(ng/g)/ppm]",
+            "heading": false,
+            "count_row": false,
+            "endpoint_in_dataset": false,
+            "bmd": null,
+            "bmdl": null
+          }
+        ]
+      }
+    ]
+  }
+}

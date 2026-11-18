@@ -1,0 +1,390 @@
+{
+  "status": 200,
+  "body": {
+    "id": "DTXSID6020430_live_rat",
+    "files_checked": true,
+    "files": [
+      {
+        "filename": "108020006_2D_Genomic_Rats.bm2",
+        "file_type": "bm2",
+        "assay": null,
+        "data_type": "gene_expression",
+        "sexes": [],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": null,
+        "converted_from": null
+      },
+      {
+        "filename": "tissue_conc_truth_female.txt",
+        "file_type": "txt",
+        "assay": "Tissue Concentration",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 42,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": null,
+        "converted_from": {
+          "filename": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+          "recorded_in": "sidecar"
+        }
+      },
+      {
+        "filename": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+        "file_type": "xlsx",
+        "assay": "Tissue Concentration",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 42,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": null,
+        "converted_from": null
+      },
+      {
+        "filename": "body_weight_truth_female.txt",
+        "file_type": "txt",
+        "assay": "Body Weight",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": {
+          "filename": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+          "recorded_in": "sidecar"
+        }
+      },
+      {
+        "filename": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+        "file_type": "xlsx",
+        "assay": "Body Weight",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 61,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      },
+      {
+        "filename": "clin_chem_truth_female.txt",
+        "file_type": "txt",
+        "assay": "Clinical Chemistry",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": {
+          "filename": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+          "recorded_in": "sidecar"
+        }
+      },
+      {
+        "filename": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+        "file_type": "xlsx",
+        "assay": "Clinical Chemistry",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      },
+      {
+        "filename": "clinical_obs_truth_female.csv",
+        "file_type": "csv",
+        "assay": "Clinical",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 61,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": null,
+        "converted_from": {
+          "filename": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+          "recorded_in": "file_check"
+        }
+      },
+      {
+        "filename": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+        "file_type": "xlsx",
+        "assay": "Clinical",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 61,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      },
+      {
+        "filename": "organ_weights_truth_female.txt",
+        "file_type": "txt",
+        "assay": "Organ Weight",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": {
+          "filename": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+          "recorded_in": "sidecar"
+        }
+      },
+      {
+        "filename": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+        "file_type": "xlsx",
+        "assay": "Organ Weight",
+        "data_type": "tox_study",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 40,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      },
+      {
+        "filename": "108020006_Individual_Animal_Removal_Reasons_Data.xlsx",
+        "file_type": "xlsx",
+        "assay": null,
+        "data_type": "removal_reasons",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 61,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      },
+      {
+        "filename": "108020006_Individual_Animal_Removal_Reasons_Data_Rats.xlsx",
+        "file_type": "xlsx",
+        "assay": null,
+        "data_type": "removal_reasons",
+        "sexes": [
+          "Female"
+        ],
+        "animals": 61,
+        "dose_groups": [
+          0,
+          1,
+          10,
+          30,
+          100,
+          250,
+          500
+        ],
+        "dose_unit": "ppm",
+        "converted_from": null
+      }
+    ],
+    "assays": [
+      {
+        "key": "gene_expression",
+        "assay": null,
+        "data_type": "gene_expression",
+        "workbook": null,
+        "tables": [],
+        "bm2": "108020006_2D_Genomic_Rats.bm2"
+      },
+      {
+        "key": "Tissue Concentration|tox_study",
+        "assay": "Tissue Concentration",
+        "data_type": "tox_study",
+        "workbook": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+        "tables": [
+          {
+            "filename": "tissue_conc_truth_female.txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "bm2": null
+      },
+      {
+        "key": "Body Weight|tox_study",
+        "assay": "Body Weight",
+        "data_type": "tox_study",
+        "workbook": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+        "tables": [
+          {
+            "filename": "body_weight_truth_female.txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "bm2": null
+      },
+      {
+        "key": "Clinical Chemistry|tox_study",
+        "assay": "Clinical Chemistry",
+        "data_type": "tox_study",
+        "workbook": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+        "tables": [
+          {
+            "filename": "clin_chem_truth_female.txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "bm2": null
+      },
+      {
+        "key": "Clinical|tox_study",
+        "assay": "Clinical",
+        "data_type": "tox_study",
+        "workbook": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+        "tables": [
+          {
+            "filename": "clinical_obs_truth_female.csv",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+              "recorded_in": "file_check"
+            }
+          }
+        ],
+        "bm2": null
+      },
+      {
+        "key": "Organ Weight|tox_study",
+        "assay": "Organ Weight",
+        "data_type": "tox_study",
+        "workbook": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+        "tables": [
+          {
+            "filename": "organ_weights_truth_female.txt",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+              "recorded_in": "sidecar"
+            }
+          }
+        ],
+        "bm2": null
+      }
+    ],
+    "integrated": false,
+    "integrated_at": null,
+    "experiments": null,
+    "own_bmd_analysis": null,
+    "accounting": null
+  }
+}

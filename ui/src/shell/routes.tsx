@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router'
 import { Navigate } from 'react-router'
 import { AppFrame } from './AppFrame'
-import { ModulePlaceholder } from './ModulePlaceholder'
+import { ModulePage } from './ModulePage'
 import { NewStudy, StudiesList, StudyPage } from '../modules/m1'
 import { NotFound } from './NotFound'
 import { StudyFrame } from './StudyFrame'
@@ -12,8 +12,8 @@ import { StudyFrame } from './StudyFrame'
  *   /studies/new             a new study (M1, S2)
  *   /studies/:id             a study's page (M1, S3; its workflow panels are the shell's)
  *   /studies/:id/:module     a module's page (placeholders until each is built)
- * A module replaces its placeholder by adding its route here, through the
- * orchestrator.
+ * A module replaces its placeholder by adding its page to ModulePage.tsx,
+ * through the orchestrator.
  */
 export const routes: RouteObject[] = [
   {
@@ -27,7 +27,7 @@ export const routes: RouteObject[] = [
         element: <StudyFrame />,
         children: [
           { index: true, element: <StudyPage /> },
-          { path: ':module', element: <ModulePlaceholder /> },
+          { path: ':module', element: <ModulePage /> },
         ],
       },
       { path: '*', element: <NotFound /> },
