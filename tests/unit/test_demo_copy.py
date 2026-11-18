@@ -61,8 +61,8 @@ def test_the_copy_holds_the_checked_files_and_the_declarations_and_nothing_made_
     assert json.loads((report / "studies.json").read_text()) == {
         "rat": f"{REPORT}_live_rat", "mouse": f"{REPORT}_live_mouse"}
     marker = json.loads((rat / "demo_copy.json").read_text())
-    assert (marker["of"], marker["source"], marker["results_cache"]) == (
-        REPORT, f"{REPORT}_rat", "none")
+    assert (marker["of"], marker["source"]) == (REPORT, f"{REPORT}_rat")
+    assert not list(rat.glob("_cache_*.json"))  # integration would clear it anyway
     # The finished report is only read.
     assert (store / f"{REPORT}_rat" / "integrated.json").exists()
     assert not (store / f"{REPORT}_rat" / "demo_copy.json").exists()
@@ -106,23 +106,17 @@ def test_a_second_copy_and_a_copy_of_a_copy_are_refused(store):
         dc.make(f"{REPORT}_live")
 
 
-def test_reset_puts_the_copy_back_and_brings_the_results_cache_unless_cold(store):
+def test_reset_puts_the_copy_back_to_its_start_state(store):
     dc.make(REPORT)
     rat = store / f"{REPORT}_live_rat"
     _write(rat, "integrated.json")
     _write(rat, "bm2_body-weight.json")
-    _write(rat, "_cache_sections_own.json", "the copy's own run")
-    out = dc.reset(REPORT)
-    assert out["results_cache"] == "copied"
-    # The copy's own cache is carried over, on top of the finished study's.
-    assert (rat / "_cache_sections_own.json").read_text() == "the copy's own run"
-    assert out["sessions"][1]["cache_files"] == 2
-    assert not list(store.glob("_demo_reset_*"))
-    assert not (rat / "integrated.json").exists() and not (rat / "bm2_body-weight.json").exists()
-    assert (rat / "_cache_ntp_abc.json").exists()
+    _write(rat, "_cache_sections_own.json")
+    assert dc.status(REPORT)["sessions"][1]["beyond_start"] == [
+        "_cache_sections_own.json", "bm2_body-weight.json", "integrated.json"]
+    dc.reset(REPORT)
     assert dc.status(REPORT)["sessions"][1]["beyond_start"] == []
-    dc.reset(REPORT, warm=False)
-    assert not list(rat.glob("_cache_*.json"))
+    assert (rat / "files" / "data.txt").exists()
 
 
 def test_only_a_folder_with_the_marker_is_ever_deleted(store):
