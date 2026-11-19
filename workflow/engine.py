@@ -45,8 +45,15 @@ def _has_knowledge_base(dtxsid: str) -> bool:
     """Whether the session's report has a knowledge base that can ground its
     genomics interpretation: the one its document definition names, else the
     default (knowledge_base.registry)."""
+    from document_model.definition_pin import DefinitionPinError
     from knowledge_base.registry import kb_or_none
-    return kb_or_none(dtxsid) is not None
+    try:
+        return kb_or_none(dtxsid) is not None
+    except DefinitionPinError:
+        # The definition that names the knowledge base cannot be read (its pin
+        # is broken), so none is named.  The state is still derived; the pin's
+        # own error is reported where the pin is (definition_pin.drift).
+        return False
 
 
 def _is_processed(session_dir) -> bool:

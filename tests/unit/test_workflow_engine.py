@@ -329,3 +329,18 @@ def test_a_study_no_report_composes_is_unchanged(monkeypatch):
     _member_of(monkeypatch, "DTX")
     store = _PerSessionStates({"DTX": {"background": True}, "OTHER": {}}, files=True)
     assert WorkflowEngine("OTHER", store).derive_section_readiness()["summary"]["enabled"] is False
+
+
+def test_a_broken_definition_pin_does_not_stop_the_state_from_being_derived(monkeypatch):
+    # The knowledge base is named by the report definition; when that cannot
+    # be read, none is named, and the state is still derived.
+    import knowledge_base.registry as registry
+    from document_model.definition_pin import DefinitionPinError
+
+    def broken(dtxsid, needs=None):
+        raise DefinitionPinError("DTX: document_definition.yaml no longer matches its pin")
+
+    monkeypatch.setattr(registry, "kb_or_none", broken)
+    eng = WorkflowEngine("DTX", FakeStore(files=True))
+    assert eng.state().phase == Phase.UPLOADED
+    assert eng.derive_section_readiness()["summary"]["enabled"] is False
