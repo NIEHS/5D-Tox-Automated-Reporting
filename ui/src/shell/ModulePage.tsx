@@ -1,4 +1,5 @@
 import { useParams } from 'react-router'
+import { ReviewPage } from '../modules/d1'
 import { WritingPage } from '../modules/d2'
 import { CombinedData } from '../modules/m3'
 import { ProcessPage } from '../modules/p1'
@@ -14,6 +15,7 @@ const MODULE_PAGES: Record<string, React.ComponentType> = {
   dataset: CombinedData, // M3 Combined data (the demo path's S1)
   process: ProcessPage, // P1 Process (the demo path's S2)
   writing: WritingPage, // D2 Written sections and its Citations tab (S3, S4)
+  review: ReviewPage, // D1 Review the report: the Bookshelf view, approvals, the Word document (S5)
 }
 
 export function ModulePage() {

@@ -354,6 +354,8 @@ app.include_router(v2_data_routes.router)
 
 import web_routes.v2_writing_routes as v2_writing_routes  # the written sections, the citations
 app.include_router(v2_writing_routes.router)
+import web_routes.v2_review_routes as v2_review_routes  # the review page: the book and its sections
+app.include_router(v2_review_routes.router)
 
 import web_routes.app_mount as app_mount
 app.include_router(app_mount.router)

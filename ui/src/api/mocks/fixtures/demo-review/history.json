@@ -1,0 +1,69 @@
+{
+  "status": 200,
+  "body": {
+    "section_key": "bm2_organ-weight",
+    "current_version": 1,
+    "current_status": "working",
+    "versions": [
+      {
+        "version": 1,
+        "archived": null,
+        "status": "working",
+        "approved_at": "2026-11-19T12:53:47.193398+00:00",
+        "current": true,
+        "retrievable": true
+      }
+    ],
+    "events": [
+      {
+        "version": 1,
+        "cause": "generate",
+        "status": "draft",
+        "ts": "2026-11-19T12:37:53.000232+00:00",
+        "v": 2,
+        "section": "bm2_organ-weight",
+        "act": "materialize",
+        "actor": "system",
+        "user": null,
+        "author": "generated",
+        "prior_version": null,
+        "changed": true,
+        "content_hash": "sha256:b54170541b72e41b844531d3d083ee66f6447a268f46f9b70132de98baa4b453",
+        "applied": true
+      },
+      {
+        "version": 1,
+        "cause": "edit",
+        "status": "blessed",
+        "ts": "2026-11-19T12:53:47.194524+00:00",
+        "v": 2,
+        "section": "bm2_organ-weight",
+        "act": "accept",
+        "actor": "person",
+        "user": null,
+        "author": "generated",
+        "prior_version": 1,
+        "changed": false,
+        "content_hash": "sha256:b54170541b72e41b844531d3d083ee66f6447a268f46f9b70132de98baa4b453",
+        "applied": true
+      },
+      {
+        "version": 1,
+        "cause": "revise",
+        "status": "working",
+        "ts": "2026-11-19T12:53:47.231102+00:00",
+        "reason": "The footnote on the liver weights is to be checked.",
+        "v": 2,
+        "section": "bm2_organ-weight",
+        "act": "release",
+        "actor": "person",
+        "user": null,
+        "author": "generated",
+        "prior_version": 1,
+        "changed": false,
+        "content_hash": "sha256:b54170541b72e41b844531d3d083ee66f6447a268f46f9b70132de98baa4b453",
+        "applied": true
+      }
+    ]
+  }
+}

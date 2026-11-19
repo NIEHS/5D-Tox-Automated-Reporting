@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "section_key": "bm2_organ-weight",
+    "approved": true,
+    "version": 1,
+    "version_status": "blessed",
+    "noop": {
+      "code": "already_accepted",
+      "say": "This section is already accepted and nothing has changed since."
+    }
+  }
+}

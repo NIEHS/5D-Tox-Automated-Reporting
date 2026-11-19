@@ -271,6 +271,24 @@ groups:
           is changed by asking.
         code: ui_api.read_model.study_state
         notebook: 17. Where things stand
+      - op: GET /api/v2/studies/{dtxsid}/review
+        title: Show the report for review, with its sections and where each starts in the book
+        does: >
+          The address of the report on the Bookshelf and whether it can be
+          shown, the addresses of the Word document and the PDF, and the
+          report's sections in the order it prints them: the report's own,
+          then each study's. For each section: who writes it, its state,
+          whether it can be approved now (and why not), and the place in the
+          Bookshelf page where it starts. A section with no place of its own
+          in the book has none; nothing is guessed. Asked of one study of a
+          report, the answer is the report's. Nothing is changed by asking.
+        reads: >
+          the report definition, the section files of the report and of each
+          study it covers, and `studies.json`.
+        code:
+          - ui_api.review.review
+          - ui_api.read_model.sections_state
+          - document_model.document_tree.study_tree
       - op: POST /api/v2/studies/{dtxsid}/sections/{key}/accept
         title: Approve a section as it stands (new interface)
         does: The section's text is never changed by approving it.
