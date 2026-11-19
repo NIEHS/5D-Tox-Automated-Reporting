@@ -101,6 +101,23 @@ What the content branch added that the plan below does not yet cover:
   are checked against the vocabulary). **Each needs a re-check against today's
   code before it is signed.**
 
+## Pinned 2026-11-19 (tag `pin-2026-11-19-demo-pages` on this branch and on `main`)
+
+The maintainer put a pin in the demo path to prepare the planning of a **user
+system** (who works on what, who approves what, only a person's own
+responsibilities editable, everything visible). Preparation, nothing decided or
+built: `docs/plans/user-system-prep.md`.
+
+Where the demo path stands at the pin:
+- all five pages (S1 to S5) are merged and run in the real app on 9000; the
+  whole live path was run through them on both studies of NIEHS-12, and the live
+  copy was put back to its start state;
+- the front end passes typecheck, lint, 354 tests and the build; the backend
+  suite has the two failures listed below and no other;
+- **to do when the path is taken up again:** the adversarial pass over the whole
+  path; the timed rehearsals; the open points of `modules/demo/spec.md` §9
+  (items 9 to 12); then, if time is left, Scott's extras.
+
 ## The demo path (2026-11-18): the two weeks to about 2026-12-02
 
 The maintainer's goal: a **demo of this interface** to the study team on NIEHS-12
@@ -108,8 +125,7 @@ The maintainer's goal: a **demo of this interface** to the study team on NIEHS-1
 maintainer on 2026-11-18:
 
 - one **demo path spec** stands in for the per-module specs and sign-offs:
-  `modules/demo/spec.md` (**draft, awaiting the maintainer; nothing is built, and
-  nothing is to be started until the maintainer says so**);
+  `modules/demo/spec.md` (the maintainer said "proceed" on 2026-11-18; built, see below);
 - two setups to switch between, a finished report and a live copy; the live copy
   is **in the same store under another id**, and the pair is set apart in the
   Studies list as **"Demo"**;
