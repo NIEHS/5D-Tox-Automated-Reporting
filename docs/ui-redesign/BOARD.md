@@ -157,8 +157,8 @@ Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9)
   its file, the stage and next-step words, the shelf reduced to the Demo
   reports, a report's Background releasing its studies' Summary;
 - the Background's public sources (ATSDR) answer only some of the time from here;
-- `test_read_model::test_a_broken_snapshot…` and
-  `test_ui_api_layering::test_every_place_has_a_module` still fail, as before.
+- (fixed 2026-11-19) `test_read_model::test_a_broken_snapshot…` and
+  `test_ui_api_layering::test_every_place_has_a_module` pass: the suite has no known failure.
 
 A route added from now on needs an entry in `web_routes/api_guide*.yaml`
 (`tests/unit/test_api_guide.py` refuses one without).

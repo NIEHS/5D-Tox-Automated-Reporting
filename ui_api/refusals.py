@@ -108,6 +108,12 @@ PLACE_MODULE: dict[str, str] = {
     "sections": "D1",
     "publish": "D1",
     "handoff": "D4",
+    # Two steps of the workflow have no page of their own yet (BOARD,
+    # 2026-11-18): each is sent to the page that shows it.  A flagged benchmark
+    # dose is listed on the Review page as what holds publishing; the knowledge
+    # base is shown on the Process page.
+    "bmd_review": "D1",
+    "knowledge_base": "P1",
 }
 
 
