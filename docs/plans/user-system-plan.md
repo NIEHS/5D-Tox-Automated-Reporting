@@ -238,6 +238,30 @@ visible"; stages 4 to 6 are answer 4.
 - Workspaces (a store and ports per person), which remain for people trying the
   tool on their own data.
 
+## 10a. A requirement beside users: text may not contradict the data
+
+The maintainer, 2026-11-19: "if any text is altered that contradicts the data
+should not be allowed." It is not about people or roles; it comes with text
+editing (stages 4 and 5) and applies to every way text arrives: typed in the
+application, returned from Word, written by a model. Not designed yet. What is
+known:
+
+- **Where text is built from data, it can be made impossible.** A results
+  narrative is a template: wording with places that refer to the data
+  (`narrative/section_template.py`), and an edit touches the wording only. A
+  number or a data-derived word ("increased") cannot be typed over. Sections do
+  not keep their template today (`workflow/reprocess.py`, deferred), so this is
+  work, not a switch.
+- **In free prose, rules can decide some contradictions** (a value that differs
+  from its table, a dose, sex, species, organ, route or unit the study does not
+  have, a direction against the table). A few run today on the finished
+  document only (`tooling/report_qc.py`). These can refuse a save.
+- **Meaning cannot be decided by rule** ("the liver was the most sensitive
+  organ"). A model can flag it for a person; it cannot be the ground for a
+  refusal.
+- Open: whether a refusal by rule has a way through with a reason (text that
+  quotes another study's value looks like a contradiction to a rule).
+
 ## 11. Still open, for the maintainer
 
 Answered on 2026-11-19 and taken into the plan: what "methods" means, how the
