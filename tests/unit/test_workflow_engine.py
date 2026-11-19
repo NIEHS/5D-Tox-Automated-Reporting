@@ -282,3 +282,50 @@ def test_a_report_over_several_studies_waits_for_each_members_bmd_review():
         "decision": "reliable", "reason": "plausible", "bmd": "1.0"}}}
     store._docs[("DTX_mouse", "bmd_flags.json")] = {"flags": [{**flag, "decision": "reliable"}]}
     assert eng.publish_readiness()["can_publish"] is True
+
+
+# --- a study of a report: the report's Background stands for it -------------
+
+class _PerSessionStates(FakeStore):
+    """A FakeStore whose section states differ by session."""
+
+    def __init__(self, states_by_session, **kw):
+        super().__init__(**kw)
+        self._by_session = states_by_session
+
+    def read_section_states(self, dtxsid):
+        return dict(self._by_session.get(dtxsid, {}))
+
+
+def _member_of(monkeypatch, report):
+    import document_model.document_definition as dd
+    monkeypatch.setattr(dd, "report_of_member", lambda dtxsid: report if dtxsid == "DTX_rat" else None)
+
+
+def test_a_reports_approved_background_unlocks_its_studys_summary(monkeypatch):
+    _member_of(monkeypatch, "DTX")
+    store = _PerSessionStates({"DTX": {"background": True}, "DTX_rat": {"bm2_liver": False}}, files=True)
+    r = WorkflowEngine("DTX_rat", store).derive_section_readiness()
+    assert r["summary"]["enabled"] is True
+    # It unlocks only: the study gains no approved Background of its own.
+    assert r["background"]["approved"] is False
+
+
+def test_a_reports_unapproved_background_does_not_unlock_its_studys_summary(monkeypatch):
+    _member_of(monkeypatch, "DTX")
+    store = _PerSessionStates({"DTX": {"background": False}, "DTX_rat": {}}, files=True)
+    r = WorkflowEngine("DTX_rat", store).derive_section_readiness()
+    assert r["summary"]["enabled"] is False
+    assert r["summary"]["blocked_by"] == ["background", "results"]
+
+
+def test_a_study_with_its_own_background_does_not_take_its_reports(monkeypatch):
+    _member_of(monkeypatch, "DTX")
+    store = _PerSessionStates({"DTX": {"background": True}, "DTX_rat": {"background": False}}, files=True)
+    assert WorkflowEngine("DTX_rat", store).derive_section_readiness()["summary"]["enabled"] is False
+
+
+def test_a_study_no_report_composes_is_unchanged(monkeypatch):
+    _member_of(monkeypatch, "DTX")
+    store = _PerSessionStates({"DTX": {"background": True}, "OTHER": {}}, files=True)
+    assert WorkflowEngine("OTHER", store).derive_section_readiness()["summary"]["enabled"] is False
