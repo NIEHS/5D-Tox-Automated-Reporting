@@ -603,9 +603,9 @@
     },
     "stands": {
       "phase": "UPLOADED",
-      "say": "Files brought in, not yet validated",
+      "say": "Files brought in, not yet checked",
       "next": {
-        "say": "Validate the files",
+        "say": "Check the files",
         "fix": "M2"
       }
     }

@@ -304,7 +304,7 @@ _DELETE_CATEGORIES: tuple[tuple[str, object, str], ...] = (
                                 "references.json", "integration_basis.json",
                                 ".session_db.fingerprint")
      or n.startswith(("_cache_", ".prepare_content")),
-     "The integrated dataset and everything computed from it (statistics, BMDs, genomics, "
+     "The combined dataset and everything computed from it (statistics, BMDs, genomics, "
      "the query database)"),
     ("statements", lambda n: n in ("study_design.json", "metadata_approved.json",
                                    "front_matter.json", "deposit.json", "efdr.json"),

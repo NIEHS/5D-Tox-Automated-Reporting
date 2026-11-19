@@ -62,9 +62,9 @@ describe('the study frame', () => {
 
   it.each<[string, ExistingStudyState, string, string]>([
     ['no files', STATE_EMPTY, "Bring in the study's files", 'Study files'],
-    ['files not checked', STATE_UPLOADED, 'Validate the files', 'Study files'],
-    ['files with problems', STATE_VALIDATION_ERRORS, 'Fix the problems the validation found', 'Study files'],
-    ['files checked', STATE_VALIDATED, 'Integrate the data', 'Combined data'],
+    ['files not checked', STATE_UPLOADED, 'Check the files', 'Study files'],
+    ['files with problems', STATE_VALIDATION_ERRORS, 'Fix the problems the check found', 'Study files'],
+    ['files checked', STATE_VALIDATED, 'Combine the files into one dataset', 'Combined data'],
     ['combined data, processed before', STATE_INTEGRATED, "Review the report's sections", 'Review the report'],
     ['processed, nothing found to block', STATE_APPROVED, "Review the report's sections", 'Review the report'],
   ])('puts forward the next step the backend serves (%s)', async (_name, state, label, module) => {

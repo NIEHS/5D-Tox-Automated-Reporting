@@ -132,10 +132,10 @@ def test_the_read_model_uses_the_same_derivation(store):
 
 @pytest.mark.parametrize("phase,say,fix", [
     ("EMPTY", "No files yet", "M2"),
-    ("UPLOADED", "Files brought in, not yet validated", "M2"),
+    ("UPLOADED", "Files brought in, not yet checked", "M2"),
     ("VALIDATION_ERRORS", "The files have problems to fix", "M2"),
-    ("VALIDATED", "Files validated, not yet integrated", "M3"),
-    ("INTEGRATED", "Data integrated", "P1"),
+    ("VALIDATED", "Files checked, not yet combined", "M3"),
+    ("INTEGRATED", "Data combined", "P1"),
     ("APPROVED", "Animals accounted for", "P1"),
 ])
 def test_stands_by_phase(phase, say, fix):

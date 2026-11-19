@@ -27,9 +27,9 @@
             },
             "stands": {
               "phase": "UPLOADED",
-              "say": "Files brought in, not yet validated",
+              "say": "Files brought in, not yet checked",
               "next": {
-                "say": "Validate the files",
+                "say": "Check the files",
                 "fix": "M2"
               }
             },
@@ -171,7 +171,7 @@
             },
             "stands": {
               "phase": "INTEGRATED",
-              "say": "Data integrated",
+              "say": "Data combined",
               "next": {
                 "say": "Review the report's sections",
                 "fix": "D1"
@@ -243,9 +243,9 @@
             },
             "stands": {
               "phase": "UPLOADED",
-              "say": "Files brought in, not yet validated",
+              "say": "Files brought in, not yet checked",
               "next": {
-                "say": "Validate the files",
+                "say": "Check the files",
                 "fix": "M2"
               }
             },
@@ -863,7 +863,7 @@
               "phase": "VALIDATION_ERRORS",
               "say": "The files have problems to fix",
               "next": {
-                "say": "Fix the problems the validation found",
+                "say": "Fix the problems the check found",
                 "fix": "M2"
               }
             },
@@ -933,9 +933,9 @@
             },
             "stands": {
               "phase": "VALIDATED",
-              "say": "Files validated, not yet integrated",
+              "say": "Files checked, not yet combined",
               "next": {
-                "say": "Integrate the data",
+                "say": "Combine the files into one dataset",
                 "fix": "M3"
               }
             },

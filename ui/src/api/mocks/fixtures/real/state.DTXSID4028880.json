@@ -633,7 +633,7 @@
     },
     "stands": {
       "phase": "INTEGRATED",
-      "say": "Data integrated",
+      "say": "Data combined",
       "next": {
         "say": "Review the report's sections",
         "fix": "D1"

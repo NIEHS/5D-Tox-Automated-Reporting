@@ -19,7 +19,7 @@
       "phase": "VALIDATION_ERRORS",
       "say": "The files have problems to fix",
       "next": {
-        "say": "Fix the problems the validation found",
+        "say": "Fix the problems the check found",
         "fix": "M2"
       }
     },

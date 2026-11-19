@@ -167,8 +167,8 @@ class TestReads:
         assert set(row) == {"id", "kind", "chemical_dtxsid", "chemical_dtxsid_from", "identity",
                             "stands", "processed", "last_changed", "format", "published",
                             "bookshelf", "relations", "actions", "notes"}
-        assert row["stands"] == {"phase": "UPLOADED", "say": "Files brought in, not yet validated",
-                                 "next": {"say": "Validate the files", "fix": "M2"}}
+        assert row["stands"] == {"phase": "UPLOADED", "say": "Files brought in, not yet checked",
+                                 "next": {"say": "Check the files", "fix": "M2"}}
 
     def test_one_study(self, store, api):
         body = api.get("/api/v2/studies/DTXSID1").json()

@@ -420,7 +420,7 @@ describe('S4 delete', () => {
     expect(dialog).toHaveTextContent('Delete DTXSID2029905 for good?')
     expect(dialog).toHaveTextContent('This cannot be undone.')
     const del = within(dialog).getByRole('region', { name: 'It will delete' })
-    for (const w of ["The study's data files", 'The integrated dataset', 'report sections', 'What people stated', 'history']) expect(del).toHaveTextContent(w)
+    for (const w of ["The study's data files", 'The combined dataset', 'report sections', 'What people stated', 'history']) expect(del).toHaveTextContent(w)
     const keeps = within(dialog).getByRole('region', { name: 'It will keep' })
     expect(keeps).toHaveTextContent('output/DTXSID2029905/')
     expect(keeps).toHaveTextContent('templates/studies/DTXSID2029905/')

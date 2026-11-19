@@ -341,10 +341,10 @@ moved to core (Q-M1-4 decides rmtree vs a bin).
 | report, a member not processed | null | "A report over N studies; its studies are being prepared" | "Finish the member studies", fix `M1` |
 | report, all members processed | null | "A report over N studies" | "Review the report's sections", fix `D1` |
 | EMPTY | EMPTY | "No files yet" | "Bring in the study's files", `M2` |
-| UPLOADED | UPLOADED | "Files brought in, not yet validated" | "Validate the files", `M2` |
-| VALIDATION_ERRORS | VALIDATION_ERRORS | "The files have problems to fix" | "Fix the problems the validation found", `M2` |
-| VALIDATED | VALIDATED | "Files validated, not yet integrated" | "Integrate the data", `M3` |
-| INTEGRATED or APPROVED, not processed | as derived | "Data integrated" / "Animals accounted for" | "Process the data", `P1` (the data review informs and gates nothing, Q3) |
+| UPLOADED | UPLOADED | "Files brought in, not yet checked" | "Check the files", `M2` |
+| VALIDATION_ERRORS | VALIDATION_ERRORS | "The files have problems to fix" | "Fix the problems the check found", `M2` |
+| VALIDATED | VALIDATED | "Files checked, not yet combined" | "Combine the files into one dataset", `M3` |
+| INTEGRATED or APPROVED, not processed | as derived | "Data combined" / "Animals accounted for" | "Process the data", `P1` (the data review informs and gates nothing, Q3) |
 | processed, publish readiness not served or not ready | as derived | as above | "Review the report's sections", `D1` |
 | processed, `readiness.publish.ready` (C6 served) | as derived | as above | "Publish the report", `D3` |
 
@@ -744,7 +744,7 @@ The counts are real [V]: 27 files, 24 originals, 0 of 9 sections approved, 7 fil
    "act": "delete_study", "strength": "irreversible",
    "deletes": [
      {"what": "files", "say": "The study's 27 data files, and the 24 originals they were converted from"},
-     {"what": "dataset", "say": "The integrated dataset and everything computed from it (statistics, BMDs, genomics, the query database)"},
+     {"what": "dataset", "say": "The combined dataset and everything computed from it (statistics, BMDs, genomics, the query database)"},
      {"what": "sections", "say": "9 report sections (7 apical results, Background, Summary); none is approved"},
      {"what": "statements", "say": "What people stated: study design, front matter, deposit list"},
      {"what": "identity", "say": "The chemical's identity as recorded for this study"},

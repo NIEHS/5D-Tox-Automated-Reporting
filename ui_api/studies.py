@@ -322,10 +322,10 @@ def member_key(dtxsid: str, index: StoreIndex | None = None) -> tuple[str, str] 
 # The phase in plain words (MODULES.md §3 names the modules that move it on).
 _PHASE_SAY = {
     "EMPTY": "No files yet",
-    "UPLOADED": "Files brought in, not yet validated",
+    "UPLOADED": "Files brought in, not yet checked",
     "VALIDATION_ERRORS": "The files have problems to fix",
-    "VALIDATED": "Files validated, not yet integrated",
-    "INTEGRATED": "Data integrated",
+    "VALIDATED": "Files checked, not yet combined",
+    "INTEGRATED": "Data combined",
     # The accounting of the animals is the act the core calls the data approval;
     # no person reviews anything in it, so the words do not say "reviewed"
     # (the maintainer, 2026-11-19).
@@ -333,9 +333,9 @@ _PHASE_SAY = {
 }
 _PHASE_NEXT = {
     "EMPTY": ("Bring in the study's files", "M2"),
-    "UPLOADED": ("Validate the files", "M2"),
-    "VALIDATION_ERRORS": ("Fix the problems the validation found", "M2"),
-    "VALIDATED": ("Integrate the data", "M3"),
+    "UPLOADED": ("Check the files", "M2"),
+    "VALIDATION_ERRORS": ("Fix the problems the check found", "M2"),
+    "VALIDATED": ("Combine the files into one dataset", "M3"),
     # The data review informs and gates nothing (decision Q3): Process is next.
     "INTEGRATED": ("Process the data", "P1"),
     "APPROVED": ("Process the data", "P1"),

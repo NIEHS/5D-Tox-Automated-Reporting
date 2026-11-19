@@ -500,9 +500,9 @@
     },
     "stands": {
       "phase": "VALIDATED",
-      "say": "Files validated, not yet integrated",
+      "say": "Files checked, not yet combined",
       "next": {
-        "say": "Integrate the data",
+        "say": "Combine the files into one dataset",
         "fix": "M3"
       }
     }

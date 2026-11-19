@@ -19,7 +19,7 @@
         },
         {
           "what": "dataset",
-          "say": "The integrated dataset and everything computed from it (statistics, BMDs, genomics, the query database)"
+          "say": "The combined dataset and everything computed from it (statistics, BMDs, genomics, the query database)"
         },
         {
           "what": "statements",

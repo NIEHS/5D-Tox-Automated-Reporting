@@ -32,10 +32,10 @@ ERA = {"eras/niehs-2023": ("NIEHS Report, as published in March 2023 (NIEHS-07 â
 
 def stands(phase, processed):
     W = {"EMPTY": ("No files yet", "Bring in the study's files", "M2"),
-         "UPLOADED": ("Files brought in, not yet validated", "Validate the files", "M2"),
-         "VALIDATION_ERRORS": ("The files have problems to fix", "Fix the problems the validation found", "M2"),
-         "VALIDATED": ("Files validated, not yet integrated", "Integrate the data", "M3"),
-         "INTEGRATED": ("Data integrated", None, None), "APPROVED": ("Animals accounted for", None, None)}
+         "UPLOADED": ("Files brought in, not yet checked", "Check the files", "M2"),
+         "VALIDATION_ERRORS": ("The files have problems to fix", "Fix the problems the check found", "M2"),
+         "VALIDATED": ("Files checked, not yet combined", "Combine the files into one dataset", "M3"),
+         "INTEGRATED": ("Data combined", None, None), "APPROVED": ("Animals accounted for", None, None)}
     say, nsay, fix = W[phase]
     if nsay is None:
         nsay, fix = ("Review the report's sections", "D1") if processed else ("Process the data", "P1")
