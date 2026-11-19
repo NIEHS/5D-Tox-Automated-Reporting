@@ -127,7 +127,7 @@ maintainer on 2026-11-18:
 | The Demo block, the switch link, the reset | merged (`1ab7cd7`, `3f9963a`) |
 | S1 Combined data, S2 Process (`ui/src/modules/m3`, `p1`; `ui_api/dataset.py`, `process_run.py`, `long_acts.py`) | merged (`ef672ca`); one live run through the real app: Combine 34 s, Process 189 s |
 | S3 Written sections, S4 Citations (`ui/src/modules/d2`; `ui_api/writing*.py`) | merged; the Background written live once on the real live copy (48 s) |
-| S5 Review with the Bookshelf and Word | released 2026-11-19 (approve and reopen only); being built in `/workspace/ui-team/demo-review` (`ui-demo-review`) |
+| S5 Review with the Bookshelf and Word (`ui/src/modules/d1`; `ui_api/review.py`) | merged 2026-11-19 (approve and reopen only); the whole live path run through the real app, both studies, then approve, reopen, Word (54 s) and PDF |
 | "Show only this block" on the Demo block; the stage reads "Animals accounted for"; the Bookshelf page, Word and PDF kept until the report changes (`main` `977a9f7`) | merged 2026-11-19 |
 | The adversarial pass over the whole path, the rehearsals | not done |
 

@@ -2,7 +2,7 @@
 
 **Written 2026-11-18 by the orchestrator. The maintainer said "proceed" the same
 day: the spec stands as written, with the recommendations of §9 taken until the
-maintainer says otherwise. S5 (the review page) still waits for its own release.
+maintainer says otherwise. S5 (the review page) was released on 2026-11-19 and is built.
 §8 records what the first checks found; where a finding changed the plan, the
 section says "As built".**
 
@@ -302,6 +302,28 @@ section, and makes the Word document.
 - No edit control: Gate 0 Q1 stands (text is edited outside, in Word). The page
   says so beside the Word button.
 
+**As built (2026-11-19, `ui/src/modules/d1`, `ui_api/review.py`,
+`GET /api/v2/studies/{id}/review`):**
+
+- The read gives the book, the downloads, whether acts are offered, and the
+  sections grouped by owner (the report: front matter and Background; each study:
+  the rest), each with the place in the book where it starts.
+- The book and the rail fill the window; the study header is a scroll above.
+  Choosing a section sets the frame's address to the section's id, which is how
+  the Bookshelf page itself moves between its parts.
+- A section that is never approved on its own (front matter, the Abstract, the
+  group narratives, the gene-level interpretations) has no Approve button; its
+  reason shows when it is chosen. One that cannot be approved yet has the button
+  disabled with the backend's reason.
+- The finished side offers no Approve and no Reopen (history only), with a link
+  to the live copy. A study of a report shows the report's book, with that
+  study's sections opened first.
+- Two sections have no place to scroll to: the Abstract (it is held in the
+  book's metadata) and Clinical Observations (no table in the book).
+- After an approval or a reopening the book is not asked for again (neither
+  changes the text); the kept copy is out of date from then on, so the next
+  opening of the page, and the next Word document, are rendered again.
+
 ## 5. Wording
 
 Every word a page shows follows the rules for team-facing text
@@ -371,6 +393,16 @@ guide's test does.
    request and not kept). Of a Process run, about a minute is the drawing of the
    charts and about a minute and a half the model's writing.
 
+6. **The whole live path through the real app, in a browser (2026-11-19):**
+   both live studies combined and processed through the pages (mouse: Combine
+   33 s, Process 161 s; rat: 35 s, 177 s); the live report's Review page then
+   showed the book after 53 s; a mouse section and a rat section approved, the
+   rat's reopened with a reason (refused without one), its history read, the book
+   scrolled to a table; the Word document saved after 54 s (1.17 MB, 48 parts)
+   and the PDF after 6 s. No error in the browser's console; one request per
+   act. The finished report's Review page opened in 3 s from its kept copy. The
+   live copy was reset to its start state afterwards.
+
 ## 9. Open for the maintainer
 
 **Answered on 2026-11-19:** item 1: (a), and S5 is released; item 6: yes, a kept
@@ -418,3 +450,17 @@ accounted for"), Combine keeps the accounting.
    2026-11-18): not in the path. The Process page shows the knowledge base
    read-only; a flagged benchmark dose appears in the review rail as something
    that blocks publishing.
+12. **The Review page (from its build, 2026-11-19):**
+    - after an approval the mark reads "Final"; after a reopening, "Kept as
+      written". Say if one approval should read otherwise;
+    - a study's Summary waits for "the Background or a result section" to be
+      approved, and in a report of two studies the Background is the report's:
+      approving it does not release the study's Summary; a result section of that
+      study does. A change to the workflow core (`workflow/section_catalog.py`),
+      not made;
+    - a study's Methods row scrolls to that study's Study Design, not to the top
+      of Materials and Methods;
+    - the Bookshelf page inside the frame keeps its own links ("Compare with
+      NIEHS-12", "Published content") on the finished report;
+    - the delete and create dialogs of the Studies pages (M1, signed off earlier)
+      still address the reader as "you" in a few messages.
