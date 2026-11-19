@@ -127,6 +127,14 @@ def is_day_layout(sidecars) -> bool:
     return any(_CONC.match(e) and _limit_endpoint(e, endpoints) for e in endpoints)
 
 
+def concentration_label(matrix: str, unit: str) -> str:
+    return f"{matrix} concentration ({unit})"
+
+
+def normalized_label(matrix: str, unit: str, dose_unit: str) -> str:
+    return f"Normalized {matrix.lower()} concentration [({unit})/{dose_unit}]"
+
+
 def _limit_endpoint(conc_endpoint: str, endpoints) -> str | None:
     stem = conc_endpoint[: -len("Concentration")]
     return next((stem + s for s in _LIMIT_SUFFIXES if stem + s in endpoints), None)
@@ -331,7 +339,7 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                         normalized[dk] = cells[dk] if not v else _fmt([x / d for x in v],
                                                                       rules.sig_figs)
                 row(matrix, is_heading=True)
-                row(f"{matrix} concentration ({unit})", cells, sig_figs=rules.sig_figs)
+                row(concentration_label(matrix, unit), cells, sig_figs=rules.sig_figs)
                 # The notes on a row's analysis sit on it (NIEHS-12/13): the
                 # statistics on its label, the 0-group BD rule on that BD.
                 if markers:
@@ -340,7 +348,7 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                     mark_first(rows[-1], js_dose_key(control), "control_bd")
                 if any(d != control for d in doses):
                     any_normalized = True
-                    row(f"Normalized {matrix.lower()} concentration [({unit})/{dose_unit}]",
+                    row(normalized_label(matrix, unit, dose_unit),
                         normalized, sig_figs=rules.sig_figs)
                     add_marker_ref(rows[-1], "label", "normalized")
                     if control is not None:

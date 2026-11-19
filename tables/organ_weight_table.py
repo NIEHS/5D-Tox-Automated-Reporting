@@ -78,6 +78,17 @@ from tables.table_builder_common import (
 # The published wording (NIEHS-07: "Summary of Select Organ Weights of Male and
 # Female Rats Administered …"; NIEHS-12, 13: "… of Female Rats and Mice
 # Exposed to …").
+TERMINAL_BODY_WEIGHT = "Terminal Body Weight"
+ABSOLUTE, RELATIVE = "Absolute", "Relative"
+
+
+def row_label(name: str, unit: str) -> str:
+    """A row's label: what it shows ("Liver Absolute", "Terminal Body Weight")
+    and its unit.  The one place the label is made, so that what a row was
+    built from can be read back from it (tables.row_sources)."""
+    return f"{name} ({unit})"
+
+
 CAPTION_TEMPLATE = (
     "Summary of Select Organ Weights of {subject} {treatment}"
 )
@@ -495,7 +506,7 @@ def build_organ_weight_table_from_sidecar(
             tbw_bmd = tbw_bmdl = "ND"
         tbw_responsive = bool(_stat(tbw_ntp, "responsive", False)) if tbw_ntp is not None else False
         tbw_entry = {
-            "label": f"Terminal Body Weight ({units['body']})",
+            "label": row_label(TERMINAL_BODY_WEIGHT, units['body']),
             "decimals": row_decimals("Terminal Body Weight"),
             "doses": sorted_doses,
             "values": tbw_row_vals,
@@ -564,7 +575,7 @@ def build_organ_weight_table_from_sidecar(
             # the absolute-weight row is emphasized when it passed the NTP
             # responsive gate OR BMDExpress produced a reportable BMD.
             abs_entry = {
-                "label": f"{organ} Absolute ({units['absolute']})",
+                "label": row_label(f"{organ} {ABSOLUTE}", units['absolute']),
                 "decimals": row_decimals(f"{organ} Absolute"),
                 "doses": sorted_doses,
                 "values": abs_values,
@@ -607,7 +618,7 @@ def build_organ_weight_table_from_sidecar(
                 rel_bmd = rel_bmdl = "ND"
                 rel_responsive = False
             rel_entry = {
-                "label": f"{organ} Relative ({units['relative']})",
+                "label": row_label(f"{organ} {RELATIVE}", units['relative']),
                 "decimals": row_decimals(f"{organ} Relative"),
                 "doses": sorted_doses,
                 "values": rel_values,
