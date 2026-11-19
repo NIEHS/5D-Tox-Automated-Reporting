@@ -192,7 +192,21 @@ class WorkflowEngine:
                 "processed": _is_processed(self.store.session_dir(self.dtxsid)),
             },
             catalog=catalog,
+            approved_elsewhere=self._approved_in_report(section_states),
         )
+
+    def _approved_in_report(self, section_states: dict) -> frozenset:
+        """The report's approved Background, for a study a report composes
+        that has none of its own: the Background is written once, for the
+        report, and stands for each of its studies."""
+        if "background" in section_states:
+            return frozenset()
+        from document_model.document_definition import report_of_member
+        report = report_of_member(self.dtxsid)
+        if report is None:
+            return frozenset()
+        return frozenset({"background"} if self.store.read_section_states(report).get("background")
+                         else ())
 
     # -- derived study parameters (the Process guard) ----------------------
 

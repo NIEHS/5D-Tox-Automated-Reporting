@@ -32,7 +32,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import common.paths
@@ -154,9 +154,27 @@ def _report_order(report: str) -> tuple:
     return tuple(int(t) if t.isdigit() else t for t in re.split(r"(\d+)", report))
 
 
-def shelf_books() -> tuple[list[dict], list[dict]]:
+PARTITIONS_FILE = "_partitions.json"
+# The partition the shelf is reduced to, kept in the browser.  The studies list
+# of the interface sets the same cookie with its "Show only this block".
+ONLY_COOKIE = "bookshelf_only"
+
+
+def shelf_partitions() -> dict[str, list[str]]:
+    """The store's partitions ({name: [report ids]}, sessions/_partitions.json;
+    tooling.demo_copy sets the "Demo" pair apart); {} when none is declared."""
+    data = _load_json(_sessions_root() / PARTITIONS_FILE)
+    if not isinstance(data, dict):
+        return {}
+    return {str(name): [i for i in ids if isinstance(i, str)]
+            for name, ids in data.items() if isinstance(ids, list)}
+
+
+def shelf_books(only: str | None = None) -> tuple[list[dict], list[dict]]:
     """The shelf's books, (published, unpublished): each {dtxsid, title,
-    report, published, studies, companion}.  A companion (the published
+    report, published, studies, companion}.  ``only`` names a partition: the
+    shelf then holds that partition's reports and no other (a name no
+    partition has leaves the shelf whole).  A companion (the published
     book's content) is not a book of its own: its twin's card links it.  A report over several studies is one book,
     its member studies not shelved apart.  Published books are in the order
     they were published (the published book's date; reports of one date by
@@ -172,7 +190,11 @@ def shelf_books() -> tuple[list[dict], list[dict]]:
         composed = []
     members = {m for c in composed for m in _members(c).values()}
     published, unpublished = [], []
-    for d in sorted((set(generated_reports()) - members) | set(composed)):
+    shelved = (set(generated_reports()) - members) | set(composed)
+    partition = shelf_partitions().get(only) if only else None
+    if partition is not None:
+        shelved &= set(partition)
+    for d in sorted(shelved):
         report = published_report(d)
         book = {"dtxsid": d, "title": _session_title(d), "report": report,
                 "published": published_date(report),
@@ -281,9 +303,25 @@ def bookshelf_pdf(dtxsid: Dtxsid):
 
 
 @router.get("/Bookshelf", response_class=HTMLResponse)
-def bookshelf_shelf():
-    """The shelf: the generated reports on disk, each linked to its facsimile."""
-    return HTMLResponse(_shelf_page(*shelf_books()))
+def bookshelf_shelf(request: Request, only: str | None = None):
+    """The shelf: the generated reports on disk, each linked to its facsimile.
+
+    ``?only=<partition>`` reduces the shelf to one partition's reports (the
+    "Demo" pair) and is remembered by the browser; ``?only=`` shows every
+    report again.  Without it the browser's remembered choice holds."""
+    from urllib.parse import quote, unquote
+
+    partitions = shelf_partitions()
+    chosen = only if only is not None else unquote(request.cookies.get(ONLY_COOKIE) or "")
+    chosen = chosen if chosen in partitions else None
+    response = HTMLResponse(_shelf_page(*shelf_books(chosen), only=chosen,
+                                        partitions=list(partitions)))
+    if only is not None:
+        if chosen:
+            response.set_cookie(ONLY_COOKIE, quote(chosen), path="/", samesite="lax")
+        else:
+            response.delete_cookie(ONLY_COOKIE, path="/")
+    return response
 
 
 def _docx_to_pdf(docx_bytes: bytes) -> bytes | None:
@@ -338,6 +376,8 @@ h2.group{font-size:1.05rem;color:#12263a;margin:30px 0 4px;}
 p.group{color:var(--muted);font-size:.85rem;margin:0 0 12px;}
 .empty{color:var(--muted);}
 a.home{color:var(--link);text-decoration:none;font-size:.85rem;}
+p.only{font-size:.9rem;color:#555;margin:.2rem 0 1rem;}
+p.only a{color:var(--link);text-decoration:none;}
 """
 
 
@@ -353,11 +393,22 @@ def _card(book: dict, when: str, cls: str = "book") -> str:
             f'<div class="id">{_html.escape(d + studies)}</div></a>{more}</li>')
 
 
-def _shelf_page(published: list[dict], unpublished: list[dict]) -> str:
+def _shelf_page(published: list[dict], unpublished: list[dict], *,
+                only: str | None = None, partitions: list[str] | None = None) -> str:
     """The shelf: the published reports in the order they were published (left
     to right, top to bottom), each labelled with its date; the unpublished
-    ones in a grid of their own below."""
+    ones in a grid of their own below.  ``only``: the partition the shelf is
+    reduced to, said above the books with the way back to every report;
+    ``partitions``: the ones the whole shelf can be reduced to."""
+    from urllib.parse import quote
     parts = []
+    if only:
+        parts.append(f'<p class="only">Only the reports of “{_html.escape(only)}” are shown. '
+                     '<a href="/Bookshelf?only=">Show every report</a></p>')
+    elif partitions:
+        links = " · ".join(f'<a href="/Bookshelf?only={quote(name)}">{_html.escape(name)}</a>'
+                           for name in partitions)
+        parts.append(f'<p class="only">Show only: {links}</p>')
     if published:
         cards = "".join(_card(b, f"{_date_label(b['published'])} · {b['report']}")
                         for b in published)

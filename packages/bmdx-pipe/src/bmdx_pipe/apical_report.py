@@ -637,6 +637,11 @@ def _relative_organ_weights(
 # first source's (DERIVED_SOURCE).
 GLOBULIN, AG_RATIO = "Globulin", "A/G Ratio"
 DERIVED_SOURCE = {GLOBULIN: "Albumin", AG_RATIO: "Albumin"}
+# What each is computed from, and how (_derived_protein_endpoints).
+DERIVED_INPUTS = {
+    GLOBULIN: (("Total protein", "Albumin"), "total protein minus albumin, per animal"),
+    AG_RATIO: (("Albumin", GLOBULIN), "albumin divided by globulin, per animal"),
+}
 # The names a method uses for them (build_table_data's derived_endpoints).
 DERIVED_ENDPOINTS = {"globulin": GLOBULIN, "ag_ratio": AG_RATIO}
 

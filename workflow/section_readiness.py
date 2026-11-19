@@ -115,6 +115,8 @@ def derive_section_readiness(
     section_states: dict[str, bool],
     resources: dict[str, bool] | None = None,
     catalog: list[SectionSpec] | None = None,
+    *,
+    approved_elsewhere: frozenset[str] = frozenset(),
 ) -> dict[str, dict]:
     """Derive per-section readiness from the approved-state of every section.
 
@@ -134,6 +136,12 @@ def derive_section_readiness(
     When omitted, behaviour is exactly as before (fixed singletons only) — the
     default path the characterization tests pin.
 
+    `approved_elsewhere` names sections approved in ANOTHER session that stand
+    for this one's when an unlock group is checked: a study a report composes
+    has no Background of its own, so its report's approved Background unlocks
+    the study's Summary (workflow.engine). They satisfy groups only: they add no
+    row and change no row's `approved`.
+
     Readiness is a pure function of these inputs + the declared `_UNLOCK_RULES`.
 
     Returns `{section_key: {"enabled": bool, "blocked_by": [group, ...],
@@ -143,6 +151,7 @@ def derive_section_readiness(
     """
     resources = resources or {}
     approved_keys = {k for k, approved in section_states.items() if approved}
+    unlocking = approved_keys | set(approved_elsewhere)
 
     # Universe of keys to report on: the fixed singletons + any instance
     # sections that exist on disk (approved or not) + any non-family catalog keys.
@@ -162,7 +171,7 @@ def derive_section_readiness(
             blocked_by: list[str] = []
         else:
             enabled = any(
-                _group_satisfied(g, approved_keys, resources) for g in groups
+                _group_satisfied(g, unlocking, resources) for g in groups
             )
             # OR semantics: when blocked, ANY of the groups would unblock it.
             blocked_by = [] if enabled else list(groups)

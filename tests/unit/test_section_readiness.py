@@ -221,3 +221,12 @@ def test_catalog_families_are_not_seeded_as_bare_keys():
     r = derive_section_readiness({}, catalog=catalog)
     assert "bm2" not in r
     assert "genomics" not in r
+
+
+def test_a_section_approved_elsewhere_unlocks_and_adds_no_approval():
+    # A study a report composes: the report's approved Background satisfies the
+    # Summary's unlock group; the study's own Background row is not approved.
+    r = derive_section_readiness({}, approved_elsewhere=frozenset({"background"}))
+    assert r["summary"]["enabled"] is True
+    assert r["summary"]["blocked_by"] == []
+    assert r["background"]["approved"] is False
