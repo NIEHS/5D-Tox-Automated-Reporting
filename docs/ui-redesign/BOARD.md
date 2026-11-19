@@ -127,7 +127,8 @@ maintainer on 2026-11-18:
 | The Demo block, the switch link, the reset | merged (`1ab7cd7`, `3f9963a`) |
 | S1 Combined data, S2 Process (`ui/src/modules/m3`, `p1`; `ui_api/dataset.py`, `process_run.py`, `long_acts.py`) | merged (`ef672ca`); one live run through the real app: Combine 34 s, Process 189 s |
 | S3 Written sections, S4 Citations (`ui/src/modules/d2`; `ui_api/writing*.py`) | merged; the Background written live once on the real live copy (48 s) |
-| S5 Review with the Bookshelf and Word | **not started: waits for the maintainer's release** |
+| S5 Review with the Bookshelf and Word | released 2026-11-19 (approve and reopen only); being built in `/workspace/ui-team/demo-review` (`ui-demo-review`) |
+| "Show only this block" on the Demo block; the stage reads "Animals accounted for"; the Bookshelf page, Word and PDF kept until the report changes (`main` `977a9f7`) | merged 2026-11-19 |
 | The adversarial pass over the whole path, the rehearsals | not done |
 
 `ui_api/runs.py` records the long act under way on a study in this process (it
@@ -135,8 +136,6 @@ stands in for C5's run lock); the state serves `run` and, for the pair, `demo`.
 The built pages are mapped in `ui/src/shell/ModulePage.tsx`.
 
 Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9):
-- the stage reads "Data reviewed" as soon as the files are combined, because the
-  accounting of the animals is the act the core calls the approval;
 - a row of a results table is not linked to its endpoint in the dataset by
   record, only by name: organ-weight rows read "not recorded for this row";
 - the Clinical Observations table stops at the experiment (the dataset holds no

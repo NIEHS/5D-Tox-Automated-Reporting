@@ -280,7 +280,10 @@ Backend:
 Not in the path: the assertion check Scott asked for (does the cited paper support
 the sentence). It is listed in §9 as the first extra.
 
-### S5. Review, Bookshelf and Word (`review`) — **not to be started yet**
+### S5. Review, Bookshelf and Word (`review`) — released 2026-11-19
+
+The maintainer released it on 2026-11-19: **approve and reopen only; the Word
+download is the way to edit** (§9, 1 (a)).
 
 **The presenter shows:** the report as the Bookshelf would show it, approves a
 section, and makes the Word document.
@@ -296,9 +299,8 @@ section, and makes the Word document.
   §4.1).
 - **"Make the Word document"**: the existing download
   (`/Bookshelf/{id}/report.docx`), with its wait; then PDF.
-- **[maintainer]** "Edit": Gate 0 Q1 says text is edited outside, in Word or
-  Overleaf, and the application has no editor. The meeting's idea named an edit
-  control. See §9.
+- No edit control: Gate 0 Q1 stands (text is edited outside, in Word). The page
+  says so beside the Word button.
 
 ## 5. Wording
 
@@ -370,6 +372,13 @@ guide's test does.
    charts and about a minute and a half the model's writing.
 
 ## 9. Open for the maintainer
+
+**Answered on 2026-11-19:** item 1: (a), and S5 is released; item 6: yes, a kept
+copy (`rendering/kept_render.py` on `main`: the Bookshelf page, the Word document
+and the PDF are kept until anything they were rendered from changes; NIEHS-12's
+page went from 53 s to 0.3 s on a repeat); item 7: yes ("Show only this block" on
+the Demo block, kept in the browser); item 8: the wording changes ("Animals
+accounted for"), Combine keeps the accounting.
 
 1. **"Edit" on the review page.** Three readings of the meeting's idea:
    - (a) no edit control; approve and reopen only (Gate 0 Q1 as it stands);
