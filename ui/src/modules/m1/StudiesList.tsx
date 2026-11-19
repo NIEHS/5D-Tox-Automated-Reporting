@@ -7,6 +7,7 @@ import { moduleById, moduleRoute, studyRoute } from '../../kit/modules'
 import { Pending } from '../../kit/Pending'
 import { PhaseTag } from '../../kit/PhaseTag'
 import { Refusal } from '../../kit/Refusal'
+import { setOnlyPartition, useOnlyPartition } from './onlyPartition'
 import { Partitions } from './Partitions'
 import { useStudies } from './queries'
 import { UNASSIGNED_KEY, buildRows, searchRows, type ListRow } from './rows'
@@ -215,6 +216,10 @@ export function StudiesList() {
   ]
 
   const partitions = data?.partitions ?? []
+  // The list reduced to one partition (a choice of this browser); a partition
+  // that no longer exists reduces nothing.
+  const chosen = useOnlyPartition()
+  const only = chosen && partitions.some((p) => p.name === chosen) ? chosen : null
   const empty = data && data.chemicals.length === 0 && data.unassigned.length === 0 && partitions.length === 0
 
   return (
@@ -240,16 +245,24 @@ export function StudiesList() {
         </Empty>
       ) : (
         <>
-          <Partitions partitions={partitions} />
+          <Partitions partitions={only ? partitions.filter((p) => p.name === only) : partitions} only={only} />
+          {only && (
+            <Typography.Text type="secondary" data-testid="others-hidden">
+              The other studies are not shown.{' '}
+              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setOnlyPartition(null)}>
+                Show all studies
+              </Button>
+            </Typography.Text>
+          )}
           <Input.Search
             allowClear
             aria-label="Find a study"
             placeholder="Find by name, CASRN or DTXSID"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ maxWidth: 420 }}
+            style={{ maxWidth: 420, display: only ? 'none' : undefined }}
           />
-          <Table<ListRow>
+          {!only && <Table<ListRow>
             rowKey="key"
             size="middle"
             columns={columns}
@@ -259,7 +272,7 @@ export function StudiesList() {
             expandable={{ expandedRowKeys: expandedKeys, onExpandedRowsChange: (keys) => setExpanded(keys) }}
             rowClassName={(r) => (r.key.startsWith('chem:') || r.key === UNASSIGNED_KEY ? 'm1-chemical-row' : 'm1-session-row')}
             locale={{ emptyText: <Empty description={`Nothing matches "${query.trim()}".`} /> }}
-          />
+          />}
         </>
       )}
     </Space>

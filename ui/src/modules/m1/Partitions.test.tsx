@@ -92,6 +92,21 @@ describe('the Demo block of the studies list', () => {
     await waitFor(() => expect(reset).toBe(1))
   })
 
+  it('"Show only this block" hides the other studies, in this browser, until all are shown again', async () => {
+    serveList()
+    const { user } = await openList()
+    expect(document.querySelector('tr[data-row-key="chem:DTXSID5032498"]')).not.toBeNull()
+    await user.click(screen.getByRole('switch', { name: 'Show only this block' }))
+    await waitFor(() => expect(screen.queryByRole('table')).toBeNull())
+    expect(document.body).not.toHaveTextContent('Triclosan')
+    expect(screen.getByTestId('partition-Demo')).toBeInTheDocument()
+    expect(window.localStorage.getItem('studies.onlyPartition')).toBe('Demo')
+    expect(screen.getByTestId('others-hidden')).toHaveTextContent('The other studies are not shown.')
+    await user.click(screen.getByRole('button', { name: 'Show all studies' }))
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(window.localStorage.getItem('studies.onlyPartition')).toBeNull()
+  })
+
   it('a session of the pair links to the same page of the other side', async () => {
     const liveRat = { ...STATE_MEMBER_RAT, demo: { partition: 'Demo', role: 'live', counterpart: 'DTXSID1020431_rat', counterpart_exists: true, report: 'DTXSID1020431_live' } }
     server.use(http.get('/api/v2/studies/DTXSID1020431_live_rat/state', () => HttpResponse.json({ ...liveRat, id: 'DTXSID1020431_live_rat' })))

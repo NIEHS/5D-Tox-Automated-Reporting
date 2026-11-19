@@ -1,10 +1,11 @@
-import { Button, Card, Col, Row, Space, Tag, Tooltip, Typography } from 'antd'
+import { Button, Card, Col, Row, Space, Switch, Tag, Tooltip, Typography } from 'antd'
 import { Link } from 'react-router'
 import { getResetPreview, resetLiveCopy } from '../../api/m1'
 import type { Partition, PartitionEntry, StudyRow } from '../../api/types'
 import { ConfirmAct } from '../../kit/ConfirmAct'
 import { studyRoute } from '../../kit/modules'
 import { PhaseTag } from '../../kit/PhaseTag'
+import { setOnlyPartition } from './onlyPartition'
 import { useRefreshStudies } from './queries'
 import { BookshelfLink, NextLink } from './StudiesList'
 import { ROLE_WORDS } from './words'
@@ -90,14 +91,25 @@ function Side({ entry, finished }: { entry: PartitionEntry; finished: PartitionE
   )
 }
 
-export function Partitions({ partitions }: { partitions: Partition[] }) {
+function OnlyThis({ name, on }: { name: string; on: boolean }) {
+  return (
+    <Space size="small">
+      <Typography.Text type="secondary" id={`only-${name}`}>
+        Show only this block
+      </Typography.Text>
+      <Switch size="small" aria-labelledby={`only-${name}`} checked={on} onChange={(v) => setOnlyPartition(v ? name : null)} />
+    </Space>
+  )
+}
+
+export function Partitions({ partitions, only }: { partitions: Partition[]; only: string | null }) {
   if (partitions.length === 0) return null
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {partitions.map((p) => {
         const finished = p.sessions.find((e) => e.role === 'finished')
         return (
-          <Card key={p.name} title={p.name} size="small" data-testid={`partition-${p.name}`}>
+          <Card key={p.name} title={p.name} size="small" data-testid={`partition-${p.name}`} extra={<OnlyThis name={p.name} on={only === p.name} />}>
             <Row gutter={[12, 12]}>
               {p.sessions.map((e) => (
                 <Col key={e.id} xs={24} md={Math.max(8, Math.floor(24 / p.sessions.length))}>
