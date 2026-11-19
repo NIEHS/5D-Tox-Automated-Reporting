@@ -405,6 +405,29 @@ guide's test does.
 
 ## 9. Open for the maintainer
 
+**Fixed on 2026-11-19 ("fix the rough spots", the maintainer):**
+
+- **item 9, the rows:** every row of a results table is followed to the
+  dataset's endpoints it is built from, and how where it is computed ("Heart
+  Relative": Heart and Terminal Body Weight, the organ's weight divided by the
+  terminal body weight). The rule is the builders' own naming read back
+  (`tables/row_sources.py` on `main`); on NIEHS-12, rat and mouse, every row of
+  every table is followed. A label no rule covers reads "not known for this
+  row";
+- **Clinical Observations:** the dataset holds no experiment for it and records
+  the files it is counted from; the page follows the table to that file and to
+  its workbook, and says so;
+- **the words:** the stage and the next step say "check" and "combine", as the
+  pages do ("Files checked, not yet combined"; "Combine the files into one
+  dataset"). The refusals of the shared safeguards (`main`) still say
+  "Integrate" and "Validate";
+- **the shelf:** `/Bookshelf` can be reduced to the reports of one partition
+  (`?only=Demo`, remembered by the browser); "Show only this block" on the
+  Studies list sets the same choice, so the unpublished reports are on neither
+  screen;
+- **item 12, the Summary:** a report's approved Background now releases the
+  Summary of each of its studies (`workflow/engine.py` on `main`).
+
 **Answered on 2026-11-19:** item 1: (a), and S5 is released; item 6: yes, a kept
 copy (`rendering/kept_render.py` on `main`: the Bookshelf page, the Word document
 and the PDF are kept until anything they were rendered from changes; NIEHS-12's

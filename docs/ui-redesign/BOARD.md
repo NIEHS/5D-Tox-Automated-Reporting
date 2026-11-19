@@ -152,10 +152,10 @@ stands in for C5's run lock); the state serves `run` and, for the pair, `demo`.
 The built pages are mapped in `ui/src/shell/ModulePage.tsx`.
 
 Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9):
-- a row of a results table is not linked to its endpoint in the dataset by
-  record, only by name: organ-weight rows read "not recorded for this row";
-- the Clinical Observations table stops at the experiment (the dataset holds no
-  experiment under that assay's name);
+- fixed 2026-11-19 (`modules/demo/spec.md` §9): the rows of a results table are
+  followed to their endpoints (`tables/row_sources.py`), Clinical Observations to
+  its file, the stage and next-step words, the shelf reduced to the Demo
+  reports, a report's Background releasing its studies' Summary;
 - the Background's public sources (ATSDR) answer only some of the time from here;
 - `test_read_model::test_a_broken_snapshot…` and
   `test_ui_api_layering::test_every_place_has_a_module` still fail, as before.
