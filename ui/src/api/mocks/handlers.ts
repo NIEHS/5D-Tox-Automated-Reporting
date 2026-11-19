@@ -13,6 +13,7 @@ import {
 } from './fixtures'
 import { createDemoWritingHandlers } from './demoWriting'
 import { createDemoDataHandlers, resetDemoDataDb } from './demoData'
+import { createDemoReviewHandlers, resetDemoReviewDb } from './demoReview'
 import { createM1Handlers, resetM1Db } from './m1'
 import { running } from './runs'
 
@@ -39,6 +40,7 @@ export function resetMockDb(): void {
   running.clear()
   resetM1Db()
   resetDemoDataDb()
+  resetDemoReviewDb()
 }
 
 export function envelope(body: ErrorEnvelope): Response {
@@ -84,6 +86,10 @@ export function createHandlers({ stepDelayMs = 0, lookupDelayMs = 0 }: MockOptio
     // The Written sections page and its citations (the demo path): the finished
     // NIEHS-12 report and its live copy, with their own state.
     ...createDemoWritingHandlers({ stepDelayMs }),
+    // The review page (the demo path): the same pair's review, the section
+    // acts on it, and the Bookshelf's page and downloads. The pair's state is
+    // answered by the two mocks above.
+    ...createDemoReviewHandlers(),
 
     http.get(`${API_V2}/studies/:id/state`, ({ params }) => {
       const id = String(params.id)

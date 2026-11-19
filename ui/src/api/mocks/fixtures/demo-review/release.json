@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "section_key": "bm2_organ-weight",
+    "approved": false,
+    "version": 1,
+    "version_status": "working"
+  }
+}

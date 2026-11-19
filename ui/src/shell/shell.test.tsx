@@ -233,7 +233,7 @@ describe('the study frame', () => {
 })
 
 /** The modules whose page is built (ModulePage.tsx); each has its own tests. The rest show the placeholder. */
-const BUILT = new Set(['dataset', 'process', 'writing'])
+const BUILT = new Set(['dataset', 'process', 'writing', 'review'])
 
 describe('the routes', () => {
   it.each(MODULES.filter((m) => m.slug && !BUILT.has(m.slug)).map((m) => [m.id, m.slug, m.title] as const))(

@@ -1,0 +1,16 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "reason_required",
+      "status": 400,
+      "message": "A reason is required to reopen 'bm2_organ-weight'",
+      "say": "Please say why. The reason is kept with the section's history.",
+      "fix": "D1",
+      "details": {
+        "key": "bm2_organ-weight",
+        "act": "reopen"
+      }
+    }
+  }
+}

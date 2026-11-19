@@ -1,0 +1,16 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "demo_reference",
+      "status": 409,
+      "message": "DTXSID6020430_rat is the finished report of a pair; acts go to its live copy DTXSID6020430_live_rat",
+      "say": "This is the finished report of a pair, kept as it is for comparison. The act is done on its live copy (DTXSID6020430_live_rat).",
+      "fix": "M1",
+      "details": {
+        "id": "DTXSID6020430_rat",
+        "counterpart": "DTXSID6020430_live_rat"
+      }
+    }
+  }
+}

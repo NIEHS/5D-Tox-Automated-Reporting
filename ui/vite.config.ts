@@ -39,7 +39,8 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: DEV_PORT,
       strictPort: true,
-      proxy: useMocks ? undefined : { '/api': { target: backend } },
+      // /Bookshelf: the report's page and its downloads, which the review page shows in a frame.
+      proxy: useMocks ? undefined : { '/api': { target: backend }, '/Bookshelf': { target: backend } },
     },
     preview: { host: '127.0.0.1', port: DEV_PORT, strictPort: true },
     build: {
