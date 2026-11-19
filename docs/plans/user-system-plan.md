@@ -14,8 +14,14 @@ what exists, the questions) and the maintainer's five answers of the same day.
 | 4 | "text is editable. perhaps methods. perhaps document structure; depending on role. data is editable only by file replacement." | Report text can be edited **in the application** by a person whose role covers it. The analysis method and the report's structure may be editable by role too. Data is never edited in place: a file is replaced and the steps run again. |
 | 5 | "planned now. when we implement, make it hidden so only I can reveal if i choose." | Planned now, built after. Built behind a switch that is off unless the maintainer turns it on; while it is off the application behaves exactly as it does today. |
 
-Two readings need the maintainer's confirmation (§11, 1 and 2): what "methods"
-means in answer 4, and how the switch of answer 5 is turned.
+**Three follow-up answers (the maintainer, 2026-11-19), taken into the plan
+below:**
+
+| Asked | The maintainer's answer | Read as |
+|---|---|---|
+| "methods" in answer 4 | "yes. analysis methods. this would, of course extend to M&M, from the change in methods." | The analysis method and its settings are editable by role. The Materials and Methods section follows a change of method; it is not a second thing to change. |
+| How the switch is turned | "we could run the server on 2 ports. demo can switch by changing url" | The same reports are served at two addresses: one with the user system, one without. The address decides, so a demonstration switches by changing the address. |
+| The stated study facts | "treat as data." | The facts no file records (species, strain, route, dosing days …) are changed only by replacing a file, like every other datum. They are not typed into the application. |
 
 ## 2. What answer 4 changes
 
@@ -51,9 +57,22 @@ So "text is editable" is a body of work of its own, in stages (§9).
 
 **"Data is editable only by file replacement"** is the software's rule already
 (the combined dataset is the single source of truth; a wrong value is fixed in
-its file). One thing sits between data and text: the **stated study facts**
+its file). One thing sat between data and text: the **stated study facts**
 (species, strain, route, dosing days …), which no file records and a person
-types. This plan treats them as their own part, editable by role (§11, 3).
+types today into one record (`study_design.json`, "the one place stated values
+live"). The maintainer's answer: they are data. So they arrive in a **study
+facts file** that belongs to the study's files, is checked on arrival like any
+other (against the controlled vocabularies, and against what the workbooks do
+record), and is changed only by being replaced. The step "State facts" stops
+being typing and becomes bringing in that file. This also gives the facts the
+formal access point the study team was asked about: the file is what the team
+delivers. Its form is open (§11, 1).
+
+**A change of method reaches Materials and Methods by itself.** The Methods
+text is built from the record of the computation that ran (ADR-0036), so a
+person who changes the method and runs Process again gets Methods that say so.
+The person who may edit the method needs no grant on the Methods text for
+that; a grant on the Methods text is for wording.
 
 ## 3. The model
 
@@ -64,9 +83,8 @@ and a mark for active or not.
 
 | Part | What editing it means | What signing it off means (today) |
 |---|---|---|
-| Files | add, replace or remove a file; settle a conflict between files; confirm what a file is | – |
-| Study facts | state or change the facts no file records; the experiment descriptions | – |
-| Method | choose the analysis method (and, if answer 4 means it, its settings) | decide a flagged benchmark dose |
+| Files | add, replace or remove a file, the study facts file among them; settle a conflict between files; confirm what a file is | – |
+| Method | choose the analysis method and its settings | decide a flagged benchmark dose |
 | Structure | choose the report definition; later, change the report's sections and order | – |
 | Report details | the front matter, the deposit, the knowledge base | – |
 | Each section of the report | edit its text; ask a model to write it again | approve it, reopen it |
@@ -103,7 +121,7 @@ never sight.
    application sends nothing).
 3. A correct code is used up, and the browser is signed in for a set time
    (proposal: 12 hours, or until "Sign out"). The next sign-in needs a new code,
-   unless the maintainer prefers a code that works for a set period (§11, 4).
+   unless the maintainer prefers a code that works for a set period (§11, 3).
 
 Codes are kept as hashes, expire unused (proposal: 24 hours), and a few wrong
 entries lock the name until the administrator makes a new code.
@@ -156,10 +174,21 @@ Off unless the maintainer turns it on. While it is off:
 - every act is allowed as today and recorded as today;
 - the tests that run today pass unchanged.
 
-Proposal: the switch is a setting given when the server is started, which only
-the person who runs the server can give. If the maintainer wants to reveal it
-without restarting (during a demonstration, say), the alternative is a hidden
-address that takes the maintainer's own code (§11, 2).
+**Two addresses, one set of reports (the maintainer's answer).** The server
+answers on two ports: on one the user system is on, on the other it is off. A
+demonstration switches by changing the address. Only the person who runs the
+server decides whether the second port exists at all.
+
+Two things follow, and the plan takes both:
+
+- **One server, not two.** The server keeps some things in memory (the long
+  step under way on a study, the sessions it has open), so two separate servers
+  on the same reports would not see each other's runs. One server listens on
+  both ports and takes the mode from the port a request arrived on.
+- **The port without the user system has no checks at all**, on the same
+  reports: anyone who can reach it can do anything, and what they do is recorded
+  without a name, as today. That is what a demonstration wants. Where the
+  responsibilities are meant to hold, that port is not opened (§11, 2).
 
 ## 7. What the interface shows (when the switch is on)
 
@@ -189,12 +218,12 @@ address that takes the maintainer's own code (§11, 2).
 | Stage | What | Where |
 |---|---|---|
 | 0 | The two ADRs | `main` |
-| 1 | **Tracking only.** People, codes, sign-in, the switch; the person recorded on every act. Nothing is refused yet. | `main` (core, safeguards), interface branch (sign-in, header) |
-| 2 | **Responsibilities.** Parts, grants, roles, assignments; the check at the door; the reasons. | `main` |
+| 1 | **Tracking only.** People, codes, sign-in, the two ports; the person recorded on every act. Nothing is refused yet. | `main` (core, safeguards), interface branch (sign-in, header) |
+| 2 | **Responsibilities.** Parts, grants, roles, assignments; the check at the door; the reasons. The study facts file: its form, its check, and the step that brings it in. | `main` |
 | 3 | **Shown.** Who holds what on every part; disabled controls with reasons; "what is waiting for whom"; the administrator's pages. | interface branch |
 | 4 | **Text editing, first parts:** Background, Summary, the report's details. The guarded save act and the editor. | `main`, then the interface branch |
 | 5 | **Text editing, the rest**, as each precondition of §2 is decided: results narratives, Methods and interpretations, group narratives. | both |
-| 6 | **Method and structure by role**, with the Configurator the interface's plan already has (D5). | both |
+| 6 | **Method and structure by role**, with the Configurator the interface's plan already has (D5). A change of method reaches Materials and Methods through Process. | both |
 | 7 | **The institute's sign-in**, when it can be reached. | `main` |
 
 Stage 1 alone answers "who works on what, who approves what" for the record;
@@ -211,21 +240,27 @@ visible"; stages 4 to 6 are answer 4.
 
 ## 11. Still open, for the maintainer
 
-1. **"perhaps methods" in answer 4:** the analysis method (which method, and
-   perhaps its settings), or the Methods section of the report? The plan assumes
-   the analysis method, since the Methods section is text.
-2. **The switch:** a setting at server start (proposal), or a reveal without
-   restarting?
-3. **The stated study facts:** their own part, editable by role (proposal), or
-   treated as data and so changed only through a file?
-4. **The code:** used up at each sign-in (proposal), or good for a set period?
-5. **A part nobody holds:** only the administrator may act on it (proposal), or
+Answered on 2026-11-19 and taken into the plan: what "methods" means, how the
+switch is turned, and the stated study facts (§1).
+
+1. **The study facts file.** Its form: a small workbook or text file the
+   application hands out already filled with the study's current facts and the
+   allowed values, to be changed and brought back (proposal); or a sheet the
+   study team adds to its own workbooks. And the experiment descriptions a
+   person approves today: data as well (proposal: yes, the same file), or a
+   decision about the files like settling a conflict?
+2. **The port without the user system:** for demonstrations and the
+   maintainer's own use only, and not opened where the responsibilities are
+   meant to hold (proposal). Until the study facts file exists, the typed form
+   stays on that port.
+3. **The code:** used up at each sign-in (proposal), or good for a set period?
+4. **A part nobody holds:** only the administrator may act on it (proposal), or
    anyone may until someone is assigned?
-6. **The runs (Combine, Process):** their own part with its own grant
+5. **The runs (Combine, Process):** their own part with its own grant
    (proposal), or allowed to anyone who may edit Files or Method?
-7. **A model writing a section again** (Background, Summary): counted as editing
+6. **A model writing a section again** (Background, Summary): counted as editing
    that section (proposal), or a grant of its own?
-8. **Assignments:** per report only (proposal), or also a standing role across
+7. **Assignments:** per report only (proposal), or also a standing role across
    every report a person works on?
-9. **May a person sign off text they edited themselves?** Left with the
+8. **May a person sign off text they edited themselves?** Left with the
    approvals (answer 3) unless the maintainer says now.
