@@ -149,7 +149,7 @@ maintainer on 2026-11-18:
 
 `ui_api/runs.py` records the long act under way on a study in this process (it
 stands in for C5's run lock); the state serves `run` and, for the pair, `demo`.
-The built pages are mapped in `ui/src/shell/ModulePage.tsx`.
+The built pages are mapped in `ui/src/shell/modulePages.ts`.
 
 Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9):
 - fixed 2026-11-19 (`modules/demo/spec.md` §9): the rows of a results table are

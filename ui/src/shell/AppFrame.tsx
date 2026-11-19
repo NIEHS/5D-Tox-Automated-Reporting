@@ -7,12 +7,13 @@ export function AppFrame() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Layout.Header style={{ paddingInline: pad, display: 'flex', alignItems: 'center', gap: 24, background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
-        <Link to="/studies">
+        <Link to="/">
           <Typography.Title level={4} style={{ margin: 0 }}>
             Potency reports
           </Typography.Title>
         </Link>
         <Link to="/studies">Studies</Link>
+        <a href="/Bookshelf">Bookshelf</a>
       </Layout.Header>
       <Layout.Content style={{ padding: pad }}>
         <Outlet />

@@ -234,3 +234,13 @@ class TestAppMount:
         # /app is registered on the real app; /api/v2 is not swallowed by it.
         assert api.get("/app/studies").status_code in (200, 404)
         assert api.get("/api/v2/vocabularies").status_code == 200
+
+    def test_the_servers_own_address_leads_to_the_interface(self, api):
+        """Where the earlier front end is not served, / goes to the interface's
+        first page (it is the Bookshelf's "app home" link)."""
+        import web_routes.background_server as server
+
+        if server._wizard_dir.exists():
+            pytest.skip("the earlier front end holds / in this checkout")
+        resp = api.get("/", follow_redirects=False)
+        assert resp.status_code in (302, 307) and resp.headers["location"] == "/app/"

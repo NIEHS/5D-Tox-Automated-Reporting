@@ -232,7 +232,7 @@ describe('the study frame', () => {
   })
 })
 
-/** The modules whose page is built (ModulePage.tsx); each has its own tests. The rest show the placeholder. */
+/** The modules whose page is built (modulePages.ts); each has its own tests. The rest show the placeholder. */
 const BUILT = new Set(['dataset', 'process', 'writing', 'review'])
 
 describe('the routes', () => {
@@ -250,9 +250,11 @@ describe('the routes', () => {
     expect(await screen.findByText(/no page called "nonsense"/)).toBeInTheDocument()
   })
 
-  it('sends / to the studies', async () => {
-    const { router } = renderApp('/')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/studies'))
+  it('shows the first page at /, and the header leads back to it', async () => {
+    const { router, user } = renderApp('/studies')
+    await user.click(await screen.findByRole('link', { name: 'Potency reports' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    expect(await screen.findByTestId('home')).toBeInTheDocument()
   })
 })
 

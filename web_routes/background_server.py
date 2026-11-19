@@ -676,6 +676,15 @@ else:
     logger.warning("Front end not built (%s missing) — / and /workflow disabled. "
                    "Run: cd wizard-ui && npm install && npm run build", _wizard_dir)
 
+    # Where that front end is not served, / is the new interface's first page
+    # (ui/src/modules/home), so the address of the server alone leads somewhere
+    # and the Bookshelf's "app home" link works.
+    @app.get("/", include_in_schema=False)
+    async def _root_to_the_interface():
+        from starlette.responses import RedirectResponse
+        from web_routes.app_mount import PREFIX
+        return RedirectResponse(url=f"{PREFIX}/")
+
 
 # ---------------------------------------------------------------------------
 # Entry point
