@@ -124,9 +124,9 @@ What follows from how the knowledge base is built today:
 
 **What the sketch leaves open:**
 
-- What a contradiction does: is the generated claim withheld from the models
-  that write, shown to them with the contradiction, or only marked? And every
-  assertion already resting on it: flagged for a check?
+- What a contradiction does to the models that write: is the contradicted
+  claim withheld from them, or shown to them with the contradiction? (What it
+  does to text already written is answered below.)
 - Who may add or contradict: a responsibility of the user system
   (`user-system-plan.md`), like editing and signing off.
 
@@ -168,3 +168,26 @@ What follows from how the knowledge base is built today:
    verifying is part of signing off or a grant of its own.
 7. What a model may be shown to check it (unpublished study data goes to the
    institute's gateway only).
+- **What a contradiction does to text already written:** "where narratives are
+  derived from assertions derived from a claim marked contradictory, it is the
+  responsiblity of the author team to resolve it. much like a code repo
+  reconciles code changes from multiple branch commits."
+
+  So a contradiction changes no text by itself. It travels along the links:
+  from the claim, to every assertion that rests on it, to every narrative that
+  holds such an assertion, and each is marked as waiting to be resolved, the
+  way a merge marks a conflict. The people who answer for that narrative resolve
+  it: reword the sentence, remove it, rest it on another claim, or keep it and
+  say why. The resolution is an act with a name, a time and a reason, like a
+  merge commit.
+
+  Two things follow, to be confirmed in the effort:
+  - this only works if the links are recorded (claim to assertion to
+    narrative): the chain is what the mark travels along;
+  - by the same likeness, a narrative with an unresolved contradiction would
+    not be signed off or published, as a merge with conflicts is not completed.
+    The software already holds a report back this way when a section's numbers
+    change under an approval.
+
+  "The author team" is, in the user system's terms, the people who may edit
+  that narrative.
