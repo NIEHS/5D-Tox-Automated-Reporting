@@ -101,7 +101,7 @@ What the content branch added that the plan below does not yet cover:
   are checked against the vocabulary). **Each needs a re-check against today's
   code before it is signed.**
 
-## Pinned 2026-11-19 (tag `pin-2026-11-19-demo-pages` on this branch and on `main`)
+## Pinned 2026-11-19 (tags `pin-2026-11-19-demo-pages` on `main`, `pin-2026-11-19-demo-pages-ui` on this branch)
 
 The maintainer put a pin in the demo path to prepare the planning of a **user
 system** (who works on what, who approves what, only a person's own
