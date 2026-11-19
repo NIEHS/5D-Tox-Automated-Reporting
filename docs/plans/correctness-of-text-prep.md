@@ -127,14 +127,20 @@ What follows from how the knowledge base is built today:
 - What a contradiction does: is the generated claim withheld from the models
   that write, shown to them with the contradiction, or only marked? And every
   assertion already resting on it: flagged for a check?
-- Whether a person's claim needs a source (a paper, a passage), or may rest on
-  their expertise alone, under their name.
-- How far a person's claim reaches: every report that reads the knowledge base,
-  or the report it was stated for.
 - Who may add or contradict: a responsibility of the user system
   (`user-system-plan.md`), like editing and signing off.
-- The other pairings: a person contradicting a person; a new crawl producing a
-  claim that contradicts a person's.
+
+**Answered by the maintainer (2026-11-19):**
+
+- **A person's claim may rest on expertise alone, "but with stated
+  rationale".** A source is not required; the rationale is, and it is kept with
+  the claim under the person's name.
+- **Reach: "it's comprehensive".** Read as: a person's claim holds for every
+  report that reads the knowledge base, not only the report it was stated for.
+- **"other pairings accounted for, as well".** The relation is between any two
+  claims, whatever their origins: a person contradicting a generated claim, a
+  person contradicting a person, and a newly generated claim contradicting a
+  person's. Each is recorded as its own class.
 
 - Claims from papers are too thin today to hold an assertion against: no
   subject, no passage. The prompt that makes them would have to ask for more
