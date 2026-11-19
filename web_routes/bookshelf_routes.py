@@ -16,8 +16,10 @@ standalone URL.
                              rendering.published_clone), which is not shelved
                              apart.
 
-The facsimile is rendered FRESH per request via preview_surface.render_preview
-(no archive/persist side effect), so it always reflects the current report.  Only
+The facsimile always reflects the current report: it is rendered by
+preview_surface.render_preview and kept (rendering.kept_render) only while
+everything it was rendered from is unchanged — the sessions' files, the report
+definition, the code.  The copy is kept outside the session.  Only
 `/api/` paths are gated by the user-gate / provenance middleware, so these page
 routes are served openly, exactly like `/` and `/workflow`.
 """
@@ -35,6 +37,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import common.paths
 from rendering.latex_export import _load_json
+from rendering.kept_render import kept
 from rendering.preview_surface import render_preview
 from workflow.errors import StepError
 from web_routes.dtxsid_param import Dtxsid
@@ -206,8 +209,11 @@ def bookshelf_facsimile(dtxsid: Dtxsid):
     if not has_generated_report(dtxsid):
         return HTMLResponse(_not_found_page(dtxsid), status_code=404)
     try:
-        page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid),
-                              shelf="/Bookshelf")
+        links = _download_links(dtxsid)
+        page, _ = kept(dtxsid, "bookshelf.html",
+                       lambda: render_preview(dtxsid, surface="bookshelf", downloads=links,
+                                              shelf="/Bookshelf"),
+                       variant=repr(links))
     except StepError as e:
         # A refusal with a reason (a study processed before a rule its report
         # now needs: "run Process again"), not a failure: the page says why.
@@ -220,6 +226,13 @@ def bookshelf_facsimile(dtxsid: Dtxsid):
     return HTMLResponse(page)
 
 
+def _kept_docx(dtxsid: str) -> bytes:
+    """The report's Word document: the kept copy while the report is unchanged."""
+    docx, _ = kept(dtxsid, "report.docx", lambda: render_preview(dtxsid, surface="docx"))
+    assert isinstance(docx, bytes)
+    return docx
+
+
 @router.get("/Bookshelf/{dtxsid}/report.docx")
 def bookshelf_docx(dtxsid: Dtxsid):
     """Download the DOCX preview — the actual Word deliverable, rendered on demand
@@ -227,7 +240,7 @@ def bookshelf_docx(dtxsid: Dtxsid):
     if not has_generated_report(dtxsid):
         return JSONResponse({"error": f"No generated report for {dtxsid}"}, status_code=404)
     try:
-        docx = render_preview(dtxsid, surface="docx")
+        docx = _kept_docx(dtxsid)
     except StepError as e:
         return JSONResponse({"error": e.message}, status_code=e.status_code)
     except Exception:
@@ -248,9 +261,7 @@ def bookshelf_pdf(dtxsid: Dtxsid):
     if not has_generated_report(dtxsid):
         return JSONResponse({"error": f"No generated report for {dtxsid}"}, status_code=404)
     try:
-        docx = render_preview(dtxsid, surface="docx")
-        assert isinstance(docx, bytes)
-        pdf = _docx_to_pdf(docx)
+        pdf, _ = kept(dtxsid, "report.pdf", lambda: _docx_to_pdf(_kept_docx(dtxsid)))
     except StepError as e:
         return JSONResponse({"error": e.message}, status_code=e.status_code)
     except Exception:

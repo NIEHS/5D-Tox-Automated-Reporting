@@ -119,6 +119,14 @@ def _clear_server_state():
 # Fixtures
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _kept_renders_in_tmp(tmp_path, monkeypatch):
+    """A rendered report is kept until its inputs change (rendering.kept_render),
+    under OUTPUT_DIR: every test keeps its own, never the real output folder's."""
+    from rendering import kept_render
+    monkeypatch.setattr(kept_render, "_root", lambda: tmp_path / "_kept_renders")
+
+
 @pytest.fixture
 def sessions_dir(tmp_path, monkeypatch):
     """
