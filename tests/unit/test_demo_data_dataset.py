@@ -247,20 +247,64 @@ def test_a_table_is_followed_back_to_its_workbook(processed):
     # Fit here (no analysis of this assay among the study's files), per the record.
     assert male["benchmark_dose"] == {"source": "inferred", "bmr": {"type": "SD", "factor": 1.0},
                                       "constant_variance": True, "models": ["Hill", "Power"]}
+    assert male["counted_from_files"] is False
     count, albumin, ratio = male["rows"]
-    assert (count["count_row"], count["endpoint_in_dataset"]) == (True, None)
+    assert (count["count_row"], count["endpoint_in_dataset"], count["built_from"]) == (
+        True, None, None)
     assert albumin == {"label": "Albumin", "heading": False, "count_row": False,
+                       "built_from": {"endpoints": ["Albumin"], "how": None},
                        "endpoint_in_dataset": True, "bmd": "12.5", "bmdl": "6.1"}
-    # A row the builder derives: no endpoint of that name, and that is said.
-    assert ratio["endpoint_in_dataset"] is False
+    # A row the builder derives has no endpoint of its own name: it is
+    # followed to the endpoints it is computed from (tables.row_sources).
+    assert ratio["built_from"] == {"endpoints": ["Albumin", "Globulin"],
+                                   "how": "albumin divided by globulin, per animal"}
+    assert ratio["endpoint_in_dataset"] is True
+
+
+def test_a_row_no_rule_names_an_endpoint_for_is_not_guessed(processed):
+    from ui_api.dataset import table_sources
+
+    section = json.loads(json.dumps(SECTION))
+    section["tables_json"]["Male"].append({"label": "Anion gap", "bmd": "—", "bmdl": "—"})
+    _write(processed, "bm2_clinical-chemistry.json", section)
+    row = table_sources(ID, "bm2_clinical-chemistry")["sexes"][0]["rows"][-1]
+    assert (row["built_from"], row["endpoint_in_dataset"]) == (None, False)
+
+
+def test_a_table_counted_from_files_is_followed_to_those_files(processed):
+    """Clinical Observations: the dataset holds no experiment for it and
+    records the files it is counted from (_meta.clinical_obs_files)."""
+    from pipeline.pool_globals import forget_session
+    from ui_api.dataset import table_sources
+
+    data = json.loads(json.dumps(INTEGRATED))
+    data["_meta"]["clinical_obs_files"] = [str(processed / "files" / "obs.csv")]
+    _write(processed, "integrated.json", data)
+    forget_session(ID, processed / "files")
+
+    [obs] = table_sources(ID, "bm2_clinical-observations")["sexes"]
+    assert (obs["experiments"], obs["counted_from_files"]) == ([], True)
+    # The file is named; nothing records the workbook it was converted from.
+    assert obs["files"] == [{"filename": "obs.csv", "kind": "txt_csv", "file_type": "csv",
+                             "converted_from": None}]
+    assert obs["stops"] == "workbook"
+    [row] = obs["rows"]
+    assert (row["built_from"], row["endpoint_in_dataset"]) == (None, None)
+
+    # With the record of the conversion, the chain is whole.
+    _write(processed, "files/obs.sidecar.json", {"source": WORKBOOK})
+    [obs] = table_sources(ID, "bm2_clinical-observations")["sexes"]
+    assert obs["files"][0]["converted_from"] == {"filename": WORKBOOK, "recorded_in": "sidecar"}
+    assert obs["stops"] is None
 
 
 def test_the_chain_stops_where_the_record_stops(processed):
     from ui_api.dataset import table_sources
 
-    # No experiment of this assay in the dataset.
+    # No experiment of this assay in the dataset, and no file recorded for it.
     [obs] = table_sources(ID, "bm2_clinical-observations")["sexes"]
     assert (obs["experiments"], obs["files"], obs["stops"]) == ([], [], "experiment")
+    assert obs["counted_from_files"] is False
     assert obs["benchmark_dose"] is None            # the table prints no benchmark dose
 
     # The dataset names no file for the assay.

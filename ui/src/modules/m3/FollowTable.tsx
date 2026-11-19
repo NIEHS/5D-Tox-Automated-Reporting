@@ -5,7 +5,17 @@ import type { ResultTable, SourceRow, TableSexSources, TableSources } from '../.
 import { moduleRoute } from '../../kit/modules'
 import { Refusal } from '../../kit/Refusal'
 import { useTableSources, useTables } from './queries'
-import { BMD_NOT_RECORDED, bmdSourceWords, bmrWords, fileKindWords, isNumberPrinted, recordedInWords, stopWords } from './words'
+import {
+  BMD_NOT_RECORDED,
+  COUNTED_FROM_FILES,
+  NO_ENDPOINT_FOR_ROW,
+  bmdSourceWords,
+  bmrWords,
+  fileKindWords,
+  isNumberPrinted,
+  recordedInWords,
+  stopWords,
+} from './words'
 
 /**
  * "Follow a table back": choose one of the report's results tables and see,
@@ -66,9 +76,12 @@ function SexSources({ sources, sex }: { sources: TableSources; sex: TableSexSour
       )}
       <Descriptions size="small" column={1} bordered>
         <Descriptions.Item label="Experiment in the dataset">
-          {sex.experiments.length === 0
-            ? NOT_RECORDED
-            : sex.experiments.map((e) => (
+          {sex.counted_from_files ? (
+            <Typography.Text data-testid="counted-from-files">{COUNTED_FROM_FILES}</Typography.Text>
+          ) : sex.experiments.length === 0 ? (
+            NOT_RECORDED
+          ) : (
+            sex.experiments.map((e) => (
                 <div key={e.name ?? ''}>
                   <Mono>{e.name}</Mono>{' '}
                   <Typography.Text type="secondary">
@@ -82,9 +95,10 @@ function SexSources({ sources, sex }: { sources: TableSources; sex: TableSexSour
                     </div>
                   )}
                 </div>
-              ))}
+            ))
+          )}
         </Descriptions.Item>
-        <Descriptions.Item label="File the data was taken from">
+        <Descriptions.Item label={sex.counted_from_files ? 'File the table is counted from' : 'File the data was taken from'}>
           {sex.files.length === 0
             ? NOT_RECORDED
             : sex.files.map((f) => (
@@ -132,17 +146,44 @@ function SexSources({ sources, sex }: { sources: TableSources; sex: TableSexSour
             title: 'Endpoint in the dataset',
             key: 'endpoint',
             render: (_, r) =>
-              r.heading || r.count_row ? null : r.endpoint_in_dataset ? (
-                <Mono>{r.label}</Mono>
+              r.heading || r.count_row ? null : sex.counted_from_files ? (
+                <Typography.Text type="secondary">an observation counted in the file</Typography.Text>
+              ) : r.built_from ? (
+                <>
+                  {r.built_from.endpoints.map((name, i) => (
+                    <span key={name}>
+                      {i > 0 && ', '}
+                      <Mono>{name}</Mono>
+                    </span>
+                  ))}
+                  {r.built_from.how && (
+                    <div>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {r.built_from.how}
+                      </Typography.Text>
+                    </div>
+                  )}
+                </>
               ) : (
-                <Tooltip title="The dataset has no endpoint of exactly this name. The row is built from the experiment's endpoints; which of them is not recorded on the row.">
+                <Tooltip title={NO_ENDPOINT_FOR_ROW}>
                   <Typography.Text type="secondary" tabIndex={0}>
-                    not recorded for this row
+                    not known for this row
                   </Typography.Text>
                 </Tooltip>
               ),
           },
-          { title: 'Experiment', key: 'experiment', render: (_, r) => (r.heading ? null : experiments ? <Mono>{experiments}</Mono> : NOT_RECORDED) },
+          {
+            title: 'Experiment',
+            key: 'experiment',
+            render: (_, r) =>
+              r.heading ? null : sex.counted_from_files ? (
+                <Typography.Text type="secondary">none</Typography.Text>
+              ) : experiments ? (
+                <Mono>{experiments}</Mono>
+              ) : (
+                NOT_RECORDED
+              ),
+          },
           { title: 'File', key: 'file', render: (_, r) => (r.heading ? null : files ? <Mono>{files}</Mono> : NOT_RECORDED) },
           { title: 'Workbook', key: 'workbook', render: (_, r) => (r.heading ? null : workbooks ? <Mono>{workbooks}</Mono> : NOT_RECORDED) },
           ...(sources.has_benchmark_doses

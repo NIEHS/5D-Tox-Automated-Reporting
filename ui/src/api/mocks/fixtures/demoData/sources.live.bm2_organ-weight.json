@@ -38,12 +38,13 @@
             }
           }
         ],
+        "counted_from_files": false,
         "stops": null,
         "benchmark_dose": {
           "source": "inferred",
           "bmr": {
             "type": "SD",
-            "factor": 1
+            "factor": 1.0
           },
           "constant_variance": true,
           "models": [
@@ -58,6 +59,7 @@
             "label": "n",
             "heading": false,
             "count_row": true,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": "NA",
             "bmdl": "NA"
@@ -66,7 +68,13 @@
             "label": "Terminal Body Weight (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Terminal Body Weight"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
             "bmd": "227.1",
             "bmdl": "116.4"
           },
@@ -74,31 +82,57 @@
             "label": "Heart Absolute (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Heart"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Heart Relative (mg/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Heart",
+                "Terminal Body Weight"
+              ],
+              "how": "the organ's weight divided by the terminal body weight, per animal"
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Kidney-Left Absolute (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Kidney-Left"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Kidney-Left Relative (mg/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Kidney-Left",
+                "Terminal Body Weight"
+              ],
+              "how": "the organ's weight divided by the terminal body weight, per animal"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "101.2",
             "bmdl": "40.9"
           },
@@ -106,15 +140,28 @@
             "label": "Kidney-Right Absolute (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Kidney-Right"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Kidney-Right Relative (mg/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Kidney-Right",
+                "Terminal Body Weight"
+              ],
+              "how": "the organ's weight divided by the terminal body weight, per animal"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "93.2",
             "bmdl": "43.2"
           },
@@ -122,7 +169,13 @@
             "label": "Liver Absolute (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
             "bmd": "113.9",
             "bmdl": "41.8"
           },
@@ -130,7 +183,14 @@
             "label": "Liver Relative (mg/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver",
+                "Terminal Body Weight"
+              ],
+              "how": "the organ's weight divided by the terminal body weight, per animal"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "57.9",
             "bmdl": "29.9"
           },
@@ -138,17 +198,30 @@
             "label": "Lungs Absolute (g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Lungs"
+              ],
+              "how": null
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Lungs Relative (mg/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
-            "bmd": "—",
-            "bmdl": "—"
+            "built_from": {
+              "endpoints": [
+                "Lungs",
+                "Terminal Body Weight"
+              ],
+              "how": "the organ's weight divided by the terminal body weight, per animal"
+            },
+            "endpoint_in_dataset": true,
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           }
         ]
       }

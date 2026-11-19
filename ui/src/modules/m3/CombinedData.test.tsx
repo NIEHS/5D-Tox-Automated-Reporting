@@ -244,27 +244,61 @@ describe('follow a table back', () => {
     const heart = female.getByText('Heart Absolute (g)').closest('tr') as HTMLElement
     expect(heart).toHaveTextContent('none printed for this row')
     expect(heart).not.toHaveTextContent('Fit by this application')
+    // every row is followed to the endpoints it is built from
+    for (const r of expected.rows.filter((r) => !r.heading && !r.count_row)) expect(r.built_from, r.label ?? '').not.toBeNull()
+    const relative = female.getByText('Heart Relative (mg/g)').closest('tr') as HTMLElement
+    expect(relative).toHaveTextContent('Heart, Terminal Body Weight')
+    expect(relative).toHaveTextContent("the organ's weight divided by the terminal body weight, per animal")
+    expect(sources).not.toHaveTextContent('not known for this row')
   })
 
-  it('names the endpoint where the dataset has one of exactly the row’s name, and says so where it has not', async () => {
+  it('names the endpoints a computed row is built from, and how', async () => {
     const { user } = await open(DEMO_FINISHED_RAT)
     await follow(user, 'Clinical Chemistry')
     const female = within(await screen.findByTestId('sources-Female'))
-    const albumin = female.getAllByText('Albumin')[0]!.closest('tr') as HTMLElement
-    expect(albumin).not.toHaveTextContent('not recorded for this row')
     const ratio = female.getByText('A/G Ratio').closest('tr') as HTMLElement
-    expect(ratio).toHaveTextContent('not recorded for this row')
+    expect(ratio).toHaveTextContent('Albumin, Globulin')
+    expect(ratio).toHaveTextContent('albumin divided by globulin, per animal')
+  })
+
+  it('says so where no rule names an endpoint for a row, and guesses nothing', async () => {
+    const answer = structuredClone(SOURCES_FINISHED['bm2_clinical-chemistry']!)
+    const row = answer.sexes[0]!.rows.find((r) => r.label === 'A/G Ratio')!
+    row.built_from = null
+    row.endpoint_in_dataset = false
+    server.use(http.get('/api/v2/studies/:id/tables/:key/sources', () => HttpResponse.json(answer)))
+    const { user } = await open(DEMO_FINISHED_RAT)
+    await follow(user, 'Clinical Chemistry')
+    const female = within(await screen.findByTestId('sources-Female'))
+    expect(female.getByText('A/G Ratio').closest('tr') as HTMLElement).toHaveTextContent('not known for this row')
+  })
+
+  it('follows a table that is counted from a file to that file and its workbook', async () => {
+    const { user } = await open(DEMO_FINISHED_RAT)
+    await follow(user, 'Clinical Observations')
+    const female = within(await screen.findByTestId('sources-Female'))
+    const expected = SOURCES_FINISHED['bm2_clinical-observations']!.sexes[0]!
+    expect(expected.counted_from_files).toBe(true)
+    expect(expected.stops).toBeNull()
+    expect(screen.queryByTestId('chain-stops')).not.toBeInTheDocument()
+    expect(female.getByTestId('counted-from-files')).toHaveTextContent('The dataset holds no experiment for it.')
+    expect(female.getByText('This table prints no benchmark dose.')).toBeInTheDocument()
+    const row = female.getByText('Lethargic').closest('tr') as HTMLElement
+    expect(row).toHaveTextContent('an observation counted in the file')
+    expect(row).toHaveTextContent('clinical_obs_truth_female.csv')
+    expect(row).toHaveTextContent('108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx')
   })
 
   it('says where the chain stops when a link is not recorded, and guesses nothing', async () => {
+    const answer = structuredClone(SOURCES_FINISHED['bm2_clinical-observations']!)
+    Object.assign(answer.sexes[0]!, { files: [], counted_from_files: false, stops: 'experiment' })
+    server.use(http.get('/api/v2/studies/:id/tables/:key/sources', () => HttpResponse.json(answer)))
     const { user } = await open(DEMO_FINISHED_RAT)
     await follow(user, 'Clinical Observations')
     const stops = await screen.findByTestId('chain-stops')
-    expect(SOURCES_FINISHED['bm2_clinical-observations']!.sexes[0]!.stops).toBe('experiment')
     expect(stops).toHaveTextContent('The record stops here')
     expect(stops).toHaveTextContent('The dataset has no experiment under the assay name "Clinical Observations"')
     const female = within(screen.getByTestId('sources-Female'))
-    expect(female.getByText('This table prints no benchmark dose.')).toBeInTheDocument()
     const row = female.getByText('Lethargic').closest('tr') as HTMLElement
     expect(within(row).getAllByText('not recorded').length).toBeGreaterThanOrEqual(3)
   })

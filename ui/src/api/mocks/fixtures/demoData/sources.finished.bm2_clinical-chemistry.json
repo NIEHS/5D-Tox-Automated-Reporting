@@ -48,12 +48,13 @@
             }
           }
         ],
+        "counted_from_files": false,
         "stops": null,
         "benchmark_dose": {
           "source": "inferred",
           "bmr": {
             "type": "SD",
-            "factor": 1
+            "factor": 1.0
           },
           "constant_variance": true,
           "models": [
@@ -68,6 +69,7 @@
             "label": "n",
             "heading": false,
             "count_row": true,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": "NA",
             "bmdl": "NA"
@@ -76,38 +78,68 @@
             "label": "Alanine aminotransferase",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Alanine aminotransferase"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Albumin",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Albumin"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Alkaline phosphatase",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Alkaline phosphatase"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Aspartate Aminotransferase",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Aspartate Aminotransferase"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Bile salts/acids",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Bile salts/acids"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
             "bmd": "141.0",
             "bmdl": "47.1"
@@ -116,6 +148,12 @@
             "label": "Cholesterol",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Cholesterol"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
             "bmd": "238.4",
             "bmdl": "147.3"
@@ -124,38 +162,68 @@
             "label": "Creatine kinase",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Creatine kinase"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Creatinine",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Creatinine"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Direct Bilirubin",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Direct Bilirubin"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Globulin",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Globulin"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Glucose",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Glucose"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
             "bmd": "360.3",
             "bmdl": "184.0"
@@ -164,47 +232,84 @@
             "label": "Sorbitol dehydrogenase",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Sorbitol dehydrogenase"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Total Bilirubin",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Total Bilirubin"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Total protein",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Total protein"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Triglycerides",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Triglycerides"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "Urea Nitrogen",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Urea Nitrogen"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
-            "bmd": "—",
-            "bmdl": "—"
+            "bmd": "\u2014",
+            "bmdl": "\u2014"
           },
           {
             "label": "A/G Ratio",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Albumin",
+                "Globulin"
+              ],
+              "how": "albumin divided by globulin, per animal"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "182.3",
             "bmdl": "99.4"
           }

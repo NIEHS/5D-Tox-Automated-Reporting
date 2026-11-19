@@ -96,6 +96,14 @@ export function bmdSourceWords(b: BenchmarkDoseSource): { label: string; explain
 export const BMD_NOT_RECORDED =
   'Not recorded: the last analysis kept no record of how the benchmark doses of this assay and sex were computed.'
 
+/** A table the dataset holds no experiment for, and records the files of. */
+export const COUNTED_FROM_FILES =
+  'None: this table is counted from the file below, which the dataset names. The dataset holds no experiment for it.'
+
+/** A row the builders' naming gives no endpoint for. */
+export const NO_ENDPOINT_FOR_ROW =
+  "The row is built from the experiment's endpoints, and the rule that names which of them does not cover this row."
+
 /** Where the chain from a table to its files stops, when a record is missing. */
 export function stopWords(stop: ChainStop | (string & {}), assay: string | null, sex: string): string {
   switch (stop) {

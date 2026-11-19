@@ -155,6 +155,15 @@ _DIGEST_LOCK = threading.Lock()
 _DIGEST_MEMO_MAX = 16
 
 
+# A table that is counted from files, not built from an experiment of the
+# dataset: its assay name -> where the dataset records those files (``_meta``).
+# Clinical Observations: pipeline.section_serializers._build_clinical_obs_section.
+_COUNTED_FROM = {"Clinical Observations": "clinical_obs_files"}
+# A file's kind, as the dataset names it for the files it was combined from
+# (``_meta.source_files``: tier), by the file's type.
+_KIND_OF_TYPE = {"xlsx": "xlsx", "txt": "txt_csv", "csv": "txt_csv", "bm2": "bm2"}
+
+
 def _source_key(description: dict) -> str | None:
     """The key the dataset files an experiment's source under
     (``_meta.source_files``): ``<assay>|<kind of data>``, or the kind of data
@@ -230,6 +239,10 @@ def _digest(dtxsid: str, session: Path) -> dict | None:
     digest = {
         "integrated_at": meta.get("integrated_at"),
         "source_files": source_files,
+        # The files a table is counted from directly, where the dataset holds
+        # no experiment for it (by the table's assay name).
+        "counted_from": {assay: [Path(str(p)).name for p in meta.get(key) or []]
+                         for assay, key in _COUNTED_FROM.items()},
         "experiments": experiments,
         "own_bmd_analyses": len(results),
     }
@@ -362,8 +375,15 @@ def table_sources(dtxsid: str, key: str) -> dict:
     the workbook that file was converted from, and where its benchmark doses
     come from.  ``stops`` names the first link that is not recorded, or is
     None when the chain reaches a workbook (or a BMDExpress project, which is
-    a source file itself)."""
+    a source file itself).
+
+    Each row says which endpoints of the experiment it is built from
+    (``built_from``: tables.row_sources, the builders' own naming read back;
+    None when no rule names one).  A table the dataset holds no experiment
+    for, and records the files of instead (Clinical Observations), is
+    ``counted_from_files``: its rows are counts of what those files record."""
     from pipeline.session_db import _latest_cache
+    from tables.row_sources import row_sources
 
     session = _session(dtxsid)
     data = _read(session / f"{key}.json") if key.startswith(RESULT_PREFIX) else None
@@ -386,8 +406,14 @@ def table_sources(dtxsid: str, key: str) -> dict:
     for sex, rows in by_sex.items():
         experiments = [e for e in (digest["experiments"] if digest else [])
                        if e["assay"] == assay and str(e["sex"] or "").lower() == str(sex).lower()]
-        endpoint_names = {n for e in experiments for n in e.get("endpoint_names") or []}
-        files = []
+        endpoint_names = [n for e in experiments for n in e.get("endpoint_names") or []]
+        counted = [] if experiments or digest is None else digest["counted_from"].get(assay) or []
+        files = [{"filename": name,
+                  "kind": _KIND_OF_TYPE.get((fps.get(name) or {}).get("file_type")),
+                  "file_type": (fps.get(name) or {}).get("file_type"),
+                  "converted_from": (_converted_from(session, name, fps[name])
+                                     if name in fps else None)}
+                 for name in counted]
         for exp in experiments:
             taken = exp["taken_from"]
             if taken and taken["filename"] not in [f["filename"] for f in files]:
@@ -401,7 +427,7 @@ def table_sources(dtxsid: str, key: str) -> dict:
 
         if digest is None:
             stops = "dataset"
-        elif not experiments:
+        elif not experiments and not counted:
             stops = "experiment"
         elif not files:
             stops = "file"
@@ -412,23 +438,33 @@ def table_sources(dtxsid: str, key: str) -> dict:
         else:
             stops = None
 
+        def built_from(row: dict) -> dict | None:
+            if counted or row.get("is_heading") or row.get("is_n_row"):
+                return None
+            return row_sources(assay, row.get("label") or "", endpoint_names)
+
         sexes.append({
             "sex": sex,
             "experiments": [{k: e[k] for k in ("name", "organ", "endpoints", "animals",
                                                "endpoint_names")}
                             for e in experiments],
             "files": files,
+            "counted_from_files": bool(counted),
             "stops": stops,
             "benchmark_dose": (_bmd_setting(record, assay, sex) if has_bmds and assay else None),
             "rows": [{
                 "label": row.get("label"),
                 "heading": bool(row.get("is_heading")),
                 "count_row": bool(row.get("is_n_row")),
-                # An endpoint of exactly this name is in the experiment(s);
-                # false: the link from the row to its endpoints is not recorded.
-                "endpoint_in_dataset": (row.get("label") in endpoint_names
-                                        if not row.get("is_heading") and not row.get("is_n_row")
-                                        else None),
+                # The endpoints of the experiment(s) the row is built from, and
+                # how where it is computed; None for a heading, a count row, a
+                # row of a counted table, and a row no rule names an endpoint for.
+                "built_from": built_from(row),
+                # Whether the row is followed to an endpoint; None where the
+                # question does not arise (a heading, a count row, a counted table).
+                "endpoint_in_dataset": (built_from(row) is not None
+                                        if not counted and not row.get("is_heading")
+                                        and not row.get("is_n_row") else None),
                 "bmd": row.get("bmd"),
                 "bmdl": row.get("bmdl"),
             } for row in rows if isinstance(row, dict)] if isinstance(rows, list) else [],

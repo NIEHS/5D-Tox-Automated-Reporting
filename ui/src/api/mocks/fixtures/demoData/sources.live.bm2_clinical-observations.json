@@ -12,15 +12,27 @@
       {
         "sex": "Female",
         "experiments": [],
-        "files": [],
-        "stops": "experiment",
+        "files": [
+          {
+            "filename": "clinical_obs_truth_female.csv",
+            "kind": "txt_csv",
+            "file_type": "csv",
+            "converted_from": {
+              "filename": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+              "recorded_in": "file_check"
+            }
+          }
+        ],
+        "counted_from_files": true,
+        "stops": null,
         "benchmark_dose": null,
         "rows": [
           {
             "label": "Ataxia (Mild)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": null,
+            "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
           },
@@ -28,7 +40,8 @@
             "label": "Coat Ruffled",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": null,
+            "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
           },
@@ -36,7 +49,8 @@
             "label": "Lethargic",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": null,
+            "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
           }

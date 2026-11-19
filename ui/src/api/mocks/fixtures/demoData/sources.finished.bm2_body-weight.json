@@ -39,12 +39,13 @@
             }
           }
         ],
+        "counted_from_files": false,
         "stops": null,
         "benchmark_dose": {
           "source": "inferred",
           "bmr": {
             "type": "SD",
-            "factor": 1
+            "factor": 1.0
           },
           "constant_variance": true,
           "models": [
@@ -59,6 +60,7 @@
             "label": "n",
             "heading": false,
             "count_row": true,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": "NA",
             "bmdl": "NA"
@@ -67,7 +69,13 @@
             "label": "0",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "SD0"
+              ],
+              "how": "the body weight on study day 0"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "ND",
             "bmdl": "ND"
           },
@@ -75,7 +83,13 @@
             "label": "4",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "SD4"
+              ],
+              "how": "the body weight on study day 4"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "298.1",
             "bmdl": "133.7"
           },
@@ -83,7 +97,13 @@
             "label": "5",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "SD5"
+              ],
+              "how": "the body weight on study day 5"
+            },
+            "endpoint_in_dataset": true,
             "bmd": "227.1",
             "bmdl": "116.4"
           },
@@ -91,6 +111,12 @@
             "label": "Body Weight Gain",
             "heading": false,
             "count_row": false,
+            "built_from": {
+              "endpoints": [
+                "Body Weight Gain"
+              ],
+              "how": null
+            },
             "endpoint_in_dataset": true,
             "bmd": "273.4",
             "bmdl": "215.4"

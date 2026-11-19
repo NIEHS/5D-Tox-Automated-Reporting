@@ -172,7 +172,14 @@ export interface SourceRow {
   label: string | null
   heading: boolean
   count_row: boolean
-  /** an endpoint of exactly this name is in the experiment(s); null for a heading or a count row */
+  /**
+   * The endpoints of the experiment(s) the row is built from, and how where it
+   * is computed ("the organ's weight divided by the terminal body weight");
+   * null for a heading, a count row, a row of a counted table, and a row the
+   * builders' naming gives no endpoint for.
+   */
+  built_from: { endpoints: string[]; how: string | null } | null
+  /** whether the row is followed to an endpoint; null where the question does not arise */
   endpoint_in_dataset: boolean | null
   /** as printed; null when the table prints no benchmark dose */
   bmd: string | null
@@ -186,6 +193,11 @@ export interface TableSexSources {
   sex: string
   experiments: { name: string | null; organ: string | null; endpoints: number; animals: number; endpoint_names: string[] | null }[]
   files: SourceFile[]
+  /**
+   * The dataset holds no experiment for this table and records the files it
+   * is counted from instead (Clinical Observations): `files` are those.
+   */
+  counted_from_files: boolean
   stops: ChainStop | (string & {}) | null
   benchmark_dose: BenchmarkDoseSource | null
   rows: SourceRow[]

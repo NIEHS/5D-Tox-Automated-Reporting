@@ -38,6 +38,7 @@
             }
           }
         ],
+        "counted_from_files": false,
         "stops": null,
         "benchmark_dose": null,
         "rows": [
@@ -45,6 +46,7 @@
             "label": "Study Day 4",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -53,6 +55,7 @@
             "label": "n",
             "heading": false,
             "count_row": true,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -61,6 +64,7 @@
             "label": "Blood",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -69,7 +73,14 @@
             "label": "Blood concentration (ng/mL)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Blood 1,2-DCB Concentration",
+                "Blood 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Blood 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -77,7 +88,14 @@
             "label": "Normalized blood concentration [(ng/mL)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Blood 1,2-DCB Concentration",
+                "Blood 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Blood 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -85,6 +103,7 @@
             "label": "Liver",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -93,7 +112,14 @@
             "label": "Liver concentration (ng/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver 1,2-DCB Concentration",
+                "Liver 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Liver 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -101,7 +127,14 @@
             "label": "Normalized liver concentration [(ng/g)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver 1,2-DCB Concentration",
+                "Liver 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Liver 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -109,6 +142,7 @@
             "label": "Lung",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -117,7 +151,14 @@
             "label": "Lung concentration (ng/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Lung 1,2-DCB Concentration",
+                "Lung 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Lung 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -125,7 +166,14 @@
             "label": "Normalized lung concentration [(ng/g)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Lung 1,2-DCB Concentration",
+                "Lung 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Lung 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -133,6 +181,7 @@
             "label": "Study Day 5",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -141,6 +190,7 @@
             "label": "n",
             "heading": false,
             "count_row": true,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -149,6 +199,7 @@
             "label": "Blood",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -157,7 +208,14 @@
             "label": "Blood concentration (ng/mL)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Blood 1,2-DCB Concentration",
+                "Blood 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Blood 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -165,7 +223,14 @@
             "label": "Normalized blood concentration [(ng/mL)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Blood 1,2-DCB Concentration",
+                "Blood 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Blood 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -173,6 +238,7 @@
             "label": "Liver",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -181,7 +247,14 @@
             "label": "Liver concentration (ng/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver 1,2-DCB Concentration",
+                "Liver 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Liver 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -189,7 +262,14 @@
             "label": "Normalized liver concentration [(ng/g)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Liver 1,2-DCB Concentration",
+                "Liver 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Liver 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -197,6 +277,7 @@
             "label": "Lung",
             "heading": true,
             "count_row": false,
+            "built_from": null,
             "endpoint_in_dataset": null,
             "bmd": null,
             "bmdl": null
@@ -205,7 +286,14 @@
             "label": "Lung concentration (ng/g)",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Lung 1,2-DCB Concentration",
+                "Lung 1,2-DCB LOD"
+              ],
+              "how": "with each sample's limit (Lung 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           },
@@ -213,7 +301,14 @@
             "label": "Normalized lung concentration [(ng/g)/ppm]",
             "heading": false,
             "count_row": false,
-            "endpoint_in_dataset": false,
+            "built_from": {
+              "endpoints": [
+                "Lung 1,2-DCB Concentration",
+                "Lung 1,2-DCB LOD"
+              ],
+              "how": "divided by the exposure concentration, with each sample's limit (Lung 1,2-DCB LOD)"
+            },
+            "endpoint_in_dataset": true,
             "bmd": null,
             "bmdl": null
           }
