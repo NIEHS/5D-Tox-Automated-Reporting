@@ -309,14 +309,16 @@ def bookshelf_shelf(request: Request, only: str | None = None):
     ``?only=<partition>`` reduces the shelf to one partition's reports (the
     "Demo" pair) and is remembered by the browser; ``?only=`` shows every
     report again.  Without it the browser's remembered choice holds."""
+    from urllib.parse import quote, unquote
+
     partitions = shelf_partitions()
-    chosen = only if only is not None else request.cookies.get(ONLY_COOKIE)
+    chosen = only if only is not None else unquote(request.cookies.get(ONLY_COOKIE) or "")
     chosen = chosen if chosen in partitions else None
     response = HTMLResponse(_shelf_page(*shelf_books(chosen), only=chosen,
                                         partitions=list(partitions)))
     if only is not None:
         if chosen:
-            response.set_cookie(ONLY_COOKIE, chosen, path="/", samesite="lax")
+            response.set_cookie(ONLY_COOKIE, quote(chosen), path="/", samesite="lax")
         else:
             response.delete_cookie(ONLY_COOKIE, path="/")
     return response

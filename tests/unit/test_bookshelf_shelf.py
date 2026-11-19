@@ -163,3 +163,17 @@ def test_a_partition_nobody_declared_leaves_the_shelf_whole(sessions_dir):
     client = TestClient(app)
     page = client.get("/Bookshelf", params={"only": "Demo"})
     assert "Bisphenol AF" in page.text and "Show only" not in page.text
+
+
+def test_a_partition_name_with_a_space_is_remembered(sessions_dir):
+    # The interface writes the cookie percent-encoded; the shelf reads it back.
+    from web_routes.background_server import app
+    from web_routes.bookshelf_routes import ONLY_COOKIE
+
+    _session(sessions_dir, "DTXSID7037717", integrated=True, processed=True, name="Bisphenol AF")
+    _session(sessions_dir, "DTXSID6020430", integrated=True, processed=True, name="1,2-DCB")
+    (sessions_dir / "_partitions.json").write_text(json.dumps({"Team demo": ["DTXSID6020430"]}))
+    client = TestClient(app)
+    client.cookies.set(ONLY_COOKIE, "Team%20demo")
+    page = client.get("/Bookshelf").text
+    assert "Bisphenol AF" not in page and "Team demo" in page
