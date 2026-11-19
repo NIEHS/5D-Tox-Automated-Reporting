@@ -257,8 +257,9 @@ known:
   have, a direction against the table). A few run today on the finished
   document only (`tooling/report_qc.py`). These can refuse a save.
 - **Meaning cannot be decided by rule** ("the liver was the most sensitive
-  organ"). A model can flag it for a person; it cannot be the ground for a
-  refusal.
+  organ"). The maintainer: it is a separate class of correctness, to be
+  developed in a concentrated effort of its own, around assertions made by a
+  model or by a person. Notes for that effort: `correctness-of-text-prep.md`.
 - Open: whether a refusal by rule has a way through with a reason (text that
   quotes another study's value looks like a contradiction to a rule).
 
