@@ -23,7 +23,7 @@ function asLive(row: StudyRow): StudyRow {
     ...row,
     id,
     relations: { ...row.relations, members: row.relations.members.map((m) => ({ ...m, id: m.id.replace('DTXSID1020431', 'DTXSID1020431_live') })) },
-    stands: row.kind === 'member' ? { phase: 'VALIDATED', say: 'Files validated, not yet integrated', next: { say: 'Integrate the data', fix: 'M3' } } : row.stands,
+    stands: row.kind === 'member' ? { phase: 'VALIDATED', say: 'Files checked, not yet combined', next: { say: 'Combine the files into one dataset', fix: 'M3' } } : row.stands,
   }
 }
 
@@ -66,7 +66,7 @@ describe('the Demo block of the studies list', () => {
     expect(finished).toHaveTextContent('DTXSID1020431')
     expect(live).toHaveTextContent('Live')
     expect(live).toHaveTextContent('DTXSID1020431_live')
-    expect(within(live).getByRole('list', { name: 'Studies of DTXSID1020431_live' })).toHaveTextContent('Next: Integrate the data')
+    expect(within(live).getByRole('list', { name: 'Studies of DTXSID1020431_live' })).toHaveTextContent('Next: Combine the files into one dataset')
     expect(document.querySelector('tr[data-row-key="chem:DTXSID1020431"]')).toBeNull()
   })
 
@@ -101,10 +101,13 @@ describe('the Demo block of the studies list', () => {
     expect(document.body).not.toHaveTextContent('Triclosan')
     expect(screen.getByTestId('partition-Demo')).toBeInTheDocument()
     expect(window.localStorage.getItem('studies.onlyPartition')).toBe('Demo')
+    // The Bookshelf's shelf page reads the same choice from a cookie.
+    expect(document.cookie).toContain('bookshelf_only=Demo')
     expect(screen.getByTestId('others-hidden')).toHaveTextContent('The other studies are not shown.')
     await user.click(screen.getByRole('button', { name: 'Show all studies' }))
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(window.localStorage.getItem('studies.onlyPartition')).toBeNull()
+    expect(document.cookie).not.toContain('bookshelf_only')
   })
 
   it('a session of the pair links to the same page of the other side', async () => {
