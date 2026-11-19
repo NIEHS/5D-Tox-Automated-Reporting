@@ -124,9 +124,6 @@ What follows from how the knowledge base is built today:
 
 **What the sketch leaves open:**
 
-- What a contradiction does to the models that write: is the contradicted
-  claim withheld from them, or shown to them with the contradiction? (What it
-  does to text already written is answered below.)
 - Who may add or contradict: a responsibility of the user system
   (`user-system-plan.md`), like editing and signing off.
 
@@ -181,13 +178,27 @@ What follows from how the knowledge base is built today:
   say why. The resolution is an act with a name, a time and a reason, like a
   merge commit.
 
-  Two things follow, to be confirmed in the effort:
+  Two things follow, both confirmed by the maintainer (2026-11-19):
   - this only works if the links are recorded (claim to assertion to
     narrative): the chain is what the mark travels along;
-  - by the same likeness, a narrative with an unresolved contradiction would
-    not be signed off or published, as a merge with conflicts is not completed.
-    The software already holds a report back this way when a section's numbers
+  - by the same likeness, a narrative with an unresolved contradiction is not
+    signed off or published, as a merge with conflicts is not completed. The
+    software already holds a report back this way when a section's numbers
     change under an approval.
 
   "The author team" is, in the user system's terms, the people who may edit
   that narrative.
+- **What a contradiction does to the models that write:** "models are not shown
+  the contradiction. the narrative post-generation QC finds the contradiction,
+  and informs the team."
+
+  So a model writes from the generated knowledge base as it stands, knowing
+  nothing of what people have contradicted. A check that runs **after** a
+  narrative is generated finds the assertions that rest on a contradicted claim
+  and tells the author team, who resolve it as above. Writing and checking are
+  two steps, and the contradiction belongs to the second.
+
+  This gives the effort its place in the workflow: a check after generation,
+  which is also where the agreement with the data (§2) and Scott's integrity
+  check belong, and which must run again when a narrative is edited or returned
+  from Word, and when a claim is contradicted after the narrative was written.
