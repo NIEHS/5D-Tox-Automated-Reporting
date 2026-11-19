@@ -85,7 +85,7 @@ lost their subject ("The neurotoxic effects are dose-dependent").
 
 | Entity | What it is | Made by |
 |---|---|---|
-| **Claim** | what a **source** says. Two kinds of source: a paper, and this study's own data ("ALT was increased at ≥250 ppm; BMD 157.8 ppm"). | from a paper: a prompt, when the knowledge base is built (exists, thin). From the data: a rule, at Process (the results sentences are already built this way, from a template and the values). |
+| **Claim** | what a **source** says. Three kinds of source: a paper, this study's own data ("ALT was increased at ≥250 ppm; BMD 157.8 ppm"), and a person's own knowledge. | from a paper: a prompt, when the knowledge base is built (exists, thin). From the data: a rule, at Process (the results sentences are already built this way, from a template and the values). From a person: stated by them, under their name. |
 | **Assertion** | what the **report** says: one statement of its text, written by a model or a person. | a rule finds the statements (sentences, citation marks, the places a template fills from data); a prompt says which of them assert something and of what kind (a finding of this study, a statement about the literature, an interpretation, a statement that something is not known). |
 | **Support** | the link from an assertion to the claims it rests on, with a verdict (supported, not supported, not checked), who gave it (a model, a person) and when. | a rule where the link is explicit (a citation mark points at a paper's claims; a filled place points at its value); a prompt proposes links and verdicts where it is not; a person confirms or overrules. |
 
@@ -94,7 +94,47 @@ assertion held against claims from the data: a rule decides it. Meaning is an
 assertion held against claims from papers, or an interpretation that goes beyond
 any one claim: a model proposes, a person decides.
 
+**Claims by people (the maintainer, 2026-11-19).** "humans will add to the KB
+with their own knowledge that the crawl and KB integration process did not
+create. humans may also contradict something in the generated KB. this becomes
+a particular class of claim, 'human contradicts AI'." And: "the KB creation
+process will require effort to support it well."
+
+So a claim has an origin (a prompt over a paper, a rule over the data, a
+person), and claims can stand in a relation to each other. A person's claim is
+one of two things:
+
+- **an addition:** something the crawl and the extraction did not produce;
+- **a contradiction:** it names a generated claim and says it is wrong, or wrong
+  as stated. This is the class "a person contradicts the generated knowledge
+  base".
+
+What follows from how the knowledge base is built today:
+
+- **A generated claim has no identity.** It is a paper and a sentence; nothing
+  can point at it. Contradicting one needs each claim to have an id that stays
+  the same when the knowledge base is rebuilt.
+- **A finished knowledge base is never changed** (ADR-0034: it is rebuilt under
+  a new name, and a rebuild from the same crawl is identical row for row). So
+  what people state cannot be written into it. It is a layer of its own beside
+  the generated one, which a rebuild does not touch and every reader sees
+  together with it.
+- **A contradicted claim is kept, not deleted:** that a person contradicted it,
+  who, when and why is the record. What a contradiction does is open (below).
+
 **What the sketch leaves open:**
+
+- What a contradiction does: is the generated claim withheld from the models
+  that write, shown to them with the contradiction, or only marked? And every
+  assertion already resting on it: flagged for a check?
+- Whether a person's claim needs a source (a paper, a passage), or may rest on
+  their expertise alone, under their name.
+- How far a person's claim reaches: every report that reads the knowledge base,
+  or the report it was stated for.
+- Who may add or contradict: a responsibility of the user system
+  (`user-system-plan.md`), like editing and signing off.
+- The other pairings: a person contradicting a person; a new crawl producing a
+  claim that contradicts a person's.
 
 - Claims from papers are too thin today to hold an assertion against: no
   subject, no passage. The prompt that makes them would have to ask for more
