@@ -62,7 +62,7 @@ describe('<VocabField>', () => {
     await user.click(box)
     await user.keyboard('ferret{Enter}')
     expect(onChange).not.toHaveBeenCalled()
-    expect(await screen.findByText('No allowed value matches what you typed.')).toBeInTheDocument()
+    expect(await screen.findByText('No allowed value matches what was typed.')).toBeInTheDocument()
   })
 
   it('keeps a dependent field closed until its parent is chosen, then offers only its values', async () => {

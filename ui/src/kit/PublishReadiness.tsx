@@ -66,7 +66,7 @@ export function PublishReadiness({ readiness, studyId }: { readiness?: Readiness
               )}
               <Typography.Text>
                 Not checked yet: whether every section is approved, missing details ("[… pending]"), the studies a report covers,
-                and the method and report definition. Read the report before you hand it on.
+                and the method and report definition. The report is to be read before it is handed on.
               </Typography.Text>
             </Space>
           }

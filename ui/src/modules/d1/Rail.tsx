@@ -70,8 +70,11 @@ function SectionRow({
   const id = sectionId(section)
   // Approve: on a section that is not approved, and on an approved one the
   // backend says can be approved again (it changed since). Reopen: on an
-  // approved one. Neither on the finished side of a pair.
-  const showApprove = acts.offered && (!section.approved || section.accept.allowed)
+  // approved one. Neither on the finished side of a pair. A section that is
+  // never approved on its own has no button to wait for: its mark says so, and
+  // the backend's reason shows when it is chosen.
+  const never = section.accept.code === 'not_approvable'
+  const showApprove = acts.offered && !never && (!section.approved || section.accept.allowed)
   const showReopen = acts.offered && section.approved
   return (
     <li
@@ -101,6 +104,11 @@ function SectionRow({
         {chosen && (
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
             {section.writer_say}
+          </Typography.Text>
+        )}
+        {chosen && never && section.accept.say && (
+          <Typography.Text type="secondary" data-testid="never-approved" style={{ fontSize: 13 }}>
+            {section.accept.say}
           </Typography.Text>
         )}
         {chosen && note && (

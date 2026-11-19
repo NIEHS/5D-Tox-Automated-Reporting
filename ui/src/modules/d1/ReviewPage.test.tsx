@@ -77,12 +77,20 @@ describe('the rail', () => {
   })
 
   it('offers Approve where the backend allows it, and says why not where it does not', async () => {
-    await openReview(REVIEW_LIVE)
+    const { user } = await openReview(REVIEW_LIVE)
     const fixture = DEMO_REVIEWS[REVIEW_LIVE]!
     let allowed = 0
+    let never = 0
     for (const group of fixture.groups) {
       for (const s of group.sections) {
-        const button = approveButton(sectionRow(group.owner, s.key))
+        const row = sectionRow(group.owner, s.key)
+        if (s.accept.code === 'not_approvable') {
+          // Never approved on its own: no button to wait for; the mark says so.
+          never += 1
+          expect(within(row).queryByRole('button', { name: /^Approve / }), s.key).toBeNull()
+          continue
+        }
+        const button = approveButton(row)
         if (s.accept.allowed) {
           allowed += 1
           expect(button, s.key).toBeEnabled()
@@ -93,6 +101,11 @@ describe('the rail', () => {
       }
     }
     expect(allowed).toBeGreaterThan(0)
+    expect(never).toBeGreaterThan(0)
+    // Chosen, such a section gives the backend's reason in words.
+    const foreword = fixture.groups[0]!.sections.find((s) => s.accept.code === 'not_approvable')!
+    await user.click(within(sectionRow(fixture.groups[0]!.owner, foreword.key)).getByRole('button', { name: foreword.title }))
+    expect(await screen.findByTestId('never-approved')).toHaveTextContent(foreword.accept.say!)
     // The live report has no Background yet: the backend's reason, word for word.
     expect(approveButton(sectionRow(REVIEW_LIVE, 'background'))).toHaveAccessibleDescription(
       'There is no text for this section yet, so there is nothing to approve.',

@@ -89,7 +89,7 @@ export function VocabField({
         loading={isPending}
         allowClear={allowClear}
         status={status}
-        notFoundContent="No allowed value matches what you typed."
+        notFoundContent="No allowed value matches what was typed."
       />
       {help && (
         <Typography.Text id={helpId} type={status === 'error' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
