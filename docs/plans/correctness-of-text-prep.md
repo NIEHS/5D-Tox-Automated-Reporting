@@ -36,11 +36,11 @@ the second.
 
 ## 4. "By AI and human"
 
-Read as: an assertion is held to the same standard whoever made it. A sentence
-a model wrote and a sentence a person typed, or brought back from Word, are both
-assertions to be checked. (If it also means that both a model and a person do
-the checking, the note of Scott's words already implies it: the model flags, a
-person decides.) To be confirmed when the effort starts.
+Confirmed by the maintainer (2026-11-19), both ways:
+
+- an assertion is held to the same standard whoever **made** it: a sentence a
+  model wrote and a sentence a person typed, or brought back from Word;
+- a model and a person both do the **checking**.
 
 ## 5. What exists today
 
@@ -59,8 +59,52 @@ person decides.) To be confirmed when the effort starts.
 - **The pre-flight checklist** already asks for it by hand: "Each interpretive
   claim: traced to a table or a cited paper" (toxicology; genomics), and
   "Statements that something is not known: checked".
-- **Nothing** records an assertion as a thing of its own, what it rests on, or
-  whether anyone found it supported.
+- **A sentence of the report is only text today.** Take "X is metabolized by
+  CYP2E1 [3]" in a Background. The software holds the section's text and its
+  reference list, and knows that [3] was among the papers given to the model.
+  It holds no record that says: this is a statement the report makes; it rests
+  on paper [3]; someone checked whether [3] says so; the answer was yes. So
+  there is nothing to list, count, flag or sign off sentence by sentence. A
+  claim of the knowledge base, by contrast, is such a record (§5a).
+
+## 5a. Claims and assertions (the maintainer, 2026-11-19; a first sketch, not a design)
+
+The maintainer: assertions and the knowledge base's "claims" are related (from
+the discussion with Scott); "perhaps we can flesh out claims and assertions as
+entities that are created by a set of rules and prompts."
+
+**What a claim is today.** A statement a model extracted from a paper, kept as
+one row: the paper and the sentence (`paper_claims`; 9,727 claims over 4,080
+papers of `baseline-2026-05`). It is made by one prompt of the crawl query
+(`crawl_queries/baseline.yaml`: "list of key scientific findings or
+conclusions, each as a concise statement"). It records nothing else: not what
+the claim is about, not where in the paper it stands, not its kind. Some have
+lost their subject ("The neurotoxic effects are dose-dependent").
+
+**The sketch: three entities.**
+
+| Entity | What it is | Made by |
+|---|---|---|
+| **Claim** | what a **source** says. Two kinds of source: a paper, and this study's own data ("ALT was increased at ≥250 ppm; BMD 157.8 ppm"). | from a paper: a prompt, when the knowledge base is built (exists, thin). From the data: a rule, at Process (the results sentences are already built this way, from a template and the values). |
+| **Assertion** | what the **report** says: one statement of its text, written by a model or a person. | a rule finds the statements (sentences, citation marks, the places a template fills from data); a prompt says which of them assert something and of what kind (a finding of this study, a statement about the literature, an interpretation, a statement that something is not known). |
+| **Support** | the link from an assertion to the claims it rests on, with a verdict (supported, not supported, not checked), who gave it (a model, a person) and when. | a rule where the link is explicit (a citation mark points at a paper's claims; a filled place points at its value); a prompt proposes links and verdicts where it is not; a person confirms or overrules. |
+
+**How the two classes of §2 fall out of it.** Agreement with the data is an
+assertion held against claims from the data: a rule decides it. Meaning is an
+assertion held against claims from papers, or an interpretation that goes beyond
+any one claim: a model proposes, a person decides.
+
+**What the sketch leaves open:**
+
+- Claims from papers are too thin today to hold an assertion against: no
+  subject, no passage. The prompt that makes them would have to ask for more
+  (what the claim is about, the passage it comes from), and many come from
+  abstracts only.
+- An assertion's identity when the text is edited: is it found again, or made
+  anew and checked again?
+- How fine: every sentence is many records for a long report; only sentences
+  with a citation or an interpretation is fewer and needs the prompt to choose.
+- An assertion that rests on nothing recorded (general knowledge).
 
 ## 6. Questions for the effort (none answered)
 
