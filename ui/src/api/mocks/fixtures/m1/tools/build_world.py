@@ -35,7 +35,7 @@ def stands(phase, processed):
          "UPLOADED": ("Files brought in, not yet validated", "Validate the files", "M2"),
          "VALIDATION_ERRORS": ("The files have problems to fix", "Fix the problems the validation found", "M2"),
          "VALIDATED": ("Files validated, not yet integrated", "Integrate the data", "M3"),
-         "INTEGRATED": ("Data integrated", None, None), "APPROVED": ("Data reviewed", None, None)}
+         "INTEGRATED": ("Data integrated", None, None), "APPROVED": ("Animals accounted for", None, None)}
     say, nsay, fix = W[phase]
     if nsay is None:
         nsay, fix = ("Review the report's sections", "D1") if processed else ("Process the data", "P1")

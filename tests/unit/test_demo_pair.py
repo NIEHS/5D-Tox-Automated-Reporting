@@ -116,3 +116,13 @@ def test_the_reset_route_answers_in_the_envelope(pair):
     assert ok.status_code == 200 and ok.json()["copy"] == f"{REPORT}_live"
     no = client.post("/api/v2/demo/DTXSID0000888/reset")
     assert no.status_code == 409 and no.json()["error"]["code"] == "demo_copy_refused"
+
+
+def test_the_finished_sides_sections_are_not_approved_or_reopened_here(pair):
+    from fastapi.testclient import TestClient
+    from web_routes.background_server import app
+
+    client = TestClient(app)
+    for act, body in (("accept", None), ("release", {"reason": "x"}), ("restore", {"version": 1})):
+        r = client.post(f"/api/v2/studies/{REPORT}_rat/sections/summary/{act}", json=body)
+        assert (r.status_code, r.json()["error"]["code"]) == (409, "demo_reference"), act

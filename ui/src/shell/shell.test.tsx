@@ -47,7 +47,7 @@ describe('the study frame', () => {
     expect(screen.getByRole('heading', { name: 'Perfluorohexanesulfonamide' })).toBeInTheDocument()
     expect(screen.getByText('DTXSID50469320')).toBeInTheDocument()
     expect(screen.getByText('41997-13-1')).toBeInTheDocument()
-    expect(screen.getByTestId('phase')).toHaveTextContent('Data reviewed')
+    expect(screen.getByTestId('phase')).toHaveTextContent('Animals accounted for')
     expect(document.body).not.toHaveTextContent(/APPROVED|REPROCESS|wizard|stale_llm_sections|data_changed/)
   })
 
@@ -146,7 +146,7 @@ describe('the study frame', () => {
     renderApp(`/studies/${STATE_REPORT.id}/review`)
     const members = await screen.findByLabelText('Studies in this report')
     expect(members).toHaveTextContent('This report covers 2 studies')
-    expect(within(members).getByRole('link', { name: /rat \(DTXSID1020431_rat\): Data reviewed/ })).toHaveAttribute('href', '/studies/DTXSID1020431_rat')
+    expect(within(members).getByRole('link', { name: /rat \(DTXSID1020431_rat\): Animals accounted for/ })).toHaveAttribute('href', '/studies/DTXSID1020431_rat')
     expect(within(members).getByRole('link', { name: /mouse \(DTXSID1020431_mouse\)/ })).toBeInTheDocument()
     expect(screen.queryByTestId('phase')).not.toBeInTheDocument()
     expect(document.body).not.toHaveTextContent(/Bring in the study's files|No files yet/)

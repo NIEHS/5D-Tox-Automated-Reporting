@@ -68,6 +68,8 @@ def _reply(result: dict, fields: tuple[str, ...]) -> JSONResponse:
 def api_v2_section_accept(dtxsid: Dtxsid, key: str):
     """Accept (approve) the section as it is. Its text is never changed."""
     from safeguards.guarded import accept_section_step
+    from ui_api.demo import require_not_reference
+    require_not_reference(dtxsid)  # the finished side of a demo pair is left as it is
     result = accept_section_step(dtxsid, key, _store(dtxsid, key, "approve"))
     return _reply(result, ("section_key", "approved", "version", "version_status"))
 
@@ -77,6 +79,8 @@ def api_v2_section_release(dtxsid: Dtxsid, key: str, body: ReleaseBody | None = 
     """Reopen an approved section, with a reason (kept in its history). It
     stays protected: Process still never replaces it."""
     from safeguards.guarded import release_section_step
+    from ui_api.demo import require_not_reference
+    require_not_reference(dtxsid)  # the finished side of a demo pair is left as it is
     reason = (body.reason if body else None) or ""
     result = release_section_step(dtxsid, key, _store(dtxsid, key, "reopen"), reason=reason)
     return _reply(result, ("section_key", "approved", "version", "version_status"))
@@ -87,6 +91,8 @@ def api_v2_section_restore(dtxsid: Dtxsid, key: str, body: RestoreBody | None = 
     """Bring a past version back as the current one: a new version, not
     approved, kept from the machine (accepting it is a separate act)."""
     from safeguards.guarded import restore_section_step
+    from ui_api.demo import require_not_reference
+    require_not_reference(dtxsid)  # the finished side of a demo pair is left as it is
     body = body or RestoreBody()
     result = restore_section_step(dtxsid, key, body.version, _store(dtxsid, key, "restore"),
                                   reason=body.reason or "")

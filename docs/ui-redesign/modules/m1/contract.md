@@ -344,7 +344,7 @@ moved to core (Q-M1-4 decides rmtree vs a bin).
 | UPLOADED | UPLOADED | "Files brought in, not yet validated" | "Validate the files", `M2` |
 | VALIDATION_ERRORS | VALIDATION_ERRORS | "The files have problems to fix" | "Fix the problems the validation found", `M2` |
 | VALIDATED | VALIDATED | "Files validated, not yet integrated" | "Integrate the data", `M3` |
-| INTEGRATED or APPROVED, not processed | as derived | "Data integrated" / "Data reviewed" | "Process the data", `P1` (the data review informs and gates nothing, Q3) |
+| INTEGRATED or APPROVED, not processed | as derived | "Data integrated" / "Animals accounted for" | "Process the data", `P1` (the data review informs and gates nothing, Q3) |
 | processed, publish readiness not served or not ready | as derived | as above | "Review the report's sections", `D1` |
 | processed, `readiness.publish.ready` (C6 served) | as derived | as above | "Publish the report", `D3` |
 
@@ -388,7 +388,7 @@ is constructed, it says so.
           "chemical_dtxsid": "DTXSID50469320", "chemical_dtxsid_from": "id",
           "identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "short_name": null,
                        "source": {"kind": "unknown", "service": null, "confirmed_at": null}},
-          "stands": {"phase": "APPROVED", "say": "Data reviewed",
+          "stands": {"phase": "APPROVED", "say": "Animals accounted for",
                      "next": {"say": "Review the report's sections", "fix": "D1"}},
           "processed": true,
           "last_changed": "2026-10-13T14:47:39Z",
@@ -430,7 +430,7 @@ is constructed, it says so.
           "chemical_dtxsid": "DTXSID50469320", "chemical_dtxsid_from": "id_prefix",
           "identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "short_name": null,
                        "source": {"kind": "unknown", "service": null, "confirmed_at": null}},
-          "stands": {"phase": "APPROVED", "say": "Data reviewed",
+          "stands": {"phase": "APPROVED", "say": "Animals accounted for",
                      "next": {"say": "Review the report's sections", "fix": "D1"}},
           "processed": true,
           "last_changed": "2026-10-13T13:46:23Z",
@@ -478,7 +478,7 @@ is constructed, it says so.
           "chemical_dtxsid": "DTXSID1020431", "chemical_dtxsid_from": "id_prefix",
           "identity": {"name": "1,4-Dichlorobenzene", "casrn": "106-46-7", "short_name": null,
                        "source": {"kind": "unknown", "service": null, "confirmed_at": null}},
-          "stands": {"phase": "APPROVED", "say": "Data reviewed",
+          "stands": {"phase": "APPROVED", "say": "Animals accounted for",
                      "next": {"say": "Review the report's sections", "fix": "D1"}},
           "processed": true,
           "last_changed": "2026-10-12T11:42:28Z",
@@ -506,7 +506,7 @@ is constructed, it says so.
           "chemical_dtxsid": "DTXSID5032498", "chemical_dtxsid_from": "id",
           "identity": {"name": "Triclosan", "casrn": "3380-34-5", "short_name": null,
                        "source": {"kind": "unknown", "service": null, "confirmed_at": null}},
-          "stands": {"phase": "APPROVED", "say": "Data reviewed",
+          "stands": {"phase": "APPROVED", "say": "Animals accounted for",
                      "next": {"say": "Review the report's sections", "fix": "D1"}},
           "processed": true,
           "last_changed": "2026-10-09T12:43:23Z",
@@ -531,7 +531,7 @@ is constructed, it says so.
           "chemical_dtxsid": "DTXSID1021952", "chemical_dtxsid_from": "id",
           "identity": {"name": "Triphenyl Phosphate", "casrn": "115-86-6", "short_name": null,
                        "source": {"kind": "unknown", "service": null, "confirmed_at": null}},
-          "stands": {"phase": "APPROVED", "say": "Data reviewed",
+          "stands": {"phase": "APPROVED", "say": "Animals accounted for",
                      "next": {"say": "Review the report's sections", "fix": "D1"}},
           "processed": true,
           "last_changed": "2026-10-12T11:22:31Z",

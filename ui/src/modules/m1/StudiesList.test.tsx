@@ -41,7 +41,7 @@ describe('S1 the studies list', () => {
     expect(queryRow('DTXSID1020431_rat')).toBeNull()
     await expand('chem:DTXSID1020431', user)
     expect(row('DTXSID1020431_rat')).toHaveTextContent('Rat study, part of a report')
-    expect(row('DTXSID1020431_rat')).toHaveTextContent('Data reviewed')
+    expect(row('DTXSID1020431_rat')).toHaveTextContent('Animals accounted for')
     expect(row('DTXSID1020431_rat')).toHaveTextContent("Next: Review the report's sections")
     expect(row('DTXSID1020431_mouse')).toHaveTextContent('Mouse study, part of a report')
     const comp = row('DTXSID1020431_published')

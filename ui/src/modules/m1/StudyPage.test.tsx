@@ -26,7 +26,7 @@ describe('S3 the study page', () => {
     expect(chem).toHaveTextContent('41997-13-1')
     expect(chem).toHaveTextContent('DTXSID50469320')
     const stands = screen.getByTestId('where-it-stands')
-    expect(stands).toHaveTextContent('Data reviewed')
+    expect(stands).toHaveTextContent('Animals accounted for')
     expect(within(stands).getByRole('link', { name: /Review the report's sections/ })).toHaveAttribute('href', '/studies/DTXSID50469320/review')
     const fmt = screen.getByTestId('format-card')
     expect(fmt).toHaveTextContent('NIEHS Report, as published in March 2023')
@@ -85,7 +85,7 @@ describe('S3 the study page', () => {
     const members = screen.getByTestId('members')
     for (const id of ['DTXSID1020431_rat', 'DTXSID1020431_mouse']) {
       const r = within(members).getByText(id).closest('tr') as HTMLElement
-      expect(r).toHaveTextContent('Data reviewed')
+      expect(r).toHaveTextContent('Animals accounted for')
       expect(within(r).getByRole('link', { name: `Open ${id}` })).toHaveAttribute('href', `/studies/${id}`)
     }
     expect(screen.queryByText('No files yet')).not.toBeInTheDocument()

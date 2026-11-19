@@ -136,7 +136,7 @@ def test_the_read_model_uses_the_same_derivation(store):
     ("VALIDATION_ERRORS", "The files have problems to fix", "M2"),
     ("VALIDATED", "Files validated, not yet integrated", "M3"),
     ("INTEGRATED", "Data integrated", "P1"),
-    ("APPROVED", "Data reviewed", "P1"),
+    ("APPROVED", "Animals accounted for", "P1"),
 ])
 def test_stands_by_phase(phase, say, fix):
     out = stands("study", phase, False)

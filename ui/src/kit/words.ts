@@ -20,7 +20,7 @@ export const PHASE_WORDS: Record<Phase, PhaseWords> = {
   VALIDATION_ERRORS: { label: 'The files have problems', explain: 'Checking the files found problems that must be fixed before the data can be combined.' },
   VALIDATED: { label: 'Files checked', explain: 'The files have been checked; the data are not yet combined.' },
   INTEGRATED: { label: 'Data combined', explain: "The files' data have been combined into one dataset." },
-  APPROVED: { label: 'Data reviewed', explain: 'The combined data have been reviewed and every animal accounted for.' },
+  APPROVED: { label: 'Animals accounted for', explain: 'The files are combined into one dataset, and every animal has been accounted for across them.' },
 }
 
 export function phaseWords(phase: string): PhaseWords & { known: boolean } {

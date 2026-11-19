@@ -503,7 +503,7 @@
     },
     "stands": {
       "phase": "APPROVED",
-      "say": "Data reviewed",
+      "say": "Animals accounted for",
       "next": {
         "say": "Process the data",
         "fix": "P1"

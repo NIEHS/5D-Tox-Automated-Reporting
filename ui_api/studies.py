@@ -326,7 +326,10 @@ _PHASE_SAY = {
     "VALIDATION_ERRORS": "The files have problems to fix",
     "VALIDATED": "Files validated, not yet integrated",
     "INTEGRATED": "Data integrated",
-    "APPROVED": "Data reviewed",
+    # The accounting of the animals is the act the core calls the data approval;
+    # no person reviews anything in it, so the words do not say "reviewed"
+    # (the maintainer, 2026-11-19).
+    "APPROVED": "Animals accounted for",
 }
 _PHASE_NEXT = {
     "EMPTY": ("Bring in the study's files", "M2"),
