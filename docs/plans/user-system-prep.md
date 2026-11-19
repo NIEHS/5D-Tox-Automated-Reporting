@@ -210,3 +210,22 @@ report.
 5. The pages: what each existing page shows differently, and the one new view
    (what is waiting for whom).
 6. The ADR, then the build order.
+
+## 8. Answered by the maintainer, 2026-11-19
+
+Of the questions of §5, in the maintainer's words:
+
+- **A1 (how a person is known):** "for now, choose from a list; enter a provided
+  OTP; maybe NIEHS login integration later."
+- **B4 (the unit of responsibility):** "any subset or entire report. maybe some
+  set of granular roles. signoff and editing are separate subsets, based on
+  admin-configured configuration."
+- **C8 (which approvals):** "to be decided. let's go with what we have for now"
+- **E14 (what is editable):** "text is editable. perhaps methods. perhaps
+  document structure; depending on role. data is editable only by file
+  replacement."
+- **H23 (the demonstration):** "planned now. when we implement, make it hidden
+  so only I can reveal if i choose."
+
+E14 changes row 6 of §2: text edited in the application reverses ADR-0018 and
+Gate 0 Q1. The plan that follows from these answers is `user-system-plan.md`.
