@@ -23,9 +23,11 @@ import {
  * reopen) are the BACKEND's; no screen repeats them.
  *
  * Mock-only:
- *   - an approval or a reopening is played on the saved rows the way the
- *     backend's next read showed it (approved, and "already accepted"; or
- *     open again), so the page's re-read sees the act;
+ *   - an approval or a reopening is played on the saved rows with the fields
+ *     the backend's next read showed on the scratch store (approved: blessed,
+ *     final, kept from the machine, "already accepted"; reopened: working,
+ *     still kept from the machine, can be approved), so the page's re-read
+ *     sees the act;
  *   - every section's history is the one saved history, under the asked key;
  *   - the report's page is a small stand-in, and a download is a few bytes.
  */
@@ -77,6 +79,8 @@ export function createDemoReviewHandlers() {
       for (const row of rows) {
         row.approved = true
         row.version_status = ACCEPT_OK.version_status
+        row.facts = ['approved', 'final', 'protected']
+        row.maturity = 'final'
         row.machine_may_write = false
         row.accept = { allowed: false, code: ACCEPT_AGAIN.noop?.code ?? 'already_accepted', say: ACCEPT_AGAIN.noop?.say ?? null }
       }
@@ -99,6 +103,9 @@ export function createDemoReviewHandlers() {
       for (const row of rows) {
         row.approved = false
         row.version_status = RELEASE_OK.version_status
+        row.facts = ['protected']
+        row.maturity = null
+        row.machine_may_write = false
         row.accept = { allowed: true, code: null, say: null }
       }
       return HttpResponse.json({ ...RELEASE_OK, section_key: key, version: rows[0]?.version ?? null })

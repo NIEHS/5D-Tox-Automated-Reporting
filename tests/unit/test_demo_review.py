@@ -188,6 +188,9 @@ def test_a_study_on_its_own_is_one_group_and_its_sections_are_not_scoped(store):
     assert {"foreword", "background", "methods", "bm2_body-weight", "summary"} <= set(rows)
     assert rows["bm2_body-weight"]["anchor"] == "T-table-body-weight"
     assert rows["methods"]["anchor"] == "bp-methods"
+    # The heading that takes in a single study's untitled section names it.
+    assert rows["animal_condition"]["anchor"] == "sec-animal-condition"
+    assert rows["animal_condition"]["title"] == "Animal Condition, Body Weights, and Organ Weights"
     assert not any("--rat" in (r["anchor"] or "") for r in rows.values())
     assert answer["kind"] == "study" and answer["asked"] is None
 

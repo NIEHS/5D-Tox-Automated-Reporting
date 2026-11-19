@@ -45,7 +45,10 @@ export function Book({ book, ref }: { book: ReviewBook; ref?: React.Ref<BookHand
       return true
     },
     enabled: Boolean(url),
+    // Kept only while the page is open: coming back to the page asks again,
+    // so a report that changed meanwhile shows the wait, not an empty frame.
     staleTime: Infinity,
+    gcTime: 0,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,

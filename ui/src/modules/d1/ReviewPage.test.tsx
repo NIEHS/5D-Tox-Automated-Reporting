@@ -111,7 +111,8 @@ describe('the rail', () => {
     await bookFrame()
     const row = sectionRow(LIVE_RAT, 'bm2_body-weight')
     await user.click(approveButton(row))
-    await waitFor(() => expect(markOf(sectionRow(LIVE_RAT, 'bm2_body-weight'))).toBe('approved'))
+    // The kit's mark for a section a person approved (the backend's facts: approved, final).
+    await waitFor(() => expect(markOf(sectionRow(LIVE_RAT, 'bm2_body-weight'))).toBe('final'))
     expect(asked).toEqual([reviewPaths.accept(LIVE_RAT, 'bm2_body-weight')])
     // Approved: Reopen is offered, Approve no longer; the other study's section of the same key is its own.
     expect(within(sectionRow(LIVE_RAT, 'bm2_body-weight')).getByRole('button', { name: 'Reopen Body Weight' })).toBeEnabled()
@@ -141,13 +142,15 @@ describe('the rail', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Reopen the section' }))
     expect(within(dialog).getByRole('alert')).toHaveTextContent(REOPEN_REASON_MISSING)
     expect(sent).toEqual([])
-    expect(markOf(sectionRow(LIVE_RAT, 'bm2_organ-weight'))).toBe('approved')
+    expect(markOf(sectionRow(LIVE_RAT, 'bm2_organ-weight'))).toBe('final')
 
     await user.type(within(dialog).getByLabelText('Reason for reopening'), 'A footnote is to be checked.')
     await user.click(within(dialog).getByRole('button', { name: 'Reopen the section' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(sent).toEqual([{ reason: 'A footnote is to be checked.' }])
     await waitFor(() => expect(approveButton(sectionRow(LIVE_RAT, 'bm2_organ-weight'))).toBeEnabled())
+    // Reopened: not approved, and still kept from the machine.
+    expect(markOf(sectionRow(LIVE_RAT, 'bm2_organ-weight'))).toBe('owned')
     expect(within(sectionRow(LIVE_RAT, 'bm2_organ-weight')).queryByRole('button', { name: /^Reopen / })).toBeNull()
   })
 

@@ -243,6 +243,11 @@ def _row(row: dict, owner: str, study: str | None, section: dict | None,
         # A section printed without a heading of its own (a study's part of
         # "Clinical Pathology"): the heading it is printed under.
         title = book.heading_over(untitled[key])
+    if not title and node is not None and getattr(node, "scope_species", None) is None:
+        # A single study: the heading took the section in (study_tree), and
+        # its title, when written out, is the section's.
+        own = (node.title or "").strip()
+        title = own if own and "${" not in own else None
     out = {**row, "owner": owner, "title": title or _key_in_words(key),
            "writer_say": _WRITER_SAY.get(row.get("kind"), _WRITER_SAY_DEFAULT),
            "anchor": book.anchor(node) if (book is not None and node is not None) else None}
