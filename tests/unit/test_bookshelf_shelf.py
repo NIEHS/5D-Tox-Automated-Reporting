@@ -125,3 +125,41 @@ def test_a_refused_report_says_why(sessions_dir, monkeypatch):
     monkeypatch.setattr(bookshelf_routes, "render_preview",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     assert client.get("/Bookshelf/DTXSID7037717").status_code == 500
+
+
+def test_the_shelf_can_be_reduced_to_one_partition_and_the_browser_remembers(sessions_dir):
+    """During a demonstration the shelf shows the "Demo" pair and no other
+    report (the unpublished ones among them); the choice is the browser's."""
+    from web_routes.background_server import app
+    from web_routes.bookshelf_routes import ONLY_COOKIE
+
+    _session(sessions_dir, "DTXSID7037717", integrated=True, processed=True, name="Bisphenol AF")
+    _session(sessions_dir, "DTXSID6020430", integrated=True, processed=True, name="1,2-DCB")
+    _session(sessions_dir, "DTXSID6020430_live", integrated=True, processed=True, name="1,2-DCB live")
+    (sessions_dir / "_partitions.json").write_text(json.dumps(
+        {"Demo": ["DTXSID6020430", "DTXSID6020430_live"]}))
+    client = TestClient(app)
+
+    whole = client.get("/Bookshelf").text
+    assert "Bisphenol AF" in whole and 'href="/Bookshelf?only=Demo"' in whole
+
+    only = client.get("/Bookshelf", params={"only": "Demo"})
+    assert "Bisphenol AF" not in only.text
+    assert "DTXSID6020430_live" in only.text and 'class="id">DTXSID6020430</div>' in only.text
+    assert "Show every report" in only.text
+    assert only.cookies.get(ONLY_COOKIE) == "Demo"
+
+    # The browser remembers: the next opening is still the Demo shelf.
+    assert "Bisphenol AF" not in client.get("/Bookshelf").text
+    # "Show every report" clears it.
+    assert "Bisphenol AF" in client.get("/Bookshelf", params={"only": ""}).text
+    assert "Bisphenol AF" in client.get("/Bookshelf").text
+
+
+def test_a_partition_nobody_declared_leaves_the_shelf_whole(sessions_dir):
+    from web_routes.background_server import app
+
+    _session(sessions_dir, "DTXSID7037717", integrated=True, processed=True, name="Bisphenol AF")
+    client = TestClient(app)
+    page = client.get("/Bookshelf", params={"only": "Demo"})
+    assert "Bisphenol AF" in page.text and "Show only" not in page.text

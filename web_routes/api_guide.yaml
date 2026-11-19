@@ -662,7 +662,8 @@ groups:
         title: The shelf of reports
         does: >
           A page, not data: every report the server holds, each linked to its
-          Bookshelf page.
+          Bookshelf page. It can be reduced to the reports of one named group
+          (the "Demo" pair), a choice the browser remembers.
       - op: GET /Bookshelf/{dtxsid}
         title: One report as a Bookshelf page
         does: >
