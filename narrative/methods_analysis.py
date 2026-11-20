@@ -187,6 +187,74 @@ def _substitution_sentences(ctx: MethodsContext, gate: str) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# The values left out of the apical analysis (ADR-0037)
+# ---------------------------------------------------------------------------
+# One paragraph, the last of the statistics subsection, built from the marks
+# the study's sidecars carry (MethodsContext.excluded_values: {reason: count}).
+# Its opening and closing are fixed, which is how a later build recognizes and
+# replaces it (methods_design.refresh_data_built, rendering.report_compose).
+
+EXCLUDED_SUBSECTION = "stat_analysis"
+EXCLUDED_OPENING = "Prior to analysis, "
+EXCLUDED_CLOSING = "noted in the table it belongs to."
+
+
+def _excluded_clause(reason: str, n: int) -> str:
+    from narrative.unified_narrative import _count_word
+
+    values = f"{_count_word(n)} value{'' if n == 1 else 's'}"
+    was = "was" if n == 1 else "were"
+    if reason == "measurement problem":
+        problem = "a measurement problem" if n == 1 else "measurement problems"
+        return (f"{values} that the laboratory indicated as inadequate because of "
+                f"{problem} {was} excluded")
+    if reason == "unrelated illness":
+        animals = "an animal" if n == 1 else "animals"
+        return (f"{values} from {animals} suspected of illness from causes other than "
+                f"experimental exposure {was} excluded")
+    return f"{values} {was} excluded as {'an outlier' if n == 1 else 'outliers'}"
+
+
+def excluded_values_paragraph(groups: list[tuple[str | None, dict | None]]) -> str | None:
+    """The paragraph that states the values left out of the apical analysis.
+
+    ``groups``: ``[(whose, {reason: count})]``: one entry with ``whose`` None
+    for a study; for a report over several studies one per study, named by
+    its animals ("Rats", "Mice").  None when nothing was left out.
+
+    "Prior to analysis, one value was excluded as an outlier. It is noted in
+    the table it belongs to."
+    """
+    from bmdx_pipe.excluded_values import REASONS
+    from narrative.narrative_helpers import _join_oxford
+
+    stated, total = [], 0
+    for whose, counts in groups:
+        clauses = [_excluded_clause(r, counts[r]) for r in REASONS if (counts or {}).get(r)]
+        if not clauses:
+            continue
+        total += sum(counts[r] for r in REASONS if counts.get(r))
+        stated.append(_join_oxford(clauses) + (f" for the {whose.lower()}" if whose else ""))
+    if not stated:
+        return None
+    body = "; ".join(stated) if any(", " in s for s in stated) else _join_oxford(stated)
+    return (f"{EXCLUDED_OPENING}{body}. {'It is' if total == 1 else 'Each is'} "
+            f"{EXCLUDED_CLOSING}")
+
+
+def is_excluded_values_paragraph(paragraph) -> bool:
+    return (isinstance(paragraph, str) and paragraph.startswith(EXCLUDED_OPENING)
+            and paragraph.endswith(EXCLUDED_CLOSING))
+
+
+def with_excluded_values(paragraphs: list[str], stated: str | None) -> list[str]:
+    """A statistics subsection's paragraphs with the excluded-values
+    paragraph as it is now: any earlier one removed, ``stated`` last."""
+    kept = [p for p in paragraphs if not is_excluded_values_paragraph(p)]
+    return kept + ([stated] if stated else [])
+
+
 def build_bmd_apical(ctx: MethodsContext, introduce: bool = True) -> list[str]:
     """The apical BMD paragraph(s), from the record of the computation."""
     from narrative.methods_prompt import _method

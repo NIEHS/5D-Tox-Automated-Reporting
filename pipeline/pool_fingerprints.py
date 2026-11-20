@@ -152,8 +152,10 @@ def fingerprint_and_store(
             except (OSError, ValueError):
                 logger.warning("Unreadable units file %s — units not recorded", units_path.name)
 
+        from bmdx_pipe import pool_excluded_values
         wide_files = tox_study_csv_to_pivot_txt(
             path, str(files_dir), platform, data_type, units=units,
+            excluded=pool_excluded_values(files_dir),
         )
 
         if wide_files:
@@ -271,7 +273,12 @@ def _derive_from_workbook(fp: FileFingerprint, path: str, dtxsid: str, ts_added:
     for fid in [fid for fid, f in pool.items() if f.filename in moved]:
         del pool[fid]
 
-    for out in study_workbook_to_pool_files(path, str(files_dir), fp.platform):
+    # With the values the package says were left out (ADR-0037): the files
+    # are derived from the workbook and the pool's excluded-values files, at
+    # every scan (the file check always scans), whichever arrived first.
+    from bmdx_pipe import pool_excluded_values
+    for out in study_workbook_to_pool_files(path, str(files_dir), fp.platform,
+                                            excluded=pool_excluded_values(files_dir)):
         name = os.path.basename(out)
         ext = Path(name).suffix.lstrip(".")
         pool[f"scan-{name}"] = fingerprint_file(f"scan-{name}", name, out, ext, ts_added, None)

@@ -1374,6 +1374,20 @@ _SUMMARY_LABEL_OVERRIDES = {
 _LATERALITY = {"left": "Left", "l": "Left", "right": "Right", "r": "Right"}
 
 
+def _study_day(label: str) -> int | None:
+    """The study day a body weight row is for ("SD4" -> 4); None for any
+    other row."""
+    import re
+    m = re.fullmatch(r"SD\s*(-?\d+)", (label or "").strip())
+    return int(m.group(1)) if m else None
+
+
+def _last_study_day(rows) -> int | None:
+    """The last study day among a sex's body weight rows."""
+    days = [d for r in rows if (d := _study_day(getattr(r, "label", None))) is not None]
+    return max(days) if days else None
+
+
 def _summary_endpoint_label(label: str, platform: str) -> str:
     """Normalize a raw endpoint label to the reference Table 8 phrasing.
 
@@ -1383,10 +1397,13 @@ def _summary_endpoint_label(label: str, platform: str) -> str:
     Weight").  Laterality is kept: left and right kidneys are separate
     endpoints with their own statistics and BMDs.  Other platforms get a small
     fixed set of title-case / full-name overrides.  Anything unmatched is
-    returned unchanged."""
+    returned unchanged.  A body weight by study day is named as NIEHS-12
+    names it: "Body Weight on Study Day 4"."""
     import re
     raw = (label or "").strip()
     key = raw.lower()
+    if platform == "Body Weight" and _study_day(raw) is not None:
+        return f"Body Weight on Study Day {_study_day(raw)}"
     if platform == "Organ Weight" and not ("body" in key and ("weight" in key or "wt" in key)):
         kind = "Absolute"
         name = raw
@@ -1667,15 +1684,22 @@ def _build_apical_bmd_summary(
                 reportable_status = row.bmd_status not in (None, "failure")
                 if not row.responsive and not reportable_status:
                     continue
-                # The per-study-day body-weight rows are never apical BMD
-                # candidates; the derived Body Weight Gain is (NIEHS-10 male,
-                # NIEHS-13 mouse).  Terminal Body Weight is when the method tests
-                # it (apical.terminal_body_weight_tested: NIEHS-02 and 12 list
+                # Terminal Body Weight is listed when the method tests it
+                # (apical.terminal_body_weight_tested: NIEHS-02 and 12 list
                 # it), not when it does not (NIEHS-07 … 10 leave it out).
                 if row.label == "Terminal Body Weight" and not tbw_tested:
                     continue
+                # Body weights by study day are endpoints like any other
+                # (NIEHS-12: "Body Weight on Study Day 4" for the rats, days
+                # 2, 3 and 4 for the mice), as is the derived Body Weight Gain
+                # (NIEHS-10 male, NIEHS-13 mouse).  The last study day is not
+                # listed by its day: it is the terminal body weight, which the
+                # rule above lists or leaves out (NIEHS-02 … 06 and RR-8 list
+                # their day 4 as "Terminal Body Weight").
                 if platform == "Body Weight" and row.label != "Body Weight Gain":
-                    continue
+                    day = _study_day(row.label)
+                    if day is None or day == _last_study_day(rows):
+                        continue
                 raw_entries.append({
                     "endpoint": _summary_endpoint_label(row.label, platform),
                     "sex": sex,

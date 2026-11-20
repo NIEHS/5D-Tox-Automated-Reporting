@@ -81,6 +81,7 @@
       "dosing_schedule": "once daily",
       "dtxsid": "DTXSID_TEST",
       "duration_days": 5,
+      "excluded_values": null,
       "fold_change_filter": null,
       "ge_organs": [],
       "genomics_assay": null,

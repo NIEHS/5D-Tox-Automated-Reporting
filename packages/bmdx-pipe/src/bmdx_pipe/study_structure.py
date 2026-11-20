@@ -219,6 +219,10 @@ def check_against_structure(fingerprints: dict, st: StudyStructure) -> list:
         if _get(fp, "data_type") == "gene_expression":
             issues.extend(_check_samples(fid, fp, st))
             continue
+        if _get(fp, "data_type") == "excluded_values":
+            # Names values, not a platform's data: checked value by value
+            # against what the workbooks hold (the file check's own pass).
+            continue
         name = _get(fp, "filename")
         platform = _get(fp, "platform") or "unknown"
         if not (_get(fp, "animal_ids") or _get(fp, "animal_doses") or _get(fp, "endpoint_names")):

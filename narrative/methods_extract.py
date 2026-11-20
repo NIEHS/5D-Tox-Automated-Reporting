@@ -488,6 +488,7 @@ def extract_methods_context(
             ctx.n_per_group = n_group
         if ctx.n_control is None:
             ctx.n_control = n_ctrl
+        ctx.excluded_values = _excluded_value_counts(session_dir)
 
     # --- Pharmacokinetics (for Abstract-Results) ---
     # Aggregate plasma concentrations + half-lives from tissue conc
@@ -549,6 +550,21 @@ def _apical_bmd_record(ctx: MethodsContext, fingerprints: dict, integrated: dict
         from pipeline.bmds27.engine import default_bmr
         engine_bmr = default_bmr()
     return apical_bmd_method(integrated, method, platform_sexes, engine_bmr)
+
+
+def _excluded_value_counts(session_dir: str) -> dict | None:
+    """{reason: count} of the Core Animals' values the study's package says
+    were left out of the analysis (ADR-0037; the marks of the session's
+    sidecars), or None when none were: the statistics paragraph states them."""
+    from collections import Counter
+    from pathlib import Path
+
+    from bmdx_pipe import session_excluded_marks
+    from common.animal_selection import is_biosampling
+
+    counts = Counter(m["reason"] for m in session_excluded_marks(Path(session_dir) / "files")
+                     if not is_biosampling(m.get("selection")))
+    return dict(counts) or None
 
 
 def _extract_core_group_sizes(session_dir: str) -> tuple[int | None, int | None]:

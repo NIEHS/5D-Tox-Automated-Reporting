@@ -1,0 +1,2 @@
+Animal ID,Endpoint,Observation Day,Reason,Note
+4,Kidney-Right,SD5,as published,"NIEHS-12 Table 3, footnote e, on the relative right kidney weight of the 0 ppm mice: ""n = 9. One value was excluded as an outlier."" The deposited workbook records 0.06 g for this animal; the other nine control values are 0.12 to 0.15 g. Without it the group prints as published (6.49 ± 0.13 mg/g) and the benchmark dose is the published 161.5 (82.3) ppm."

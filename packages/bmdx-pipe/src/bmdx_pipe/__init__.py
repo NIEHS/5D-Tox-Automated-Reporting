@@ -30,6 +30,14 @@ from .file_integrator import (
 from .study_workbook import StudyWorkbook, read_study_workbook, title_facts
 from .study_structure import StudyStructure, build_study_structure, check_against_structure
 from .sample_sheet import read_sample_sheet, resolve_sample
+from .excluded_values import (
+    ExcludedValue,
+    excluded_marks,
+    is_excluded_values_file,
+    pool_excluded_values,
+    read_excluded_values,
+    session_excluded_marks,
+)
 
 # ── Pool integration (merge files → unified BMDProject JSON) ─────────────
 from .pool_integrator import (
