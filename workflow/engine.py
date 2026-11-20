@@ -249,6 +249,11 @@ class WorkflowEngine:
         (studies.json: NIEHS-12/13's rat and mouse) waits for each member
         study's flags too, as ``bmd_review:<member session>:<key>`` with the
         member's ``session``, where the decision is recorded.
+
+        And the report's citations block, as ``citations``, until a citation
+        check made on the report as it stands has passed:
+        ``citations_not_checked``, ``citations_out_of_date`` (the report
+        changed after the check) or ``citations_failed``.
         """
         from workflow.reprocess import blocking_llm_sections
 
@@ -274,4 +279,12 @@ class WorkflowEngine:
                 if prefix:
                     entry["session"] = session
                 blocking.append(entry)
+        # The citations are checked on the report as it stands, and the check
+        # found no error (rendering.citations_validate, ADR-0038).
+        from rendering.citations_validate import PASSED, RECORD_FILE, status
+
+        check = status(self.dtxsid, self.store.read_json(self.dtxsid, RECORD_FILE))
+        if check["state"] != PASSED:
+            blocking.append({"section_key": "citations",
+                             "reason": f"citations_{check['state']}"})
         return {"can_publish": not blocking, "blocking": blocking}

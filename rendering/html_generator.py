@@ -1750,6 +1750,9 @@ def generate_html(
     # [[xref:<component>::<organ>-<sex>-table]] tokens resolve to the data-driven
     # tables' positional numbers.  Cleared in the finally so it never leaks into
     # a later render pass.  The twin latex_generator does the identical setup.
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data, tree)
     set_genomics_table_index(build_genomics_table_index(data.get("genomics_sections")))
     try:
         return _generate_html_body(data, section_filter, tree)

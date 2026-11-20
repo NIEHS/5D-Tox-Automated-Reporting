@@ -1,0 +1,115 @@
+# The definitions' source library: the boilerplate sources.
+#
+# What a report of this kind cites whatever the study: the statistical
+# procedures, the software.  It belongs to the document definitions (every
+# definition and era template may cite an entry) and is kept once, here.
+# ADR-0038; read by narrative.sources.load_library.
+#
+# An entry's key is what text cites it by: [[cite:<key>]].  The numbers and the
+# reference list are derived from what a presented report prints, so an entry
+# is listed only in a report whose text cites it.
+#
+#   kind       paper | book | report | dataset | software | website | other
+#   authors, title, container (journal or publisher), year, volume, issue,
+#   pages, doi, url, accessed
+#   cited_at   where the Materials and Methods cite it by rule: at the first
+#              mention of the words `after` in the subsection `methods`
+#              (narrative.methods_models.SUBSECTION_SKELETON keys).  `after`
+#              may list alternatives; the first that occurs is used.  A
+#              subsection that does not use the words does not cite the entry.
+#
+# The entries are the published NIEHS reports' own (NIEHS Report 12,
+# references 18 to 26), field by field.
+
+sources:
+  williams1971:
+    kind: paper
+    authors: [Williams DA]
+    title: A test for differences between treatment means when several dose levels are compared with a zero dose control
+    container: Biometrics
+    year: 1971
+    volume: 27
+    issue: 1
+    pages: 103–117
+    doi: 10.2307/2528930
+    cited_at:
+      - {methods: stat_analysis, after: Williams}
+      - {methods: bmd_genomics, after: Williams}
+
+  williams1972:
+    kind: paper
+    authors: [Williams DA]
+    title: The comparison of several dose levels with a zero dose control
+    container: Biometrics
+    year: 1972
+    volume: 28
+    issue: 2
+    pages: 519–531
+    doi: 10.2307/2556164
+    cited_at:
+      - {methods: stat_analysis, after: Williams}
+      - {methods: bmd_genomics, after: Williams}
+
+  dunnett1955:
+    kind: paper
+    authors: [Dunnett CW]
+    title: A multiple comparison procedure for comparing several treatments with a control
+    container: J Am Stat Assoc
+    year: 1955
+    volume: 50
+    issue: 272
+    pages: 1096–1121
+    doi: 10.1080/01621459.1955.10501294
+    cited_at:
+      - {methods: stat_analysis, after: Dunnett}
+
+  shirley1977:
+    kind: paper
+    authors: [Shirley E]
+    title: A non-parametric equivalent of Williams’ test for contrasting increasing dose levels of a treatment
+    container: Biometrics
+    year: 1977
+    volume: 33
+    issue: 2
+    pages: 386–389
+    doi: 10.2307/2529789
+    cited_at:
+      - {methods: stat_analysis, after: Shirley}
+
+  dunn1964:
+    kind: paper
+    authors: [Dunn OJ]
+    title: Multiple comparisons using rank sums
+    container: Technometrics
+    year: 1964
+    volume: 6
+    issue: 3
+    pages: 241–252
+    doi: 10.1080/00401706.1964.10490181
+    cited_at:
+      - {methods: stat_analysis, after: Dunn}
+
+  jonckheere1954:
+    kind: paper
+    authors: [Jonckheere AR]
+    title: A distribution-free k-sample test against ordered alternatives
+    container: Biometrika
+    year: 1954
+    volume: 41
+    issue: 1-2
+    pages: 133–145
+    doi: 10.1093/biomet/41.1-2.133
+    cited_at:
+      - {methods: stat_analysis, after: [Jonckheere test, Jonckheere]}
+
+  yang2007:
+    kind: paper
+    authors: [Yang L, Allen BC, Thomas RS]
+    title: "BMDExpress: A software tool for the benchmark dose analyses of genomic data"
+    container: BMC Genomics
+    year: 2007
+    volume: 8
+    pages: "387"
+    doi: 10.1186/1471-2164-8-387
+    cited_at:
+      - {methods: bmd_genomics, after: BMDExpress}

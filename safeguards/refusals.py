@@ -71,6 +71,8 @@ PLACES = {
     "facts": "the facts a person states about the study (design, experiment details)",
     "publish": "the report's readiness to publish",
     "bmd_review": "the review of apical BMDs far below their NOEL/LOEL (pipeline.bmd_review)",
+    "citations": ("the citation check: the report's citations against its recorded sources "
+                  "(rendering.citations_validate)"),
     "knowledge_base": ("the knowledge bases: the crawl queries, the crawls run from them, "
                        "and which knowledge base each report reads (knowledge_base.registry)"),
 }
@@ -258,6 +260,16 @@ REFUSALS: dict[str, Refusal] = {
         "study's NOEL and LOEL would suggest ({keys}). For each, a reviewer decides "
         "whether it is an unreliable estimate of potency (UREP) or a reliable one, and "
         "says why; then run Process again, and publish."), "bmd_review"),
+    "citations_not_checked": Refusal(409, (
+        "The report can't be published yet: its citations have not been checked. "
+        "Check the citations (the last step before publishing), then publish."), "citations"),
+    "citations_out_of_date": Refusal(409, (
+        "The report can't be published yet: it changed after its citations were "
+        "checked. Check the citations again, then publish."), "citations"),
+    "citations_failed": Refusal(409, (
+        "The report can't be published yet: the check of its citations found errors. "
+        "Each is listed with the check's result. Correct them, check the citations "
+        "again, then publish."), "citations"),
     # ── the review of apical BMDs (safeguards.inputs) ────────────────────────
     "bmd_review_invalid": Refusal(422, (
         "The BMD review was not saved: {errors}. Each decision names an endpoint the "

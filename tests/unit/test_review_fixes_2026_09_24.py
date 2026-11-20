@@ -145,10 +145,17 @@ def test_preview_download_refuses_stale_report(client, sessions_dir):
     assert resp.status_code == 409
     body = resp.json()
     assert "not publishable" in body["error"]
-    assert [b["section_key"] for b in body["blocking"]] == ["summary"]
-    # Re-accept (clears stale) ⇒ the gate opens; the next failure is the honest
+    assert [b["section_key"] for b in body["blocking"]] == ["summary", "citations"]
+    # Re-accept (clears stale), then the citation check on the report as it now
+    # stands (ADR-0038) ⇒ the gate opens; the next failure is the honest
     # "no preview materialized" 404, proving the gate runs before the file check.
     accept_section_step("DTXSID_GATE", "summary", DiskPoolStore())
+    resp = client.get("/api/preview/DTXSID_GATE/download?surface=docx")
+    assert resp.status_code == 409 and resp.json()["code"] == "citations_not_checked"
+    from rendering.citations_validate import RECORD_FILE
+    from rendering.kept_render import content_fingerprint
+    (d / RECORD_FILE).write_text(json.dumps(
+        {"passed": True, "content_fingerprint": content_fingerprint("DTXSID_GATE")}))
     resp = client.get("/api/preview/DTXSID_GATE/download?surface=docx")
     assert resp.status_code == 404
     assert d.exists()

@@ -1210,6 +1210,9 @@ def generate_jats(data: dict) -> str:
     DOCUMENT_TREE.  Returns a UTF-8 XML declaration + JATS 1.3 DOCTYPE +
     pretty-printed article.
     """
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data)
     compute_table_numbers(_render_nodes(data))  # positional numbers → xref labels resolve
     # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
     # with the literal "xlink" prefix the JATS DTD fixes (see generate_bits).

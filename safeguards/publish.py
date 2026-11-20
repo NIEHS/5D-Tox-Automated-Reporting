@@ -1,6 +1,8 @@
 """
 safeguards.publish — the publish gate: the report ships only when every
-section a data change regenerated has been read and accepted again.
+section a data change regenerated has been read and accepted again, every
+flagged apical BMD is reviewed, and its citations, checked on the report as it
+stands, passed (rendering.citations_validate; the last act before publishing).
 
 Readiness is derived state (workflow.engine.WorkflowEngine.publish_readiness,
 from section currency); refusing to ship on it is the safeguard. Every route
@@ -18,6 +20,13 @@ from safeguards.refusals import Refused
 logger = logging.getLogger(__name__)
 
 
+_CITATIONS = {
+    "citations_not_checked": "its citations have not been checked",
+    "citations_out_of_date": "it changed after its citations were checked",
+    "citations_failed": "the check of its citations found errors",
+}
+
+
 def require_publishable(dtxsid: str, store=None, *, draft: bool = False) -> dict:
     """The study's publish readiness; refused (``publish_blocked``) when it is
     closed, unless ``draft`` — the override, logged."""
@@ -33,9 +42,17 @@ def require_publishable(dtxsid: str, store=None, *, draft: bool = False) -> dict
         logger.warning("publish gate closed for %s (%s): rendering anyway, as a draft",
                        dtxsid, keys)
         return readiness
-    sections = [b for b in blocking if not str(b.get("section_key", "")).startswith("bmd_review:")]
+    citations = [b for b in blocking if b.get("section_key") == "citations"]
+    if citations and len(citations) == len(blocking):
+        # Everything else is settled: the citation check is the last act.
+        reason = citations[0].get("reason", "citations_not_checked")
+        raise Refused(reason, f"Report is not publishable: {_CITATIONS[reason]}",
+                      status_code=409, details={"keys": "citations", "blocking": blocking})
+    sections = [b for b in blocking if b not in citations
+                and not str(b.get("section_key", "")).startswith("bmd_review:")]
     if not sections:
-        bmds = ", ".join(b["section_key"].split(":", 1)[1] for b in blocking)
+        bmds = ", ".join(b["section_key"].split(":", 1)[1] for b in blocking
+                         if b not in citations)
         raise Refused(
             "bmd_review_required",
             f"Report is not publishable: apical BMDs await review or a Process ({bmds})",
