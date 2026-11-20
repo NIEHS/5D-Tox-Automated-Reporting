@@ -163,6 +163,26 @@ def test_the_file_checks_own_note_names_the_workbook_when_there_is_no_sidecar(st
     assert obs["converted_from"] == {"filename": "Observations.xlsx", "recorded_in": "file_check"}
 
 
+def test_the_values_the_package_left_out_are_shown_as_the_tables_mark_them(study):
+    # ADR-0037: the converted table's sidecar keeps the value under a mark.
+    from ui_api.dataset import study_dataset
+
+    assert study_dataset(ID)["left_out"] == []
+    _write(study, f"files/{TABLE.removesuffix('.txt')}.sidecar.json", {
+        "source": WORKBOOK, "platform": "Clinical Chemistry", "sex": "Male",
+        "animals": {"202": {"dose": 10.0, "selection": "Core Animals", "observations": [
+            {"day": "SD5", "endpoint": "Albumin", "value": "4.1", "terminal": True},
+            {"day": "SD5", "endpoint": "Bile salts/acids", "value": None, "terminal": True,
+             "excluded": {"value": "0", "reason": "measurement problem", "note": "",
+                          "source": "Excluded_Values.csv"}}]}}})
+    assert study_dataset(ID)["left_out"] == [{
+        "animal_id": "202", "assay": "Clinical Chemistry", "sex": "Male", "dose": 10.0,
+        "endpoint": "Bile salts/acids", "day": "SD5", "value": "0",
+        "reason": "measurement problem",
+        "reason_say": "the laboratory indicated the measurement as inadequate",
+        "note": None, "stated_in": "Excluded_Values.csv"}]
+
+
 def test_reading_changes_nothing(study):
     from ui_api.dataset import result_tables, study_dataset
 

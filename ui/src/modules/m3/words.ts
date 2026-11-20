@@ -13,7 +13,13 @@ const FILE_TYPES: Record<string, string> = {
   bm2: 'BMDExpress project',
 }
 
-export function fileTypeWords(fileType: string | null): string {
+/** A list the package states (not a table converted from a workbook). */
+const LISTS: Record<string, string> = {
+  excluded_values: 'List',
+}
+
+export function fileTypeWords(fileType: string | null, dataType?: string | null): string {
+  if (dataType && LISTS[dataType]) return LISTS[dataType]
   if (!fileType) return 'Not recognized'
   return FILE_TYPES[fileType] ?? fileType
 }
@@ -22,7 +28,12 @@ const DATA_TYPES: Record<string, string> = {
   tox_study: 'Animal data',
   gene_expression: 'Gene expression',
   removal_reasons: 'Removal reasons',
+  excluded_values: 'Values left out of the analysis',
 }
+
+export const LEFT_OUT_TITLE = 'Values left out of the analysis'
+export const LEFT_OUT_SAY =
+  'The study\u2019s package names these values and why. They are not in the statistics or the benchmark dose inputs, and the tables note each.'
 
 export function dataTypeWords(dataType: string | null): string {
   if (!dataType) return 'Not recognized'

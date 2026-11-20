@@ -405,6 +405,21 @@
         }
       }
     ],
+    "left_out": [
+      {
+        "animal_id": "202",
+        "assay": "Clinical Chemistry",
+        "sex": "Female",
+        "dose": 10.0,
+        "endpoint": "Bile salts/acids",
+        "day": "SD5",
+        "value": "0",
+        "reason": "as published",
+        "reason_say": "the published report left it out",
+        "note": "NIEHS-12 Table 4 prints the bile salts/acids of the 10 ppm rats as 9.3 ± 3.0 (4), four of the five animals.",
+        "stated_in": "NIEHS-12_Excluded_Values_Rats.csv"
+      }
+    ],
     "integrated": true,
     "integrated_at": "2026-11-17T14:02:25.413592+00:00",
     "experiments": [

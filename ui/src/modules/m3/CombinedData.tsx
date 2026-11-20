@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Collapse, Descriptions, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { runIntegrate, type AssayChain, type Dataset, type DatasetExperiment, type DatasetFile, type IntegrateSummary } from '../../api/demoData'
+import { runIntegrate, type AssayChain, type Dataset, type DatasetExperiment, type DatasetFile, type IntegrateSummary, type LeftOutValue } from '../../api/demoData'
 import type { ExistingStudyState } from '../../api/types'
 import { formatClock } from '../../kit/elapsed'
 import { moduleById, moduleRoute } from '../../kit/modules'
@@ -12,7 +12,7 @@ import { ApiPageLink, FinishedNotice, StudyChoice } from './common'
 import { isFinishedSide } from './demoPair'
 import { FollowTable } from './FollowTable'
 import { useDataset } from './queries'
-import { capital, dataTypeWords, doseWords, fileKindWords, fileTypeWords, recordedInWords } from './words'
+import { LEFT_OUT_SAY, LEFT_OUT_TITLE, capital, dataTypeWords, doseWords, fileKindWords, fileTypeWords, recordedInWords } from './words'
 
 /**
  * Combined data (the demo path, S1): a study's files become one dataset, and
@@ -46,7 +46,7 @@ function FilesTable({ files }: { files: DatasetFile[] }) {
       dataSource={files}
       columns={[
         { title: 'File', key: 'file', render: (_, f) => <FileName name={f.filename} /> },
-        { title: 'Recognized as', key: 'type', render: (_, f) => fileTypeWords(f.file_type) },
+        { title: 'Recognized as', key: 'type', render: (_, f) => fileTypeWords(f.file_type, f.data_type) },
         { title: 'Assay', key: 'assay', render: (_, f) => f.assay ?? <Typography.Text type="secondary">none</Typography.Text> },
         { title: 'Kind of data', key: 'data', render: (_, f) => dataTypeWords(f.data_type) },
         { title: 'Sexes', key: 'sexes', render: (_, f) => f.sexes.join(', ') },
@@ -54,6 +54,40 @@ function FilesTable({ files }: { files: DatasetFile[] }) {
         { title: 'Dose groups', key: 'doses', render: (_, f) => doseWords(f.dose_groups, f.dose_unit) },
       ]}
     />
+  )
+}
+
+/** The values the package says were left out, as the backend serves them. */
+function LeftOut({ values }: { values: LeftOutValue[] }) {
+  if (values.length === 0) return null
+  return (
+    <Card size="small" title={`${LEFT_OUT_TITLE} (${values.length})`}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+        <Typography.Text type="secondary">{LEFT_OUT_SAY}</Typography.Text>
+        <Table<LeftOutValue>
+          aria-label={LEFT_OUT_TITLE}
+          data-testid="left-out"
+          size="small"
+          rowKey={(v) => `${v.stated_in}|${v.animal_id}|${v.endpoint}|${v.day}`}
+          pagination={false}
+          scroll={{ x: true }}
+          dataSource={values}
+          columns={[
+            { title: 'Animal', key: 'animal', render: (_, v) => v.animal_id },
+            { title: 'Assay', key: 'assay', render: (_, v) => v.assay ?? NOT_RECORDED },
+            { title: 'Endpoint', key: 'endpoint', render: (_, v) => v.endpoint ?? NOT_RECORDED },
+            { title: 'Day', key: 'day', render: (_, v) => v.day ?? NOT_RECORDED },
+            { title: 'Value recorded', key: 'value', align: 'right', render: (_, v) => v.value ?? NOT_RECORDED },
+            { title: 'Why', key: 'why', render: (_, v) => (v.reason_say ? capital(v.reason_say) : (v.reason ?? NOT_RECORDED)) },
+            { title: 'Stated in', key: 'file', render: (_, v) => <FileName name={v.stated_in} /> },
+          ]}
+          expandable={{
+            rowExpandable: (v) => Boolean(v.note),
+            expandedRowRender: (v) => <Typography.Text type="secondary">{v.note}</Typography.Text>,
+          }}
+        />
+      </Space>
+    </Card>
   )
 }
 
@@ -362,6 +396,7 @@ function CombinedDataOf({ id }: { id: string }) {
             <Card size="small" title={`The study's files (${d.files.length})`}>
               <FilesTable files={d.files} />
             </Card>
+            <LeftOut values={d.left_out} />
             <Card size="small" title="From workbook to dataset, by assay" extra={<Typography.Text type="secondary">as the file check recorded it</Typography.Text>}>
               <AssayChains assays={d.assays} combined={false} />
             </Card>
@@ -397,6 +432,7 @@ function CombinedDataOf({ id }: { id: string }) {
             <Card size="small" title="From workbook to dataset, by assay" extra={<Typography.Text type="secondary">as the file check and the dataset recorded it</Typography.Text>}>
               <AssayChains assays={d.assays} combined />
             </Card>
+            <LeftOut values={d.left_out} />
             <Card size="small" title="Follow a table back">
               <FollowTable studyId={id} />
             </Card>

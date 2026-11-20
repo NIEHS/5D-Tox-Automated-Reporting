@@ -273,6 +273,21 @@ def _accounting(session: Path) -> dict | None:
     }
 
 
+def _left_out(session: Path) -> list[dict]:
+    """The values the study's package says were left out of the analysis
+    (ADR-0037), as the converted tables' sidecars mark them: the animal, the
+    endpoint and day, the value as recorded, the reason in words, and the
+    file that names it."""
+    from bmdx_pipe.excluded_values import REASONS, session_excluded_marks
+
+    return [{"animal_id": m["animal_id"], "assay": m.get("platform"), "sex": m.get("sex"),
+             "dose": m.get("dose"), "endpoint": m.get("endpoint"), "day": m.get("day") or None,
+             "value": m.get("value"), "reason": m.get("reason"),
+             "reason_say": REASONS.get(m.get("reason")), "note": m.get("note") or None,
+             "stated_in": m.get("source")}
+            for m in session_excluded_marks(session / "files")]
+
+
 # ---------------------------------------------------------------------------
 # GET …/dataset
 # ---------------------------------------------------------------------------
@@ -289,6 +304,7 @@ def study_dataset(dtxsid: str) -> dict:
         "files_checked": (session / "validation_report.json").is_file(),
         "files": [_file_row(session, name, fp) for name, fp in fps.items()],
         "assays": _assays(session, fps, digest["source_files"] if digest else None),
+        "left_out": _left_out(session),
         "integrated": digest is not None,
         "integrated_at": None,
         "experiments": None,

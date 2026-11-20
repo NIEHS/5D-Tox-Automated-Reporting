@@ -197,6 +197,25 @@ describe('after the files are combined', () => {
     expect(genes).toHaveTextContent('the BMDExpress project')
   })
 
+  it('lists the values the package says were left out of the analysis, with the reason and the file', async () => {
+    await open(DEMO_FINISHED_RAT)
+    const leftOut = within(await screen.findByTestId('left-out'))
+    const row = leftOut.getByText('Bile salts/acids').closest('tr') as HTMLElement
+    expect(row).toHaveTextContent('202')
+    expect(row).toHaveTextContent('Clinical Chemistry')
+    expect(row).toHaveTextContent('SD5')
+    expect(row).toHaveTextContent('The published report left it out')
+    expect(row).toHaveTextContent('NIEHS-12_Excluded_Values_Rats.csv')
+    expect(screen.getByText('Values left out of the analysis (1)')).toBeInTheDocument()
+  })
+
+  it('shows no such list for a study whose package leaves nothing out', async () => {
+    server.use(http.get(`/api/v2/studies/${DEMO_FINISHED_RAT}/dataset`, () => HttpResponse.json({ ...DATASET_FINISHED, left_out: [] })))
+    await open(DEMO_FINISHED_RAT)
+    await screen.findByTestId('assay-chains')
+    expect(screen.queryByTestId('left-out')).not.toBeInTheDocument()
+  })
+
   it("shows the animal accounting's summary", async () => {
     await open(DEMO_FINISHED_RAT)
     const accounting = await screen.findByTestId('accounting')

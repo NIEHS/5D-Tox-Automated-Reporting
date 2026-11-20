@@ -88,11 +88,31 @@ export interface Accounting {
   problems: unknown[]
 }
 
+/** One value the study's package says was left out of the analysis. */
+export interface LeftOutValue {
+  animal_id: string
+  assay: string | null
+  sex: string | null
+  dose: number | null
+  endpoint: string | null
+  day: string | null
+  /** the value as the workbook records it */
+  value: string | null
+  reason: string | null
+  /** the reason in words; null for a reason the backend does not know */
+  reason_say: string | null
+  note: string | null
+  /** the file of the package that names the value */
+  stated_in: string | null
+}
+
 export interface Dataset {
   id: string
   files_checked: boolean
   files: DatasetFile[]
   assays: AssayChain[]
+  /** the values left out of the analysis, as the converted tables mark them */
+  left_out: LeftOutValue[]
   integrated: boolean
   integrated_at: string | null
   experiments: DatasetExperiment[] | null
