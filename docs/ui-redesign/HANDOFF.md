@@ -187,6 +187,7 @@ and writes files in the session directory (§5). The steps:
 | 9 | Process | `process_step` (`pipeline.process_integrated.run_process`), then `materialize_result_sections` | `RunApicalBmds`, `ExportGenomics` | ✓ | `_cache_<unit>_<hash>.json`, `bm2_<slug>.json` result sections, `references.json`, `session.duckdb`, `session_parquet/` | – |
 | 10 | Background, Summary | `generate_report.background` (LLM + PubChem/ATSDR/IRIS; optional); `materialize_summary` | – | ✓ | `background.json`, `summary.json` | – |
 | 11 | Review sections | `accept_section_step` (lock), `release_section_step` (reopen, with a reason) | – | – | the section files; `history/` | – |
+| 11b | Check the citations (the last act before publishing; ADR-0038) | `rendering.citations_validate.validate` | – | DOI system, the sources' addresses | `citations_check.json` | – |
 | 12 | Publish gate | `WorkflowEngine.publish_readiness()` | – | – | – | – |
 | 13 | Render | `rendering.preview_surface.render_preview` (on demand) / `materialize_preview` (persisted); LaTeX through `rendering.latex_export` | – | – | deliverables (§8) | – |
 
@@ -322,6 +323,16 @@ then splits by authorship:
 `publish_readiness()` → `{can_publish, blocking: [{section_key, reason}]}`. The
 command line refuses to render while it is closed, unless given `--draft`.
 
+The gate also waits for the **citation check** (ADR-0038), as the blocking key
+`citations`. A source a report may cite is a record (`narrative/sources.py`);
+text cites the record, never a number; the numbers and the reference list are
+derived from what the presented report prints (`rendering/citations.py`), the
+way table numbers are. The check (`rendering/citations_validate.py`) reads the
+report as presented and records its result with the state of the report it was
+made on. Where it stands is derived, never stored: `citations_not_checked`,
+`citations_out_of_date` (anything written to the report after the check, an
+approval included), `citations_failed`, or passed.
+
 ### 4.5 Pins: the method and the document are fixed per study
 
 A session pins:
@@ -386,7 +397,9 @@ sessions is the directory listing.
 | `animal_report.json` | the data approval: every animal accounted for | 8 |
 | `_cache_*.json`, `.prepare_content.*` | Process results, by unit and input hash | 9 |
 | `bm2_<slug>.json`, `background.json`, `summary.json`, genomics sections | **report sections**: content plus `approved`, `stale`, `regenerated` … | 9–11 |
-| `references.json` | the bibliography | 9 |
+| `references.json` | the papers the interpretations cite, as assembled at Process (no longer what a report prints: its list is derived, ADR-0038) | 9 |
+| `sources.json` | sources a person added to the study | – |
+| `citations_check.json` | the record of the last citation check | 11b |
 | `session.duckdb`, `session_parquet/` | read-only query substrate over the study (ADR-0016; `/api/query`) | 9 |
 | `history/` | past versions of sections and pins | throughout |
 | `studies.json` | (a report over several studies) its member sessions | – |
