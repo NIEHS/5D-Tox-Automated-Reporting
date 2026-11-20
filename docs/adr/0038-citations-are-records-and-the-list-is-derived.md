@@ -188,6 +188,9 @@ check of a study reads those answers and asks nothing about them.
 - `references.json` (written at process time) is no longer read by the
   session render path. It is still written, and the request-body path still
   reads it.
+- The reading order is the HTML surface's. A citation in text that only
+  another surface prints would not be numbered there; it is printed as
+  "Citation pending" (a strict build refuses it) and never as a raw token.
 - Every report needs a passed check before it can be published. Reports
   checked before a change need the check again.
 - The knowledge base `baseline-2026-05` has 4,937 DOIs: 4,936 are registered

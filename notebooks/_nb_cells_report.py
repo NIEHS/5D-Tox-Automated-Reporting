@@ -286,6 +286,16 @@ already accepted.
 - `workflow.steps.release_section_step(dtxsid, key, store, reason=…)` reopens
   one: `approved: false`, FINAL withdrawn (PROTECTED stays), and the reason
   recorded.
+- **The citations** (ADR-0038). A source the report may cite is a record
+  (`narrative.sources`: a paper of the knowledge base, a public source of the
+  Background, a boilerplate source of `templates/sources.yaml`, a source a
+  person added). Text cites the record (`[[cite:<slug>]]`), never a number.
+  Each render derives the numbers and the reference list from what the
+  presented report prints (`rendering.citations.numbered`), so only cited
+  sources are listed, each once. `rendering.citations_validate.validate`
+  is the citation check: it reads the report as presented and records what it
+  found (`citations_check.json`) with the state of the report it was made on.
+  The gate waits for a check that holds and passed.
 - Refusing to ship while a section blocks is the safeguards'
   (`safeguards.publish.require_publishable`): the app's download and Overleaf
   bundle, and the command line, whose `--draft` is the one named override.
@@ -305,6 +315,12 @@ readiness = WorkflowEngine(DTXSID, store).publish_readiness()
 print("\ncan publish:", readiness["can_publish"], readiness["blocking"] or "")
 # accept_section_step(DTXSID, "bm2_body-weight", store)    # approve one section
 # release_section_step(DTXSID, "bm2_body-weight", store)   # and reopen it
+
+# The citation check, without recording it and without asking the DOI system
+# (save=True records it; the gate then reads the record):
+# from rendering.citations_validate import validate
+# found = validate(DTXSID, save=False, network=False)
+# print(found["passed"], found["counts"]); [print(f["severity"], f["message"]) for f in found["findings"]]
 """)
 
 # ---------------------------------------------------------------------------
