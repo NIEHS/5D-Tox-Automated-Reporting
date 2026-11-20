@@ -44,7 +44,7 @@ from ui_api.writing import _json, _kind, runs_of, session_of
 
 logger = logging.getLogger(__name__)
 
-BACKGROUND, SUMMARY = "background", "summary"
+BACKGROUND, SUMMARY, CITATIONS = "background", "summary", "citations"
 
 _LIVE_ONLY_SAY = ("For now, writing is offered here only on the live copy of a "
                   "demonstration pair.")
@@ -67,6 +67,19 @@ def _require_act(dtxsid: str, act: str, kind: dict | None = None) -> None:
     if kind["kind"] == "companion":
         raise StudyRefusal("read_only_session", f"{dtxsid} is a published book's content",
                            409, {"id": dtxsid})
+    if act == CITATIONS and kind["kind"] == "member":
+        parent = kind["relations"]["parent"]
+        raise StudyRefusal("citations_are_the_reports",
+                           f"{dtxsid} is a study of the report {parent}; the report prints "
+                           "the reference list", 409, {"id": dtxsid, "parent": parent})
+    if act == CITATIONS:
+        # The check reads the report as it is presented: there must be one.
+        from ui_api.studies import _bookshelf
+        shelf = _bookshelf(dtxsid, kind["kind"], kind.get("relations") or {})
+        if not shelf["on_shelf"]:
+            raise StudyRefusal("citations_no_report_yet",
+                               f"{dtxsid} has no report to check: {shelf['say']}", 409,
+                               {"id": dtxsid, "why": shelf["say"]})
     if act == BACKGROUND and kind["kind"] == "member":
         parent = kind["relations"]["parent"]
         raise StudyRefusal("background_is_the_reports",
@@ -102,6 +115,25 @@ def act_verdicts(dtxsid: str, kind: dict) -> dict:
             verdict["counterpart"] = pair["counterpart"]
         out[act] = verdict
     return out
+
+
+def citation_check_verdict(dtxsid: str, kind: dict) -> dict:
+    """Whether the page offers "Check the citations" now, and why not
+    (``{allowed, say}``). Offered on a report or a study on its own, live copy
+    or not; never on the finished side of a demo pair, where ``counterpart``
+    names the live copy."""
+    from ui_api.demo import pair_of
+    from ui_api.refusals import explain
+
+    verdict: dict = {"allowed": True, "say": None}
+    try:
+        _require_act(dtxsid, CITATIONS, kind)
+    except Exception as exc:  # noqa: BLE001 — shown as the reason, in plain words
+        verdict = {"allowed": False, "say": explain(exc)["error"]["say"]}
+    pair = pair_of(dtxsid)
+    if pair and pair["role"] == "finished":
+        verdict["counterpart"] = pair["counterpart"]
+    return verdict
 
 
 # ---------------------------------------------------------------------------
@@ -337,3 +369,33 @@ def use_summary_run(dtxsid: str, run_id: str) -> dict:
                           "say": "This run's text is already the Summary in the report. "
                                  "Nothing was changed."}
     return result
+
+
+# ---------------------------------------------------------------------------
+# Check the citations
+# ---------------------------------------------------------------------------
+
+def _check_citations(dtxsid: str, steps: _Steps) -> dict:
+    from document_model.view_config import DEFAULT_VIEW
+    from rendering.citations_validate import validate
+    from rendering.preview_surface import _preview_inputs
+
+    steps.start("report", "Reading the report as it is presented")
+    inputs = _preview_inputs(dtxsid, DEFAULT_VIEW)
+    steps.start("citations", "Checking every citation against the recorded sources, "
+                             "and every source against the DOI system or its address")
+    record = validate(dtxsid, view=DEFAULT_VIEW, inputs=inputs)
+    counts = record["counts"]
+    return {"passed": record["passed"], "checked_at": record["checked_at"],
+            "citations": counts["citations"], "listed": counts["listed"],
+            "errors": counts["errors"], "warnings": counts["warnings"]}
+
+
+def check_citations(dtxsid: str) -> Iterator[dict]:
+    """Check the report's citations as it is presented and record the result
+    (rendering.citations_validate, ADR-0038); the run's events."""
+    session_of(dtxsid)
+    _require_act(dtxsid, CITATIONS)
+    return _run_events(dtxsid, "the check of the citations",
+                       lambda steps: _check_citations(dtxsid, steps))
+

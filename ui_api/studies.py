@@ -686,7 +686,8 @@ def _phase_and_publish(dtxsid: str, kind: str, relations: dict) -> tuple[dict, b
         member_states = [{"exists": (_root() / m["id"]).is_dir(),
                           "processed": _is_processed(_root() / m["id"])}
                          for m in relations.get("members", [])]
-    publish = publish_readiness_state(engine) if processed else None
+    publish = (publish_readiness_state(engine, citations=kind not in ("member", "companion"))
+               if processed else None)
     return (stands(kind, phase, processed, member_states=member_states, publish=publish),
             processed, phase)
 

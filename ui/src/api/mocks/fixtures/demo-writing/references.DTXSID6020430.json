@@ -4,13 +4,58 @@
     "id": "DTXSID6020430",
     "kind": "report",
     "check_says": "The check establishes that a citation points at a source. It does not judge whether the source supports the sentence.",
-    "numbering_say": "Numbered as the report prints them: the Background's sources first, then each study's papers in turn.",
+    "numbering_say": "Numbered as the report prints them: each source at its first citation, in reading order. Only the sources the printed text cites are listed, each once.",
+    "printed": {
+      "state": "passed",
+      "say": "The citations were checked on the report as it stands (2026-11-20 at 19:53): no error. 1 check could not be made or needs a look; it is listed below.",
+      "checked_at": "2026-11-20T19:53:22.685081+00:00",
+      "checked_by": null,
+      "counts": {
+        "citations": 43,
+        "cited_sources": 12,
+        "listed": 12,
+        "recorded_sources": 81,
+        "errors": 0,
+        "warnings": 1,
+        "notes": 1
+      },
+      "tracked": true,
+      "findings": [
+        {
+          "severity": "warning",
+          "code": "address_not_checked",
+          "say": "The address of [3] OSHA Chemical Data (regulation) could not be reached from this machine, so it was not checked: https://www.osha.gov/chemicaldata/",
+          "sentences": []
+        },
+        {
+          "severity": "note",
+          "code": "cited_by_unprinted_text",
+          "say": "69 recorded sources are cited only by text this report does not print (its definition leaves that text out), so they are not listed. By origin: papers of the knowledge base, 69.",
+          "sentences": []
+        }
+      ],
+      "not_judged": [
+        "Whether a source supports the sentence that cites it. That is a question of meaning.",
+        "Whether a sentence that cites nothing should cite a source.",
+        "Whether a registered DOI belongs to the work its entry describes.",
+        "A Word file edited outside the application: the check reads the report as the application presents it."
+      ],
+      "act": {
+        "allowed": false,
+        "say": "This is the finished report of a pair, kept as it is for comparison. The act is done on its live copy (DTXSID6020430_live).",
+        "counterpart": "DTXSID6020430_live"
+      }
+    },
     "entries": [
       {
         "n": 1,
+        "slug": "s5291d97c35",
         "kind": "background_source",
+        "listed": true,
+        "why_not_listed": null,
         "study": null,
         "study_id": "DTXSID6020430",
+        "entry": "PubChem Compound 7239 (database). https://pubchem.ncbi.nlm.nih.gov/compound/7239",
         "text": "PubChem Compound 7239 (database).",
         "url": "https://pubchem.ncbi.nlm.nih.gov/compound/7239",
         "title": null,
@@ -18,16 +63,19 @@
         "venue": null,
         "doi": null,
         "genes": [],
+        "knowledge_base": null,
+        "checked": "answers",
+        "cited": 3,
         "cited_in": [
           {
-            "part": "background",
-            "part_title": "Background",
+            "part": "",
+            "part_title": "In the report as presented",
             "study": null,
             "study_id": "DTXSID6020430",
             "sentences": [
-              "1,2-Dichlorobenzene (CASRN: 95-50-1; DTXSID: DTXSID6020430; PubChem CID: 7239; EC Number: 202-425-9) is a chlorinated aromatic hydrocarbon with the molecular formula C₆H₄Cl₂ and a molecular weight of 147.0 g/mol [1].",
-              "The compound has been characterized as a hepatotoxic agent, consistent with hepatic bioactivation of reactive intermediates [1].",
-              "The compound has been identified as a hepatotoxic agent, and liver injury represents a principal target organ effect observed in experimental animal studies [1][2]."
+              "1,2-Dichlorobenzene (CASRN: 95-50-1; DTXSID: DTXSID6020430; PubChem CID: 7239; EC Number: 202-425-9) is a chlorinated aromatic hydrocarbon with the molecular formula C₆H₄Cl₂ and a molecular weight of 147.0 g/mol.",
+              "The compound has been characterized as a hepatotoxic agent, consistent with hepatic bioactivation of reactive intermediates.",
+              "The compound has been identified as a hepatotoxic agent, and liver injury represents a principal target organ effect observed in experimental animal studies."
             ]
           }
         ],
@@ -35,9 +83,13 @@
       },
       {
         "n": 2,
+        "slug": "sc042e29e9c",
         "kind": "background_source",
+        "listed": true,
+        "why_not_listed": null,
         "study": null,
         "study_id": "DTXSID6020430",
+        "entry": "ATSDR Toxicological Profile for 1,2-Dichlorobenzene (government report). https://wwwn.cdc.gov/TSP/ToxProfiles/ToxProfiles.aspx?id=&tid=&casrn=95-50-1",
         "text": "ATSDR Toxicological Profile for 1,2-Dichlorobenzene (government report).",
         "url": "https://wwwn.cdc.gov/TSP/ToxProfiles/ToxProfiles.aspx?id=&tid=&casrn=95-50-1",
         "title": null,
@@ -45,36 +97,40 @@
         "venue": null,
         "doi": null,
         "genes": [],
+        "knowledge_base": null,
+        "checked": "answers",
+        "cited": 24,
         "cited_in": [
           {
-            "part": "background",
-            "part_title": "Background",
+            "part": "",
+            "part_title": "In the report as presented",
             "study": null,
             "study_id": "DTXSID6020430",
             "sentences": [
-              "It is produced industrially by the chlorination of benzene or monochlorobenzene in the presence of a Lewis acid catalyst, or alternatively via the Sandmeyer procedure from the appropriate chloroaniline precursor; these processes yield mixtures of ortho-, meta-, and para-dichlorobenzene isomers, which are subsequently separated [2].",
-              "The compound serves as a chemical intermediate in the synthesis of 3,4-dichloroaniline, dyes, herbicides, and pharmaceuticals, and functions as a solvent, heat transfer liquid, degreasing agent, paint solvent, paint remover, cylinder lubricant, and a solvent for waxes, gums, resins, tars, rubber, oils, and asphalts [2].",
-              "It is also employed as a deodorant and, historically, as an insecticide and soil fumigant, although its pesticide registrations in the United States have been cancelled and no currently registered pesticide products contain this substance [2].",
-              "Industrial products incorporating 1,2-dichlorobenzene include metal degreasing formulations and paint solvent preparations [2].",
-              "Technical-grade material typically contains 70–85% of the ortho-isomer, with the remainder consisting of meta- and para-dichlorobenzene isomers, trace chlorobenzene, and trichlorobenzene; pure-grade material contains greater than 99.8% of the ortho-isomer [2].",
-              "Human exposure may occur in occupational settings among chemical manufacturing plant operators, metal degreasing workers, paint formulators, and laboratory personnel through inhalation of vapors and dermal contact with the liquid [2].",
-              "Environmental exposure pathways include volatilization from industrial waste streams into ambient air, leaching from contaminated soil into groundwater, and adsorption to sediments in surface water bodies receiving industrial effluents [2].",
-              "Authoritative threshold limit value (TLV) documentation from the American Conference of Governmental Industrial Hygienists (ACGIH) was not available for review at the time of this writing; the relevant ACGIH documentation requires a subscription and specific values could not be confirmed from the data sources consulted [2].",
-              "1,2-Dichlorobenzene can be absorbed into the body by inhalation, through the skin, and by ingestion [2].",
-              "Inhalation represents the primary route of occupational exposure, given the compound's vapor pressure of 1.4 mm Hg at 25 °C, which supports meaningful volatilization under ambient conditions [2].",
-              "Following absorption, the compound is distributed to tissues throughout the body; consistent with its lipophilic character, distribution to adipose tissue and highly perfused organs, including the liver and kidneys, is anticipated [2].",
-              "Metabolism proceeds primarily via cytochrome P450-mediated oxidation, yielding reactive arene oxide intermediates and phenolic metabolites, including 3,4-dichlorophenol and 3,4-dichlorocatechol, which may be further conjugated with glucuronic acid or sulfate prior to excretion [2].",
-              "Excretion occurs predominantly via the urine as conjugated metabolites, with a smaller fraction eliminated through exhalation as unchanged parent compound or carbon dioxide [2].",
-              "The acute toxicological effects of 1,2-dichlorobenzene in humans and experimental animals include irritation of the eyes, skin, and respiratory tract following inhalation or dermal contact, as well as central nervous system depression at high exposure concentrations [2].",
-              "The compound has been identified as a hepatotoxic agent, and liver injury represents a principal target organ effect observed in experimental animal studies [1][2].",
-              "Chronic toxicity data sufficient to characterize lifetime health risks from prolonged exposure were similarly not available from the sources consulted [2][3].",
-              "The mechanism of toxicity of 1,2-dichlorobenzene is understood to involve cytochrome P450-mediated bioactivation to reactive arene oxide intermediates, which may covalently bind to cellular macromolecules, including proteins and DNA, thereby initiating cytotoxic and potentially genotoxic events [2].",
-              "Oxidative stress resulting from the generation of reactive oxygen species during metabolic activation is considered a contributing mechanism, particularly in the liver, where bioactivation is most active [2].",
-              "The phenolic and catechol metabolites produced during oxidative metabolism may undergo further redox cycling, amplifying oxidative damage to hepatic and renal tissues [2].",
-              "Glutathione depletion has been proposed as a secondary mechanism by which reactive intermediates overwhelm cellular antioxidant defenses, leading to lipid peroxidation and cell death [2].",
-              "In the domain of hazard identification, subchronic toxicity data characterizing effects following repeated intermediate-duration exposures are absent from the sources reviewed, representing a gap relevant to the assessment of occupational and repeated consumer exposure scenarios [2][3].",
-              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established [4][5], industrial and consumer uses are documented [2], and environmental fate and transport data are available [2].",
-              "Absorption, distribution, metabolism, and excretion (ADME) data are also available at a qualitative level from the ATSDR Toxicological Profile, though quantitative pharmacokinetic parameters are incompletely characterized [2]."
+              "esence of a Lewis acid catalyst, or alternatively via the Sandmeyer procedure from the appropriate chloroaniline precursor; these processes yield mixtures of ortho-, meta-, and para-dichlorobenzene isomers, which are subsequently separated.",
+              "roaniline, dyes, herbicides, and pharmaceuticals, and functions as a solvent, heat transfer liquid, degreasing agent, paint solvent, paint remover, cylinder lubricant, and a solvent for waxes, gums, resins, tars, rubber, oils, and asphalts.",
+              "It is also employed as a deodorant and, historically, as an insecticide and soil fumigant, although its pesticide registrations in the United States have been cancelled and no currently registered pesticide products contain this substance.",
+              "Industrial products incorporating 1,2-dichlorobenzene include metal degreasing formulations and paint solvent preparations.",
+              "material typically contains 70–85% of the ortho-isomer, with the remainder consisting of meta- and para-dichlorobenzene isomers, trace chlorobenzene, and trichlorobenzene; pure-grade material contains greater than 99.8% of the ortho-isomer.",
+              "Human exposure may occur in occupational settings among chemical manufacturing plant operators, metal degreasing workers, paint formulators, and laboratory personnel through inhalation of vapors and dermal contact with the liquid.",
+              "Environmental exposure pathways include volatilization from industrial waste streams into ambient air, leaching from contaminated soil into groundwater, and adsorption to sediments in surface water bodies receiving industrial effluents.",
+              "nce of Governmental Industrial Hygienists (ACGIH) was not available for review at the time of this writing; the relevant ACGIH documentation requires a subscription and specific values could not be confirmed from the data sources consulted.",
+              "1,2-Dichlorobenzene can be absorbed into the body by inhalation, through the skin, and by ingestion.",
+              "Inhalation represents the primary route of occupational exposure, given the compound's vapor pressure of 1.4 mm Hg at 25 °C, which supports meaningful volatilization under ambient conditions.",
+              "Following absorption, the compound is distributed to tissues throughout the body; consistent with its lipophilic character, distribution to adipose tissue and highly perfused organs, including the liver and kidneys, is anticipated.",
+              "chrome P450-mediated oxidation, yielding reactive arene oxide intermediates and phenolic metabolites, including 3,4-dichlorophenol and 3,4-dichlorocatechol, which may be further conjugated with glucuronic acid or sulfate prior to excretion.",
+              "Excretion occurs predominantly via the urine as conjugated metabolites, with a smaller fraction eliminated through exhalation as unchanged parent compound or carbon dioxide.",
+              "ects of 1,2-dichlorobenzene in humans and experimental animals include irritation of the eyes, skin, and respiratory tract following inhalation or dermal contact, as well as central nervous system depression at high exposure concentrations.",
+              "The compound has been identified as a hepatotoxic agent, and liver injury represents a principal target organ effect observed in experimental animal studies.",
+              "Chronic toxicity data sufficient to characterize lifetime health risks from prolonged exposure were similarly not available from the sources consulted.",
+              "rstood to involve cytochrome P450-mediated bioactivation to reactive arene oxide intermediates, which may covalently bind to cellular macromolecules, including proteins and DNA, thereby initiating cytotoxic and potentially genotoxic events.",
+              "Oxidative stress resulting from the generation of reactive oxygen species during metabolic activation is considered a contributing mechanism, particularly in the liver, where bioactivation is most active.",
+              "The phenolic and catechol metabolites produced during oxidative metabolism may undergo further redox cycling, amplifying oxidative damage to hepatic and renal tissues.",
+              "Glutathione depletion has been proposed as a secondary mechanism by which reactive intermediates overwhelm cellular antioxidant defenses, leading to lipid peroxidation and cell death.",
+              "subchronic toxicity data characterizing effects following repeated intermediate-duration exposures are absent from the sources reviewed, representing a gap relevant to the assessment of occupational and repeated consumer exposure scenarios.",
+              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established, industrial and consumer uses are documented, and environmental fate and transport data are available.",
+              "rted: occupational exposure limits (OSHA PEL and NIOSH REL) are established, industrial and consumer uses are documented, and environmental fate and transport data are available.",
+              "Absorption, distribution, metabolism, and excretion (ADME) data are also available at a qualitative level from the ATSDR Toxicological Profile, though quantitative pharmacokinetic parameters are incompletely characterized."
             ]
           }
         ],
@@ -82,42 +138,13 @@
       },
       {
         "n": 3,
+        "slug": "s84bc162770",
         "kind": "background_source",
+        "listed": true,
+        "why_not_listed": null,
         "study": null,
         "study_id": "DTXSID6020430",
-        "text": "EPA IRIS Assessment for 1,2-Dichlorobenzene (government report).",
-        "url": "https://cfpub.epa.gov/ncea/iris2/chemicalLanding.cfm?substance_nmbr=95501",
-        "title": null,
-        "year": null,
-        "venue": null,
-        "doi": null,
-        "genes": [],
-        "cited_in": [
-          {
-            "part": "background",
-            "part_title": "Background",
-            "study": null,
-            "study_id": "DTXSID6020430",
-            "sentences": [
-              "No maximum contaminant level (MCL) or maximum contaminant level goal (MCLG) under the Safe Drinking Water Act has been identified for 1,2-dichlorobenzene in the data sources reviewed for this report [3].",
-              "The EPA Integrated Risk Information System (IRIS) assessment for 1,2-dichlorobenzene was not accessible at the time of this writing due to a system error; accordingly, no oral reference dose (RfD), critical study NOAEL, or associated uncertainty factor could be confirmed from IRIS records [3].",
-              "Chronic toxicity data sufficient to characterize lifetime health risks from prolonged exposure were similarly not available from the sources consulted [2][3].",
-              "EPA, the International Agency for Research on Cancer (IARC), or other regulatory bodies was identified in the data sources reviewed for this report [3].",
-              "In the domain of hazard identification, subchronic toxicity data characterizing effects following repeated intermediate-duration exposures are absent from the sources reviewed, representing a gap relevant to the assessment of occupational and repeated consumer exposure scenarios [2][3].",
-              "Chronic toxicity data sufficient to support characterization of lifetime health risks are likewise unavailable, precluding a complete assessment of long-term exposure consequences [3].",
-              "No authoritative cancer classification has been identified from EPA, IARC, or other bodies, leaving the carcinogenic potential of 1,2-dichlorobenzene uncharacterized and preventing a weight-of-evidence determination [3].",
-              "In the domain of dose-response assessment, no oral reference dose (RfD) was confirmed from IRIS records due to a system access error at the time of this writing; without an established RfD, NOAEL, or point of departure from a critical study, health-based oral exposure limits and drinking water guidelines cannot be derived from first principles, and benchmark dose modeling or read-across from structurally related dichlorobenzene isomers may be required as interim approaches [3].",
-              "In the domain of risk characterization, no drinking water MCL or MCLG has been identified for 1,2-dichlorobenzene, meaning that environmental contamination of drinking water sources cannot be evaluated against an enforceable federal standard [3]."
-            ]
-          }
-        ],
-        "statements": null
-      },
-      {
-        "n": 4,
-        "kind": "background_source",
-        "study": null,
-        "study_id": "DTXSID6020430",
+        "entry": "OSHA Chemical Data (regulation). https://www.osha.gov/chemicaldata/",
         "text": "OSHA Chemical Data (regulation).",
         "url": "https://www.osha.gov/chemicaldata/",
         "title": null,
@@ -125,25 +152,32 @@
         "venue": null,
         "doi": null,
         "genes": [],
+        "knowledge_base": null,
+        "checked": "not_reached",
+        "cited": 2,
         "cited_in": [
           {
-            "part": "background",
-            "part_title": "Background",
+            "part": "",
+            "part_title": "In the report as presented",
             "study": null,
             "study_id": "DTXSID6020430",
             "sentences": [
-              "The Occupational Safety and Health Administration (OSHA) has established a permissible exposure limit (PEL) for 1,2-dichlorobenzene of 50 ppm (300 mg/m³) as a ceiling value under Table Z-1 [4].",
-              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established [4][5], industrial and consumer uses are documented [2], and environmental fate and transport data are available [2]."
+              "The Occupational Safety and Health Administration (OSHA) has established a permissible exposure limit (PEL) for 1,2-dichlorobenzene of 50 ppm (300 mg/m³) as a ceiling value under Table Z-1.",
+              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established, industrial and consumer uses are documented, and environmental fate and transport data are available."
             ]
           }
         ],
         "statements": null
       },
       {
-        "n": 5,
+        "n": 4,
+        "slug": "sd6ef1a0c2f",
         "kind": "background_source",
+        "listed": true,
+        "why_not_listed": null,
         "study": null,
         "study_id": "DTXSID6020430",
+        "entry": "NIOSH Pocket Guide to Chemical Hazards (regulation). https://www.cdc.gov/niosh/npg/",
         "text": "NIOSH Pocket Guide to Chemical Hazards (regulation).",
         "url": "https://www.cdc.gov/niosh/npg/",
         "title": null,
@@ -151,15 +185,58 @@
         "venue": null,
         "doi": null,
         "genes": [],
+        "knowledge_base": null,
+        "checked": "answers",
+        "cited": 2,
         "cited_in": [
           {
-            "part": "background",
-            "part_title": "Background",
+            "part": "",
+            "part_title": "In the report as presented",
             "study": null,
             "study_id": "DTXSID6020430",
             "sentences": [
-              "The National Institute for Occupational Safety and Health (NIOSH) has established a recommended exposure limit (REL) of 50 ppm (300 mg/m³) as a 15-minute ceiling value [5].",
-              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established [4][5], industrial and consumer uses are documented [2], and environmental fate and transport data are available [2]."
+              "The National Institute for Occupational Safety and Health (NIOSH) has established a recommended exposure limit (REL) of 50 ppm (300 mg/m³) as a 15-minute ceiling value.",
+              "By contrast, exposure characterization is relatively well-supported: occupational exposure limits (OSHA PEL and NIOSH REL) are established, industrial and consumer uses are documented, and environmental fate and transport data are available."
+            ]
+          }
+        ],
+        "statements": null
+      },
+      {
+        "n": 5,
+        "slug": "sb8949bef41",
+        "kind": "background_source",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "EPA IRIS Assessment for 1,2-Dichlorobenzene (government report). https://cfpub.epa.gov/ncea/iris2/chemicalLanding.cfm?substance_nmbr=95501",
+        "text": "EPA IRIS Assessment for 1,2-Dichlorobenzene (government report).",
+        "url": "https://cfpub.epa.gov/ncea/iris2/chemicalLanding.cfm?substance_nmbr=95501",
+        "title": null,
+        "year": null,
+        "venue": null,
+        "doi": null,
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "answers",
+        "cited": 9,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "No maximum contaminant level (MCL) or maximum contaminant level goal (MCLG) under the Safe Drinking Water Act has been identified for 1,2-dichlorobenzene in the data sources reviewed for this report.",
+              "assessment for 1,2-dichlorobenzene was not accessible at the time of this writing due to a system error; accordingly, no oral reference dose (RfD), critical study NOAEL, or associated uncertainty factor could be confirmed from IRIS records.",
+              "Chronic toxicity data sufficient to characterize lifetime health risks from prolonged exposure were similarly not available from the sources consulted.",
+              "EPA, the International Agency for Research on Cancer (IARC), or other regulatory bodies was identified in the data sources reviewed for this report.",
+              "subchronic toxicity data characterizing effects following repeated intermediate-duration exposures are absent from the sources reviewed, representing a gap relevant to the assessment of occupational and repeated consumer exposure scenarios.",
+              "Chronic toxicity data sufficient to support characterization of lifetime health risks are likewise unavailable, precluding a complete assessment of long-term exposure consequences.",
+              "No authoritative cancer classification has been identified from EPA, IARC, or other bodies, leaving the carcinogenic potential of 1,2-dichlorobenzene uncharacterized and preventing a weight-of-evidence determination.",
+              "dy, health-based oral exposure limits and drinking water guidelines cannot be derived from first principles, and benchmark dose modeling or read-across from structurally related dichlorobenzene isomers may be required as interim approaches.",
+              "the domain of risk characterization, no drinking water MCL or MCLG has been identified for 1,2-dichlorobenzene, meaning that environmental contamination of drinking water sources cannot be evaluated against an enforceable federal standard."
             ]
           }
         ],
@@ -167,119 +244,272 @@
       },
       {
         "n": 6,
-        "kind": "paper",
-        "study": "rat",
-        "study_id": "DTXSID6020430_rat",
+        "slug": "williams1971",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Williams DA. A test for differences between treatment means when several dose levels are compared with a zero dose control. Biometrics. 1971; 27(1):103–117. https://doi.org/10.2307/2528930",
         "text": null,
-        "url": "https://doi.org/10.3390/antiox10010086",
-        "title": "Rutaecarpine Protects against Acetaminophen-Induced Acute Liver Injury in Mice by Activating Antioxidant Enzymes",
-        "year": 2021,
-        "venue": "Antioxidants",
-        "doi": "10.3390/antiox10010086",
-        "genes": [
-          "CYP2E1",
-          "HMOX1"
-        ],
+        "url": "https://doi.org/10.2307/2528930",
+        "title": "A test for differences between treatment means when several dose levels are compared with a zero dose control",
+        "year": 1971,
+        "venue": "Biometrics",
+        "doi": "10.2307/2528930",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 2,
         "cited_in": [
           {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
             "sentences": [
-              "The induction of CYP2E1 alongside HMOX1 is mechanistically coherent with reactive oxygen species generation during halogenated aromatic metabolism, which may trigger downstream heme oxygenase-mediated cytoprotection [6][7]."
-            ]
-          },
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "CYP2E1, supported by 14 publications, is a well-characterized mediator of halogenated compound bioactivation; its induction is consistent with oxidative metabolite generation and has been linked to downstream HMOX1 co-induction in models of chemical hepatotoxicity [6][10].",
-              "Confidence in the mechanistic interpretation of the 1,2-DCB cardiac transcriptomic response is highest for the oxidative stress and xenobiotic metabolism signatures, which are supported by multiple consensus genes (HMOX1, CYP2E1, SRXN1, TXNRD1) with strong cross-study literature concordance [8][9][6]."
-            ]
-          },
-          {
-            "part": "genomics_kidney_female",
-            "part_title": "Gene-level interpretation: kidney, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "The upregulation of canonical NRF2 target genes NQO1 and GCLC is consistent with an adaptive cellular response to electrophilic or oxidative insult generated during 1,2-DCB biotransformation [6].",
-              "The liver enrichment is consistent with the known hepatic biotransformation of 1,2-DCB via CYP2E1 and the shared phase II detoxification machinery between liver and kidney [21][6]."
-            ]
-          },
-          {
-            "part": "genomics_kidney_female",
-            "part_title": "Gene-level interpretation: kidney, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Both genes are well-established indicators of electrophilic and oxidative stress-driven NRF2 activation, and their upregulation in the kidney is consistent with the biotransformation of 1,2-DCB to reactive intermediates capable of activating the KEAP1/NRF2 axis [6][9].",
-              "Confidence in the biological interpretation of the 1,2-DCB renal transcriptomic response is high for the NRF2-mediated oxidative stress and xenobiotic metabolism signatures, given the convergent evidence from pathway enrichment, GO term analysis, BMD ordering, and the extensive multi-study literature support for NQO1, GCLC, SRXN1, CYP2E1, CAT, and BAX as consensus response genes [8][6][24]."
-            ]
-          },
-          {
-            "part": "genomics_lung_female",
-            "part_title": "Gene-level interpretation: lung, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "CYP2E1, a cytochrome P450 isoform known to bioactivate halogenated aromatic compounds and generate reactive oxygen species, was upregulated and appeared in the metabolic and arachidonic acid metabolism pathways; its induction is mechanistically plausible given the role of CYP2E1 in the oxidative metabolism of chlorinated benzenes [6]."
+              "Body weight and organ weight data, which are approximately normally distributed, were analyzed using the parametric multiple-comparison procedures of Williams and Dunnett.",
+              "A Williams trend prefilter (p < 0.05) was applied, followed by the Curve Fit Prefilter with a p-value cutoff of 0.05, to identify probes exhibiting a statistically meaningful concentration-response relationship."
             ]
           }
         ],
-        "statements": [
-          "Rutaecarpine protects against acetaminophen-induced acute liver injury in mice by activating antioxidant enzymes",
-          "Rutaecarpine pretreatment decreases serum ALT/AST activities and hepatic malondialdehyde content, prevents glutathione depletion, inhibits CYP2E1 expression, and reduces inflammatory cytokines"
-        ]
+        "statements": null
       },
       {
         "n": 7,
-        "kind": "paper",
-        "study": "rat",
-        "study_id": "DTXSID6020430_rat",
+        "slug": "williams1972",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Williams DA. The comparison of several dose levels with a zero dose control. Biometrics. 1972; 28(2):519–531. https://doi.org/10.2307/2556164",
         "text": null,
-        "url": "https://doi.org/10.1042/BCJ20200768",
-        "title": "Heteromeric complex formation between human cytochrome P450 CYP1A1 and heme oxygenase-1.",
-        "year": 2021,
-        "venue": "Biochemical Journal",
-        "doi": "10.1042/BCJ20200768",
-        "genes": [
-          "HMOX1",
-          "POR"
-        ],
+        "url": "https://doi.org/10.2307/2556164",
+        "title": "The comparison of several dose levels with a zero dose control",
+        "year": 1972,
+        "venue": "Biometrics",
+        "doi": "10.2307/2556164",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 2,
         "cited_in": [
           {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
             "sentences": [
-              "The induction of CYP2E1 alongside HMOX1 is mechanistically coherent with reactive oxygen species generation during halogenated aromatic metabolism, which may trigger downstream heme oxygenase-mediated cytoprotection [6][7]."
-            ]
-          },
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "POR, which encodes NADPH-cytochrome P450 oxidoreductase, was also responsive and has been shown to catalyze lipid peroxidation during ferroptotic cell death [11], and its co-expression with HMOX1 in the context of CYP450 complex formation [7] suggests potential for amplified oxidative injury in cardiac tissue."
+              "Body weight and organ weight data, which are approximately normally distributed, were analyzed using the parametric multiple-comparison procedures of Williams and Dunnett.",
+              "A Williams trend prefilter (p < 0.05) was applied, followed by the Curve Fit Prefilter with a p-value cutoff of 0.05, to identify probes exhibiting a statistically meaningful concentration-response relationship."
             ]
           }
         ],
-        "statements": [
-          "CYP1A1 forms a stable complex with HO-1 that is further stabilized in the presence of POR.",
-          "The interaction between CYP1A1 and HO-1 affects their functional characteristics, altering Km values but not Vmaxapp."
-        ]
+        "statements": null
       },
       {
         "n": 8,
+        "slug": "dunnett1955",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Dunnett CW. A multiple comparison procedure for comparing several treatments with a control. J Am Stat Assoc. 1955; 50(272):1096–1121. https://doi.org/10.1080/01621459.1955.10501294",
+        "text": null,
+        "url": "https://doi.org/10.1080/01621459.1955.10501294",
+        "title": "A multiple comparison procedure for comparing several treatments with a control",
+        "year": 1955,
+        "venue": "J Am Stat Assoc",
+        "doi": "10.1080/01621459.1955.10501294",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 1,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "Body weight and organ weight data, which are approximately normally distributed, were analyzed using the parametric multiple-comparison procedures of Williams and Dunnett."
+            ]
+          }
+        ],
+        "statements": null
+      },
+      {
+        "n": 9,
+        "slug": "shirley1977",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Shirley E. A non-parametric equivalent of Williams’ test for contrasting increasing dose levels of a treatment. Biometrics. 1977; 33(2):386–389. https://doi.org/10.2307/2529789",
+        "text": null,
+        "url": "https://doi.org/10.2307/2529789",
+        "title": "A non-parametric equivalent of Williams’ test for contrasting increasing dose levels of a treatment",
+        "year": 1977,
+        "venue": "Biometrics",
+        "doi": "10.2307/2529789",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 1,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "Clinical pathology data, which are typically skewed, were analyzed using the nonparametric multiple-comparison procedures of Shirley and Dunn."
+            ]
+          }
+        ],
+        "statements": null
+      },
+      {
+        "n": 10,
+        "slug": "dunn1964",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Dunn OJ. Multiple comparisons using rank sums. Technometrics. 1964; 6(3):241–252. https://doi.org/10.1080/00401706.1964.10490181",
+        "text": null,
+        "url": "https://doi.org/10.1080/00401706.1964.10490181",
+        "title": "Multiple comparisons using rank sums",
+        "year": 1964,
+        "venue": "Technometrics",
+        "doi": "10.1080/00401706.1964.10490181",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 1,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "Clinical pathology data, which are typically skewed, were analyzed using the nonparametric multiple-comparison procedures of Shirley and Dunn."
+            ]
+          }
+        ],
+        "statements": null
+      },
+      {
+        "n": 11,
+        "slug": "jonckheere1954",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Jonckheere AR. A distribution-free k-sample test against ordered alternatives. Biometrika. 1954; 41(1-2):133–145. https://doi.org/10.1093/biomet/41.1-2.133",
+        "text": null,
+        "url": "https://doi.org/10.1093/biomet/41.1-2.133",
+        "title": "A distribution-free k-sample test against ordered alternatives",
+        "year": 1954,
+        "venue": "Biometrika",
+        "doi": "10.1093/biomet/41.1-2.133",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 1,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "For each endpoint, the Jonckheere test was applied to assess the presence of a dose-response trend; when the Jonckheere test was significant at p ≤ 0.01, the trend-sensitive procedure (Williams for body and organ weights; Shirley for clinical pathology) was selected, otherwise"
+            ]
+          }
+        ],
+        "statements": null
+      },
+      {
+        "n": 12,
+        "slug": "yang2007",
+        "kind": "boilerplate",
+        "listed": true,
+        "why_not_listed": null,
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Yang L, Allen BC, Thomas RS. BMDExpress: A software tool for the benchmark dose analyses of genomic data. BMC Genomics. 2007; 8:387. https://doi.org/10.1186/1471-2164-8-387",
+        "text": null,
+        "url": "https://doi.org/10.1186/1471-2164-8-387",
+        "title": "BMDExpress: A software tool for the benchmark dose analyses of genomic data",
+        "year": 2007,
+        "venue": "BMC Genomics",
+        "doi": "10.1186/1471-2164-8-387",
+        "genes": [],
+        "knowledge_base": null,
+        "checked": "registered",
+        "cited": 1,
+        "cited_in": [
+          {
+            "part": "",
+            "part_title": "In the report as presented",
+            "study": null,
+            "study_id": "DTXSID6020430",
+            "sentences": [
+              "Transcriptomic benchmark dose (BMD) analysis was performed using BMDExpress 3.20.0119 BETA."
+            ]
+          }
+        ],
+        "statements": null
+      }
+    ],
+    "not_listed": [
+      {
+        "n": null,
+        "slug": "s2ab5f2f158",
         "kind": "paper",
-        "study": "rat",
-        "study_id": "DTXSID6020430_rat",
+        "listed": false,
+        "why_not_listed": "Cited only by text this report does not print: its definition leaves that text out.",
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "I. Shah, David Gallegos, B. Robinette, Bryant A. Chambers, Dennis J. Eastburn, Douglas A. Bell, et al. Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics. bioRxiv. 2025. https://doi.org/10.1101/2025.06.10.657506",
+        "text": null,
+        "url": "https://doi.org/10.1101/2025.06.10.657506",
+        "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+        "year": 2025,
+        "venue": "bioRxiv",
+        "doi": "10.1101/2025.06.10.657506",
+        "genes": [
+          "ACOX1",
+          "HSPA5",
+          "PLIN2",
+          "SQSTM1"
+        ],
+        "knowledge_base": "baseline-2026-05",
+        "checked": null,
+        "cited": 0,
+        "cited_in": [],
+        "statements": [
+          "Single-cell transcriptomics can decode cellular stress states and reveal dynamic shifts in subpopulations responding to chemical exposures.",
+          "Troglitazone upregulates lipid metabolism genes along with heat shock response and unfolded protein response activation.",
+          "Brefeldin A and tunicamycin strongly induce UPR markers, indicating diverse stress responses including apoptosis and autophagy."
+        ]
+      },
+      {
+        "n": null,
+        "slug": "sea40651c75",
+        "kind": "paper",
+        "listed": false,
+        "why_not_listed": "Cited only by text this report does not print: its definition leaves that text out.",
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Christina Morgenstern, I. Lastres-Becker, B. C. Demirdöğen, V. M. Costa, A. Daiber, R. Foresti, et al. Biomarkers of NRF2 signalling: Current status and future challenges. Redox Biology. 2024. https://doi.org/10.1016/j.redox.2024.103134",
         "text": null,
         "url": "https://doi.org/10.1016/j.redox.2024.103134",
         "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
@@ -291,96 +521,24 @@
           "SRXN1",
           "TXNRD1"
         ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Concurrently, response to xenobiotic stimulus (GO:0009410; FDR = 8.90 × 10⁻⁵) was enriched across 15 genes including CYP2E1, HMOX1, MGST1, TXNRD1, and SRXN1, the majority of which were upregulated, consistent with activation of the NRF2 antioxidant response pathway [8][9].",
-              "Organ signature analysis indicated that the cardiac gene expression profile bore greatest resemblance to signatures from hepatic Kupffer cells, monocytes/macrophages, and renal tubular epithelium, driven predominantly by HMOX1 enrichment, which is consistent with the known broad inducibility of heme oxygenase-1 across stress-responsive cell types [8]."
-            ]
-          },
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "HMOX1 upregulation is a well-established indicator of NRF2 pathway activation and oxidative stress, and HMOX1, SRXN1, and TXNRD1 have been identified as robust NRF2 activity biomarkers across multiple cell types [8][9].",
-              "Confidence in the mechanistic interpretation of the 1,2-DCB cardiac transcriptomic response is highest for the oxidative stress and xenobiotic metabolism signatures, which are supported by multiple consensus genes (HMOX1, CYP2E1, SRXN1, TXNRD1) with strong cross-study literature concordance [8][9][6]."
-            ]
-          },
-          {
-            "part": "genomics_kidney_female",
-            "part_title": "Gene-level interpretation: kidney, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Key NRF2-associated genes — GCLC, NQO1, SRXN1, GPX3, and CAT — were represented across these terms, consistent with activation of the NRF2/ARE antioxidant response pathway [8]."
-            ]
-          },
-          {
-            "part": "genomics_kidney_female",
-            "part_title": "Gene-level interpretation: kidney, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Among the individual dose-responsive genes, NQO1 and GCLC emerged as the most sensitive and biologically informative markers of 1,2-DCB renal exposure, with BMD values at the lower end of the observed range and strong literature support as canonical NRF2 pathway biomarkers across multiple cell types and tissues [8][22].",
-              "SRXN1, a sulfiredoxin and additional NRF2 target, was also among the responsive genes, further supporting engagement of the antioxidant response program [8][23].",
-              "Confidence in the biological interpretation of the 1,2-DCB renal transcriptomic response is high for the NRF2-mediated oxidative stress and xenobiotic metabolism signatures, given the convergent evidence from pathway enrichment, GO term analysis, BMD ordering, and the extensive multi-study literature support for NQO1, GCLC, SRXN1, CYP2E1, CAT, and BAX as consensus response genes [8][6][24]."
-            ]
-          },
-          {
-            "part": "genomics_liver_female",
-            "part_title": "Gene-level interpretation: liver, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "The ferroptosis pathway was represented by a complete five-gene set (GCLC, GCLM, GPX4, HMOX1, TP53), all upregulated, consistent with an adaptive cytoprotective response to lipid peroxidation stress [8]."
-            ]
-          },
-          {
-            "part": "genomics_liver_female",
-            "part_title": "Gene-level interpretation: liver, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "These genes were upregulated across a BMD range of approximately 134–241 ppm and are well-established transcriptional targets of KEAP1-NRF2 signaling activated by electrophilic and oxidative insults [8].",
-              "GCLC, GCLM, HMOX1, NQO1, SRXN1, and TXNRD1 have been validated as robust NRF2 activity biomarkers across multiple cell types and species [8, 9], lending high confidence to the interpretation that 1,2-DCB activates hepatic NRF2 signaling in a dose-dependent manner.",
-              "GPX4, a phospholipid hydroperoxide glutathione peroxidase critical for suppressing ferroptosis, was upregulated with a BMD within the ferroptosis pathway cluster (median ~165 ppm), and its co-induction with GCLC, GCLM, and HMOX1 suggests that lipid peroxidation is an early hepatic stress signal following 1,2-DCB exposure [8]."
-            ]
-          },
-          {
-            "part": "genomics_lung_female",
-            "part_title": "Gene-level interpretation: lung, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "The predominant upregulation of genes within these pathways — particularly the NRF2-associated antioxidant response genes GCLC, NQO1, SRXN1, and TXNRD1 — is consistent with an adaptive cellular response to oxidative stress induced by 1,2-DCB metabolism [8]."
-            ]
-          },
-          {
-            "part": "genomics_lung_female",
-            "part_title": "Gene-level interpretation: lung, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "NQO1, a well-established NRF2 target gene and robust biomarker of NRF2 pathway activation across multiple cell types [8], was similarly upregulated and co-enriched with GCLC, SRXN1, and TXNRD1 across multiple GO terms and pathways, collectively constituting a canonical NRF2 transcriptional signature [8, 9]."
-            ]
-          }
-        ],
+        "knowledge_base": "baseline-2026-05",
+        "checked": null,
+        "cited": 0,
+        "cited_in": [],
         "statements": [
           "GCLC, GCLM, HMOX1, NQO1, SRXN1 and TXNRD1 are robust markers for NRF2 activity across multiple cell types.",
           "There is a need for consensus on the most relevant set of genes/proteins that best represent NRF2 activity in different contexts."
         ]
       },
       {
-        "n": 9,
+        "n": null,
+        "slug": "sdd34b9e80b",
         "kind": "paper",
-        "study": "rat",
-        "study_id": "DTXSID6020430_rat",
+        "listed": false,
+        "why_not_listed": "Cited only by text this report does not print: its definition leaves that text out.",
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Monika Jakubowska, Vera Marisa Costa, Wojciech Krzeptowski, Pia Pužar Dominkuš, Marlene Santos, B. C. Demirdöğen, et al. Altered NRF2 signalling in systemic redox imbalance: Insights from non-communicable diseases. Redox Biology. 2025. https://doi.org/10.1016/j.redox.2025.103891",
         "text": null,
         "url": "https://doi.org/10.1016/j.redox.2025.103891",
         "title": "Altered NRF2 signalling in systemic redox imbalance: Insights from non-communicable diseases",
@@ -392,248 +550,77 @@
           "SRXN1",
           "TXNRD1"
         ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (gene sets)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Concurrently, response to xenobiotic stimulus (GO:0009410; FDR = 8.90 × 10⁻⁵) was enriched across 15 genes including CYP2E1, HMOX1, MGST1, TXNRD1, and SRXN1, the majority of which were upregulated, consistent with activation of the NRF2 antioxidant response pathway [8][9]."
-            ]
-          },
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "HMOX1 upregulation is a well-established indicator of NRF2 pathway activation and oxidative stress, and HMOX1, SRXN1, and TXNRD1 have been identified as robust NRF2 activity biomarkers across multiple cell types [8][9].",
-              "Confidence in the mechanistic interpretation of the 1,2-DCB cardiac transcriptomic response is highest for the oxidative stress and xenobiotic metabolism signatures, which are supported by multiple consensus genes (HMOX1, CYP2E1, SRXN1, TXNRD1) with strong cross-study literature concordance [8][9][6]."
-            ]
-          },
-          {
-            "part": "genomics_kidney_female",
-            "part_title": "Gene-level interpretation: kidney, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "Both genes are well-established indicators of electrophilic and oxidative stress-driven NRF2 activation, and their upregulation in the kidney is consistent with the biotransformation of 1,2-DCB to reactive intermediates capable of activating the KEAP1/NRF2 axis [6][9]."
-            ]
-          },
-          {
-            "part": "genomics_liver_female",
-            "part_title": "Gene-level interpretation: liver, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "GCLC, GCLM, HMOX1, NQO1, SRXN1, and TXNRD1 have been validated as robust NRF2 activity biomarkers across multiple cell types and species [8, 9], lending high confidence to the interpretation that 1,2-DCB activates hepatic NRF2 signaling in a dose-dependent manner."
-            ]
-          },
-          {
-            "part": "genomics_lung_female",
-            "part_title": "Gene-level interpretation: lung, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "NQO1, a well-established NRF2 target gene and robust biomarker of NRF2 pathway activation across multiple cell types [8], was similarly upregulated and co-enriched with GCLC, SRXN1, and TXNRD1 across multiple GO terms and pathways, collectively constituting a canonical NRF2 transcriptional signature [8, 9]."
-            ]
-          }
-        ],
+        "knowledge_base": "baseline-2026-05",
+        "checked": null,
+        "cited": 0,
+        "cited_in": [],
         "statements": [
           "NRF2 activity is crucial for maintaining redox homeostasis and regulating inflammatory responses.",
           "Assessing NRF2 activity in accessible human samples can reveal its involvement in various non-communicable diseases."
         ]
       },
       {
-        "n": 10,
+        "n": null,
+        "slug": "s5f8eaf0af8",
         "kind": "paper",
-        "study": "rat",
-        "study_id": "DTXSID6020430_rat",
+        "listed": false,
+        "why_not_listed": "Cited only by text this report does not print: its definition leaves that text out.",
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "Qian Xue, Rui Kang, D. Klionsky, D. Tang, Jinbao Liu, Xin Chen. Copper metabolism in cell death and autophagy. Autophagy. 2023. https://doi.org/10.1080/15548627.2023.2200554",
         "text": null,
-        "url": "https://doi.org/10.3390/nu18030403",
-        "title": "Binankadsurin A from Kadsura coccinea Fruits Ameliorates Acetaminophen-Induced Liver Injury Through Inhibiting Oxidative Stress by Keap1/Nrf2/HO-1 Pathway",
-        "year": 2026,
-        "venue": "Nutrients",
-        "doi": "10.3390/nu18030403",
-        "genes": [
-          "CYP2E1",
-          "HMOX1"
-        ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "rat",
-            "study_id": "DTXSID6020430_rat",
-            "sentences": [
-              "CYP2E1, supported by 14 publications, is a well-characterized mediator of halogenated compound bioactivation; its induction is consistent with oxidative metabolite generation and has been linked to downstream HMOX1 co-induction in models of chemical hepatotoxicity [6][10]."
-            ]
-          }
-        ],
-        "statements": [
-          "Binankadsurin A (BKA) reduces acetaminophen-induced acute liver damage by inhibiting oxidative stress through activation of the Keap1/Nrf2/HO-1 signaling pathway.",
-          "Pretreatment with BKA mitigates liver injury and improves CYP2E1 expression in mouse livers."
-        ]
-      },
-      {
-        "n": 40,
-        "kind": "paper",
-        "study": "mouse",
-        "study_id": "DTXSID6020430_mouse",
-        "text": null,
-        "url": "https://doi.org/10.2174/1381612824666180327165604",
-        "title": "Signaling Pathways in Inflammation and Anti-inflammatory Therapies.",
-        "year": 2018,
-        "venue": "Current pharmaceutical design",
-        "doi": "10.2174/1381612824666180327165604",
-        "genes": [
-          "STAT3"
-        ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "mouse",
-            "study_id": "DTXSID6020430_mouse",
-            "sentences": [
-              "Among genes with available literature context, Stat3 has been extensively characterized as a mediator of cytokine signaling, inflammatory responses, and cardiac stress adaptation [40, 41], and its potential involvement in the cardiac transcriptional response to 1,2-DCB would be consistent with known roles in heart-liver cross-talk following myocardial stress [41]."
-            ]
-          }
-        ],
-        "statements": [
-          "Inflammation plays a critical role in chronic diseases such as neurodegeneration, cancer, diabetes, cardiovascular disease and inflammatory bowel disease.",
-          "The p38 MAPK, IL-6/JAK/STAT3, PI3K pathways and the Hippo pathway are associated with inflammation initiation and progression."
-        ]
-      },
-      {
-        "n": 41,
-        "kind": "paper",
-        "study": "mouse",
-        "study_id": "DTXSID6020430_mouse",
-        "text": null,
-        "url": "https://doi.org/10.1126/sciadv.ade4110",
-        "title": "An IL-6/STAT3/MR/FGF21 axis mediates heart-liver cross-talk after myocardial infarction",
+        "url": "https://doi.org/10.1080/15548627.2023.2200554",
+        "title": "Copper metabolism in cell death and autophagy",
         "year": 2023,
-        "venue": "Science Advances",
-        "doi": "10.1126/sciadv.ade4110",
+        "venue": "Autophagy",
+        "doi": "10.1080/15548627.2023.2200554",
         "genes": [
-          "STAT3"
+          "POR",
+          "TXNRD1"
         ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "mouse",
-            "study_id": "DTXSID6020430_mouse",
-            "sentences": [
-              "Among genes with available literature context, Stat3 has been extensively characterized as a mediator of cytokine signaling, inflammatory responses, and cardiac stress adaptation [40, 41], and its potential involvement in the cardiac transcriptional response to 1,2-DCB would be consistent with known roles in heart-liver cross-talk following myocardial stress [41]."
-            ]
-          }
-        ],
+        "knowledge_base": "baseline-2026-05",
+        "checked": null,
+        "cited": 0,
+        "cited_in": [],
         "statements": [
-          "Mineralocorticoid receptor (MR) mediates liver-to-heart protection after myocardial infarction through regulation of hepatic fibroblast growth factor 21 (FGF21)",
-          "An IL-6/STAT3 pathway transmits heart-to-liver signals to suppress MR expression during myocardial infarction",
-          "Hepatocyte Il6 receptor deficiency and Stat3 deficiency exacerbate cardiac injury by disrupting the MR/FGF21 axis"
+          "Copper ions can induce various forms of cell death including apoptosis, paraptosis, pyroptosis, ferroptosis, and cuproptosis.",
+          "Copper metabolism impairment due to environmental or genetic causes is linked to human diseases such as Wilson disease and cancer.",
+          "Copper-based compounds have potential as chemotherapeutic agents for cancer treatment."
         ]
       },
       {
-        "n": 42,
+        "n": null,
+        "slug": "s4bb8233e99",
         "kind": "paper",
-        "study": "mouse",
-        "study_id": "DTXSID6020430_mouse",
+        "listed": false,
+        "why_not_listed": "Cited only by text this report does not print: its definition leaves that text out.",
+        "study": null,
+        "study_id": "DTXSID6020430",
+        "entry": "T. Mizukami, H. Momose, Madoka Kuramitsu, Kazuya Takizawa, Kumiko Araki, Keiko Furuhata, et al. System Vaccinology for the Evaluation of Influenza Vaccine Safety by Multiplex Gene Detection of Novel Biomarkers in a Preclinical Study and Batch Release Test. PLoS ONE. 2014. https://doi.org/10.1371/journal.pone.0101835",
         "text": null,
-        "url": "https://doi.org/10.1038/s41598-017-00796-3",
-        "title": "Sodium fluoride induces nephrotoxicity via oxidative stress-regulated mitochondrial SIRT3 signaling pathway",
-        "year": 2017,
-        "venue": "Scientific Reports",
-        "doi": "10.1038/s41598-017-00796-3",
+        "url": "https://doi.org/10.1371/journal.pone.0101835",
+        "title": "System Vaccinology for the Evaluation of Influenza Vaccine Safety by Multiplex Gene Detection of Novel Biomarkers in a Preclinical Study and Batch Release Test",
+        "year": 2014,
+        "venue": "PLoS ONE",
+        "doi": "10.1371/journal.pone.0101835",
         "genes": [
-          "SOD2"
+          "IRF7",
+          "PSMB9"
         ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "mouse",
-            "study_id": "DTXSID6020430_mouse",
-            "sentences": [
-              "Sod2, encoding manganese superoxide dismutase, is a well-established marker of mitochondrial oxidative stress and has been reported to be regulated through Nrf2 and related antioxidant pathways in multiple organ systems [42, 43, 44]; its presence among the responsive genes would support an oxidative stress component to the cardiac response."
-            ]
-          }
-        ],
+        "knowledge_base": "baseline-2026-05",
+        "checked": null,
+        "cited": 0,
+        "cited_in": [],
         "statements": [
-          "Sodium fluoride (NaF) induces nephrotoxicity via oxidative stress-regulated mitochondrial SIRT3 signaling pathway",
-          "Overexpression of SIRT3 ameliorates NaF-induced nephrotoxicity in vitro and in vivo",
-          "ERK1/2 activation is associated with increased apoptosis induced by NaF"
-        ]
-      },
-      {
-        "n": 43,
-        "kind": "paper",
-        "study": "mouse",
-        "study_id": "DTXSID6020430_mouse",
-        "text": null,
-        "url": "https://doi.org/10.1016/j.bbrc.2020.11.061",
-        "title": "Klotho ameliorates diabetic nephropathy by activating Nrf2 signaling pathway in podocytes.",
-        "year": 2020,
-        "venue": "Biochemical and Biophysical Research Communications - BBRC",
-        "doi": "10.1016/j.bbrc.2020.11.061",
-        "genes": [
-          "SOD2"
-        ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "mouse",
-            "study_id": "DTXSID6020430_mouse",
-            "sentences": [
-              "Sod2, encoding manganese superoxide dismutase, is a well-established marker of mitochondrial oxidative stress and has been reported to be regulated through Nrf2 and related antioxidant pathways in multiple organ systems [42, 43, 44]; its presence among the responsive genes would support an oxidative stress component to the cardiac response."
-            ]
-          }
-        ],
-        "statements": [
-          "Klotho overexpression ameliorates diabetic nephropathy by activating Nrf2 signaling pathway in podocytes, reducing oxidative stress and apoptosis.",
-          "Activation of Nrf2 signaling by Klotho leads to improved renal function and decreased glomerulosclerosis in db/db mice."
-        ]
-      },
-      {
-        "n": 44,
-        "kind": "paper",
-        "study": "mouse",
-        "study_id": "DTXSID6020430_mouse",
-        "text": null,
-        "url": "https://doi.org/10.1007/s12192-020-01079-z",
-        "title": "Nrf2/ARE is a key pathway for curcumin-mediated protection of TMJ chondrocytes from oxidative stress and inflammation",
-        "year": 2020,
-        "venue": "Cell stress & chaperones (Print)",
-        "doi": "10.1007/s12192-020-01079-z",
-        "genes": [
-          "SOD2"
-        ],
-        "cited_in": [
-          {
-            "part": "genomics_heart_female",
-            "part_title": "Gene-level interpretation: heart, female (genes)",
-            "study": "mouse",
-            "study_id": "DTXSID6020430_mouse",
-            "sentences": [
-              "Sod2, encoding manganese superoxide dismutase, is a well-established marker of mitochondrial oxidative stress and has been reported to be regulated through Nrf2 and related antioxidant pathways in multiple organ systems [42, 43, 44]; its presence among the responsive genes would support an oxidative stress component to the cardiac response."
-            ]
-          }
-        ],
-        "statements": [
-          "Curcumin inhibits inflammation and oxidative stress in TMJ chondrocytes through activation of the Nrf2/ARE pathway.",
-          "Curcumin upregulates cartilage anabolic factors COL2A1 and ACAN while downregulating matrix-degrading proteinases MMPs and ADAMTSs.",
-          "Specific inhibition of Nrf2 abrogates curcumin-induced anti-inflammatory effects in TMJ chondrocytes."
+          "A systems biological approach using biomarkers can evaluate the safety and consistency of seasonal trivalent influenza vaccines more accurately than conventional methods.",
+          "The biomarker analysis correlates with findings from traditional animal toxicity tests but offers a faster alternative for batch-to-batch evaluation."
         ]
       }
     ],
     "check": {
       "untraced": 0,
       "removed": 0,
-      "say": "Every citation points at a source that was supplied.",
+      "say": "Every citation a model wrote points at a source that was supplied to it.",
       "parts": [
         {
           "where": "background",

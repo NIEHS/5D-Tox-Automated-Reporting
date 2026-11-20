@@ -477,6 +477,8 @@ def sections_state(dtxsid: str, engine, store: PoolStore, session: Path,
 PUBLISH_CHECKS: dict[str, str] = {
     "stale_llm_sections": ("Whether any section written by the language model is out of "
                            "date with the study's data."),
+    "citations": ("Whether the report's citations were checked on the report as it stands, "
+                  "and the check found no error."),
 }
 
 # Whether PUBLISH_CHECKS is everything publishing needs. It is not, until C6
@@ -493,20 +495,46 @@ _STALE_SAY_DEFAULT = ("This section is out of date with the study's data. Read i
                       "then approve it again.")
 
 
-def publish_readiness_state(engine) -> dict:
+_CITATIONS_SAY = {
+    "citations_not_checked": ("The citations have not been checked. Check them on the "
+                              "Citations tab: it is the last step before publishing."),
+    "citations_out_of_date": ("The report changed after its citations were checked. Check "
+                              "them again on the Citations tab."),
+    "citations_failed": ("The check of the citations found errors. They are listed on the "
+                         "Citations tab; correct them and check again."),
+}
+
+
+def publish_readiness_state(engine, citations: bool = True) -> dict:
     """``publish_readiness()`` as the checklist the interface shows: one block
-    item per stale LLM section, each saying why and where it is cleared."""
+    item per stale LLM section and one for the citation check, each saying why
+    and where it is cleared.
+
+    ``citations=False`` leaves the citation check out: for a study of a report
+    and for a published book's content, where the check is not made (the
+    report prints the reference list, and its check covers its studies' text;
+    a published book's content is read-only). The interface never lists a
+    block that nothing on the page can clear."""
     verdict = engine.publish_readiness()
+    blocking = [b for b in verdict.get("blocking", [])
+                if citations or b.get("section_key") != "citations"]
     items = [{
+        "id": "citations.check",
+        "level": "block",
+        "reason": b.get("reason"),
+        "say": _CITATIONS_SAY.get(b.get("reason"), _CITATIONS_SAY["citations_not_checked"]),
+        "fix": "D2",
+    } if b.get("section_key") == "citations" else {
         "id": "section.stale",
         "level": "block",
         "section": b["section_key"],
         "reason": b.get("reason"),
         "say": _STALE_SAY.get(b.get("reason"), _STALE_SAY_DEFAULT),
         "fix": "D1",
-    } for b in verdict.get("blocking", [])]
-    return {"ready": bool(verdict.get("can_publish")), "complete": PUBLISH_CHECKS_COMPLETE,
-            "checks": [{"id": k, "say": v} for k, v in PUBLISH_CHECKS.items()],
+    } for b in blocking]
+    return {"ready": not blocking, "complete": PUBLISH_CHECKS_COMPLETE,
+            "checks": [{"id": k, "say": v} for k, v in PUBLISH_CHECKS.items()
+                       if citations or k != "citations"],
             "items": items}
 
 
@@ -532,7 +560,7 @@ def members_state(dtxsid: str, store: PoolStore) -> list[dict] | None:
             entry["phase"] = engine.state().phase.value
             entry["processed"] = _is_processed(store.session_dir(member_id))
             entry["readiness"] = {
-                "publish": publish_readiness_state(engine)}
+                "publish": publish_readiness_state(engine, citations=False)}
         out.append(entry)
     return out
 
@@ -578,17 +606,19 @@ def study_state(dtxsid: str, store: PoolStore | None = None) -> dict:
     if tree_error is not None and "error" not in definition:
         definition["error"] = tree_error
 
+    kind = session_kind(dtxsid, session.parent)
     state: dict = {
         "id": dtxsid,
         "exists": True,
-        **session_kind(dtxsid, session.parent),
+        **kind,
         "phase": wf.phase.value,
         "legal_actions": sorted(a.value for a in wf.legal_actions),
         "identity": _identity(session),
         "pins": {"method": method_pin_state(dtxsid, session), "definition": definition},
         "processed": _is_processed(session),
         "sections": sections_state(dtxsid, engine, store, session, catalog, tree),
-        "readiness": {"publish": publish_readiness_state(engine)},
+        "readiness": {"publish": publish_readiness_state(
+            engine, citations=kind["kind"] not in ("member", "companion"))},
     }
     if state["kind"] in ("companion", "report"):
         # Every workflow action is a data act, and R6 refuses them all on a

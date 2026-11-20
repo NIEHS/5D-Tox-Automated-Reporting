@@ -255,13 +255,21 @@ def test_publish_readiness_is_a_checklist_of_stale_llm_sections(session):
     publish = state["readiness"]["publish"]
     assert publish["ready"] is False
     # What "ready" covered, in words, and that it is not everything (until C6).
-    assert [c["id"] for c in publish["checks"]] == list(PUBLISH_CHECKS) == ["stale_llm_sections"]
+    assert [c["id"] for c in publish["checks"]] == list(PUBLISH_CHECKS) == [
+        "stale_llm_sections", "citations"]
     assert all(c["say"] for c in publish["checks"])
     assert publish["complete"] is PUBLISH_CHECKS_COMPLETE is False
-    by_section = {i["section"]: i for i in publish["items"]}
+    # The citations have not been checked (ADR-0038): its own item, cleared on
+    # the Citations tab.
+    citations = [i for i in publish["items"] if i["id"] == "citations.check"]
+    assert [(i["reason"], i["fix"], "section" in i) for i in citations] == [
+        ("citations_not_checked", "D2", False)]
+    assert "have not been checked" in citations[0]["say"]
+    stale = [i for i in publish["items"] if i["id"] == "section.stale"]
+    by_section = {i["section"]: i for i in stale}
     assert set(by_section) == {"methods", "summary"}
-    for item in publish["items"]:
-        assert item["id"] == "section.stale" and item["level"] == "block" and item["fix"] == "D1"
+    for item in stale:
+        assert item["level"] == "block" and item["fix"] == "D1"
         assert item["say"]
     assert by_section["summary"]["reason"] == "data_changed"
     assert by_section["methods"]["reason"] == "stale"
@@ -430,8 +438,17 @@ def test_members_are_listed_with_their_own_publish_readiness(sessions_dir, sessi
     assert rat_m["readiness"]["publish"]["ready"] is False
     assert [i["section"] for i in rat_m["readiness"]["publish"]["items"]] == ["summary"]
     assert mouse_m == {"key": "mouse", "id": f"{ID}_mouse", "exists": False}
-    # Not folded into the report's own verdict (that is C6).
-    assert state["readiness"]["publish"]["ready"] is True
+    # A study of a report is never asked for a citation check: the report
+    # prints the list, and its check covers its studies' text.
+    assert [c["id"] for c in rat_m["readiness"]["publish"]["checks"]] == ["stale_llm_sections"]
+    # Not folded into the report's own verdict (that is C6): the report's own
+    # block is its citation check, which has not been made.
+    assert [i["id"] for i in state["readiness"]["publish"]["items"]] == ["citations.check"]
+    from rendering.citations_validate import RECORD_FILE
+    from rendering.kept_render import content_fingerprint
+    (session / RECORD_FILE).write_text(json.dumps(
+        {"passed": True, "content_fingerprint": content_fingerprint(ID)}))
+    assert study_state(ID)["readiness"]["publish"]["ready"] is True
     assert not (sessions_dir / f"{ID}_mouse").exists()
 
 

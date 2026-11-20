@@ -14,6 +14,7 @@ export const writingPaths = {
   writing: (id: string) => `${API_V2}/studies/${enc(id)}/writing`,
   part: (id: string, part: string) => `${API_V2}/studies/${enc(id)}/writing/${enc(part)}`,
   references: (id: string) => `${API_V2}/studies/${enc(id)}/references`,
+  checkCitations: (id: string) => `${API_V2}/studies/${enc(id)}/citations/check`,
   writeBackground: (id: string) => `${API_V2}/studies/${enc(id)}/writing/background`,
   runSummary: (id: string) => `${API_V2}/studies/${enc(id)}/writing/summary`,
   takeSummaryRun: (id: string, runId: string) =>
@@ -182,13 +183,19 @@ export interface CitedIn {
 }
 
 export interface ReferenceEntry {
-  /** the number as printed */
-  n: number
-  kind: 'background_source' | 'paper' | (string & {})
-  /** the study's key in the report ("rat"); null for the Background's sources */
+  /** the number as the report prints it; null for a recorded source the report does not list */
+  n: number | null
+  slug: string | null
+  /** where the source came from */
+  kind: 'background_source' | 'paper' | 'boilerplate' | 'person_source' | 'as_given' | (string & {})
+  listed: boolean
+  /** why a recorded source is not listed; null for a listed one */
+  why_not_listed: string | null
   study: string | null
   study_id: string
-  /** a Background source, as printed */
+  /** the entry as the list prints it */
+  entry: string | null
+  /** a source recorded as one line */
   text: string | null
   url: string | null
   title: string | null
@@ -197,9 +204,43 @@ export interface ReferenceEntry {
   doi: string | null
   /** the genes a paper was offered for */
   genes: string[]
+  knowledge_base: string | null
+  /** what the DOI system or the address answered at the check */
+  checked: string | null
+  /** how many times the printed report cites it */
+  cited: number
   cited_in: CitedIn[]
-  /** the knowledge base's statements from the paper; null when it has none to read from */
+  /** the knowledge base's statements from a paper; null when there is none to read from */
   statements: string[] | null
+}
+
+export interface CitationFinding {
+  severity: 'error' | 'warning' | 'note' | (string & {})
+  code: string
+  say: string
+  sentences: string[]
+}
+
+/** Where the check of the report's citations stands, and what it found. */
+export interface PrintedCheck {
+  state: 'not_checked' | 'out_of_date' | 'failed' | 'passed' | (string & {})
+  say: string
+  checked_at: string | null
+  checked_by: string | null
+  counts: {
+    citations: number
+    cited_sources: number
+    listed: number
+    recorded_sources: number
+    errors: number
+    warnings: number
+    notes: number
+  } | null
+  tracked: boolean | null
+  findings: CitationFinding[]
+  not_judged: string[]
+  /** whether "Check the citations" is offered here, and why not */
+  act: ActVerdict
 }
 
 export interface CheckPart {
@@ -229,7 +270,13 @@ export interface References {
   check_says: string
   numbering_say: string
   report?: { id: string | null }
+  /** the check of the report as presented; null for a study of a report (the report prints the list) */
+  printed: PrintedCheck | null
+  /** the reference list as the last check derived it from the printed report */
   entries: ReferenceEntry[]
+  /** the recorded sources the report does not list */
+  not_listed: ReferenceEntry[]
+  /** what the writers cited, against the sources offered to them */
   check: { untraced: number; removed: number; say: string; parts: CheckPart[] }
   knowledge_bases: KnowledgeBaseUsed[]
 }
@@ -250,7 +297,12 @@ export function getWritingPart(studyId: string, part: string, signal?: AbortSign
   return getJson<PartDetail>(writingPaths.part(studyId, part), signal)
 }
 
-/** The reference list as printed, with what cites each entry. No side effect. */
+/** Check the report's citations as it is presented and record the result: a run's events (§4.4). */
+export function checkCitations(id: string): AsyncGenerator<RunEvent> {
+  return streamRun(writingPaths.checkCitations(id))
+}
+
+/** Where the citation check stands, the list it derived, the sources not listed. No side effect. */
 export function getReferences(id: string, signal?: AbortSignal): Promise<References> {
   return getJson<References>(writingPaths.references(id), signal)
 }

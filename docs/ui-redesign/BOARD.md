@@ -162,6 +162,19 @@ Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9)
   package; the Combined data page lists them (`left_out` in GET …/dataset), the
   tables note the cells and the Methods state them. A study's files table names
   the new kind of file ("Values left out of the analysis");
+- built 2026-11-20 (`main` `64cb7cf`, ADR-0038): the citations. A source is a
+  record; text cites it by its record; the numbers and the reference list are
+  derived from what the report prints, so only cited sources are listed, each
+  once. The Citations tab shows where the check of the report stands (not
+  checked, out of date, failed, passed), what it found and what it does not
+  judge; "Check the citations" runs it (`POST …/citations/check`, about a
+  minute) and records the result; the list shown is the one the last check
+  derived; the recorded sources the report does not list are shown with the
+  reason. The publish checklist names the check (`citations.check`, cleared on
+  the Citations tab); a study of a report and a published book's content are
+  never asked for one. The finished NIEHS-12 lists 12 references (it listed 81
+  and cited 5). Any change of the report after a check, an approval included,
+  shows the check out of date: the check is the last step before publishing;
 - the Background's public sources (ATSDR) answer only some of the time from here;
 - (fixed 2026-11-19) `test_read_model::test_a_broken_snapshot…` and
   `test_ui_api_layering::test_every_place_has_a_module` pass: the suite has no known failure.

@@ -5,8 +5,10 @@ tab (the demo path, docs/ui-redesign/modules/demo/spec.md §4 S3 and S4).
   GET  /api/v2/studies/{id}/writing                    the written parts, each marked built from
                                                        the data or written by a model
   GET  /api/v2/studies/{id}/writing/{part}             one part: its text and what the model was given
-  GET  /api/v2/studies/{id}/references                 the reference list, what cites each entry,
-                                                       the citation check's result
+  GET  /api/v2/studies/{id}/references                 where the citation check stands, the reference
+                                                       list it derived, the sources not listed
+  POST /api/v2/studies/{id}/citations/check            check the citations of the report as it is
+                                                       presented and record the result (event stream)
   POST /api/v2/studies/{id}/writing/background         write the Background (a run's event stream)
   POST /api/v2/studies/{id}/writing/summary            have the model word the Summary (event stream)
   POST /api/v2/studies/{id}/writing/summary/runs/{run_id}/use
@@ -57,9 +59,18 @@ def api_v2_writing_part(dtxsid: str, part: str):
 
 @router.get("/studies/{dtxsid}/references")
 def api_v2_references(dtxsid: str):
-    """The reference list as printed (ui_api.writing_references.references)."""
+    """Where the citation check stands, the reference list it derived and the
+    recorded sources not listed (ui_api.writing_references.references)."""
     from ui_api.writing_references import references
     return JSONResponse(references(dtxsid))
+
+
+@router.post("/studies/{dtxsid}/citations/check")
+def api_v2_check_citations(dtxsid: str):
+    """Check the report's citations as it is presented and record the result
+    (ADR-0038); answers a run's events."""
+    from ui_api.writing_acts import check_citations
+    return _ndjson(check_citations(dtxsid))
 
 
 @router.post("/studies/{dtxsid}/writing/background")

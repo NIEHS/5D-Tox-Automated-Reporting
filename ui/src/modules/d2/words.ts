@@ -93,8 +93,35 @@ export const TAKE_RUN_ELSEWHERE = "A run's text is taken into the report on the 
 export const API_PAGE_LEAD = 'This step on the API page:'
 export const SHOW_TEXT = 'Show the text'
 
-export const REFERENCES_STUDY_NOTE = 'The Background and its sources belong to the report:'
-export const NO_REFERENCES = 'There are no references yet: they are listed once the Background or the gene-level interpretations are written.'
+export const REFERENCES_STUDY_NOTE = 'The report prints the reference list; a study of a report has none of its own:'
+export const NO_REFERENCES = 'The printed report cites no source, so its reference list is empty.'
+export const NO_LIST_YET = 'There is no list to show until the citations are checked.'
+export const CHECK_CITATIONS = 'Check the citations'
+export const CHECK_CITATIONS_AGAIN = 'Check the citations again'
+export const WAIT_CITATIONS_TITLE = 'Checking the citations'
+export const WAIT_CITATIONS_NOTE =
+  'The report is read the way a reader gets it. Every citation must name a recorded source; every cited source must have a complete entry and a registered DOI or an address that answers. The reference list is derived from what the report prints. The result is recorded.'
+export const PRINTED_TITLE = "The check of the report's citations"
+
+/** What a finished check says of itself, from the run's summary (the backend's counts). */
+export function checkOutcome(summary: Record<string, unknown>): string {
+  const n = (key: string) => (typeof summary[key] === 'number' ? (summary[key] as number) : 0)
+  const found =
+    n('errors') > 0
+      ? `${plural(n('errors'), 'error was', 'errors were')} found; each is listed below.`
+      : n('warnings') > 0
+        ? `No error was found. ${plural(n('warnings'), 'check', 'checks')} could not be made or ${n('warnings') === 1 ? 'needs' : 'need'} a look.`
+        : 'No error was found.'
+  return `The citations were checked and the result was recorded: ${plural(n('citations'), 'citation', 'citations')} in the printed report, ${plural(n('listed'), 'source', 'sources')} listed. ${found}`
+}
+export const NOT_JUDGED_TITLE = 'What this check does not judge'
+export const NOT_LISTED_TITLE = 'Recorded sources the report does not list'
+export const NOT_LISTED_SAY =
+  'A source is listed only when text the report prints cites it. These are recorded for the report and not listed, each for the reason given.'
+export const WRITERS_TITLE = 'What the models cited, against the sources supplied to them'
+export const STATEMENTS_NOT_A_PAPER_BOILERPLATE =
+  "This is a source of the report definitions' library (what a report of this kind cites whatever the study), not a paper of the knowledge base: there are no extracted statements."
+export const STATEMENTS_NOT_A_PAPER_PERSON = 'This source was added by a person, not taken from the knowledge base: there are no extracted statements.'
 export const STATEMENTS_TITLE = 'Statements the knowledge base extracted from this paper'
 export const STATEMENTS_NONE = 'The knowledge base holds no statement extracted from this paper.'
 export const STATEMENTS_UNREADABLE = 'The knowledge base could not be read, so its statements from this paper are not shown.'

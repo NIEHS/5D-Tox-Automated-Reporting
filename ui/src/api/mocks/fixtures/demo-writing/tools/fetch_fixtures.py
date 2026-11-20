@@ -10,8 +10,12 @@ Three answers are shortened so the fixtures stay small; nothing else is
 changed, and no key is added or removed:
   * a gene-level interpretation's recorded text (57,000 characters) is cut to
     its first 3,000, and its papers offered to the first eight;
-  * a reference list keeps the Background's sources and the first five papers
-    of each study.
+  * of the recorded sources a report does not list, the first five are kept,
+    and of a paper's extracted statements the first three. The reference list
+    itself (the last citation check's) is kept whole.
+
+``--references`` saves only the Citations tab's answers (the references of
+the four sessions and the refusal of a check on a study of a report).
 """
 
 import json
@@ -52,15 +56,22 @@ def shorten_part(answer: dict) -> dict:
 
 
 def shorten_references(answer: dict) -> dict:
-    kept, seen = [], {}
-    for entry in answer["body"]["entries"]:
-        if entry["kind"] == "paper":
-            seen[entry["study_id"]] = seen.get(entry["study_id"], 0) + 1
-            if seen[entry["study_id"]] > 5:
-                continue
-        kept.append(entry)
-    answer["body"]["entries"] = kept
+    """The list as printed is kept whole; of the recorded sources not listed,
+    the first five; a paper's extracted statements, the first three."""
+    body = answer["body"]
+    body["not_listed"] = body.get("not_listed", [])[:5]
+    for entry in body.get("entries", []) + body["not_listed"]:
+        if entry.get("statements"):
+            entry["statements"] = entry["statements"][:3]
     return answer
+
+
+def references_only(base: str) -> None:
+    for session in SESSIONS:
+        save(f"references.{session}.json",
+             shorten_references(fetch(base, f"/api/v2/studies/{session}/references")))
+    save("refusal.citations_are_the_reports.json",
+         fetch(base, f"/api/v2/studies/{LIVE}_rat/citations/check", "POST"))
 
 
 def main(base: str) -> None:
@@ -82,7 +93,11 @@ def main(base: str) -> None:
          fetch(base, f"/api/v2/studies/{LIVE}_rat/writing/background", "POST"))
     save("refusal.writing_part_not_found.json",
          fetch(base, f"/api/v2/studies/{FINISHED}/writing/methods"))
+    save("refusal.citations_are_the_reports.json",
+         fetch(base, f"/api/v2/studies/{LIVE}_rat/citations/check", "POST"))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:9520")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    base = args[0] if args else "http://127.0.0.1:9520"
+    references_only(base) if "--references" in sys.argv else main(base)

@@ -1,0 +1,16 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "citations_are_the_reports",
+      "status": 409,
+      "message": "DTXSID6020430_live_rat is a study of the report DTXSID6020430_live; the report prints the reference list",
+      "say": "The reference list is the report's (DTXSID6020430_live): a study of a report prints none of its own. The citations are checked on the report's page.",
+      "fix": null,
+      "details": {
+        "id": "DTXSID6020430_live_rat",
+        "parent": "DTXSID6020430_live"
+      }
+    }
+  }
+}

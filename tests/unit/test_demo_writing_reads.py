@@ -102,7 +102,56 @@ def kb(tmp_path, monkeypatch):
     con.close()
     monkeypatch.setattr(registry, "kb_or_none", lambda dtxsid, needs=None: {
         "name": "kb-test", "path": path, "sha256": "f" * 64})
+    monkeypatch.setattr(registry, "db_path", lambda name: path)
     return path
+
+
+def _checked(store, passed=True):
+    """The record of a citation check made on the report as it stands
+    (rendering.citations_validate), as the check writes it."""
+    from rendering.citations_validate import NOT_JUDGED, RECORD_FILE
+    from rendering.kept_render import content_fingerprint
+
+    record = {
+        "dtxsid": REPORT, "view": "bookshelf", "checked_at": "2026-11-20T18:00:00Z",
+        "checked_by": None, "network": True, "tracked": True, "passed": passed,
+        "content_fingerprint": content_fingerprint(REPORT), "print_fingerprint": "p" * 32,
+        "counts": {"citations": 3, "cited_sources": 2, "listed": 2, "recorded_sources": 3,
+                   "errors": 0 if passed else 1, "warnings": 1, "notes": 1},
+        "findings": ([] if passed else [{
+            "severity": "error", "code": "no_source",
+            "message": "The text cites number 7, which its writer's list does not have.",
+            "slug": "unknown-7", "sentences": ["Its limit is 5 ppm."]}]) + [
+            {"severity": "warning", "code": "address_not_checked",
+             "message": "The address of [1] PubChem Compound 1 (database) could not be reached "
+                        "from this machine, so it was not checked: https://pubchem.example/1",
+             "slug": "sbg"},
+            {"severity": "note", "code": "cited_by_unprinted_text",
+             "message": "1 recorded source is cited only by text this report does not print.",
+             "slugs": ["spb"]}],
+        "references": [
+            {"number": 1, "slug": "sbg", "kind": "website", "origin": "background",
+             "entry": "PubChem Compound 1 (database). https://pubchem.example/1",
+             "text": "PubChem Compound 1 (database).", "url": "https://pubchem.example/1",
+             "cited": 2, "sentences": ["Testane is a solvent.", "It is a liver toxicant."],
+             "address_state": "not_reached"},
+            {"number": 2, "slug": "spa", "kind": "paper", "origin": "knowledge_base",
+             "knowledge_base": "kb-test", "paper_id": PAPER_A,
+             "entry": "Able B. Nrf2 in the liver. Tox Sci. 2021. https://doi.org/10.1000/a",
+             "title": "Nrf2 in the liver", "container": "Tox Sci", "year": 2021,
+             "doi": "10.1000/a", "url": "https://doi.org/10.1000/a", "genes": ["NFE2L2"],
+             "cited": 1, "sentences": ["Nrf2 was activated."], "doi_state": "registered"}],
+        "not_listed": [
+            {"slug": "spb", "kind": "paper", "origin": "knowledge_base",
+             "knowledge_base": "kb-test", "paper_id": PAPER_B,
+             "entry": "Heme oxygenase. Redox. 2019. https://doi.org/10.1000/b",
+             "title": "Heme oxygenase", "container": "Redox", "year": 2019,
+             "doi": "10.1000/b", "url": "https://doi.org/10.1000/b", "genes": ["HMOX1"],
+             "reason": "unprinted_text"}],
+        "not_judged": list(NOT_JUDGED),
+    }
+    _write(store / REPORT, RECORD_FILE, record)
+    return record
 
 
 def _snapshot(root):
@@ -308,7 +357,7 @@ def test_an_unknown_part_and_a_part_of_the_wrong_session_are_refused(store):
 # The reference list
 # ---------------------------------------------------------------------------
 
-def test_the_report_prints_one_list_and_says_what_cites_each_entry(store, kb):
+def test_before_a_check_there_is_no_list_and_the_writers_check_is_served(store, kb):
     from ui_api.writing_references import CHECK_SAYS, references
 
     before = _snapshot(store)
@@ -318,23 +367,19 @@ def test_the_report_prints_one_list_and_says_what_cites_each_entry(store, kb):
     assert out["check_says"] == CHECK_SAYS == (
         "The check establishes that a citation points at a source. It does not judge "
         "whether the source supports the sentence.")
-    assert [(e["n"], e["kind"]) for e in out["entries"]] == [
-        (1, "background_source"), (2, "background_source"), (3, "paper"), (4, "paper")]
-    first = out["entries"][0]
-    assert first["text"] == "PubChem Compound 1 (database)." and first["url"] == "https://pubchem.example/1"
-    assert first["cited_in"][0]["sentences"] == [
-        "Testane is a solvent [1].", "It is a liver toxicant [1, 2]."]
-    # The study's papers are numbered on from the Background's sources, and
-    # the sentences carry the printed numbers; the invented token is gone.
-    paper = out["entries"][2]
-    assert (paper["title"], paper["doi"], paper["genes"]) == ("Nrf2 in the liver", "10.1000/a", ["NFE2L2"])
-    assert paper["url"] == "https://doi.org/10.1000/a"
-    assert paper["statements"] == ["Nrf2 protects the liver.", "Nrf2 induces NQO1."]
-    cited = paper["cited_in"][0]
-    assert cited["part"] == "genomics_liver_male" and cited["study"] == "rat"
-    assert cited["sentences"] == ["Nrf2 was activated [3].", "Oxidative stress followed [3, 4]."]
-    assert out["entries"][3]["statements"] == []            # a paper with no statement extracted
+    # The list is derived from what the report prints: nothing is shown
+    # before the citations are checked, and the answer says so.
+    printed = out["printed"]
+    assert printed["state"] == "not_checked" and "have not been checked" in printed["say"]
+    # The check reads the report as presented: it is not offered before the
+    # report can be shown (its study has not been processed), and says so.
+    assert printed["act"]["allowed"] is False
+    assert "has not been processed" in printed["act"]["say"]
+    assert printed["findings"] == [] and len(printed["not_judged"]) == 4
+    assert out["entries"] == [] and out["not_listed"] == []
 
+    # What the models cited against the sources supplied to them is recorded
+    # with the texts, so it is served whether or not the report was checked.
     check = out["check"]
     assert (check["untraced"], check["removed"]) == (2, 1)
     by_where = {p["where"]: p for p in check["parts"]}
@@ -344,23 +389,94 @@ def test_the_report_prints_one_list_and_says_what_cites_each_entry(store, kb):
                                        "recorded_name": "kb-test", "same": True, "usable": True}]
 
 
-def test_a_study_lists_its_own_papers_under_its_own_numbers(store, kb):
+def test_the_list_is_the_last_checks_with_what_cites_each_entry(store, kb):
+    from ui_api.writing_references import references
+
+    _checked(store)
+    before = _snapshot(store)
+    out = references(REPORT)
+    assert _snapshot(store) == before
+
+    printed = out["printed"]
+    assert printed["state"] == "passed"
+    assert "checked on the report as it stands (2026-11-20 at 18:00): no error." in printed["say"]
+    assert "1 check could not be made or needs a look" in printed["say"]
+    assert [(f["severity"], f["code"]) for f in printed["findings"]] == [
+        ("warning", "address_not_checked"), ("note", "cited_by_unprinted_text")]
+    assert all(f["say"] for f in printed["findings"])
+
+    assert [(e["n"], e["kind"], e["listed"]) for e in out["entries"]] == [
+        (1, "background_source", True), (2, "paper", True)]
+    first = out["entries"][0]
+    assert first["text"] == "PubChem Compound 1 (database)." and first["url"] == "https://pubchem.example/1"
+    assert first["entry"] == "PubChem Compound 1 (database). https://pubchem.example/1"
+    assert first["cited"] == 2 and first["checked"] == "not_reached"
+    assert first["cited_in"][0]["sentences"] == ["Testane is a solvent.", "It is a liver toxicant."]
+    assert first["statements"] is None                     # not a paper of the knowledge base
+    paper = out["entries"][1]
+    assert (paper["title"], paper["doi"], paper["genes"]) == ("Nrf2 in the liver", "10.1000/a", ["NFE2L2"])
+    assert paper["url"] == "https://doi.org/10.1000/a" and paper["knowledge_base"] == "kb-test"
+    assert paper["statements"] == ["Nrf2 protects the liver.", "Nrf2 induces NQO1."]
+    assert paper["checked"] == "registered" and paper["why_not_listed"] is None
+
+    # A recorded source the report does not list, with the reason.
+    idle = out["not_listed"]
+    assert [(e["n"], e["listed"], e["title"]) for e in idle] == [(None, False, "Heme oxygenase")]
+    assert idle[0]["why_not_listed"].startswith("Cited only by text this report does not print")
+    assert idle[0]["statements"] == []                     # a paper with no statement extracted
+
+
+def test_a_change_after_the_check_shows_it_out_of_date_and_a_failed_check_says_so(store, kb):
+    from ui_api.writing_references import references
+
+    _checked(store, passed=False)
+    failed = references(REPORT)["printed"]
+    assert failed["state"] == "failed" and "found 1 error" in failed["say"]
+    assert failed["findings"][0]["sentences"] == ["Its limit is 5 ppm."]
+
+    _checked(store)
+    _write(store / STUDY, "summary.json", {"paragraphs": ["Changed."], "approved": False})
+    out = references(REPORT)
+    assert out["printed"]["state"] == "out_of_date"
+    assert "changed after its citations were checked" in out["printed"]["say"]
+    # What is shown is the result as it was then.
+    assert [e["n"] for e in out["entries"]] == [1, 2]
+
+
+def test_a_study_of_a_report_is_pointed_at_the_reports_list(store, kb):
     from ui_api.writing_references import references
 
     out = references(STUDY)
     assert out["report"] == {"id": REPORT}
-    assert [(e["n"], e["kind"]) for e in out["entries"]] == [(1, "paper"), (2, "paper")]
-    assert out["entries"][0]["cited_in"][0]["sentences"][0] == "Nrf2 was activated [1]."
+    assert out["printed"] is None and out["entries"] == [] and out["not_listed"] == []
+    assert [p["where"] for p in out["check"]["parts"]] == ["interpretations"]
 
 
 def test_without_a_knowledge_base_the_statements_are_absent_not_empty(store, monkeypatch):
     from knowledge_base import registry
     from ui_api.writing_references import references
 
+    def unreadable(name):
+        raise registry.KnowledgeBaseError(f"no knowledge base named {name!r}")
+
     monkeypatch.setattr(registry, "kb_or_none", lambda dtxsid, needs=None: None)
-    out = references(STUDY)
-    assert out["entries"][0]["statements"] is None
+    monkeypatch.setattr(registry, "db_path", unreadable)
+    _checked(store)
+    out = references(REPORT)
+    assert out["entries"][1]["statements"] is None
     assert out["knowledge_bases"][0]["usable"] is False
+
+
+def test_the_check_is_offered_on_a_report_and_refused_on_a_study_of_one(store, kb):
+    from ui_api.studies import StudyRefusal
+    from ui_api.writing_acts import check_citations
+
+    with pytest.raises(StudyRefusal) as refused:
+        check_citations(STUDY)
+    assert refused.value.code == "citations_are_the_reports"
+    with pytest.raises(StudyRefusal) as refused:
+        check_citations(REPORT)                      # its study has not been processed
+    assert refused.value.code == "citations_no_report_yet"
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +490,10 @@ def test_the_routes_answer_and_refuse_in_the_envelope(store, kb):
     client = TestClient(app)
     assert client.get(f"/api/v2/studies/{REPORT}/writing").json()["kind"] == "report"
     assert client.get(f"/api/v2/studies/{STUDY}/writing/summary").json()["key"] == "summary"
-    assert len(client.get(f"/api/v2/studies/{REPORT}/references").json()["entries"]) == 4
+    assert client.get(f"/api/v2/studies/{REPORT}/references").json()["printed"]["state"] == "not_checked"
+    not_here = client.post(f"/api/v2/studies/{STUDY}/citations/check")
+    assert not_here.status_code == 409
+    assert not_here.json()["error"]["code"] == "citations_are_the_reports"
     missing = client.get(f"/api/v2/studies/{STUDY}/writing/nothing")
     assert missing.status_code == 404 and missing.json()["error"]["code"] == "writing_part_not_found"
     gone = client.get("/api/v2/studies/DTXSID0000999/references")
@@ -404,13 +523,16 @@ def test_the_wording_addresses_nobody(store, kb):
     from ui_api.writing import writing_overview, writing_part
     from ui_api.writing_references import references
 
+    _checked(store, passed=False)
     served = [writing_overview(REPORT), writing_overview(STUDY), references(REPORT),
-              writing_part(REPORT, "background")]
+              references(STUDY), writing_part(REPORT, "background")]
     served += [writing_part(STUDY, p) for p in
                ("methods", "results", "bmd_summary", "genomics_liver_male", "summary")]
     texts = _says(served)
     assert len(texts) > 40
     texts += [STUDY_REFUSALS[code].say for code in (
-        "writing_part_not_found", "background_is_the_reports", "summary_is_a_studys",
+        "writing_part_not_found", "background_is_the_reports", "citations_are_the_reports",
+        "citations_no_report_yet",
+        "summary_is_a_studys",
         "summary_not_ready", "summary_run_not_found", "model_not_allowed", "writing_failed")]
     assert [t for t in texts if SECOND_PERSON.search(t) or "wizard" in t.lower()] == []

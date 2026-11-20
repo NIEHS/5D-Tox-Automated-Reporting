@@ -270,7 +270,9 @@ def _group(owner: str, key: str | None, title: str, rows: list[dict], belongs,
     shown = [_row(r, owner, key, sections.get(r["key"]), book, untitled)
              for r in rows if belongs(r)]
     return {"owner": owner, "key": key, "title": title, "exists": True,
-            "publish": publish_readiness_state(engine),
+            # A study of a report (it has a key) is not asked for a citation
+            # check: the report prints the list.
+            "publish": publish_readiness_state(engine, citations=key is None),
             "sections": _in_document_order(shown)}
 
 

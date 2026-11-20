@@ -240,24 +240,54 @@ groups:
 
   - key: citations
     operations:
-      - op: GET /api/v2/studies/{dtxsid}/references
-        title: Show the reference list, what cites each entry and where each paper came from
+      - op: POST /api/v2/studies/{dtxsid}/citations/check
+        title: Check the report's citations and record the result
         does: >
-          The list as the report prints it: the Background's sources, then
-          the papers the gene-level interpretations cite. For each entry: the
-          sentences that cite it, the genes a paper was offered for, and the
-          statements the knowledge base extracted from the paper. With it,
-          the citation check's result: how many citations could not be traced
-          to a supplied source. The check establishes that a citation points
-          at a source; it does not judge whether the source supports the
-          sentence.
+          The report is read the way a reader gets it. Every citation in the
+          printed text must name a recorded source; every cited source's entry
+          must be complete; its DOI must be registered with the DOI system, or
+          its address must answer; no citation may be typed as a bare number.
+          The reference list is derived from the printed citations: each
+          source is numbered at its first citation, and only cited sources are
+          listed, each once. The result is recorded with the state of the
+          report it was made on, so any later change shows it out of date. The
+          report can't be published until a check that holds has passed. The
+          answer is a stream of the steps as they happen. Refused on the
+          finished report of a demonstration pair and on a study of a report
+          (the report prints the list). The check does not judge whether a
+          source supports the sentence that cites it.
         reads: >
-          `background.json`, the interpretations with the papers offered to
-          each, and the study's knowledge base.
+          The report's sections and data, the sources recorded for it (the
+          Background's, the papers the interpretations cite, the definitions'
+          source library, sources a person added), the DOI system and the
+          sources' addresses.
+        writes: "`citations_check.json` in the report's session."
+        code:
+          - ui_api.writing_acts.check_citations
+          - rendering.citations_validate.validate
+          - rendering.citations.numbered
+          - narrative.source_lookup.check_doi
+      - op: GET /api/v2/studies/{dtxsid}/references
+        title: Show where the citation check stands, the reference list it derived and the sources not listed
+        does: >
+          Where the check of the report's citations stands (not checked, out
+          of date, failed, passed) and what it found. The reference list as
+          the last check derived it from the printed report: for each entry,
+          the sentences that cite it and, for a paper, the genes it was
+          offered for and the statements the knowledge base extracted from
+          it. The recorded sources the report does not list, each with the
+          reason: the text that cites it is not part of this report, or no
+          text cites it. And the writers' check: how many citations a model
+          wrote could not be traced to a source it was offered. A study of a
+          report is pointed at the report's list.
+        reads: >
+          `citations_check.json`, `background.json`, the interpretations with
+          the papers offered to each, and the study's knowledge base.
         code:
           - ui_api.writing_references.references
+          - rendering.citations_validate.status
           - narrative.references_builder.build_session_references
-          - knowledge_base.registry.kb_for
+          - knowledge_base.registry.db_path
 
   - key: review
     operations:

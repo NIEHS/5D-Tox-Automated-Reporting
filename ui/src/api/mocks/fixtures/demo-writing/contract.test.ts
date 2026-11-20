@@ -53,10 +53,37 @@ describe('the Written sections fixtures are real answers in the typed shape', ()
     expect(DEMO_WRITING['DTXSID6020430_live_rat']!.acts.summary.allowed).toBe(true)
   })
 
-  it('the reference list is numbered as printed, without a gap in what was kept of the Background', () => {
+  it('the finished report was checked: its list is the one the check derived, numbered without a gap, and only cited sources are in it', () => {
     const refs = DEMO_REFERENCES['DTXSID6020430']!
+    expect(refs.printed).toMatchObject({ state: 'passed', act: { allowed: false, counterpart: 'DTXSID6020430_live' } })
+    expect(refs.printed!.counts!.errors).toBe(0)
+    expect(refs.entries.map((e) => e.n)).toEqual(refs.entries.map((_, i) => i + 1))
     expect(refs.entries.filter((e) => e.kind === 'background_source').map((e) => e.n)).toEqual([1, 2, 3, 4, 5])
-    expect(refs.entries.find((e) => e.kind === 'paper')!.n).toBe(6)
-    for (const e of refs.entries) expect(e.kind === 'paper' ? e.statements !== null : e.statements === null, String(e.n)).toBe(true)
+    expect(refs.entries.filter((e) => e.kind === 'boilerplate').map((e) => e.n)).toEqual([6, 7, 8, 9, 10, 11, 12])
+    for (const e of refs.entries) {
+      expect(e.listed, String(e.n)).toBe(true)
+      expect(e.cited, String(e.n)).toBeGreaterThan(0)
+      expect(e.why_not_listed, String(e.n)).toBeNull()
+    }
+    // recorded and not listed: each says why, and a paper has the knowledge base's statements (or none)
+    expect(refs.not_listed.length).toBeGreaterThan(0)
+    for (const e of refs.not_listed) {
+      expect(e.n).toBeNull()
+      expect(e.listed).toBe(false)
+      expect(e.why_not_listed).toBeTruthy()
+      expect(e.kind === 'paper' ? e.statements !== null : e.statements === null, e.slug ?? '').toBe(true)
+    }
+  })
+
+  it('the live copy has not been checked, and the check is offered there; a study of a report has no list of its own', () => {
+    const live = DEMO_REFERENCES['DTXSID6020430_live']!
+    expect(live.printed).toMatchObject({ state: 'not_checked', act: { allowed: true } })
+    expect(live.entries).toEqual([])
+    for (const id of ['DTXSID6020430_rat', 'DTXSID6020430_live_rat']) {
+      const study = DEMO_REFERENCES[id]!
+      expect(study.printed, id).toBeNull()
+      expect(study.entries, id).toEqual([])
+      expect(study.report?.id, id).toBe(DEMO_STATES[id]!.relations!.parent)
+    }
   })
 })

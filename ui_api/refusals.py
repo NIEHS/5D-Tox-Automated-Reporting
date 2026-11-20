@@ -75,6 +75,13 @@ STUDY_REFUSALS: dict[str, Refusal] = {
     "background_is_the_reports": Refusal(409, (
         "The Background belongs to the report ({parent}), not to one of its studies. "
         "It is written on the report's page."), None),
+    "citations_are_the_reports": Refusal(409, (
+        "The reference list is the report's ({parent}): a study of a report prints none of "
+        "its own. The citations are checked on the report's page."), None),
+    "citations_no_report_yet": Refusal(409, (
+        "The citations can't be checked yet, because there is no report to read: the study "
+        "(or one of the studies of the report) has not been processed. The check reads the "
+        "report as it is presented, so it is made once the report can be shown."), None),
     "summary_is_a_studys": Refusal(409, (
         "A Summary is written for each study of a report, from that study's results. "
         "It is written on the study's page."), None),
@@ -114,6 +121,9 @@ PLACE_MODULE: dict[str, str] = {
     # base is shown on the Process page.
     "bmd_review": "D1",
     "knowledge_base": "P1",
+    # The citation check is made on the Citations tab of the Written sections
+    # page (ADR-0038).
+    "citations": "D2",
 }
 
 

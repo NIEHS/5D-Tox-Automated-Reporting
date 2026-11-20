@@ -1,6 +1,7 @@
 import type { PartDetail, References, WritingOverview } from '../../../demoWriting'
 import type { ErrorEnvelope, ExistingStudyState, RunEvent } from '../../../types'
 import rawRefusalMember from './refusal.background_is_the_reports.json'
+import rawRefusalCitations from './refusal.citations_are_the_reports.json'
 import rawRefusalFinished from './refusal.demo_reference.json'
 import rawRefusalNoPart from './refusal.writing_part_not_found.json'
 
@@ -17,7 +18,7 @@ import rawRefusalNoPart from './refusal.writing_part_not_found.json'
  * | writing.<id>.json | GET …/writing of the same four |
  * | part.<id>.<part>.json | GET …/writing/{part}: the finished Background (no prompt recorded), the live report's (not written), the finished rat study's five kinds of part, the live rat study's Summary |
  * | references.<id>.json | GET …/references of the four |
- * | refusal.*.json | three refusals, each as answered before any work |
+ * | refusal.*.json | four refusals, each as answered before any work |
  *
  * Three answers are SHORTENED by the tool (nothing else is changed): the
  * liver interpretation's recorded text is cut to its first 3,000 characters
@@ -67,6 +68,7 @@ export const DEMO_REFERENCES: Record<string, References> = Object.fromEntries(
 export const REFUSAL_DEMO_REFERENCE = (rawRefusalFinished as Saved<ErrorEnvelope>).body
 export const REFUSAL_BACKGROUND_IS_THE_REPORTS = (rawRefusalMember as Saved<ErrorEnvelope>).body
 export const REFUSAL_WRITING_PART_NOT_FOUND = (rawRefusalNoPart as Saved<ErrorEnvelope>).body
+export const REFUSAL_CITATIONS_ARE_THE_REPORTS = (rawRefusalCitations as Saved<ErrorEnvelope>).body
 
 /**
  * The backend's answer when a hazard assessment cannot be reached
@@ -125,6 +127,20 @@ export const STREAM_BACKGROUND_OK: RunEvent[] = [
       run_id: 'r20261118T180000-0a1b2c',
       model: 'claude-sonnet-4-6',
     },
+  },
+]
+
+/** HAND-MADE: the check of the citations, to its end (the summary's keys are the backend's). */
+export const STREAM_CITATIONS_OK: RunEvent[] = [
+  ...steps([['report', 'Reading the report as it is presented']], 52000),
+  ...steps(
+    [['citations', 'Checking every citation against the recorded sources, and every source against the DOI system or its address']],
+    4000,
+  ),
+  {
+    event: 'result',
+    ok: true,
+    summary: { passed: true, checked_at: '2026-11-20T19:53:22.685081+00:00', citations: 43, listed: 12, errors: 0, warnings: 1 },
   },
 ]
 

@@ -9,9 +9,11 @@ import {
   DEMO_STATES,
   DEMO_WRITING,
   REFUSAL_BACKGROUND_IS_THE_REPORTS,
+  REFUSAL_CITATIONS_ARE_THE_REPORTS,
   REFUSAL_DEMO_REFERENCE,
   REFUSAL_WRITING_PART_NOT_FOUND,
   STREAM_BACKGROUND_OK,
+  STREAM_CITATIONS_OK,
   STREAM_SUMMARY_OK,
 } from './fixtures/demo-writing'
 import { running } from './runs'
@@ -24,7 +26,9 @@ import { running } from './runs'
  *
  * Mock-only: a part of a study whose answer was not saved is served from the
  * finished rat study's part of the same key, under the asked study's id.
- * Writing changes nothing in the mock: the page reads the same answers again.
+ * Writing changes nothing in the mock: the page reads the same answers again
+ * (so after a mocked check of the citations the live copy still reads "not
+ * checked").
  */
 
 function envelope(body: ErrorEnvelope): Response {
@@ -65,7 +69,7 @@ function partOf(id: string, part: string): PartDetail | undefined {
 
 export function createDemoWritingHandlers({ stepDelayMs = 0 }: { stepDelayMs?: number } = {}) {
   /** A long act on a session of the pair: refused where the backend refuses it, else its stream. */
-  const act = (id: string, act: 'background' | 'summary', events: RunEvent[]) => {
+  const act = (id: string, act: 'background' | 'summary' | 'citations', events: RunEvent[]) => {
     const state = DEMO_STATES[id]
     if (!state) return undefined
     if (state.demo?.role === 'finished') {
@@ -74,6 +78,7 @@ export function createDemoWritingHandlers({ stepDelayMs = 0 }: { stepDelayMs?: n
       })
     }
     if (act === 'background' && state.kind === 'member') return envelope(REFUSAL_BACKGROUND_IS_THE_REPORTS)
+    if (act === 'citations' && state.kind === 'member') return envelope(REFUSAL_CITATIONS_ARE_THE_REPORTS)
     running.set(id, new Date().toISOString())
     return ndjson(events, stepDelayMs, () => running.delete(id))
   }
@@ -104,6 +109,8 @@ export function createDemoWritingHandlers({ stepDelayMs = 0 }: { stepDelayMs?: n
       const refs = DEMO_REFERENCES[String(params.id)]
       return refs ? HttpResponse.json(refs) : undefined
     }),
+
+    http.post(`${API_V2}/studies/:id/citations/check`, ({ params }) => act(String(params.id), 'citations', STREAM_CITATIONS_OK)),
 
     http.post(`${API_V2}/studies/:id/writing/background`, ({ params }) =>
       act(String(params.id), 'background', STREAM_BACKGROUND_OK),
