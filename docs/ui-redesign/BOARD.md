@@ -156,6 +156,12 @@ Open, from the build (for the maintainer; details in `modules/demo/spec.md` §9)
   followed to their endpoints (`tables/row_sources.py`), Clinical Observations to
   its file, the stage and next-step words, the shelf reduced to the Demo
   reports, a report's Background releasing its studies' Summary;
+- fixed 2026-11-20 (`main` `8b0cc04`, ADR-0037): the finished report's apical
+  benchmark doses now equal the book's (22 of 22 summary rows, each within 2%).
+  The two values the book left out are stated in a file of each study's
+  package; the Combined data page lists them (`left_out` in GET …/dataset), the
+  tables note the cells and the Methods state them. A study's files table names
+  the new kind of file ("Values left out of the analysis");
 - the Background's public sources (ATSDR) answer only some of the time from here;
 - (fixed 2026-11-19) `test_read_model::test_a_broken_snapshot…` and
   `test_ui_api_layering::test_every_place_has_a_module` pass: the suite has no known failure.
