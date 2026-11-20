@@ -469,7 +469,9 @@ class FileFingerprint:
                         etc.) or None for gene expression / unrecognized files
       data_type     — "tox_study", "inferred", "gene_expression", or
                       "sample_sheet" (sample_sheet: genomic sample → animal), or
-                      "removal_reasons" (each animal's disposition; no platform)
+                      "removal_reasons" (each animal's disposition; no platform), or
+                      "excluded_values" (excluded_values: the values the package
+                      says were left out of the analysis; no platform)
       endpoint_names — e.g., ["SD0", "SD5"] or ["Liver Weight Absolute", ...]
       animal_ids    — e.g., ["101", "102", ...] — for cross-tier count comparison
       n_animals_by_dose — {0.0: 10, 4.0: 8, ...} — animals per dose group
@@ -1036,6 +1038,20 @@ def fingerprint_txt_csv(
             lines = f.readlines()
     except Exception as e:
         logger.warning("Could not read %s: %s", filename, e)
+        return fp
+
+    # --- The package's excluded values (excluded_values, ADR-0037) ---
+    # Not data of a platform: the values the package says were left out of the
+    # analysis.  The animals it names are fingerprinted (the file check
+    # compares them with the study), and each row is one of its
+    # "endpoint_names", so what the file says is part of what a dataset is
+    # built from (workflow.integration_basis).
+    from .excluded_values import DATA_TYPE as _EXCLUDED, is_excluded_values_file, read_excluded_values
+    if is_excluded_values_file(path):
+        values, _problems = read_excluded_values(path)
+        fp.platform, fp.data_type, fp.sexes = None, _EXCLUDED, []
+        fp.animal_ids = sorted({v.animal_id for v in values})
+        fp.endpoint_names = [v.key() for v in values]
         return fp
 
     # Strip trailing whitespace, skip empty lines, and skip metadata comment
@@ -2155,6 +2171,9 @@ def _check_roster_consistency(
         # Gene expression files use plate/sample IDs (e.g., "Plate5-116"),
         # not study animal IDs (e.g., "101").  Exclude from roster.
         if fp.data_type == "gene_expression":
+            continue
+        # The excluded-values file names single values, not a roster.
+        if fp.data_type == "excluded_values":
             continue
 
         sexes = fp.sexes if fp.sexes else ["Unknown"]

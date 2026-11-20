@@ -68,8 +68,11 @@ def _sidecar_value_map(sc: dict) -> dict[tuple[str, str, str, str], dict]:
             dose = None
         for obs in animal.get("observations") or []:
             key = (sex, str(aid), obs.get("endpoint", ""), obs.get("day", ""))
+            # A value the package says was left out (ADR-0037) is still the
+            # value the source recorded: it is compared as recorded.
+            left_out = obs.get("excluded") if isinstance(obs.get("excluded"), dict) else None
             out[key] = {
-                "value": obs.get("value"),
+                "value": left_out["value"] if left_out else obs.get("value"),
                 "terminal": bool(obs.get("terminal")),
                 "selection": selection,
                 "dose": dose,

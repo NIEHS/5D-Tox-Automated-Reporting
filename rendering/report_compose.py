@@ -104,6 +104,7 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
         if key in first:
             data[key] = copy.deepcopy(first[key])
     _state_each_studys_bmd_method(data, studies)
+    _state_each_studys_excluded_values(data, studies)
     data["apical_sections"] = _merge_apical(studies)
     data["genomics_sections"] = _merge_genomics(studies)
     data["bmd_summary"] = _merge_bmd_summary(studies, data.get("bmd_summary") or {})
@@ -138,6 +139,23 @@ def _state_each_studys_bmd_method(data: dict, studies: list[dict]) -> None:
         methods["sections"] = [
             {**sec, "paragraphs": merged}
             if isinstance(sec, dict) and sec.get("key") == "bmd_apical" else sec
+            for sec in methods.get("sections") or []]
+
+
+def _state_each_studys_excluded_values(data: dict, studies: list[dict]) -> None:
+    """The statistics subsection states the values left out of each study's
+    analysis (ADR-0037), by the study's animals; the shared prose is the first
+    study's, whose own statement this replaces."""
+    from narrative.methods_analysis import (
+        EXCLUDED_SUBSECTION, excluded_values_paragraph, with_excluded_values,
+    )
+    stated = excluded_values_paragraph(
+        [(s["title"], (s["data"].get("methods") or {}).get("excluded_values")) for s in studies])
+    methods = data.get("methods")
+    if isinstance(methods, dict):
+        methods["sections"] = [
+            {**sec, "paragraphs": with_excluded_values(list(sec.get("paragraphs") or []), stated)}
+            if isinstance(sec, dict) and sec.get("key") == EXCLUDED_SUBSECTION else sec
             for sec in methods.get("sections") or []]
 
 

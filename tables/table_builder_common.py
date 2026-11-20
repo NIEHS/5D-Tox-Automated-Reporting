@@ -418,9 +418,12 @@ def detect_core_animal_availability(
             if aid in early:
                 continue
 
+            # A value the package left out (ADR-0037) was received: the
+            # animal is not a missing sample for it.
             has_data = any(
-                obs.get("value") and obs["value"].strip()
-                and obs["value"].strip().upper() != "NA"
+                isinstance(obs.get("excluded"), dict)
+                or (obs.get("value") and obs["value"].strip()
+                    and obs["value"].strip().upper() != "NA")
                 for obs in rec.get("observations", [])
             )
             if has_data:
@@ -725,6 +728,81 @@ def attach_n_row_marker_refs(
         if sex_refs and rows and rows[0].get("is_n_row"):
             for d, fid in sex_refs.items():
                 add_marker_ref(rows[0], js_dose_key(d), fid)
+
+
+# ---------------------------------------------------------------------------
+# Values the package says were left out (ADR-0037)
+# ---------------------------------------------------------------------------
+# A sidecar observation the conversion left out keeps no value and carries the
+# mark ``excluded`` (bmdx_pipe.excluded_values).  The statistics are already
+# without it; the table says so on the cell, as NIEHS-12 Table 3 does:
+# "n = 9. One value was excluded as an outlier."
+
+_COUNT_WORDS = ("", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten")
+
+
+def excluded_by_endpoint(sc: dict) -> dict[str, dict[float, list[dict]]]:
+    """``{endpoint (lower case): {dose: [{animal_id, day, reason}, ...]}}``:
+    the Core Animals' values of a sidecar that were left out."""
+    out: dict[str, dict[float, list[dict]]] = {}
+    for aid, rec in (sc or {}).get("animals", {}).items():
+        if is_biosampling(rec.get("selection")):
+            continue
+        for obs in rec.get("observations", []):
+            ex = obs.get("excluded")
+            if isinstance(ex, dict):
+                out.setdefault(str(obs.get("endpoint", "")).strip().lower(), {}).setdefault(
+                    rec["dose"], []).append(
+                        {"animal_id": aid, "day": obs.get("day"), "reason": ex.get("reason")})
+    return out
+
+
+def core_n_with_values(sc: dict, endpoints: list[str], dose: float) -> int:
+    """How many Core Animals of a dose group have a number for every one of
+    ``endpoints`` (a row's endpoint, or the inputs of a derived one)."""
+    wanted = {str(e).strip().lower() for e in endpoints}
+    n = 0
+    for rec in (sc or {}).get("animals", {}).values():
+        if is_biosampling(rec.get("selection")) or rec.get("dose") != dose:
+            continue
+        have = set()
+        for obs in rec.get("observations", []):
+            try:
+                float(obs.get("value"))
+            except (TypeError, ValueError):
+                continue
+            have.add(str(obs.get("endpoint", "")).strip().lower())
+        n += wanted <= have
+    return n
+
+
+def excluded_note_text(n: int, reasons: list[str]) -> str:
+    """The note of a cell some of whose values were left out:
+    "n = 9. One value was excluded as an outlier."."""
+    from bmdx_pipe.excluded_values import NOTE_PHRASES
+    sentences = []
+    for reason in dict.fromkeys(reasons):
+        count = reasons.count(reason)
+        subject = (f"{_COUNT_WORDS[count]} value was" if count == 1
+                   else f"{_COUNT_WORDS[count] if count < len(_COUNT_WORDS) else count} values were")
+        sentences.append(f"{subject} excluded {NOTE_PHRASES[reason]}.")
+    return f"n = {n}. " + " ".join(sentences)
+
+
+def note_excluded_cell(footnotes: list[dict], row: dict, dose: float, n: int,
+                       reasons: list[str]) -> None:
+    """Mark a row's cell of one dose with the note that values were left out
+    of it; the note is added to ``footnotes`` once per distinct wording.
+
+    The note is printed whatever the report's ``table_notes:
+    outlier_exclusions`` says: that switch is for the exclusions a rule makes
+    (the internal dose outlier test, which NIEHS-12 applies without a note);
+    a value the package names is noted (NIEHS-12 Table 3 notes its one)."""
+    text = excluded_note_text(n, reasons)
+    fid = "excluded_" + re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    if not any(isinstance(f, dict) and f.get("id") == fid for f in footnotes):
+        footnotes.append(lettered_footnote(text, fid, target="cells"))
+    add_marker_ref(row, js_dose_key(dose), fid)
 
 
 # ---------------------------------------------------------------------------

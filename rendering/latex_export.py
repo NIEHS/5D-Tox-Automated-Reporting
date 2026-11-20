@@ -841,6 +841,11 @@ def load_session_data(
         data["methods"] = {"sections": refresh_data_built(
             methods_cache["sections"], methods_cache.get("context"),
             _methods_key_order(dtxsid, view))}
+        # The values left out of the study's analysis ({reason: count},
+        # ADR-0037): a report over several studies states each study's.
+        left_out = (methods_cache.get("context") or {}).get("excluded_values")
+        if left_out:
+            data["methods"]["excluded_values"] = left_out
 
     # ── Table 1: Final Sample Counts (the sample-counts-table tree node) ──
     # Built from the cached MethodsContext; when that context lacks

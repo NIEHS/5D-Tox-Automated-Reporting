@@ -64,6 +64,8 @@ from tables.table_builder_common import (
     add_marker_ref,
     mark_reviewed_bmd,
     reviewed_bmd_footnotes,
+    excluded_by_endpoint,
+    note_excluded_cell,
 )
 
 
@@ -443,6 +445,8 @@ def build_organ_weight_table_from_sidecar(
 
     # ── Build the table rows ──────────────────────────────────────────────
     serialized: dict[str, list[dict]] = {}
+    # (row, dose, n, reasons) of every cell some of whose values were left out.
+    excluded_cells: list[tuple[dict, float, int, list[str]]] = []
 
     from document_model.filters import sex_allowed
     for sex in ("Male", "Female"):
@@ -467,6 +471,10 @@ def build_organ_weight_table_from_sidecar(
             continue
 
         rows: list[dict] = []
+        # The values the package says were left out (ADR-0037), by endpoint
+        # and dose: each affected cell is noted after the footnotes are built.
+        left_out = excluded_by_endpoint(sidecar_data.get(sex) or {})
+        tbw_left_out = left_out.get("terminal body weight", {})
 
         # ── n-row ─────────────────────────────────────────────────────────
         # N = number of Core Animals per dose with Terminal Body Weight data
@@ -521,6 +529,9 @@ def build_organ_weight_table_from_sidecar(
         if tbw_ntp is not None:
             mark_reviewed_bmd(tbw_entry, tbw_ntp)
         rows.append(tbw_entry)
+        for dose, items in tbw_left_out.items():
+            excluded_cells.append((tbw_entry, dose, len(tbw_vals_list.get(dose, [])),
+                                   [i["reason"] for i in items]))
 
         # ── Per-organ rows: Absolute + Relative ──────────────────────────
         # Sort organs alphabetically for consistent output
@@ -590,6 +601,10 @@ def build_organ_weight_table_from_sidecar(
                 abs_entry["trend_marker"] = organ_trend
             mark_reviewed_bmd(abs_entry, organ_ntp)
             rows.append(abs_entry)
+            organ_left_out = left_out.get(organ.strip().lower(), {})
+            for dose, items in organ_left_out.items():
+                excluded_cells.append((abs_entry, dose, len(abs_at_dose.get(dose, [])),
+                                       [i["reason"] for i in items]))
 
             # Relative weight row — the NTP statistics of "<organ> Relative"
             # (relative weight per animal, tested like the absolute weight,
@@ -633,6 +648,12 @@ def build_organ_weight_table_from_sidecar(
             if rel_ntp is not None:
                 mark_reviewed_bmd(rel_entry, rel_ntp)
             rows.append(rel_entry)
+            # A relative weight is without the animal when either its organ
+            # weight or its terminal body weight was left out.
+            for dose in sorted({*organ_left_out, *tbw_left_out}):
+                excluded_cells.append((rel_entry, dose, len(rel_at_dose.get(dose, [])),
+                                       [i["reason"] for i in (organ_left_out.get(dose, [])
+                                                              + tbw_left_out.get(dose, []))]))
 
         serialized[sex] = rows
 
@@ -690,6 +711,11 @@ def build_organ_weight_table_from_sidecar(
     # function), then finalize_footnotes assigns letters and derives the
     # rows' `markers` dicts from `marker_refs`.
     attach_n_row_marker_refs(serialized, n_row_marker_refs)
+
+    # Cells without a value the package left out, last as NIEHS-12 prints it
+    # ("^e n = 9. One value was excluded as an outlier.").
+    for row, dose, n, reasons in excluded_cells:
+        note_excluded_cell(footnotes, row, dose, n, reasons)
 
     # A BMD the reviewer rejected prints with its note (mark_reviewed_bmd).
     footnotes.extend(reviewed_bmd_footnotes(serialized))

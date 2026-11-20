@@ -51,6 +51,9 @@ from tables.table_builder_common import (
     roster_sidecars,
     mark_reviewed_bmd,
     reviewed_bmd_footnotes,
+    excluded_by_endpoint,
+    core_n_with_values,
+    note_excluded_cell,
 )
 
 
@@ -80,6 +83,22 @@ CAPTION_TEMPLATE = (
 # Main builder
 # ---------------------------------------------------------------------------
 
+
+
+def _raw_inputs(label: str, measured: set[str]) -> list[str]:
+    """The measured endpoints a row's values are computed from: the row's own
+    endpoint, or the inputs of an endpoint derived per animal
+    (bmdx_pipe.apical_report.DERIVED_INPUTS: globulin from total protein and
+    albumin) when the study's files do not measure it."""
+    from bmdx_pipe.apical_report import DERIVED_INPUTS
+    if str(label).strip().lower() in measured or label not in DERIVED_INPUTS:
+        return [label]
+    out: list[str] = []
+    for name in DERIVED_INPUTS[label][0]:
+        for endpoint in _raw_inputs(name, measured):
+            if endpoint not in out:
+                out.append(endpoint)
+    return out
 
 
 def build_clinical_pathology_table_from_sidecar(
@@ -158,6 +177,8 @@ def build_clinical_pathology_table_from_sidecar(
     # This matches the Body Weight pattern where all study days appear
     # regardless of the statistical gate.
     serialized: dict[str, list[dict]] = {}
+    # (row, dose, n, reasons) of every cell some of whose values were left out.
+    excluded_cells: list[tuple[dict, float, int, list[str]]] = []
 
     # How precisely each endpoint's individual values are recorded (Core
     # Animals), for endpoints the published precision convention lacks.
@@ -177,6 +198,10 @@ def build_clinical_pathology_table_from_sidecar(
             continue
 
         rows: list[dict] = []
+        left_out = excluded_by_endpoint(sidecar_data.get(sex) or {})
+        measured = {str(o.get("endpoint", "")).strip().lower()
+                    for rec in (sidecar_data.get(sex) or {}).get("animals", {}).values()
+                    for o in rec.get("observations", [])}
 
         # ── n-row: max Core Animals N across shown endpoints per dose ─────
         # The NIEHS reference uses a single n-row per sex showing the
@@ -277,6 +302,16 @@ def build_clinical_pathology_table_from_sidecar(
             mark_reviewed_bmd(entry, stat_row)
 
             rows.append(entry)
+            # The cells some of whose values the package left out (ADR-0037):
+            # the endpoint's own, or those of a derived endpoint's inputs
+            # (globulin without the animal's albumin or total protein).
+            inputs = _raw_inputs(label, measured)
+            for dose in sorted({d for ep in inputs for d in left_out.get(ep.lower(), {})}):
+                reasons = [i["reason"] for ep in inputs
+                           for i in left_out.get(ep.lower(), {}).get(dose, [])]
+                excluded_cells.append((entry, dose,
+                                       core_n_with_values(sidecar_data.get(sex) or {}, inputs, dose),
+                                       reasons))
 
         serialized[sex] = rows
 
@@ -360,6 +395,10 @@ def build_clinical_pathology_table_from_sidecar(
                 "imputation",
                 target="none",
             ))
+
+    # ── Cells without a value the package left out ────────────────────────
+    for row, dose, n, reasons in excluded_cells:
+        note_excluded_cell(footnotes, row, dose, n, reasons)
 
     # ── Attach marker_refs to the n-rows, then finalize ───────────────────
     # The n-rows were built early (before footnotes existed), so attach each

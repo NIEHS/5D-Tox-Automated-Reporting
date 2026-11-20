@@ -244,6 +244,12 @@ class MethodsContext:
     # before the record existed (2026-11-17).
     apical_bmd_method: dict | None = None
 
+    # --- Values left out of the apical analysis (ADR-0037) ---
+    # {reason: count} of the Core Animals' values the study's package names
+    # as left out (bmdx_pipe.excluded_values); the statistics paragraph
+    # states them.  None or {}: none were left out.
+    excluded_values: dict | None = None
+
     def to_dict(self) -> dict:
         """Serialize for JSON persistence.  Converts dataclass to a plain dict."""
         d = {}

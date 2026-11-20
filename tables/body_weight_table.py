@@ -84,6 +84,8 @@ from tables.table_builder_common import (
     add_marker_ref,
     mark_reviewed_bmd,
     reviewed_bmd_footnotes,
+    excluded_by_endpoint,
+    note_excluded_cell,
 )
 
 
@@ -312,6 +314,9 @@ def build_body_weight_table_from_sidecar(
     else:
         expected_terminal_day = ""  # no observations: no study day to name
 
+    left_out: dict[str, dict[int | None, dict[float, list[str]]]] = {}
+    # (row, dose, n, reasons) of every cell some of whose values were left out.
+    excluded_cells: list[tuple[dict, float, int, list[str]]] = []
     for sex, sc_path in sidecar_paths.items():
         sc = _load_sidecar(sc_path)
         sex_vals: dict[str, dict[float, list[float]]] = {}
@@ -382,6 +387,13 @@ def build_body_weight_table_from_sidecar(
 
         raw_values[sex] = sex_vals
         attrition_by_sex_dose[sex] = attrition
+        # The weights the package says were left out (ADR-0037):
+        # {study day: {dose: [reason, ...]}} of the sex's cohort.
+        for by_dose in excluded_by_endpoint(sc).values():
+            for dose, items in by_dose.items():
+                for item in items:
+                    left_out.setdefault(sex, {}).setdefault(_day_number(item["day"]), {}) \
+                        .setdefault(dose, []).append(item["reason"])
 
     sorted_doses = sorted(all_doses)
 
@@ -741,12 +753,23 @@ def build_body_weight_table_from_sidecar(
             if day_stats is not None:
                 mark_reviewed_bmd(entry, day_stats)
             rows.append(entry)
+            for dose, reasons in left_out.get(sex, {}).get(_day_number(day), {}).items():
+                excluded_cells.append((entry, dose, len(dose_vals.get(dose, [])), reasons))
 
         gain = _gain_row(per_animal.get(sex, {}), (first_day, expected_terminal_day), sorted_doses,
                          sex_stats.get(BODY_WEIGHT_GAIN))
         if gain:
             _mark_later(gain, later_marker_refs.get(sex, {}), _day_number(expected_terminal_day))
             rows.append(gain)
+            # The gain is without an animal whose first or last weight was left out.
+            span_left_out: dict[float, list[str]] = {}
+            for span_day in {_day_number(first_day), _day_number(expected_terminal_day)}:
+                for dose, reasons in left_out.get(sex, {}).get(span_day, {}).items():
+                    span_left_out.setdefault(dose, []).extend(reasons)
+            for dose, reasons in span_left_out.items():
+                n = sum(1 for d, days in per_animal.get(sex, {}).values()
+                        if d == dose and first_day in days and expected_terminal_day in days)
+                excluded_cells.append((gain, dose, n, reasons))
 
         # A later removal in a group with no later weights left (every
         # animal gone) has no cell to mark: its note goes on the n-row.
@@ -770,6 +793,8 @@ def build_body_weight_table_from_sidecar(
     # `markers` dict from its `marker_refs` — see the typed footnote
     # model in table_builder_common.  A BMD the reviewer rejected prints with
     # its note (mark_reviewed_bmd).
+    for row, dose, n, reasons in excluded_cells:
+        note_excluded_cell(footnotes, row, dose, n, reasons)
     footnotes.extend(reviewed_bmd_footnotes(serialized))
     finalize_footnotes(footnotes, serialized)
 

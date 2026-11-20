@@ -357,6 +357,7 @@ def tox_study_csv_to_pivot_txt(
     platform: str,
     data_type: str,
     units: dict[str, str] | None = None,
+    excluded=None,
 ) -> list[str]:
     """
     Convert a long-format _tox_study CSV file into tab-delimited pivot files
@@ -396,6 +397,8 @@ def tox_study_csv_to_pivot_txt(
                     the endpoints this file has; the unit under the dose
                     column ("Concentration") is the dose unit, recorded as
                     "dose_unit".
+        excluded:   the values the package says were left out
+                    (excluded_values.ExcludedValue), see long_rows_to_pivot.
 
     Returns:
         List of paths to the generated pivot .txt files.
@@ -429,7 +432,7 @@ def tox_study_csv_to_pivot_txt(
 
     return long_rows_to_pivot(rows[0], rows[1:], output_dir, platform, data_type,
                               source=os.path.basename(path), out_name=out_name,
-                              units=units)
+                              units=units, excluded=excluded)
 
 
 # The derived files' name stem per platform, as the pool's filename patterns
@@ -445,7 +448,8 @@ WORKBOOK_STEMS = {
 }
 
 
-def study_workbook_to_pool_files(path: str, output_dir: str, platform: str) -> list[str]:
+def study_workbook_to_pool_files(path: str, output_dir: str, platform: str,
+                                 excluded=None) -> list[str]:
     """
     The files the pool uses, derived from a study workbook — the workbook drives.
 
@@ -456,6 +460,9 @@ def study_workbook_to_pool_files(path: str, output_dir: str, platform: str) -> l
     are, for the incidence tables; its first line ``# Source: <workbook>`` says
     where it came from.  A sex the workbook doesn't record (no Sex column and
     no single sex in the title) is written as "unknown".
+
+    ``excluded``: the values the package says were left out
+    (excluded_values.ExcludedValue), see long_rows_to_pivot.
 
     Returns the paths written; [] for a platform with no stem or a workbook with
     no rows.
@@ -492,7 +499,7 @@ def study_workbook_to_pool_files(path: str, output_dir: str, platform: str) -> l
 
     return long_rows_to_pivot(wb.header, wb.rows, output_dir, platform, "tox_study",
                               source=source, out_name=out_name, units=wb.units or None,
-                              dose_unit=wb.dose_unit)
+                              dose_unit=wb.dose_unit, excluded=excluded)
 
 
 def long_rows_to_pivot(
@@ -506,6 +513,7 @@ def long_rows_to_pivot(
     out_name,
     units: dict[str, str] | None = None,
     dose_unit: str | None = None,
+    excluded=None,
 ) -> list[str]:
     """
     The NTP long-format rows (one row per animal and observation) → one
@@ -522,8 +530,19 @@ def long_rows_to_pivot(
     same files from the same rows.  ``source`` is the file the rows came from
     (recorded in each sidecar), ``out_name(sex, n_sexes)`` names the pivot of
     one sex, and ``units`` ({endpoint column: unit}) is recorded in the sidecar.
+
+    ``excluded``: the values the package says were left out of the analysis
+    (excluded_values, ADR-0037).  A named value is not written to the pivot
+    (so the statistics, the derived endpoints and the benchmark dose inputs
+    are without it), and its observation in the sidecar keeps no ``value``
+    and carries the mark ``excluded`` (the value, the reason, the file).
+
     Returns the paths of the pivots written.
     """
+    from .excluded_values import PLATFORMS as _EXCLUDABLE
+    from .excluded_values import mark as _excluded_mark, match as _excluded_match
+    if platform not in _EXCLUDABLE:
+        excluded = None
     path = source
     rows = [header] + list(body)
     header = [c.strip() for c in rows[0]]
@@ -676,12 +695,21 @@ def long_rows_to_pivot(
             # signal missing data, e.g., animal 203 at 1000 mg/kg with NA
             # body weight at SD0 because it was found dead).
             if obs_day or terminal:
-                animal_rec["observations"].append({
+                obs = {
                     "day": obs_day,
                     "endpoint": col_name,
                     "value": val if val else None,
                     "terminal": terminal.lower() in ("yes", "true", "1") if terminal else False,
-                })
+                }
+                # A value the package says was left out: the sidecar keeps it
+                # under the mark, and it is not a value of the pivot.
+                left_out = _excluded_match(excluded, aid, col_name, obs_day) if val else None
+                if left_out is not None:
+                    obs["value"] = None
+                    obs["excluded"] = _excluded_mark(val, left_out)
+                animal_rec["observations"].append(obs)
+                if left_out is not None:
+                    continue
 
             if not val:
                 continue

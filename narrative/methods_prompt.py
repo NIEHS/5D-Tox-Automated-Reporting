@@ -443,6 +443,9 @@ def _stat_analysis_guideline(ctx: MethodsContext) -> str:
         text += ("Values flagged by the Dixon and Massey outlier test were examined and "
                  "excluded. ")
     else:
+        # The values the study's package says were left out (ADR-0037) are
+        # stated in a paragraph built from the data
+        # (methods_analysis.excluded_values_paragraph), not by the model.
         text += "Do not describe any outlier test or exclusion of values. "
     # The levels as bmdx_pipe.apical_report derives them: the NOEL is the
     # tested dose next below the LOEL, not any higher dose without a

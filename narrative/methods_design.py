@@ -186,6 +186,18 @@ def _built(ctx: MethodsContext, keys: list[str]) -> dict[str, list[str]]:
     return out
 
 
+def _with_excluded_values(key: str, paragraphs: list[str], ctx: MethodsContext) -> list[str]:
+    """The statistics subsection ends with the paragraph that states the
+    values left out of the analysis (ADR-0037), built from the data; a
+    model-written subsection with no text stays empty."""
+    from narrative.methods_analysis import (
+        EXCLUDED_SUBSECTION, excluded_values_paragraph, with_excluded_values,
+    )
+    if key != EXCLUDED_SUBSECTION or not paragraphs:
+        return paragraphs
+    return with_excluded_values(paragraphs, excluded_values_paragraph([(None, ctx.excluded_values)]))
+
+
 def assemble_methods_sections(
     ctx: MethodsContext,
     skeleton: list[tuple[str, str, int]],
@@ -203,6 +215,7 @@ def assemble_methods_sections(
         else:
             text = llm_texts.get(key, "")
             paragraphs = [p.strip() for p in str(text).split("\n\n") if p.strip()]
+            paragraphs = _with_excluded_values(key, paragraphs, ctx)
         if paragraphs:
             sections.append(MethodsSection(heading=heading, level=level, key=key,
                                            paragraphs=paragraphs))
@@ -229,5 +242,9 @@ def refresh_data_built(sections: list[dict], context: dict | None,
         key = section.get("key") if isinstance(section, dict) else None
         if key in built:
             section = {**section, "paragraphs": built[key]}
+        elif isinstance(section, dict):
+            paragraphs = _with_excluded_values(key, list(section.get("paragraphs") or []), ctx)
+            if paragraphs != section.get("paragraphs"):
+                section = {**section, "paragraphs": paragraphs}
         out.append(section)
     return out

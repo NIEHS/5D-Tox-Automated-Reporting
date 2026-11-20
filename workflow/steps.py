@@ -258,6 +258,12 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
     except Exception:
         logger.exception("Value provenance check failed for %s (skipped)", dtxsid)
 
+    # The package's excluded values (ADR-0037): every value an
+    # excluded-values file names must be one the derived files left out.
+    from pipeline.excluded_values import check_excluded_values
+    report_dict["issues"] = report_dict["issues"] + check_excluded_values(
+        fps, store.session_dir(dtxsid))
+
     store.write_json(dtxsid, "validation_report.json", report_dict)
     return report_dict
 
