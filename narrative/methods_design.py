@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from narrative.methods_models import MethodsContext, MethodsSection
 from narrative.narrative_helpers import _format_dose_list, _join_oxford
+from narrative.sources import cite_boilerplate
 
 # Subsections built from the data or the record of a computation (this module
 # and methods_analysis), never requested from the LLM.
@@ -216,6 +217,9 @@ def assemble_methods_sections(
             text = llm_texts.get(key, "")
             paragraphs = [p.strip() for p in str(text).split("\n\n") if p.strip()]
             paragraphs = _with_excluded_values(key, paragraphs, ctx)
+        # The boilerplate sources, cited where the definitions' library says
+        # (the statistical procedures at their first mention; ADR-0038).
+        paragraphs = cite_boilerplate(key, paragraphs)
         if paragraphs:
             sections.append(MethodsSection(heading=heading, level=level, key=key,
                                            paragraphs=paragraphs))
@@ -246,5 +250,11 @@ def refresh_data_built(sections: list[dict], context: dict | None,
             paragraphs = _with_excluded_values(key, list(section.get("paragraphs") or []), ctx)
             if paragraphs != section.get("paragraphs"):
                 section = {**section, "paragraphs": paragraphs}
+        if isinstance(section, dict):
+            # Stored text written before the library cited an entry gains the
+            # citation without a new run of the model.
+            cited = cite_boilerplate(key, list(section.get("paragraphs") or []))
+            if cited != section.get("paragraphs"):
+                section = {**section, "paragraphs": cited}
         out.append(section)
     return out

@@ -597,6 +597,9 @@ def _build_book(data: dict, nodes: list) -> etree._Element:
 def generate_bits(data: dict, tree=None) -> str:
     """Project the report to a BITS <book> XML string (the Bookshelf submission
     form): XML declaration + BITS 2.0 DOCTYPE + the book."""
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data, tree)
     return etree.tostring(
         build_book(data, tree), xml_declaration=True, encoding="UTF-8", pretty_print=True,
         doctype=_BITS_DOCTYPE,

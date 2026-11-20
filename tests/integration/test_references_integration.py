@@ -7,9 +7,10 @@ consume — WITHOUT the LLM or the network.  We stage a synthetic session whose
 interpretation caches already carry `reference_pool` + [Pn]-citing narratives
 (the shape `generate_genomics_narrative_async` persists), then assert that:
 
-  * `data["references"]["paragraphs"]` is the assembled, globally-numbered list;
-  * the genomics narratives have their inline [Pn] tokens rewritten to the
-    report-wide [n] numbers so citations agree with the References section;
+  * the papers the interpretations cite are source records (`data["sources"]`)
+    and the narratives cite them by token (narrative.sources, ADR-0038);
+  * the presented report (rendering.citations.numbered) numbers them in reading
+    order and lists exactly the cited ones;
   * a shared paper keeps ONE number across strata, and an uncited pool paper is
     excluded.
 """
@@ -86,40 +87,54 @@ def staged_sessions(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_references_surface_and_tokens_rewritten(staged_sessions):
+def test_cited_papers_are_sources_and_the_report_derives_its_numbers(staged_sessions):
+    from narrative.sources import slug_for, token
+    from rendering.citations import numbered
+
     data = latex_export.load_session_data(
         DTXSID, chemical_name="Test Article", casrn="0-0-0",
     )
-
-    paras = data.get("references", {}).get("paragraphs", [])
-    # Global numbering: liver gene-set prose cites P2(pb) then P1(pa) → pb=1,
-    # pa=2.  pc is never cited → excluded.  So exactly two references.
-    assert paras == [
-        "[1] Paper B. VB. 2021. https://doi.org/10.1/b",
-        "[2] Paper A. VA. 2020. https://doi.org/10.1/a",
-    ]
-
-    # Inline [Pn] tokens rewritten to report-wide [n] in the genomics narratives.
+    pa, pb = slug_for("doi:10.1/a"), slug_for("doi:10.1/b")
+    # The sources are the papers an interpretation cited: pa and pb.  pc was
+    # offered and never cited, so it is no source.  A paper two strata cite
+    # (pb) is one source.
+    assert set(data["sources"]) == {pa, pb}
+    assert data["sources"][pb]["origin"]["from"] == "knowledge_base"
+    # Nothing is numbered in the data: the text cites by token, no list yet.
+    assert data["references"] == {"paragraphs": []}
     narrs = {
         (e["type"], e["organ"], s.get("sex")): s.get("narrative")
         for e in data["genomics_sections"] for s in e.get("sexes", [])
     }
+    assert narrs[("gene_set", "liver", "Male")] == [
+        f"Liver sterol response cites {token(pb)} and {token(pa)}."]
+    assert narrs[("gene", "liver", "Male")] == [f"CYP7A1 was sensitive {token(pa)}."]
+    assert narrs[("gene_set", "kidney", "Male")] == [f"Kidney cites {token(pb)}."]
+
+    # The presented report: numbered in reading order, the list holds the
+    # cited papers, and the shared paper keeps one number across strata.
+    shown = numbered(data)
+    assert shown["references"]["paragraphs"] == [
+        "[1] Paper B. VB. 2021. https://doi.org/10.1/b",
+        "[2] Paper A. VA. 2020. https://doi.org/10.1/a",
+    ]
+    narrs = {
+        (e["type"], e["organ"], s.get("sex")): s.get("narrative")
+        for e in shown["genomics_sections"] for s in e.get("sexes", [])
+    }
     assert narrs[("gene_set", "liver", "Male")] == ["Liver sterol response cites [1] and [2]."]
     assert narrs[("gene", "liver", "Male")] == ["CYP7A1 was sensitive [2]."]
-    # Kidney's LOCAL P1 (shared paper pb) resolves to the SAME global number 1.
     assert narrs[("gene_set", "kidney", "Male")] == ["Kidney cites [1]."]
 
 
-def test_no_pools_leaves_references_from_background(tmp_path, monkeypatch):
-    """A session whose interpretation caches carry NO reference_pool (older or
-    apical-only) must not fabricate references — background.json still governs
-    that section, and here there's no genomics at all so references stays as the
-    scaffold's empty list."""
+def test_a_session_with_no_writer_has_no_sources_and_an_empty_list(tmp_path, monkeypatch):
+    """A session with no Background and no interpretation has nothing to cite:
+    no source record, and the list (derived from what is printed) is empty."""
     monkeypatch.setattr(session_store, "SESSIONS_DIR", tmp_path)
     (tmp_path / DTXSID / "files").mkdir(parents=True)
     data = latex_export.load_session_data(DTXSID, chemical_name="Test", casrn="0-0-0")
-    # Scaffold default: empty references list (no graph pools, no background.json).
-    assert data.get("references") == []
+    assert data["sources"] == {} and data["references"] == {"paragraphs": []}
+    assert data["citation_warnings"] == []
 
 
 # ---------------------------------------------------------------------------

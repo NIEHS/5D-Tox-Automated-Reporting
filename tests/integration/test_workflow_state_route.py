@@ -96,5 +96,7 @@ class TestWorkflowStateRoute:
         body = resp.json()
         assert body["can_publish"] is False
         assert body["blocking"] == [
-            {"section_key": "genomics_liver_male", "reason": "data_changed"}
+            {"section_key": "genomics_liver_male", "reason": "data_changed"},
+            # And the citations have not been checked (ADR-0038).
+            {"section_key": "citations", "reason": "citations_not_checked"},
         ]

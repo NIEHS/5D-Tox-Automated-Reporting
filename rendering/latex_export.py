@@ -375,6 +375,21 @@ def _normalize_apical_section(sec: dict) -> dict:
     return normalize_apical_section_for_render(sec)
 
 
+def _reslug(narratives: dict, slug_in_report: dict[str, str]) -> dict:
+    """Narratives whose citation tokens name the report's slug for each
+    source (the same slug, unless the report already had the source under
+    another: a paper a person added, a library entry)."""
+    changed = {a: b for a, b in slug_in_report.items() if a != b}
+    if not changed:
+        return narratives
+    from narrative.sources import TOKEN_RE, token
+
+    def fix(text):
+        return TOKEN_RE.sub(lambda m: token(changed.get(m.group(1), m.group(1))), text)
+    return {key: [fix(p) if isinstance(p, str) else p for p in paragraphs]
+            for key, paragraphs in narratives.items()}
+
+
 def _load_genomics_interpretations(
     session_dir: Path,
     genomics_cache: dict,
@@ -699,21 +714,35 @@ def load_session_data(
 
     # ── Background paragraphs + abstract Background sentence ──────────
     bg = _load_json(session_dir / "background.json")
+    # The sources the report may cite ({slug: record}, narrative.sources):
+    # what people added to the study, then each writer's.  The text cites
+    # them by token; the numbers and the References list are derived from
+    # what the presented report prints (rendering.citations, ADR-0038).
+    from narrative.sources import (
+        background_sources, load_session_sources, merge as merge_sources, tokens_for_numbers,
+    )
+    data["sources"] = {}
+    merge_sources(data["sources"], load_session_sources(session_dir))
+    # The scaffold's placeholder list goes: a session's list is derived.
+    data["references"] = {"paragraphs": []}
+    # What the writers cited that named none of the sources offered to them
+    # (narrative.citation_check issue dicts); the citation check reports them.
+    data["citation_warnings"] = []
     if isinstance(bg, dict):
+        data["citation_warnings"].extend(
+            {**issue, "where": issue.get("where") or "Background"}
+            for issue in (bg.get("citation_report") or {}).get("issues") or []
+            if isinstance(issue, dict))
+        # The Background cites its own numbered list of public sources.
+        bg_sources, bg_slug_by_number = background_sources(bg.get("references") or [])
+        bg_slug_by_number = {n: merge_sources(data["sources"], {slug: bg_sources[slug]})[slug]
+                             for n, slug in bg_slug_by_number.items()}
         if bg.get("paragraphs"):
             data["background"] = {
-                "paragraphs": bg["paragraphs"],
-                # Carry references through so a future References handler
-                # can pull them from the same blob.
-                "references": bg.get("references", []),
+                "paragraphs": [tokens_for_numbers(p, bg_slug_by_number) for p in bg["paragraphs"]],
             }
-        # References: the LLM background pass extracts a numbered reference
-        # list (each item already prefixed "[1] ...").  Surface it in the
-        # References section — a plain narrative node whose handler renders
-        # data["references"]["paragraphs"], one reference per paragraph.
-        if bg.get("references"):
-            data["references"] = {"paragraphs": bg["references"]}
-        abs_bg = (bg.get("abstract_background") or "").strip()
+        abs_bg = tokens_for_numbers((bg.get("abstract_background") or "").strip(),
+                                    bg_slug_by_number)
         if abs_bg and isinstance(data.get("abstract"), dict):
             sections = data["abstract"].setdefault("sections", [])
             # Replace any existing scaffold "Background" entry rather
@@ -895,42 +924,19 @@ def load_session_data(
             session_dir, genomics_cache,
         )
 
-        # ── Graph-grounded references (the References section) ─────────
-        # Assemble ONE report-wide, globally-numbered reference list from the
-        # per-stratum candidate pools the genomics narrative pass persisted, and
-        # rewrite each stratum's inline [Pn] tokens to the report-wide [n]
-        # numbers so the inline citations agree with the References section.
-        # Deterministic (no LLM, no network): same persisted caches → same list.
-        # This path (unlike the marshal path) DOES render the [Pn]-carrying
-        # genomics narratives, so the References list and the inline citations
-        # must come from ONE assembly pass — hence the recompute here rather than
-        # just reading references.json.  Empty when no stratum carries a pool
-        # (older/apical-only sessions) → the background.json references overlaid
-        # above stand unchanged.
-        from narrative.references_builder import (
-            build_session_references, load_persisted_references,
-        )
-        # The Background's own numbered references come first ([1]..[B]); the
-        # genomics references continue the numbering after them, so the inline
-        # [n] in both sections point into ONE References list.
-        _bg_refs = list(bg.get("references") or []) if isinstance(bg, dict) else []
-        _refs = build_session_references(
-            session_dir, genomics_cache, dtxsid=dtxsid, offset=len(_bg_refs),
-        )
-        for (organ_k, sex_k), narrs in _refs["rewritten"].items():
+        # ── The papers the interpretations cite ─────────────────────────
+        # Each interpretation cites papers of the study's knowledge base by
+        # the tokens of the pool it was offered.  Here they become citations
+        # of source records (narrative.sources): deterministic, no model, no
+        # network.  Nothing is numbered: the report's numbers and its
+        # References list are derived from what it prints.
+        from narrative.references_builder import cited_interpretations
+        _cited = cited_interpretations(session_dir, genomics_cache, dtxsid=dtxsid)
+        _slug_in_report = merge_sources(data["sources"], _cited["sources"])
+        data["citation_warnings"].extend(_cited["warnings"])
+        for (organ_k, sex_k), narrs in _cited["rewritten"].items():
             if (organ_k, sex_k) in interpretations:
-                interpretations[(organ_k, sex_k)] = narrs
-        # Prefer the persisted references.json (the SAME artifact the marshal path
-        # reads, so the two paths surface identical citation strings) when it was
-        # numbered for this Background; else the freshly assembled list.
-        _persisted = load_persisted_references(session_dir)
-        _persisted_offset = (_load_json(session_dir / "references.json") or {}).get(
-            "background_offset", 0)
-        if _persisted and _persisted_offset != len(_bg_refs):
-            _persisted = []
-        _ref_paragraphs = _persisted or _refs["paragraphs"]
-        if _ref_paragraphs:
-            data["references"] = {"paragraphs": _bg_refs + _ref_paragraphs}
+                interpretations[(organ_k, sex_k)] = _reslug(narrs, _slug_in_report)
 
         _ctx = methods_cache.get("context") if isinstance(methods_cache, dict) else None
         converted = _convert_genomics_cache(

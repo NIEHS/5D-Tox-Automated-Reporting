@@ -473,6 +473,63 @@ def collect_reference_strata(session_dir, genomics_cache: dict,
     return strata
 
 
+def _stratum_knowledge_base(session_dir, organ: str, sex: str) -> str | None:
+    """The name of the knowledge base a stratum's interpretation was written
+    from, as its cache records it."""
+    import json
+    from pathlib import Path
+    from genomics.genomics_narratives import interpretation_cache_prefix
+
+    files = sorted(Path(session_dir).glob(f"{interpretation_cache_prefix(organ, sex)}*.json"),
+                   key=lambda f: f.stat().st_mtime)
+    if not files:
+        return None
+    try:
+        return (json.loads(files[-1].read_text(encoding="utf-8")).get("knowledge_base")
+                or {}).get("name")
+    except (OSError, ValueError):
+        return None
+
+
+def cited_interpretations(session_dir, genomics_cache: dict, dtxsid: str = "") -> dict:
+    """A session's gene-level interpretations as text that cites sources by
+    token (narrative.sources), and those sources.
+
+    Returns ``{"sources": {slug: record}, "rewritten": {(organ, sex):
+    {gene_set_narrative, gene_narrative}}, "warnings": [...]}``.  A source is
+    a paper an interpretation was offered and cited; its authors are the ones
+    the knowledge base's crawl recorded.  Nothing is numbered here: the
+    numbers and the reference list follow from what a presented report prints
+    (rendering.citations).  ``warnings``: the citations the model wrote that
+    name no offered paper (dropped from the text), as before.
+    """
+    from pathlib import Path
+
+    from document_model.view_config import study_document_facts
+    from knowledge_base.bibliography import authors_of
+    from narrative.sources import paper_source, register, tokens_for_pool
+
+    strata = collect_reference_strata(
+        session_dir, genomics_cache,
+        study_document_facts(dtxsid or Path(session_dir).name)["tissue_order"])
+    sources: dict = {}
+    rewritten: dict = {}
+    for s in strata:
+        kb = _stratum_knowledge_base(session_dir, s["organ"], s["sex"])
+        cited = set(cited_tokens_in_order(s.get("gene_set_narrative"), s.get("gene_narrative")))
+        slug_by_token = {}
+        for paper in s["reference_pool"]:
+            if paper.get("token") in cited:
+                record = paper_source(paper, kb)
+                record["authors"] = authors_of(kb, paper.get("paper_id"))
+                slug_by_token[paper["token"]] = register(sources, record)
+        rewritten[(s["organ"], s["sex"])] = {
+            key: [tokens_for_pool(p, slug_by_token) for p in _iter_paragraphs(s.get(key))]
+            for key in ("gene_set_narrative", "gene_narrative")}
+    return {"sources": sources, "rewritten": rewritten,
+            "warnings": find_unresolved_citations(strata)}
+
+
 def load_persisted_references(session_dir) -> list[str]:
     """Read the persisted report-wide reference paragraphs for a session.
 

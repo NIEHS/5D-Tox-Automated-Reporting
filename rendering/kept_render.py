@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 # Folders of a session no render reads.
 _NOT_RENDERED_FROM = {"history", "preview", "narrative_runs", "_originals"}
+# Files of a session no render reads: the record of a citation check is about
+# the report, not part of it (rendering.citations_validate).
+_NOT_RENDERED_FROM_FILES = {"citations_check.json"}
 # What the render runs, beside the sessions.
 _CODE_DIRS = ("common", "document_model", "genomics", "knowledge_base", "narrative", "pipeline",
               "rendering", "styling_export", "tables", "workflow", "templates", "profiles", "vocab")
@@ -48,11 +51,14 @@ def _repo() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _stat_lines(root: Path, skip: set[str] = frozenset()) -> list[str]:
+def _stat_lines(root: Path, skip: set[str] = frozenset(),
+                skip_files: set[str] = frozenset()) -> list[str]:
     lines = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in skip and d != "__pycache__")
         for name in sorted(filenames):
+            if name in skip_files:
+                continue
             path = Path(dirpath) / name
             try:
                 st = path.stat()
@@ -92,21 +98,36 @@ def report_sessions(dtxsid: str) -> list[str]:
     return [dtxsid, *(member for _, member in member_sessions(dtxsid) or [])]
 
 
-def report_fingerprint(dtxsid: str) -> str:
-    """One hash of everything a render of the report reads (module docstring)."""
+def _content_lines(dtxsid: str) -> str:
+    """The report's own content: every file of its sessions and the definition
+    each renders from."""
     from common.dtxsid import is_valid_dtxsid
     from common.paths import SESSIONS_DIR
 
-    h = hashlib.sha256()
-    h.update(f"code\t{code_stamp()}\n".encode())
+    out = []
     for sid in report_sessions(dtxsid):
-        h.update(f"session\t{sid}\n".encode())
+        out.append(f"session\t{sid}")
         if not is_valid_dtxsid(sid):
             continue
         folder = SESSIONS_DIR / sid
         if folder.is_dir():
-            h.update(("\n".join(_stat_lines(folder, _NOT_RENDERED_FROM)) + "\n").encode())
-        h.update(f"definition\t{_definition_stamp(sid)}\n".encode())
+            out.extend(_stat_lines(folder, _NOT_RENDERED_FROM, _NOT_RENDERED_FROM_FILES))
+        out.append(f"definition\t{_definition_stamp(sid)}")
+    return "\n".join(out) + "\n"
+
+
+def content_fingerprint(dtxsid: str) -> str:
+    """One hash of the report's content as it stands (its sessions' files and
+    their definitions), the code aside: what a check of the report was made
+    on, so a later change of the content shows the check is out of date."""
+    return hashlib.sha256(_content_lines(dtxsid).encode()).hexdigest()[:32]
+
+
+def report_fingerprint(dtxsid: str) -> str:
+    """One hash of everything a render of the report reads (module docstring)."""
+    h = hashlib.sha256()
+    h.update(f"code\t{code_stamp()}\n".encode())
+    h.update(_content_lines(dtxsid).encode())
     return h.hexdigest()[:32]
 
 

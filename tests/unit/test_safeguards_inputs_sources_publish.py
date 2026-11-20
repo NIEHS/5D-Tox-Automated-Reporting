@@ -202,9 +202,20 @@ def _stale(sessions_dir):
         {"approved": True, "stale": True, "regenerated": {"reason": "data_changed"}}))
 
 
+def _citations_checked(sessions_dir, passed=True):
+    """The record of a citation check made on the study as it stands."""
+    from rendering.citations_validate import RECORD_FILE
+    from rendering.kept_render import content_fingerprint
+    d = sessions_dir / ID
+    d.mkdir(exist_ok=True)
+    (d / RECORD_FILE).write_text(json.dumps(
+        {"passed": passed, "content_fingerprint": content_fingerprint(ID)}))
+
+
 def test_the_publish_gate_refuses_and_draft_overrides(sessions_dir, caplog):
     from safeguards.publish import require_publishable
     from workflow.store import DiskPoolStore
+    _citations_checked(sessions_dir)
     assert require_publishable(ID, DiskPoolStore())["can_publish"] is True
     _stale(sessions_dir)
     with pytest.raises(Refused) as e:
@@ -217,12 +228,37 @@ def test_the_publish_gate_refuses_and_draft_overrides(sessions_dir, caplog):
     assert r["can_publish"] is False and "as a draft" in caplog.text
 
 
+def test_the_publish_gate_waits_for_the_citation_check(sessions_dir):
+    # The last act before publishing (ADR-0038): refused until the citations
+    # were checked on the report as it stands, and the check passed.
+    from safeguards.publish import require_publishable
+    from workflow.store import DiskPoolStore
+    (sessions_dir / ID).mkdir(exist_ok=True)
+
+    def refused():
+        with pytest.raises(Refused) as e:
+            require_publishable(ID, DiskPoolStore())
+        return explain(e.value)["error"]
+
+    body = refused()
+    assert body["code"] == "citations_not_checked" and body["fix"] == "citations"
+    _citations_checked(sessions_dir, passed=False)
+    assert refused()["code"] == "citations_failed"
+    _citations_checked(sessions_dir)
+    assert require_publishable(ID, DiskPoolStore())["can_publish"] is True
+    # The report changes after the check: the check no longer holds.
+    (sessions_dir / ID / "summary.json").write_text(json.dumps({"approved": True}))
+    body = refused()
+    assert body["code"] == "citations_out_of_date" and "again" in body["say"]
+
+
 def test_the_download_is_gated_with_an_explanation(client, sessions_dir):
     _stale(sessions_dir)
     r = client.get(f"/api/preview/{ID}/download")
     assert r.status_code == 409
     body = r.json()
     assert body["code"] == "publish_blocked" and body["say"]
-    assert body["blocking"] == [{"section_key": "genomics_liver_male",
-                                 "reason": "data_changed"}]
+    assert body["blocking"] == [
+        {"section_key": "genomics_liver_male", "reason": "data_changed"},
+        {"section_key": "citations", "reason": "citations_not_checked"}]
     assert body["error"].startswith("Report is not publishable")

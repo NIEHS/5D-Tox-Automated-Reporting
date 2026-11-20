@@ -38,14 +38,20 @@ def _member(species, title, doses, ref, extra_platform=None):
         "apical_sections": sections,
         "genomics_sections": [{"type": "gene_set", "organ": "liver", "narrative": ["n"],
                                "sexes": [{"sex": "female", "gene_sets": [{"go_id": species}],
-                                          "narrative": [f"{species} prose [1]."]}]}],
+                                          "narrative": [f"{species} prose [[cite:{species}-paper]]"
+                                                        "[[cite:shared]]."]}]}],
         "bmd_summary": {"endpoints": [{"endpoint": "Liver", "sex": "Female", "bmd": "1"}]},
         "sample_counts": {"caption": "Final Sample Counts", "headers": [""] + heads,
                           "rows": [["**Female**"] + [""] * len(doses),
                                    ["  Liver"] + ["5"] * len(doses)], "footnotes": []},
         "summary": {"paragraphs": [f"{title} summary."]},
         "abstract": {"sections": [{"label": "Results", "text": f"{title} results."}]},
-        "references": {"paragraphs": [f"[1] {title} reference."]},
+        # The sources the study's text cites (narrative.sources): one of its
+        # own, and a paper both studies cite.
+        "sources": {f"{species}-paper": {"slug": f"{species}-paper", "kind": "paper",
+                                         "doi": f"10.1/{species}", "title": title},
+                    "shared": {"slug": "shared", "kind": "paper", "doi": "10.1/shared",
+                               "title": "Shared"}},
     }
 
 
@@ -61,7 +67,8 @@ def composed(tmp_path, monkeypatch):
     monkeypatch.setattr(latex_export, "load_session_data",
                         lambda sid, *a, **k: json.loads(json.dumps(members[sid])))
     data = {"abstract": {"sections": [{"label": "Background", "text": "Why."}]},
-            "references": {"paragraphs": ["[1] Background reference."]}}
+            "sources": {"bg": {"slug": "bg", "kind": "website", "identity": "url:https://x",
+                               "url": "https://x", "text": "Background source."}}}
     assert report_compose.compose_studies(data, "R", "1,4-DCB", "106-46-7")
     return data
 
@@ -105,12 +112,32 @@ def test_genomic_tables_group_by_study_and_leave_the_prose_to_the_studies(compos
     assert liver["narrative"] == []
 
 
-def test_one_references_list_numbered_through_the_studies(composed):
-    assert composed["references"]["paragraphs"] == [
-        "[1] Background reference.", "[2] Rats reference.", "[3] Mice reference."]
+def test_the_reports_sources_are_its_own_and_each_studys_once(composed):
+    # ADR-0038: nothing is numbered here; a paper two studies cite is one source.
+    assert list(composed["sources"]) == ["bg", "rat-paper", "shared", "mouse-paper"]
+    assert "references" not in composed
     rat, mouse = (s["data"]["genomics_sections"][0]["sexes"][0]["narrative"]
                   for s in composed["studies"])
-    assert rat == ["rat prose [2]."] and mouse == ["mouse prose [3]."]
+    assert rat == ["rat prose [[cite:rat-paper]][[cite:shared]]."]
+    assert mouse == ["mouse prose [[cite:mouse-paper]][[cite:shared]]."]
+
+
+def test_a_source_the_report_already_has_keeps_the_reports_slug(tmp_path, monkeypatch):
+    import pipeline.session_store as store
+    import rendering.latex_export as latex_export
+    monkeypatch.setattr(store, "SESSIONS_DIR", tmp_path)
+    (tmp_path / "R").mkdir()
+    (tmp_path / "R" / "studies.json").write_text(json.dumps({"rat": "R_rat"}))
+    member = _member("rat", "Rats", [0, 1], "a")
+    monkeypatch.setattr(latex_export, "load_session_data",
+                        lambda sid, *a, **k: json.loads(json.dumps(member)))
+    # A person added the shared paper to the report under a slug of its own.
+    data = {"sources": {"added": {"slug": "added", "kind": "paper", "doi": "10.1/SHARED",
+                                  "identity": "doi:10.1/shared", "title": "Shared"}}}
+    assert report_compose.compose_studies(data, "R", "X", "1-1-1")
+    assert list(data["sources"]) == ["added", "rat-paper"]
+    prose = data["studies"][0]["data"]["genomics_sections"][0]["sexes"][0]["narrative"]
+    assert prose == ["rat prose [[cite:rat-paper]][[cite:added]]."]
 
 
 def test_summary_tables_and_counts_take_the_study_labels(composed):

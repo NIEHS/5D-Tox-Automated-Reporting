@@ -47,7 +47,6 @@ STUDY_KEYS = (
 )
 
 _SEXES = ("Male", "Female")
-_CITATION = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\]")
 
 
 def member_sessions(dtxsid: str) -> list[tuple[str, str]]:
@@ -82,8 +81,11 @@ def compose_studies(data: dict, dtxsid: str, chemical_name: str, casrn: str,
         studies.append({"key": key, "title": SPECIES_TITLES.get(key, key.title()),
                         "dtxsid": member, "data": sdata,
                         "abstract": mdata.get("abstract"),
-                        "references": (mdata.get("references") or {}).get("paragraphs") or []})
-    _renumber_references(data, studies)
+                        "sources": mdata.get("sources") or {}})
+        # What a study's writers cited that named none of the sources offered.
+        data.setdefault("citation_warnings", []).extend(
+            {**w, "study": key} for w in mdata.get("citation_warnings") or [])
+    _merge_sources(data, studies)
     one_sex = all(len(_study_sexes(s["data"])) <= 1 for s in studies)
     for s in studies:
         s["labels"] = {sex: (s["title"] if one_sex else f"{sex} {s['title']}")
@@ -401,47 +403,19 @@ def _name_study(text: str, title: str, first: bool) -> str:
             else f"In {animals}, {rest}")
 
 
-def _renumber_references(data: dict, studies: list[dict]) -> None:
-    """One References list: the report's Background references, then each
-    study's genomic references, numbered on from them — the citations in a
-    study's genomic prose renumbered to match."""
-    report = list((data.get("references") or {}).get("paragraphs") or [])
-    offset = len(report)
+def _merge_sources(data: dict, studies: list[dict]) -> None:
+    """The report's sources are its own and each study's (narrative.sources):
+    one record per source, so a paper two studies cite is one source.  The
+    studies' text cites by token; the report's numbers and its References
+    list are derived from what it prints (rendering.citations)."""
+    from narrative.sources import TOKEN_RE, merge, token
+
+    sources = data.setdefault("sources", {})
     for s in studies:
-        refs = s["references"]
-        if not refs:
-            continue
-        shift = offset
+        changed = {a: b for a, b in merge(sources, s.get("sources")).items() if a != b}
+        if changed:
+            # The report already had the source under another slug.
+            from rendering.citations import _rewrite
+            s["data"] = _rewrite(s["data"], lambda text: TOKEN_RE.sub(
+                lambda m: token(changed.get(m.group(1), m.group(1))), text))
 
-        def renumber(text, shift=shift):
-            return _CITATION.sub(lambda m: "[" + re.sub(
-                r"\d+", lambda n: str(int(n.group()) + shift), m.group(1)) + "]", text)
-
-        report.extend(renumber(p) for p in refs)
-        _rewrite_narratives(s["data"].get("genomics_sections"), renumber)
-        offset += len(refs)
-    if report:
-        data["references"] = {"paragraphs": report}
-
-
-def _rewrite_narratives(node, fn) -> None:
-    """Apply ``fn`` to every prose string under a ``*narrative*`` key."""
-    if isinstance(node, list):
-        for item in node:
-            _rewrite_narratives(item, fn)
-    elif isinstance(node, dict):
-        for k, v in node.items():
-            if "narrative" in k:
-                node[k] = _rewrite_text(v, fn)
-            else:
-                _rewrite_narratives(v, fn)
-
-
-def _rewrite_text(value, fn):
-    if isinstance(value, str):
-        return fn(value)
-    if isinstance(value, list):
-        return [_rewrite_text(v, fn) for v in value]
-    if isinstance(value, dict):
-        return {k: _rewrite_text(v, fn) for k, v in value.items()}
-    return value

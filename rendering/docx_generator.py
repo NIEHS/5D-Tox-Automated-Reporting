@@ -2610,6 +2610,9 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     Returns:
         The .docx file contents as bytes (ready to write to disk or stream).
     """
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data, tree)
     from document_model.document_tree import render_nodes
     nodes = render_nodes(data, tree)
     running_header = data.get("running_header") or data.get("title") or "5dToxReport"

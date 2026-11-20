@@ -35,6 +35,8 @@ Basis key:
 | Dose words ("Exposure Concentration …") | node titles | decl |
 | BMD summary caption (2026) | node `caption` | decl |
 | What the generated prose cites | `cited_as` | decl |
+| Boilerplate sources (the statistical procedures, the software), and where the Materials and Methods cite each | `templates/sources.yaml` (`cited_at`; ADR-0038) | decl |
+| Citation numbers and the reference list | derived from what the presented report prints (`rendering.citations`; ADR-0038) | derived |
 | Statistical tests, alphas, BMD acceptance, BMR, GO ranking and display cut-offs, internal-dose rules, eFDR null data generation | method profile | profile |
 
 ## B. Rules in code

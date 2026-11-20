@@ -18,7 +18,12 @@ class FakeStore:
     `present` set of artifact names + `files`/`stale` toggles + a `docs` map."""
 
     def __init__(self, *, files=False, stale=False, present=None, docs=None,
-                 section_states=None, section_dicts=None, processed=False):
+                 section_states=None, section_dicts=None, processed=False,
+                 citations_checked=True):
+        # The citation check has passed on the report as it stands, unless a
+        # test says otherwise: the tests of the other publish conditions are
+        # about those conditions.
+        self._citations_checked = citations_checked
         self._files = files
         self._stale = stale
         self._present = set(present or ())
@@ -55,7 +60,11 @@ class FakeStore:
 
     def read_json(self, dtxsid, name):
         # (session, name) for another session's document; a bare name is DTX's.
-        return self._docs.get((dtxsid, name), self._docs.get(name) if dtxsid == "DTX" else None)
+        found = self._docs.get((dtxsid, name), self._docs.get(name) if dtxsid == "DTX" else None)
+        if found is None and name == "citations_check.json" and self._citations_checked:
+            from rendering.kept_render import content_fingerprint
+            return {"passed": True, "content_fingerprint": content_fingerprint(dtxsid)}
+        return found
 
     def read_section_states(self, dtxsid):
         return dict(self._section_states)
@@ -282,6 +291,27 @@ def test_a_report_over_several_studies_waits_for_each_members_bmd_review():
         "decision": "reliable", "reason": "plausible", "bmd": "1.0"}}}
     store._docs[("DTX_mouse", "bmd_flags.json")] = {"flags": [{**flag, "decision": "reliable"}]}
     assert eng.publish_readiness()["can_publish"] is True
+
+
+def test_publish_readiness_waits_for_a_citation_check_that_holds_and_passed():
+    # rendering.citations_validate (ADR-0038): the check is the last act
+    # before publishing; whether its record holds is derived, never stored.
+    from rendering.kept_render import content_fingerprint
+
+    def blocking(record):
+        store = FakeStore(files=True, citations_checked=False,
+                          docs={"citations_check.json": record} if record else {})
+        return WorkflowEngine("DTX", store).publish_readiness()
+
+    assert blocking(None) == {"can_publish": False, "blocking": [
+        {"section_key": "citations", "reason": "citations_not_checked"}]}
+    assert blocking({"passed": True, "content_fingerprint": "another state"})["blocking"] == [
+        {"section_key": "citations", "reason": "citations_out_of_date"}]
+    now = content_fingerprint("DTX")
+    assert blocking({"passed": False, "content_fingerprint": now})["blocking"] == [
+        {"section_key": "citations", "reason": "citations_failed"}]
+    assert blocking({"passed": True, "content_fingerprint": now}) == {
+        "can_publish": True, "blocking": []}
 
 
 # --- a study of a report: the report's Background stands for it -------------

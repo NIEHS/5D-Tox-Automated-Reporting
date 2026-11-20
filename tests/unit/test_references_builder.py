@@ -234,3 +234,42 @@ class TestRealDB:
 
     def test_empty_gene_set_yields_empty_pool(self):
         assert build_reference_pool_for_genes([], str(DB_PATH)) == []
+
+
+# ── the interpretations' citations as source records (ADR-0038) ────────────
+
+def test_cited_interpretations_makes_sources_of_the_cited_papers_only(tmp_path, monkeypatch):
+    import json
+
+    from narrative import references_builder as rb
+    from narrative.sources import slug_for, token
+
+    monkeypatch.setattr("knowledge_base.bibliography.authors_of",
+                        lambda kb, paper_id: ["Able B", "Cee D"] if paper_id == "pa" else [])
+    (tmp_path / "_cache_interpretation_liver_male_h1.json").write_text(json.dumps({
+        "knowledge_base": {"name": "kb-one"},
+        "gene_set_narrative": ["Sterol response [P2, P1]. Invented [P9]."],
+        "gene_narrative": ["CYP7A1 was sensitive [P1]."],
+        "reference_pool": [
+            {"token": "P1", "paper_id": "pa", "title": "Paper A", "year": 2020,
+             "venue": "VA", "doi": "10.1/a", "genes": ["CYP7A1"]},
+            {"token": "P2", "paper_id": "pb", "title": "Paper B", "year": 2021,
+             "venue": "VB", "doi": "10.1/b", "genes": ["EGR1"]},
+            {"token": "P3", "paper_id": "pc", "title": "Paper C", "year": 2022,
+             "venue": "VC", "doi": "10.1/c", "genes": ["MYC"]},
+        ]}))
+    out = rb.cited_interpretations(
+        tmp_path, {"liver_Male": {"organ": "liver", "sex": "Male"}}, dtxsid="DTXSID_REFTEST")
+
+    pa, pb = slug_for("doi:10.1/a"), slug_for("doi:10.1/b")
+    # Offered and never cited (pc) is no source.
+    assert set(out["sources"]) == {pa, pb}
+    assert out["sources"][pa]["authors"] == ["Able B", "Cee D"]
+    assert out["sources"][pa]["origin"] == {
+        "from": "knowledge_base", "knowledge_base": "kb-one", "paper_id": "pa"}
+    assert out["rewritten"][("liver", "male")] == {
+        "gene_set_narrative": [f"Sterol response {token(pb)}{token(pa)}. Invented."],
+        "gene_narrative": [f"CYP7A1 was sensitive {token(pa)}."]}
+    # What the writer cited outside its pool is reported, not printed.
+    assert [(w["organ"], w["kind"], w["tokens"]) for w in out["warnings"]] == [
+        ("liver", "gene_set", ["P9"])]

@@ -2016,6 +2016,9 @@ def generate_latex(
         A self-contained .tex source string.  The caller is responsible
         for placing latex/niehs.cls alongside it before invoking pdflatex.
     """
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data, tree)
     # Install the render-scoped genomics-table xref index (ADR-0021 D2) so
     # [[xref:<component>::<organ>-<sex>-table]] tokens in narrative prose resolve
     # to the data-driven tables' positional numbers.  Cleared in the finally so
@@ -2103,6 +2106,9 @@ def generate_report_body(data: dict, tree: "list | None" = None) -> str:
     `tree` defaults to the global DOCUMENT_TREE; a per-session tree renders that
     session's own structure (ADR-0007 follow-on).
     """
+    # The citations numbered as this report prints them (rendering.citations).
+    from rendering.citations import numbered
+    data = numbered(data, tree)
     from document_model.document_tree import render_nodes
     nodes = render_nodes(data, tree)
     body_first_id = first_body_node_id(nodes)
