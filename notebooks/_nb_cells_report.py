@@ -292,7 +292,9 @@ already accepted.
   person added). Text cites the record (`[[cite:<slug>]]`), never a number.
   Each render derives the numbers and the reference list from what the
   presented report prints (`rendering.citations.numbered`), so only cited
-  sources are listed, each once. `rendering.citations_validate.validate`
+  sources are listed, each once. How a citation is written is the
+  definition's `citation_style` (a superscript after the punctuation, as the
+  books print them, or a bracketed number), for the document and per section. `rendering.citations_validate.validate`
   is the citation check: it reads the report as presented and records what it
   found (`citations_check.json`) with the state of the report it was made on.
   The gate waits for a check that holds and passed.

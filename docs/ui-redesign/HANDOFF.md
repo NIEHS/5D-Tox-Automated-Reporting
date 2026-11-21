@@ -297,7 +297,8 @@ The gate also waits for the **citation check** (ADR-0038), as the blocking key
 `citations`. A source a report may cite is a record (`narrative/sources.py`);
 text cites the record, never a number; the numbers and the reference list are
 derived from what the presented report prints (`rendering/citations.py`), the
-way table numbers are. The check (`rendering/citations_validate.py`) reads the
+way table numbers are. How a citation is written (superscript or bracketed)
+is the definition's `citation_style`, for the document and per section. The check (`rendering/citations_validate.py`) reads the
 report as presented and records its result with the state of the report it was
 made on. Where it stands is derived, never stored: `citations_not_checked`,
 `citations_out_of_date` (anything written to the report after the check, an

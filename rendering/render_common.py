@@ -2157,10 +2157,12 @@ def node_data(node: DocNode, data: dict) -> dict:
 _REPORT_DATA = "_report_data"
 
 
-def _paragraph_list(value) -> list[str]:
+def _paragraph_list(value) -> list:
+    """The paragraphs of a narrative that have text: each a plain string or a
+    list of inline units (a paragraph whose citations are superscripts)."""
     if isinstance(value, str):
         return [value] if value.strip() else []
-    return [p for p in value or [] if isinstance(p, str) and p.strip()]
+    return [p for p in value or [] if isinstance(p, (str, list)) and inline_plain_text(p).strip()]
 
 
 def walk_emit(

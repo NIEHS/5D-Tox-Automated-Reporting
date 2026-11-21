@@ -7,6 +7,10 @@
     layer), ADR-0034 (named knowledge bases), ADR-0017 (content provenance);
     Invariant 2 (the document tree drives all structure) and Invariant 3
     (state is derived, never stored);
+  - `document_model/document_template.py` (`CITATION_STYLES`,
+    `load_citation_style`), `document_model/document_node.py`
+    (`DocNode.citation_style`), `templates/niehs-5day-report.yaml`
+    (`citation_style: superscript`);
   - `narrative/sources.py` (the source record, the citation token, the entry a
     list prints, the boilerplate rule), `templates/sources.yaml` (the
     definitions' source library);
@@ -101,6 +105,35 @@ This is the rule table numbers follow. It follows that a source nothing
 printed cites cannot be listed, a paper two studies cite is listed once, and
 a view that prints fewer sections has a shorter list. Nothing numbered is
 stored.
+
+### 3a. The citation style is declared by the definition, per section
+
+How a citation is written where it is printed is a declared element of the
+document definition (decided by the maintainer, 2026-11-21), not a rule in
+the renderers:
+
+- `citation_style:` at the top of a definition is the document's style;
+- `citation_style:` on a node is the style of that section and of the
+  sections under it (the nearest declaring node above a citation decides).
+
+Two styles (`document_template.CITATION_STYLES`):
+
+| Style | What is printed |
+|---|---|
+| `superscript` | the numbers in ascending order, joined by a comma, three or more in a row as a range, set as a superscript after the punctuation that follows: "…Williams¹⁸,¹⁹ and Dunnett.²⁰", "…samples.³⁻⁶" |
+| `bracket` | "[3]", "[3, 7]", in the order written, where the citation was |
+
+The base template declares `superscript`: all twelve published books print
+their citations that way (checked in their Bookshelf text, NIEHS-02 to -13
+and RR-8; none uses brackets). A section that differs declares its own, in
+its definition (`changes: [{set: <node>, citation_style: bracket}]`).
+
+The numbering already learns which node prints each citing text (the probe
+render marks where each node starts), so the style costs no second pass. A
+superscript paragraph becomes inline units (`render_common`'s inline model:
+text and `sup` units), which the HTML, LaTeX, Word and BITS emitters already
+render. Where no markup can go (a text that is one string, such as the
+abstract's), superscript digits are written.
 
 ### 4. Boilerplate sources are part of the definition system
 
@@ -213,9 +246,12 @@ check of a study reads those answers and asks nothing about them.
 ## Open questions
 
 1. Where the *use* of a boilerplate citation is declared. Today: a rule in
-   the library entry (`cited_at`) for the Methods. A definition's own text
-   blocks can already cite an entry by token. Whether the Methods' rule
-   should move into the era templates is undecided.
+   the library entry (`cited_at`) for the Methods. Text that a definition
+   authors on its own nodes (a text block of an era template) is not part of
+   the report's data, so a citation written there is not numbered yet: it
+   would print as it stands, and the check reports it. Whether the Methods'
+   rule should move into the era templates, and citations in a definition's
+   own text, are undecided.
 2. Whether a check with warnings only (an address out of reach from this
    machine) should open the gate. Today it does, and the record says which
    checks were not made.
@@ -227,3 +263,7 @@ check of a study reads those answers and asks nothing about them.
    source and prints the token.
 5. The boilerplate of the other books (the outlier procedure, the software
    versions) is not yet in the library.
+6. In the BITS a citation is a `<sup>` with its numbers; the published books
+   also link each number to its entry (`<xref ref-type="bibr">`, or a
+   `<related-object>` across the files of a chunked book). The numbers are
+   kept on the unit (`cites`) for that; the link is not emitted yet.

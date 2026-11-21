@@ -226,6 +226,12 @@ class DocNode:
                         those paragraphs cite by number.  Declared by the
                         definition (eras/niehs-2026), so the citing code knows
                         no node ids (document_tree.find_cited).
+        citation_style: How the citations printed in this node and the nodes
+                        under it are written (document_template.CITATION_STYLES:
+                        "superscript" as the published books print them,
+                        "bracket" for "[3, 7]").  Unset, the nearest node above
+                        that declares one decides, else the definition's own
+                        ``citation_style`` (ADR-0038, rendering.citations).
         scope_species:  COMPUTED by that expansion: the species a copy (and every
                         node in it) is about; derived file lists keep to it, and
                         in a report over several studies the copy renders from
@@ -271,6 +277,7 @@ class DocNode:
     entry_narrative: bool | None = None
     intro_key: str | None = None
     cited_as: str | None = None
+    citation_style: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

@@ -538,8 +538,8 @@ def _emit_bmd_summary(node: DocNode, data: dict) -> list:
     plan = bmd_summary_plan(node, data)
     out: list = []
     for para in plan.paragraphs:
-        if isinstance(para, str) and para.strip():
-            out.append(_p(para))
+        if inline_plain_text(para).strip():
+            out.append(_p_inline(para))
     if plan.rows is not None:
         out.append(_table_wrap(
             node.id, plan.caption, list(BMD_SUMMARY_HEADERS), plan.rows,
@@ -571,8 +571,8 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
     # Section intro paragraph(s) — the gene_set_narrative / gene_narrative prose
     # that leads the section, ahead of the per-entry items.
     for para in genomics_intro_paragraphs(node, data):
-        if isinstance(para, str) and para.strip():
-            out.append(_p(para))
+        if inline_plain_text(para).strip():
+            out.append(_p_inline(para))
 
     for r in resolve_content_items(node, data):
         # ADR-0003 Part B: a template-authored item (text fully wired; other
@@ -590,8 +590,8 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
         entry, part = r.entry, r.item.get("part")
         if part == "narrative":
             for para in entry.get("narrative") or []:
-                if isinstance(para, str) and para.strip():
-                    out.append(_p(para))
+                if inline_plain_text(para).strip():
+                    out.append(_p_inline(para))
         elif part == "table":
             rows = (
                 gene_set_table_rows(entry) if role == "gene_set"
