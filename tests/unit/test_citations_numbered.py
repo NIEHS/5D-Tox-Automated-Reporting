@@ -20,8 +20,11 @@ C = {"slug": "c", "identity": "doi:10.1/c", "kind": "paper", "authors": ["Cee D"
      "origin": {"from": "knowledge_base"}}
 
 
-def _report(background, sources=None, methods=None):
+def _report(background, sources=None, methods=None, style="bracket"):
+    """A small report.  The numbering tests declare the bracket style, whose
+    paragraphs stay plain strings; the style tests below declare their own."""
     data = scaffold_report_data()
+    data["citation_style"] = style
     data["background"] = {"paragraphs": list(background)}
     data["sources"] = {s["slug"]: dict(s) for s in (sources if sources is not None else (A, B, C))}
     if methods:
@@ -98,25 +101,155 @@ def test_numbering_twice_changes_nothing_and_untracked_data_is_left_alone():
     once = numbered(data)
     assert numbered(once) is once
     plain = scaffold_report_data()
+    plain["citation_style"] = "superscript"
     plain["background"] = {"paragraphs": ["As given [3]."]}
     plain["references"] = {"paragraphs": ["[3] A reference as given."]}
     assert numbered(plain) is plain
 
 
-@pytest.mark.parametrize("surface", ["latex", "bits", "jats"])
-def test_every_surface_prints_numbers_and_the_derived_list(surface):
-    data = _report([f"First {token('b')}.", f"Then {token('a')}{token('b')}."])
+# ── the citation style: declared by the definition, per section ────────────
+
+def _sup(text, cites):
+    return {"type": "sup", "text": text, "cites": cites}
+
+
+def test_the_published_style_is_a_superscript_after_the_punctuation():
+    data = _report([f"The procedures of Williams {token('a')}{token('b')} and Dunnett {token('c')}.",
+                    f"Three in a row {token('a')}{token('b')}{token('c')}; then one ({token('b')})."],
+                   style="superscript")
+    out = numbered(data)
+    assert out["background"]["paragraphs"] == [
+        ["The procedures of Williams", _sup("1,2", [1, 2]), " and Dunnett.", _sup("3", [3])],
+        ["Three in a row;", _sup("1-3", [1, 2, 3]), " then one (", _sup("2", [2]), ")."]]
+    text = generate_html(data)
+    assert "Williams<sup>1,2</sup> and Dunnett.<sup>3</sup>" in text
+    assert "Three in a row;<sup>1-3</sup> then one (<sup>2</sup>)." in text
+
+
+def test_superscript_numbers_are_ascending_each_once_and_three_in_a_row_are_a_range():
+    from rendering.citations import superscript_numbers
+    assert superscript_numbers([19, 18]) == "18,19"
+    assert superscript_numbers([3, 4, 5, 6]) == "3-6"
+    assert superscript_numbers([1, 2, 4, 5, 6, 9, 2]) == "1,2,4-6,9"
+
+
+def test_the_style_is_superscript_where_the_definition_says_nothing():
+    data = _report([f"Cited {token('a')}."])
+    del data["citation_style"]
+    assert numbered(data)["background"]["paragraphs"] == [["Cited.", _sup("1", [1])]]
+    from document_model.document_template import load_citation_style
+    assert load_citation_style("niehs-5day-report") == "superscript"
+
+
+def _tree_with(node_id, style):
+    """The default tree, with one node declaring its citation style."""
+    import copy
+
+    from document_model.document_tree import DOCUMENT_TREE
+    tree = copy.deepcopy(DOCUMENT_TREE)
+
+    def find(nodes):
+        for node in nodes:
+            if node.id == node_id:
+                return node
+            found = find(node.children)
+            if found:
+                return found
+    find(tree).citation_style = style
+    return tree
+
+
+def test_a_section_declares_its_own_style_and_the_sections_under_it_follow():
+    data = _report([f"Background cites {token('a')}."], methods=[f"Methods cite {token('c')}."],
+                   style="superscript")
+    # The Background in brackets; the Methods follow the document.
+    out = numbered(data, _tree_with("background", "bracket"))
+    assert out["background"]["paragraphs"] == ["Background cites [1]."]
+    assert out["methods"]["sections"][0]["paragraphs"] == [["Methods cite.", _sup("2", [2])]]
+    # Declared on the Methods' top node: its subsections follow it.
+    data["citation_style"] = "bracket"
+    out = numbered(data, _tree_with("methods", "superscript"))
+    assert out["background"]["paragraphs"] == ["Background cites [1]."]
+    assert out["methods"]["sections"][0]["paragraphs"] == [["Methods cite.", _sup("2", [2])]]
+    from rendering.citations import node_styles
+    styles = node_styles(_tree_with("methods", "superscript"), "bracket")
+    assert styles["methods"] == "superscript" and styles["background"] == "bracket"
+    assert {styles[k] for k in styles if k.startswith("methods")} == {"superscript"}
+
+
+def test_a_node_may_only_declare_a_known_style():
+    from document_model.document_template import _validate_entry
+    entry = {"id": "background", "type": "narrative", "title": "Background",
+             "data_key": "background", "element": "book-part", "book_part_type": "section"}
+    _validate_entry({**entry, "citation_style": "bracket"}, None)
+    with pytest.raises(ValueError, match="citation_style must be one of"):
+        _validate_entry({**entry, "citation_style": "footnote"}, None)
+
+
+def test_a_paragraph_that_already_is_units_keeps_its_units():
+    data = _report([["The gene ", {"type": "italic", "text": "Cyp1a1"},
+                     f" rose {token('a')}."]], style="superscript")
+    assert numbered(data)["background"]["paragraphs"] == [
+        ["The gene ", {"type": "italic", "text": "Cyp1a1"}, " rose.", _sup("1", [1])]]
+
+
+def test_where_no_markup_can_go_the_superscript_is_written_in_superscript_digits():
+    data = _report([f"Printed {token('a')}."], style="superscript")
+    data["abstract"] = {"sections": [{"label": "Background", "text": f"A solvent {token('a')}."}]}
+    out = numbered(data)
+    # The abstract's text is one string, not a list of paragraphs.
+    assert out["abstract"]["sections"][0]["text"] == "A solvent.¹"
+    assert "A solvent.¹" in generate_html(data)
+
+
+def test_an_unknown_citation_stays_a_plain_pending_marker_in_the_superscript_style():
+    data = _report([f"Known {token('a')}. Unknown {token('unknown-7')}."], style="superscript")
+    assert numbered(data)["background"]["paragraphs"] == [
+        ["Known.", _sup("1", [1]), f" Unknown {UNKNOWN_SOURCE}."]]
+
+
+@pytest.mark.parametrize("style", ["bracket", "superscript"])
+@pytest.mark.parametrize("surface", ["latex", "bits", "jats", "docx"])
+def test_every_surface_prints_numbers_and_the_derived_list(surface, style):
+    data = _report([f"First {token('b')}.", f"Then {token('a')}{token('b')}."], style=style)
     if surface == "latex":
         from rendering.latex_generator import generate_latex
         out = generate_latex(data)
+        cited = "Then.\\textsuperscript{1,2}"
     elif surface == "bits":
         from rendering.bits_book import generate_bits
         out = generate_bits(data)
-    else:
+        cited = "Then.<sup>1,2</sup>"
+    elif surface == "jats":
         from rendering.jats_generator import generate_jats
         out = generate_jats(data)
+        cited = "Then.<sup>1,2</sup>"
+    else:
+        import io
+
+        from docx import Document
+
+        from rendering.docx_generator import generate_docx
+        paragraphs = Document(io.BytesIO(generate_docx(data))).paragraphs
+        then = next(p for p in paragraphs if p.text.startswith("Then"))
+        runs = [(r.text, bool(r.font.superscript)) for r in then.runs if r.text]
+        assert runs == ([("Then [2, 1].", False)] if style == "bracket"
+                        else [("Then.", False), ("1,2", True)])
+        out = "\n".join(p.text for p in paragraphs)
+        cited = "Then [2, 1]." if style == "bracket" else "Then.1,2"
     out = out if isinstance(out, str) else str(out)
     assert "[[cite:" not in out and "cite:" not in out
-    assert "Then [2, 1]." in out
+    assert ("Then [2, 1]." if style == "bracket" else cited) in out
     assert "Gamma" not in out                      # recorded, never cited: not listed
     assert out.count("Beta site.") == 1
+
+
+def test_a_paragraph_of_units_is_kept_where_paragraphs_with_text_are_selected():
+    # A superscript paragraph is a list of units; the selections that keep
+    # "the paragraphs that have text" must keep it (they once kept strings only,
+    # which dropped an interpretation's paragraphs from a per-tissue section).
+    from rendering.render_common import _paragraph_list
+    units = ["Cyp1a1 rose.", _sup("3", [3])]
+    assert _paragraph_list(["Plain.", units, "  ", [], ["", {"type": "sup", "text": ""}]]) == [
+        "Plain.", units]
+    assert _paragraph_list("One.") == ["One."] and _paragraph_list(None) == []

@@ -37,6 +37,7 @@ Basis key:
 | What the generated prose cites | `cited_as` | decl |
 | Boilerplate sources (the statistical procedures, the software), and where the Materials and Methods cite each | `templates/sources.yaml` (`cited_at`; ADR-0038) | decl |
 | Citation numbers and the reference list | derived from what the presented report prints (`rendering.citations`; ADR-0038) | derived |
+| How a citation is written (superscript after the punctuation, or bracketed), for the document and per section | `citation_style:` at the top of a definition and on a node (ADR-0038 §3a) | decl |
 | Statistical tests, alphas, BMD acceptance, BMR, GO ranking and display cut-offs, internal-dose rules, eFDR null data generation | method profile | profile |
 
 ## B. Rules in code

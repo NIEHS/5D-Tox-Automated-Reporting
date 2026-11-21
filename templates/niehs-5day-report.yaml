@@ -677,6 +677,12 @@ foreword:
 # float (Bookshelf shows a card that opens the object); the appendices' are
 # anchored in the text (shown in full) — as NIEHS-07 … 10 have them.
 packaging: chunked
+# How a citation is written where it is printed (ADR-0038): `superscript`, a
+# superscript number after the punctuation, as every published book prints
+# them ("…Dunnett.²⁰", "…samples.³⁻⁶"), or `bracket` ("[3, 7]").  This is the
+# document's style; a section that differs declares `citation_style:` on its
+# node, and the sections under it follow.
+citation_style: superscript
 # The order of the genomic analyses' tissues (tables and per-tissue sections):
 # these first, the rest alphabetically — Liver then Kidney, as NIEHS-07 … 10.
 tissue_order: [liver, kidney]

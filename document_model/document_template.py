@@ -109,6 +109,14 @@ _REPEATS = ("deposit_species", "study_species", "genomic_organs", "genomic_analy
 CITED_AS = ("supplemental-data", "gene-set-summary-table", "efdr-table",
             "genomic-figures-appendix", "organ-weight-descriptions")
 
+# How a citation is written where it is printed (ADR-0038): a superscript
+# number after the punctuation, as every published book prints them
+# ("…Dunnett.²⁰", "…samples.³⁻⁶"), or a bracketed number ("[3, 7]").  Declared
+# for the document (``citation_style:``) and, where a section differs, on its
+# node (DocNode.citation_style).
+CITATION_STYLES = ("superscript", "bracket")
+DEFAULT_CITATION_STYLE = "superscript"
+
 # The component types whose content is AUTHORED (in the template or an external
 # file) rather than read from the pipeline data dict, as content / content_file
 # / representation.  Their content bindings get a dedicated validation branch +
@@ -489,6 +497,9 @@ def _validate_deposit_fields(entry: dict, node_id: str, node_type: str) -> None:
     if entry.get("study_title") is not None and repeat != "study_species":
         raise ValueError(f"template node {node_id!r}: study_title is only valid on a "
                          f"`repeat: study_species` node")
+    if entry.get("citation_style") is not None and entry["citation_style"] not in CITATION_STYLES:
+        raise ValueError(f"template node {node_id!r}: citation_style must be one of "
+                         f"{list(CITATION_STYLES)}, got {entry['citation_style']!r}")
     if entry.get("cited_as") is not None and entry["cited_as"] not in CITED_AS:
         raise ValueError(f"template node {node_id!r}: cited_as must be one of "
                          f"{list(CITED_AS)}, got {entry['cited_as']!r}")
@@ -1038,6 +1049,20 @@ def load_knowledge_base(name: str) -> str | None:
     if not isinstance(kb, str) or not kb.strip():
         raise ValueError(f"template {name!r}: knowledge_base is a knowledge base's name, got {kb!r}")
     return kb.strip()
+
+
+def load_citation_style(name: str) -> str:
+    """How the report writes its citations where no section says otherwise
+    (ADR-0038): the definition's ``citation_style:``, one of CITATION_STYLES.
+    The published books' superscript when the template says nothing."""
+    raw = _load_raw(name)
+    style = raw.get("citation_style") if isinstance(raw, dict) else None
+    if style is None:
+        return DEFAULT_CITATION_STYLE
+    if style not in CITATION_STYLES:
+        raise ValueError(f"template {name!r}: citation_style must be one of "
+                         f"{list(CITATION_STYLES)}, got {style!r}")
+    return style
 
 
 def load_abstract_genes(name: str) -> bool:

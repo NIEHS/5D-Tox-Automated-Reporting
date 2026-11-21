@@ -56,7 +56,7 @@ PACKAGINGS = ("chunked", "single-file")
 _DEFINITION_KEYS = frozenset({"extends", "packaging", "object_position", "book_meta",
                               "phrasing", "tissue_order", "abstract_genes", "foreword",
                               "dose_terms", "organ_descriptions", "organ_description_order",
-                              "knowledge_base", "table_notes", "changes"})
+                              "knowledge_base", "table_notes", "citation_style", "changes"})
 _OPS = ("set", "remove", "insert", "move")
 _PLACES = ("after", "before", "into")
 
@@ -107,6 +107,8 @@ def load_definition(name: str, _seen: tuple[str, ...] = ()) -> dict | list:
         out["tissue_order"] = raw["tissue_order"]
     if "abstract_genes" in raw:
         out["abstract_genes"] = raw["abstract_genes"]
+    if "citation_style" in raw:
+        out["citation_style"] = raw["citation_style"]
     if "foreword" in raw:
         out["foreword"] = raw["foreword"]
     if "knowledge_base" in raw:

@@ -113,6 +113,9 @@ def test_cited_papers_are_sources_and_the_report_derives_its_numbers(staged_sess
 
     # The presented report: numbered in reading order, the list holds the
     # cited papers, and the shared paper keeps one number across strata.
+    # (Declared in brackets here, whose paragraphs stay plain strings; the
+    # styles are tested in tests/unit/test_citations_numbered.py.)
+    data["citation_style"] = "bracket"
     shown = numbered(data)
     assert shown["references"]["paragraphs"] == [
         "[1] Paper B. VB. 2021. https://doi.org/10.1/b",
