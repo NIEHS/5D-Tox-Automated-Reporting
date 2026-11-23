@@ -143,5 +143,5 @@ def test_a_background_run_is_recorded_with_the_exact_prompt():
     record = background_run_record("DTXSID0000777", result, version=3)
     assert record == {"section": "background", "dtxsid": "DTXSID0000777",
                       "prompt": {"system": "s", "user": "u"}, "model_used": "m",
-                      "paragraphs": ["p"], "references": ["r"],
+                      "paragraphs": ["p"], "references": ["r"], "sources": [],
                       "citation_report": {"issues": []}, "section_version": 3}

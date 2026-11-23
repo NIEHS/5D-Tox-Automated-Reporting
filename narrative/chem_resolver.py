@@ -38,7 +38,7 @@ import requests
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
 # EPA CompTox (CTX) API base URL — requires free API key in CTX_API_KEY env var
-CTX_BASE = "https://api-ccte.epa.gov"
+CTX_BASE = "https://comptox.epa.gov/ctx-api"
 
 # Rate limit delay between API calls (seconds) to be a polite client
 RATE_LIMIT = 0.3
@@ -349,20 +349,11 @@ def resolve_via_ctx(identity: ChemicalIdentity, api_key: str = "") -> None:
         identity.resolution_notes.append("No CASRN or name available for CTX lookup")
         return
 
-    # Search for the chemical in CTX
-    # The /chemical/search/by-name/ endpoint accepts both names and CASRNs
+    # The exact-match search takes a CAS number or a name
     data = _ctx_get(
-        f"/chemical/search/by-name/{requests.utils.quote(search_term)}",
+        f"/chemical/search/equal/{requests.utils.quote(search_term, safe='')}",
         api_key=api_key,
     )
-
-    if not data:
-        # Try the equal endpoint for exact CASRN match
-        if identity.casrn:
-            data = _ctx_get(
-                f"/chemical/detail/search/by-casrn/{identity.casrn}",
-                api_key=api_key,
-            )
 
     if not data:
         identity.resolution_notes.append(f"CTX lookup failed for '{search_term}'")
@@ -386,13 +377,13 @@ def resolve_via_ctx(identity: ChemicalIdentity, api_key: str = "") -> None:
     # Fetch functional uses if we have a DTXSID
     if identity.dtxsid:
         uses_data = _ctx_get(
-            f"/chemical/functionuse/{identity.dtxsid}",
+            f"/exposure/functional-use/search/by-dtxsid/{identity.dtxsid}",
             api_key=api_key,
         )
         if uses_data and isinstance(uses_data, list):
             uses = set()
             for item in uses_data:
-                category = item.get("category", "")
+                category = item.get("functioncategory") or item.get("category") or ""
                 if category:
                     uses.add(category)
             identity.functional_uses = sorted(uses)

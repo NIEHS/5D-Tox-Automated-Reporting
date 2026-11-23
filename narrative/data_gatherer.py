@@ -1,28 +1,30 @@
 """
 Regulatory and toxicological data gatherer for background section generation.
 
-For a resolved ChemicalIdentity, queries multiple public databases to collect
-the raw data needed to write a structured toxicology background section:
+For a resolved ChemicalIdentity, collects what a Background is written from,
+the way a human author of the published reports does (the routine was read
+from the twelve books, 2026-11-23):
 
-  - EPA CTX Hazard API: RfD, NOAEL, LOAEL, cancer classification, uncertainty factors
-  - PubChem: chemical class, description, uses, properties
-  - ATSDR ToxProfiles: ADME (absorption, distribution, metabolism, excretion),
-    toxicological effects by duration, mechanism of toxicity
-  - EPA IRIS: chronic RfD, cancer weight-of-evidence, critical study details
-  - OSHA/NIOSH: PELs (Permissible Exposure Limits), RELs, ceiling values
-  - Semantic Scholar: recent peer-reviewed papers on mechanism/toxicity
+  - PubChem's record of the compound: uses, exposure, hazard descriptions;
+  - the documents an author consults, each found from the chemical's public
+    identifiers and read (narrative.agency_sources): EPA's CompTox dashboard,
+    ATSDR's toxicological profile, OECD's SIDS assessment, EPA's IRIS summary,
+    the IARC monograph, NTP's technical reports, OSHA's Table Z-1, the NIOSH
+    Pocket Guide, ACGIH's Data Hub, EPA's drinking water regulations;
+  - papers on the chemical's toxicity, metabolism and kinetics, from PubMed.
 
-Design note: ATSDR and IRIS pages contain large blocks of narrative text.
-Rather than writing fragile parsers to extract specific facts, we pass the
-raw text to the LLM along with structured data. The LLM extracts what it
-needs during the writing step (background_writer.py).
+Each document is a numbered reference, entered as a reference list cites it,
+and its text is passed to the model as that numbered document: the model
+writes from what the documents say and cites them by number
+(background_writer.py).  A site that could not be read is named in
+``unreachable_sources``; that is different from a document that does not
+exist for the chemical.
 
 Usage:
     python data_gatherer.py "95-50-1"
 """
 
 import json
-import os
 import re
 import sys
 import time
@@ -40,20 +42,11 @@ from narrative.chem_resolver import ChemicalIdentity, resolve_chemical
 # Rate limit between API calls (seconds)
 RATE_LIMIT = 0.4
 
-# EPA CTX API base URL
-CTX_BASE = "https://api-ccte.epa.gov"
-
 # PubChem PUG REST base URL
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
 # PubChem PUG View base URL (for detailed compound descriptions)
 PUGVIEW_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
-
-# Semantic Scholar API base URL
-S2_BASE = "https://api.semanticscholar.org/graph/v1"
-
-# ATSDR ToxProfiles base URL — the main public repository of toxicological profiles
-ATSDR_BASE = "https://www.atsdr.cdc.gov/ToxProfiles"
 
 # User-Agent header for web requests — identifies us as a research tool
 USER_AGENT = "BackgroundGenerator/1.0 (toxicology research tool)"
@@ -91,6 +84,9 @@ class BackgroundData:
     iris_noael: str = ""
     # Uncertainty factors applied to derive the RfD
     iris_uf: str = ""
+    # What IRIS says of an inhalation reference concentration (RfC): its value,
+    # or that none was assessed
+    iris_rfc: str = ""
     # EPA/IARC cancer classification (e.g., "Group D — Not classifiable")
     cancer_class: str = ""
 
@@ -127,8 +123,9 @@ class BackgroundData:
     #              "detail": ..., "risk_impact": ...}
     data_gaps: list[dict] = field(default_factory=list)
 
-    # --- References collected from all sources ---
-    # Each entry: {"url": ..., "title": ..., "source_type": ...}
+    # --- References: the documents consulted, in the order offered ---
+    # Each entry is a reference record (narrative.sources fields: kind,
+    # authors, title, container, year, accessed, url) with its source_type.
     references: list[dict] = field(default_factory=list)
 
     # --- Raw text for LLM context ---
@@ -137,7 +134,16 @@ class BackgroundData:
     raw_atsdr_text: str = ""
     raw_iris_text: str = ""
 
-    # --- Semantic Scholar papers on mechanism/toxicity ---
+    # The number of PubChem's summary among the references (0: none): the
+    # uses, exposure and hazard descriptions above are its.
+    pubchem_reference: int = 0
+
+    # --- What the documents say, for the model: {"n": the reference's number,
+    # "label": the document's title, "text": the part read} ---
+    documents: list[dict] = field(default_factory=list)
+
+    # --- Papers on toxicity, metabolism and kinetics (PubMed): reference
+    # records (narrative.sources fields) with their "abstract" ---
     mechanism_papers: list[dict] = field(default_factory=list)
 
     # --- Gathering notes (warnings, gaps, errors) ---
@@ -275,11 +281,6 @@ def gather_pubchem(data: BackgroundData, session: requests.Session) -> None:
                 # GHS hazard statements often describe acute effects
                 data.acute_effects = text[:1500]
 
-    data.references.append({
-        "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
-        "title": f"PubChem Compound {cid}",
-        "source_type": "database",
-    })
 
 
 def _flatten_pugview_sections(view: dict) -> list[dict]:
@@ -332,533 +333,78 @@ def _extract_pugview_text(section: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# EPA CTX Hazard API gathering
+# The documents a human author consults (narrative.agency_sources)
 # ---------------------------------------------------------------------------
 
-def gather_ctx_hazard(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather hazard data from the EPA CompTox (CTX) Hazard API.
+# The order the documents are offered in, and so numbered: the databases that
+# identify the chemical, the assessments, then each limit's own document.
+# (What each is and how it is found: narrative.agency_sources.)
+_ROUTINE = (
+    ("pubchem_summary", "PubChem's compound summary"),
+    ("comptox", "EPA's CompTox Chemicals Dashboard"),
+    ("atsdr_profile", "ATSDR's toxicological profile"),
+    ("oecd_sids", "OECD's SIDS initial assessment"),
+    ("iris", "EPA's IRIS assessment"),
+    ("iarc", "the IARC monograph"),
+    ("ntp_reports", "NTP's technical reports"),
+    ("osha_table_z", "OSHA's Table Z-1 (29 CFR 1910.1000)"),
+    ("niosh", "the NIOSH Pocket Guide"),
+    ("acgih", "ACGIH's Data Hub"),
+    ("drinking_water", "EPA's drinking water regulations"),
+)
 
-    Provides RfD, NOAEL, LOAEL, cancer classification, and uncertainty
-    factors from EPA's integrated risk information. Requires a DTXSID and
-    the CTX_API_KEY environment variable.
-    """
-    dtxsid = data.identity.dtxsid
-    api_key = os.environ.get("CTX_API_KEY", "")
+# What each document's facts fill of the structured data.
+_TEXT_FIELDS = {"atsdr": "raw_atsdr_text", "iris": "raw_iris_text"}
 
-    if not dtxsid:
-        data.notes.append("No DTXSID — skipping CTX Hazard lookup")
-        return
-    if not api_key:
-        data.notes.append("No CTX_API_KEY — skipping CTX Hazard lookup")
-        data.unreachable_sources.append("CTX")
-        return
 
-    url = f"{CTX_BASE}/hazard/search/by-dtxsid/{dtxsid}"
-    headers = {"x-api-key": api_key, "Accept": "application/json"}
-    try:
-        time.sleep(RATE_LIMIT)
-        r = session.get(url, headers=headers, timeout=30)
-        if r.status_code != 200:
-            data.notes.append(f"CTX Hazard API returned {r.status_code} for {dtxsid}")
-            return
-        hazard_records = r.json()
-    except (requests.RequestException, ValueError) as e:
-        data.notes.append(f"CTX Hazard API error: {e}")
-        return
+def gather_documents(data: BackgroundData, report=None) -> None:
+    """Find and read the documents of the authors' routine for this chemical.
+    Each one found becomes a numbered reference (its entry as a reference list
+    cites it) and, when it says something, a document the model writes from;
+    then the papers PubMed has on its toxicity."""
+    from narrative.agency_sources import Finder
 
-    if not isinstance(hazard_records, list):
-        return
-
-    # Parse hazard records — each record has a type (e.g., "oral RfD", "cancer")
-    for rec in hazard_records:
-        if not isinstance(rec, dict):
+    report = report or (lambda message: None)
+    finder = Finder(data.identity, report)
+    for method, label in _ROUTINE:
+        report(f"Looking for {label}...")
+        try:
+            found = getattr(finder, method)()
+        except Exception as exc:  # noqa: BLE001 — one document's failure never stops the rest
+            data.notes.append(f"{label}: not read ({type(exc).__name__}: {exc})")
             continue
+        for source in (found if isinstance(found, list) else [found]):
+            if source is None:
+                continue
+            data.references.append(source.record)
+            number = len(data.references)
+            if source.key == "pubchem":
+                data.pubchem_reference = number
+            if source.text:
+                data.documents.append({"n": number, "label": source.record["title"], "text": source.text})
+            for key, value in source.facts.items():
+                if key == "cpdat_uses":
+                    data.cpdat_uses = list(value)
+                elif value and key == "cancer_class" and data.cancer_class:
+                    data.cancer_class += f"; {value} [{number}]"      # each body's own class
+                elif value and not getattr(data, key, ""):
+                    setattr(data, key, f"{value} [{number}]")
+            if source.key in _TEXT_FIELDS:
+                setattr(data, _TEXT_FIELDS[source.key], source.text)
 
-        # The hazard endpoint returns a flat list of records with various fields
-        tox_type = (rec.get("toxvalType") or "").lower()
-        tox_val = rec.get("toxvalNumeric", "")
-        units = rec.get("toxvalUnits", "")
-        source = rec.get("source", "")
-        study_type = (rec.get("studyType") or "").lower()
-
-        # Reference dose from IRIS or other EPA sources
-        if "rfd" in tox_type or "reference dose" in tox_type:
-            val_str = f"{tox_val} {units}" if tox_val else ""
-            if val_str and not data.iris_rfd:
-                data.iris_rfd = f"{val_str} (source: {source})"
-
-        # NOAEL values
-        if "noael" in tox_type:
-            val_str = f"{tox_val} {units}" if tox_val else ""
-            if val_str and not data.iris_noael:
-                data.iris_noael = f"{val_str} ({study_type}, source: {source})"
-
-        # Cancer classification
-        cancer_class = rec.get("cancerCallDescription") or rec.get("supercategory", "")
-        if cancer_class and "cancer" in (rec.get("humanHealthHazard") or "").lower():
-            if not data.cancer_class:
-                data.cancer_class = cancer_class
-
-    data.references.append({
-        "url": f"https://comptox.epa.gov/dashboard/chemical/hazard/{dtxsid}",
-        "title": f"EPA CompTox Hazard Data for {dtxsid}",
-        "source_type": "database",
-    })
-
-
-# ---------------------------------------------------------------------------
-# ATSDR ToxProfiles gathering
-# ---------------------------------------------------------------------------
-
-def gather_atsdr(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather toxicological profile text from ATSDR (Agency for Toxic
-    Substances and Disease Registry).
-
-    ATSDR ToxProfiles are the gold standard for chemical toxicology summaries.
-    Each profile has structured chapters covering ADME, health effects,
-    mechanism, etc. Not all chemicals have profiles — if absent, the
-    background will have thinner ADME/mechanism sections.
-
-    Strategy: Fetch the main ToxProfile page by CASRN, then extract
-    relevant text blocks. Since ATSDR recently restructured their site,
-    we try multiple URL patterns.
-    """
-    casrn = data.identity.casrn
-    name = data.identity.name
-    if not casrn and not name:
-        data.notes.append("No CASRN or name — skipping ATSDR lookup")
-        return
-
-    # Try the ATSDR ToxFAQs search by chemical name (structured summary)
-    # ATSDR provides substance-specific pages at predictable URLs
-    atsdr_text = ""
-    atsdr_url = ""
-
-    # Try PubChem's ATSDR integration — PubChem links to ATSDR substance pages
-    if data.identity.pubchem_cid:
-        pugview_url = (
-            f"{PUGVIEW_BASE}/data/compound/{data.identity.pubchem_cid}/JSON"
-            f"?heading=ATSDR+Toxic+Substances+Portal"
-        )
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(pugview_url, timeout=15)
-            if r.status_code == 200:
-                view = r.json()
-                text = _extract_pugview_text(view)
-                if text and len(text) > 200:
-                    atsdr_text = text
-                    # Try to find the actual ATSDR URL from the response
-                    atsdr_url = f"https://www.atsdr.cdc.gov/toxfaqs/tfacts{casrn.replace('-', '')}.cfm"
-        except (requests.RequestException, ValueError):
-            pass
-
-    atsdr_errors = 0
-    # Try direct ATSDR ToxFAQs search
-    if not atsdr_text:
-        search_term = casrn or name
-        search_url = (
-            "https://wwwn.cdc.gov/TSP/ToxProfiles/ToxProfiles.aspx"
-            f"?id=&tid=&casrn={requests.utils.quote(search_term)}"
-        )
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(search_url, timeout=30)
-            if r.status_code == 200 and len(r.text) > 500:
-                # Extract text from HTML (similar to fulltext.py approach)
-                atsdr_text = _extract_html_text(r.text)
-                atsdr_url = search_url
-        except requests.RequestException:
-            atsdr_errors += 1
-
-    # Try the ATSDR minimal risk levels page for this chemical
-    if not atsdr_text:
-        mrl_url = f"https://wwwn.cdc.gov/TSP/MRLS/mrlslisting.aspx?cas={casrn}"
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(mrl_url, timeout=15)
-            if r.status_code == 200 and len(r.text) > 300:
-                mrl_text = _extract_html_text(r.text)
-                if "mrl" in mrl_text.lower() or "minimal risk" in mrl_text.lower():
-                    atsdr_text = mrl_text
-                    atsdr_url = mrl_url
-        except requests.RequestException:
-            atsdr_errors += 1
-
-    if atsdr_text:
-        # Store raw text for LLM (capped at 15K chars to fit in prompt)
-        data.raw_atsdr_text = atsdr_text[:15000]
-        if atsdr_url:
-            data.references.append({
-                "url": atsdr_url,
-                "title": f"ATSDR Toxicological Profile for {name or casrn}",
-                "source_type": "government_report",
-            })
-    elif atsdr_errors == 2:
-        # Neither ATSDR endpoint answered: the profile's existence is unknown.
-        data.unreachable_sources.append("ATSDR")
-        data.notes.append("ATSDR could not be reached — ToxProfile availability unknown")
-    else:
-        data.notes.append(
-            f"No ATSDR ToxProfile found for {name or casrn}. "
-            "ADME and mechanism sections may be thinner."
-        )
-
-
-# ---------------------------------------------------------------------------
-# EPA IRIS gathering
-# ---------------------------------------------------------------------------
-
-def gather_iris(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather data from EPA's Integrated Risk Information System (IRIS).
-
-    IRIS provides chronic reference doses (RfD), cancer weight-of-evidence
-    classifications, and critical study details. The data is available via
-    the IRIS assessments page.
-
-    We first check the IRIS summary table (JSON endpoint), then try to
-    fetch the full assessment page for raw text.
-    """
-    casrn = data.identity.casrn
-    name = data.identity.name
-    if not casrn:
-        data.notes.append("No CASRN — skipping IRIS lookup")
-        return
-
-    # Try the IRIS assessment search
-    iris_url = (
-        f"https://cfpub.epa.gov/ncea/iris2/chemicalLanding.cfm"
-        f"?substance_nmbr={casrn.replace('-', '')}"
-    )
+    report("Searching PubMed for papers on its toxicity, metabolism and kinetics...")
     try:
-        time.sleep(RATE_LIMIT)
-        r = session.get(iris_url, timeout=30, allow_redirects=True)
-        if r.status_code == 200 and len(r.text) > 500:
-            iris_text = _extract_html_text(r.text)
-            if iris_text and ("reference dose" in iris_text.lower()
-                             or "iris" in iris_text.lower()
-                             or "cancer" in iris_text.lower()):
-                data.raw_iris_text = iris_text[:15000]
-                data.references.append({
-                    "url": iris_url,
-                    "title": f"EPA IRIS Assessment for {name or casrn}",
-                    "source_type": "government_report",
-                })
-            else:
-                data.notes.append("IRIS page found but no assessment data detected")
-        else:
-            data.notes.append(f"IRIS lookup returned {r.status_code}")
-    except requests.RequestException as e:
-        data.notes.append(f"IRIS lookup error: {e}")
-        iris_unreachable = True
-    else:
-        iris_unreachable = False
+        papers = finder.papers()
+    except Exception as exc:  # noqa: BLE001
+        data.notes.append(f"PubMed: not searched ({type(exc).__name__}: {exc})")
+        papers = []
+    for source in papers:
+        data.mechanism_papers.append({**source.record, "abstract": source.text})
 
-    # Also try the IRIS data via PubChem (PubChem cross-references IRIS)
-    if data.identity.pubchem_cid and not data.raw_iris_text:
-        pugview_url = (
-            f"{PUGVIEW_BASE}/data/compound/{data.identity.pubchem_cid}/JSON"
-            f"?heading=EPA+Integrated+Risk+Information+System"
-        )
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(pugview_url, timeout=15)
-            if r.status_code == 200:
-                view = r.json()
-                text = _extract_pugview_text(view)
-                if text and len(text) > 100:
-                    data.raw_iris_text = text[:15000]
-        except (requests.RequestException, ValueError):
-            pass
-    if iris_unreachable and not data.raw_iris_text:
-        data.unreachable_sources.append("IRIS")
-
-
-# ---------------------------------------------------------------------------
-# OSHA / NIOSH gathering
-# ---------------------------------------------------------------------------
-
-def gather_osha_niosh(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather occupational exposure limits from OSHA and NIOSH.
-
-    OSHA PEL = legally enforceable workplace limit (8-hour TWA)
-    NIOSH REL = recommended limit (not enforceable but often stricter)
-
-    We use PubChem's cross-references to OSHA/NIOSH data, since scraping
-    the actual OSHA/NIOSH sites is fragile.
-    """
-    cid = data.identity.pubchem_cid
-    if not cid:
-        return
-
-    # PubChem PUG View has NIOSH and OSHA sections under "Safety and Hazards"
-    for heading_name, field_name in [
-        ("OSHA+Standards", "osha_pel"),
-        ("NIOSH+Recommendations", "niosh_rel"),
-    ]:
-        url = (
-            f"{PUGVIEW_BASE}/data/compound/{cid}/JSON"
-            f"?heading={heading_name}"
-        )
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(url, timeout=15)
-            if r.status_code == 200:
-                view = r.json()
-                text = _extract_pugview_text(view)
-                if text:
-                    # Extract the actual limit value from the text
-                    setattr(data, field_name, text[:500])
-        except (requests.RequestException, ValueError):
-            pass
-
-    # ACGIH TLV — behind a paywall, so we just note that
-    if not data.acgih_tlv:
-        data.acgih_tlv = "See ACGIH documentation (subscription required)"
-
-    # Add OSHA/NIOSH references if we found data
-    if data.osha_pel:
-        data.references.append({
-            "url": "https://www.osha.gov/chemicaldata/",
-            "title": "OSHA Chemical Data",
-            "source_type": "regulation",
-        })
-    if data.niosh_rel:
-        data.references.append({
-            "url": "https://www.cdc.gov/niosh/npg/",
-            "title": "NIOSH Pocket Guide to Chemical Hazards",
-            "source_type": "regulation",
-        })
-
-
-# ---------------------------------------------------------------------------
-# EPA SDWA (Safe Drinking Water Act) MCL/MCLG
-# ---------------------------------------------------------------------------
-
-def gather_sdwa(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather Safe Drinking Water Act Maximum Contaminant Levels.
-
-    MCL = enforceable maximum allowed in drinking water
-    MCLG = health-based goal (may be zero for carcinogens)
-
-    Uses PubChem's cross-reference to EPA drinking water data.
-    """
-    cid = data.identity.pubchem_cid
-    if not cid:
-        return
-
-    url = (
-        f"{PUGVIEW_BASE}/data/compound/{cid}/JSON"
-        f"?heading=Drinking+Water+Standards"
-    )
-    try:
-        time.sleep(RATE_LIMIT)
-        r = session.get(url, timeout=15)
-        if r.status_code == 200:
-            view = r.json()
-            text = _extract_pugview_text(view)
-            if text:
-                # Look for MCL and MCLG values in the text
-                mcl_match = re.search(
-                    r'MCL[^G].*?(\d+\.?\d*\s*(?:mg/L|ppm|ppb|ug/L|μg/L))',
-                    text, re.IGNORECASE,
-                )
-                mclg_match = re.search(
-                    r'MCLG.*?(\d+\.?\d*\s*(?:mg/L|ppm|ppb|ug/L|μg/L))',
-                    text, re.IGNORECASE,
-                )
-                if mcl_match:
-                    data.epa_mcl = mcl_match.group(0)[:200]
-                if mclg_match:
-                    data.epa_mclg = mclg_match.group(0)[:200]
-
-                # If we couldn't parse specific values, store the whole text
-                if not data.epa_mcl and not data.epa_mclg and text:
-                    data.epa_mcl = text[:500]
-
-                data.references.append({
-                    "url": "https://www.epa.gov/ground-water-and-drinking-water/national-primary-drinking-water-regulations",
-                    "title": "EPA National Primary Drinking Water Regulations",
-                    "source_type": "regulation",
-                })
-    except (requests.RequestException, ValueError):
-        pass
-
-
-# ---------------------------------------------------------------------------
-# Semantic Scholar — mechanism/toxicity papers
-# ---------------------------------------------------------------------------
-
-def gather_mechanism_papers(data: BackgroundData,
-                            session: requests.Session) -> None:
-    """
-    Search Semantic Scholar for recent peer-reviewed papers on the chemical's
-    mechanism of toxicity.
-
-    These papers provide primary literature citations for the mechanism
-    paragraph in the background section.
-    """
-    name = data.identity.name
-    if not name:
-        return
-
-    # Search for mechanism-of-toxicity papers
-    queries = [
-        f"{name} mechanism toxicity",
-        f"{name} ADME pharmacokinetics",
-    ]
-
-    s2_headers = {}
-    s2_key = os.environ.get("S2_API_KEY", "")
-    if s2_key:
-        s2_headers["x-api-key"] = s2_key
-
-    for query in queries:
-        url = f"{S2_BASE}/paper/search"
-        params = {
-            "query": query,
-            "limit": 5,
-            "fields": "title,year,url,authors,venue,citationCount",
-        }
-        try:
-            time.sleep(RATE_LIMIT)
-            r = session.get(url, params=params, timeout=15, headers=s2_headers)
-            if r.status_code == 200:
-                results = r.json()
-                for paper in results.get("data", []):
-                    data.mechanism_papers.append({
-                        "title": paper.get("title", ""),
-                        "year": paper.get("year"),
-                        "url": paper.get("url", ""),
-                        "venue": paper.get("venue", ""),
-                        "citation_count": paper.get("citationCount", 0),
-                        "authors": [
-                            a.get("name", "") for a in paper.get("authors", [])[:3]
-                        ],
-                    })
-            elif r.status_code == 429:
-                # Rate limited — wait and skip
-                data.notes.append("Semantic Scholar rate limited — fewer papers retrieved")
-                time.sleep(3)
-        except requests.RequestException:
-            pass
-
-    # Deduplicate by title
-    seen_titles = set()
-    unique_papers = []
-    for p in data.mechanism_papers:
-        title_lower = p["title"].lower()
-        if title_lower not in seen_titles:
-            seen_titles.add(title_lower)
-            unique_papers.append(p)
-    data.mechanism_papers = unique_papers
-
-
-# ---------------------------------------------------------------------------
-# HTML text extraction helper
-# ---------------------------------------------------------------------------
-
-def _extract_html_text(html: str) -> str:
-    """
-    Extract readable text from HTML, stripping tags and normalizing whitespace.
-
-    Uses BeautifulSoup if available, otherwise falls back to regex-based
-    extraction (same approach as fulltext.py).
-    """
-    try:
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser")
-        # Remove script and style elements
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
-            tag.decompose()
-        text = soup.get_text(separator="\n")
-    except ImportError:
-        # Fallback: regex-based extraction (from fulltext.py pattern)
-        text = re.sub(r'<script[^>]*>.*?</script>', '', html,
-                       flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<style[^>]*>.*?</style>', '', html,
-                       flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<(?:p|div|br|h[1-6]|li|tr)[^>]*>', '\n', html,
-                       flags=re.IGNORECASE)
-        text = re.sub(r'<[^>]+>', ' ', text)
-        text = text.replace('&amp;', '&').replace('&lt;', '<')
-        text = text.replace('&gt;', '>').replace('&nbsp;', ' ')
-
-    # Normalize whitespace
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
-
-
-# ---------------------------------------------------------------------------
-# EPA CPDat — Chemicals and Products Database (functional uses, products)
-# ---------------------------------------------------------------------------
-
-def gather_cpdat(data: BackgroundData, session: requests.Session) -> None:
-    """
-    Gather functional use and consumer product data from EPA's CPDat
-    (Chemicals and Products Database) via the CTX API.
-
-    CPDat tracks what chemicals are used for (functional uses like "solvent",
-    "flame retardant", "plasticizer") and what product categories contain them
-    (e.g., "cleaning products", "paints and coatings"). This complements
-    PubChem's use data with EPA's product-specific categorization.
-    """
-    dtxsid = data.identity.dtxsid
-    api_key = os.environ.get("CTX_API_KEY", "")
-
-    if not dtxsid or not api_key:
-        # Without CTX key or DTXSID, can't query CPDat
-        return
-
-    # Fetch functional use data from CTX
-    # This endpoint returns categories like "Solvent", "Intermediate",
-    # "Cleaning agent", etc.
-    url = f"{CTX_BASE}/chemical/functionuse/{dtxsid}"
-    headers = {"x-api-key": api_key, "Accept": "application/json"}
-    try:
-        time.sleep(RATE_LIMIT)
-        r = session.get(url, headers=headers, timeout=15)
-        if r.status_code == 200:
-            uses_data = r.json()
-            if isinstance(uses_data, list):
-                categories = set()
-                for item in uses_data:
-                    cat = item.get("category", "")
-                    if cat:
-                        categories.add(cat)
-                data.cpdat_uses = sorted(categories)
-    except (requests.RequestException, ValueError):
-        pass
-
-    # Fetch product/use categories — what kinds of products contain this chemical
-    url = f"{CTX_BASE}/chemical/productdata/{dtxsid}"
-    try:
-        time.sleep(RATE_LIMIT)
-        r = session.get(url, headers=headers, timeout=15)
-        if r.status_code == 200:
-            prod_data = r.json()
-            if isinstance(prod_data, list) and prod_data:
-                product_cats = set()
-                for item in prod_data:
-                    puc = item.get("pucName", "") or item.get("productCategory", "")
-                    if puc:
-                        product_cats.add(puc)
-                if product_cats and not data.consumer_products:
-                    data.consumer_products = "; ".join(sorted(product_cats))
-
-                data.references.append({
-                    "url": f"https://comptox.epa.gov/dashboard/chemical/product-data/{dtxsid}",
-                    "title": f"EPA CPDat Product Data for {dtxsid}",
-                    "source_type": "database",
-                })
-    except (requests.RequestException, ValueError):
-        pass
+    data.notes.extend(finder.notes)
+    for name in finder.unreachable:
+        if name not in data.unreachable_sources:
+            data.unreachable_sources.append(name)
 
 
 # ---------------------------------------------------------------------------
@@ -940,12 +486,17 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
                data.acute_effects,
                "Cannot characterize acute hazard for emergency response or "
                "short-term exposure scenarios")
+    # A duration the documents read report on is not a gap, whether or not a
+    # structured field holds it.
+    read = " ".join(d.get("text", "") for d in data.documents).lower()
+    subchronic = data.subchronic_effects or re.search(r"subchronic|13-week|90-day|intermediate-duration", read)
+    chronic = data.chronic_effects or re.search(r"\bchronic\b|2-year|two-year|carcinogenesis stud", read)
     _check_gap(gaps, "Hazard Identification", "Subchronic toxicity data",
-               data.subchronic_effects,
+               subchronic,
                "Gap in intermediate-duration exposure assessment — relevant "
                "for occupational and repeated consumer exposure")
     _check_gap(gaps, "Hazard Identification", "Chronic toxicity data",
-               data.chronic_effects,
+               chronic,
                "Cannot characterize long-term/lifetime health risks")
     _check_gap(gaps, "Hazard Identification", "Cancer classification",
                data.cancer_class,
@@ -973,10 +524,12 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
                "No identified point of departure — benchmark dose modeling "
                "or read-across may be needed",
                unknown=_unknown({"IRIS", "CTX"}, data.iris_noael))
+    # IRIS says whether it derived an RfC; without its word (no assessment
+    # read, or one that does not say) whether one exists is unknown, not a gap.
     _check_gap(gaps, "Dose-Response", "Inhalation reference concentration (RfC)",
-               "",  # Not gathered: whether an RfC exists is unknown, not a gap
+               data.iris_rfc and "not assessed" not in data.iris_rfc.lower(),
                "No inhalation RfC — cannot derive health-based inhalation limits",
-               unknown=True)
+               unknown=not data.iris_rfc)
 
     # ---- RISK CHARACTERIZATION ----
     _check_gap(gaps, "Risk Characterization", "Drinking water MCL/MCLG",
@@ -1058,37 +611,12 @@ def gather_all(identity: ChemicalIdentity,
         if progress_callback:
             progress_callback(msg)
 
-    # Source 1: PubChem (uses, GHS hazards, descriptions)
+    # PubChem's use, exposure and hazard descriptions (the structured data).
     _report("Querying PubChem for chemical data...")
     gather_pubchem(data, session)
 
-    # Source 2: EPA CTX Hazard (RfD, NOAEL, cancer class)
-    _report("Querying EPA CTX Hazard API...")
-    gather_ctx_hazard(data, session)
-
-    # Source 3: ATSDR ToxProfiles (ADME, mechanism, effects)
-    _report("Querying ATSDR ToxProfiles...")
-    gather_atsdr(data, session)
-
-    # Source 4: EPA IRIS (chronic RfD, cancer WOE)
-    _report("Querying EPA IRIS...")
-    gather_iris(data, session)
-
-    # Source 5: OSHA/NIOSH (workplace exposure limits)
-    _report("Querying OSHA/NIOSH exposure limits...")
-    gather_osha_niosh(data, session)
-
-    # Source 6: EPA SDWA (drinking water limits)
-    _report("Querying EPA Safe Drinking Water Act...")
-    gather_sdwa(data, session)
-
-    # Source 7: Semantic Scholar (mechanism/tox papers)
-    _report("Searching Semantic Scholar for mechanism papers...")
-    gather_mechanism_papers(data, session)
-
-    # Source 8: EPA CPDat (functional uses, consumer product categories)
-    _report("Querying EPA CPDat for product/use data...")
-    gather_cpdat(data, session)
+    # The documents a human author consults, and the papers.
+    gather_documents(data, _report)
 
     # Final step: Build data gap analysis from hazard characterization
     # and risk assessment standpoint — examines all gathered data and
