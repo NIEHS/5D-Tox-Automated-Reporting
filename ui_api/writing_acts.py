@@ -269,6 +269,7 @@ def _write_background(dtxsid: str, steps: _Steps) -> dict:
     out = write_section(dtxsid, BACKGROUND, {
         "paragraphs": result["paragraphs"],
         "references": result.get("references", []),
+        "sources": result.get("sources", []),
         "citation_report": result.get("citation_report"),
         "abstract_background": result.get("abstract_background", ""),
         "model_used": model,
