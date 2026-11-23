@@ -507,6 +507,7 @@ def background(dtxsid: str, identity: dict, model: str, store, *, force: bool = 
         out = write_section(dtxsid, "background", {
             "paragraphs": paragraphs,
             "references": result.get("references", []),
+            "sources": result.get("sources", []),
             "citation_report": result.get("citation_report"),
             "abstract_background": result.get("abstract_background", ""),
             "model_used": result.get("model_used", model),

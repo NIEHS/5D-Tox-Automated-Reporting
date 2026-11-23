@@ -164,15 +164,28 @@ def background_source(line: str) -> dict:
             "text": " ".join(words.split()), "url": url}
 
 
-def background_sources(lines: list) -> tuple[dict, dict[int, str]]:
-    """The Background's reference list as records, and {its number: slug}."""
+_RECORD_FIELDS = ("kind", "authors", "title", "container", "year", "volume", "issue", "pages",
+                  "number", "doi", "url", "accessed", "pmid")
+
+
+def background_sources(lines: list, records: list | None = None) -> tuple[dict, dict[int, str]]:
+    """The Background's reference list as records, and {its number: slug}.
+    ``records``: the list as the writer kept it (each a record with the number
+    ``n`` the text cites it by); a number without one is read from its line."""
     sources: dict = {}
     by_number: dict[int, str] = {}
+    for record in records or []:
+        if not isinstance(record, dict) or not isinstance(record.get("n"), int):
+            continue
+        kept = {k: record[k] for k in _RECORD_FIELDS if record.get(k) not in (None, "", [])}
+        by_number[record["n"]] = register(sources, {**kept, "origin": {"from": "background"}})
     for i, line in enumerate(lines or [], start=1):
         if not isinstance(line, str) or not line.strip():
             continue
         m = re.match(r"^\s*\[(\d+)\]", line)
-        by_number[int(m.group(1)) if m else i] = register(sources, background_source(line))
+        number = int(m.group(1)) if m else i
+        if number not in by_number:
+            by_number[number] = register(sources, background_source(line))
     return sources, by_number
 
 
@@ -302,9 +315,14 @@ def format_entry(source: dict) -> str:
         parts.append(shown.rstrip(".") + ".")
     if source.get("title"):
         parts.append(str(source["title"]).strip().rstrip(".") + ".")
-    if source.get("container"):
-        parts.append(str(source["container"]).strip().rstrip(".") + ".")
     where = str(source.get("year") or "")
+    container = str(source.get("container") or "").strip().rstrip(".")
+    if container and where and source.get("kind") != "paper" and not source.get("volume"):
+        # A report, book or page: "Place: Publisher; year."
+        parts.append(f"{container}; {where}.")
+        container = where = ""
+    if container:
+        parts.append(container + ".")
     if source.get("volume"):
         where += f"; {source['volume']}"
         if source.get("issue"):
@@ -313,6 +331,8 @@ def format_entry(source: dict) -> str:
             where += f":{source['pages']}"
     if where:
         parts.append(where + ".")
+    if source.get("number"):
+        parts.append(str(source["number"]).strip().rstrip(".") + ".")
     if source.get("accessed"):
         parts.append(f"[Accessed: {source['accessed']}].")
     doi = normalize_doi(source.get("doi"))

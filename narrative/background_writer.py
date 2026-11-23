@@ -42,6 +42,7 @@ from narrative.test_article import naming_rule
 # Gemini, Llama, ollama-* — is served through it, so there is one code path.
 from narrative.interpret import AnthropicEndpoint
 from narrative.citation_check import sentence_containing, summarize_issues
+from narrative.sources import format_entry
 
 # Module logger. The abstract-distillation fallback below logged through a
 # `logger` name that was never defined (NameError on the failure path);
@@ -94,7 +95,9 @@ Information System (IRIS) has established an oral reference dose (RfD) of
 with an uncertainty factor of 100 [5].
 
 NOTE: The above is a partial example showing the target style. Your output should
-follow this same formal, citation-heavy, regulatory-focused prose style.
+follow this same formal, citation-heavy, regulatory-focused prose style. The
+example's values and reference numbers are illustrations of the style only:
+never take a value or a number from it.
 """.strip()
 
 
@@ -126,8 +129,8 @@ def build_prompt(data: BackgroundData) -> str:
     # Build the reference inventory section
     ref_inventory = _format_reference_inventory(data)
 
-    # Build the raw text sections (ATSDR + IRIS for LLM context)
-    raw_sections = _format_raw_text_sections(data)
+    # What each document says, under its reference number
+    raw_sections = _format_documents(data)
 
     # Build the mechanism papers section
     # Papers continue the inventory numbering so EVERY citable source has one
@@ -234,6 +237,8 @@ PARAGRAPH 6 — Data Gap Analysis (Hazard Characterization & Risk Assessment)
 - Be specific: name the missing data type, the regulatory implication,
   and whether surrogate or read-across data might be available
 - Use the DATA GAP INVENTORY provided below to write this paragraph
+- Write it as statements about the chemical and what is known of it. Never
+  mention the inventory, a count of items, a checklist or these instructions
 
 PARAGRAPH 7 — Study Purpose
 - One to two sentences connecting all the above to the specific study
@@ -248,6 +253,15 @@ PARAGRAPH 7 — Study Purpose
 - Use inline numbered references: [1], [2], [3], etc. The numbers MUST be the
   [N] numbers of the REFERENCE SOURCES / PEER-REVIEWED PAPERS listed above.
   Never renumber them, and never cite a source that is not listed above.
+- Cite each statement to the document it is taken from: the document whose
+  text (WHAT THE DOCUMENTS SAY, or a paper's abstract) states it. A limit or a
+  classification is cited to the document of the body that set it (the OSHA
+  table for the OSHA limit, the IARC monograph for the IARC group), not to a
+  database that repeats it. A value marked [N] in the structured data comes
+  from document [N].
+- State a value exactly as its document gives it (number, unit, and what kind
+  of limit it is: a ceiling is not a time-weighted average).
+- Cite a paper only for what its abstract says.
 - After the 7 paragraphs, include a "References" section listing every source
   you cited, one per line, each starting with its [N] number from the lists above
 - Each reference should include: [N] Author/Organization. "Title." Source/URL. Year.
@@ -295,6 +309,7 @@ def _format_structured_data(data: BackgroundData) -> str:
     lines.append(f"  EPA IRIS RfD: {data.iris_rfd or 'Not found'}")
     lines.append(f"  EPA IRIS NOAEL: {data.iris_noael or 'Not found'}")
     lines.append(f"  EPA IRIS UF: {data.iris_uf or 'Not found'}")
+    lines.append(f"  EPA IRIS RfC (inhalation): {data.iris_rfc or 'Not found'}")
     lines.append(f"  Cancer Classification: {data.cancer_class or 'Not found'}")
     lines.append("")
 
@@ -403,6 +418,13 @@ def _format_structured_data(data: BackgroundData) -> str:
     return "\n".join(lines)
 
 
+def _is_record(ref: dict) -> bool:
+    """A reference kept as a source record (narrative.sources fields), as the
+    gatherer keeps the documents it read; a legacy entry has only a title, an
+    address and a type."""
+    return bool(ref.get("kind"))
+
+
 def _format_reference_inventory(data: BackgroundData) -> str:
     """Format all collected references into a numbered inventory."""
     if not data.references:
@@ -410,35 +432,36 @@ def _format_reference_inventory(data: BackgroundData) -> str:
 
     lines = ["Available references (use these for inline citations):"]
     for i, ref in enumerate(data.references, 1):
+        if _is_record(ref):
+            lines.append(f"  [{i}] {format_entry(ref)}")
+            continue
         title = ref.get("title", "")
         url = ref.get("url", "")
         source_type = ref.get("source_type", "")
         lines.append(f"  [{i}] {title} ({source_type}) — {url}")
+    if data.pubchem_reference:
+        lines.append(f"  (The uses, exposure and hazard descriptions in the structured data are "
+                     f"from PubChem's summary, [{data.pubchem_reference}].)")
 
     return "\n".join(lines)
 
 
-def _format_raw_text_sections(data: BackgroundData) -> str:
-    """Format raw ATSDR and IRIS text blocks for LLM context."""
-    parts = []
-
-    if data.raw_atsdr_text:
-        parts.append("=== RAW ATSDR TOXPROFILE TEXT ===")
-        parts.append("(Extract ADME, mechanism, and health effects from this text)")
-        parts.append(data.raw_atsdr_text[:12000])
+def _format_documents(data: BackgroundData) -> str:
+    """What each document read says, under its reference number."""
+    if not data.documents:
+        return ""
+    parts = ["=== WHAT THE DOCUMENTS SAY ===",
+             "(Each block is the text read from the reference of that number. Write from "
+             "these, and cite the number of the block a statement is taken from.)", ""]
+    for doc in data.documents:
+        parts.append(f"--- DOCUMENT [{doc['n']}]: {doc['label']} ---")
+        parts.append(doc["text"])
         parts.append("")
-
-    if data.raw_iris_text:
-        parts.append("=== RAW EPA IRIS TEXT ===")
-        parts.append("(Extract RfD, cancer classification, and critical study from this text)")
-        parts.append(data.raw_iris_text[:12000])
-        parts.append("")
-
-    return "\n".join(parts) if parts else ""
+    return "\n".join(parts)
 
 
 def _format_mechanism_papers(data: BackgroundData, start: int = 1) -> str:
-    """Format Semantic Scholar papers into a citable, NUMBERED list.
+    """Format the papers into a citable, NUMBERED list, each with its abstract.
 
     `start` is the first [N] number to use — the caller passes
     len(data.references) + 1 so the papers continue the inventory numbering
@@ -447,14 +470,16 @@ def _format_mechanism_papers(data: BackgroundData, start: int = 1) -> str:
     if not data.mechanism_papers:
         return ""
 
-    lines = ["=== PEER-REVIEWED PAPERS ON MECHANISM/TOXICITY ==="]
+    lines = ["=== PEER-REVIEWED PAPERS ON TOXICITY, METABOLISM AND KINETICS ==="]
     lines.append("(Cite these by their [N] number exactly like the sources above)")
     for n, p in enumerate(data.mechanism_papers, start):
-        authors = ", ".join(p.get("authors", []))
-        year = p.get("year", "")
-        title = p.get("title", "")
-        venue = p.get("venue", "")
-        lines.append(f"  [{n}] {authors} ({year}). {title}. {venue}.")
+        if _is_record(p):
+            lines.append(f"  [{n}] {format_entry(p)}")
+        else:
+            authors = ", ".join(p.get("authors", []))
+            lines.append(f"  [{n}] {authors} ({p.get('year', '')}). {p.get('title', '')}. {p.get('venue', '')}.")
+        if p.get("abstract"):
+            lines.append(f"      Abstract: {p['abstract']}")
 
     return "\n".join(lines)
 
@@ -519,9 +544,11 @@ def generate_background(data: BackgroundData,
     # and every inline [N] or reference line that does not map to a source is
     # recorded in `citation_report` for the author to see.
     paragraphs, llm_reference_lines = _parse_response(response)
+    inventory = build_citation_inventory(data)
     references, citation_report = verify_background_citations(
-        paragraphs, llm_reference_lines, build_citation_inventory(data),
+        paragraphs, llm_reference_lines, inventory,
     )
+    sources = cited_source_records(references, inventory)
     if citation_report["issues"]:
         logger.warning(
             "Background citations: %s",
@@ -546,6 +573,9 @@ def generate_background(data: BackgroundData,
         "text": response,
         "paragraphs": paragraphs,
         "references": references,
+        # The same list as records (narrative.sources fields), keyed by the
+        # number the text cites: what the report's reference list is built from.
+        "sources": sources,
         # Verification record: which inventory sources were cited and every
         # citation that could not be resolved (see verify_background_citations).
         "citation_report": citation_report,
@@ -569,6 +599,7 @@ def background_run_record(dtxsid: str, result: dict, *, version: int | None = No
         "model_used": result.get("model_used"),
         "paragraphs": result.get("paragraphs") or [],
         "references": result.get("references") or [],
+        "sources": result.get("sources") or [],
         "citation_report": result.get("citation_report"),
         "section_version": version,
     }
@@ -636,6 +667,7 @@ def build_citation_inventory(data: BackgroundData) -> list[dict]:
             "title": ref.get("title", "") or "",
             "url": ref.get("url", "") or "",
             "source_type": ref.get("source_type", "") or "",
+            "record": dict(ref) if _is_record(ref) else None,
         })
     for j, p in enumerate(data.mechanism_papers, len(data.references) + 1):
         inventory.append({
@@ -644,8 +676,9 @@ def build_citation_inventory(data: BackgroundData) -> list[dict]:
             "title": p.get("title", "") or "",
             "authors": ", ".join(p.get("authors", []) or []),
             "year": p.get("year", "") or "",
-            "venue": p.get("venue", "") or "",
+            "venue": p.get("venue", "") or p.get("container", "") or "",
             "url": p.get("url", "") or "",
+            "record": {k: v for k, v in p.items() if k != "abstract"} if _is_record(p) else None,
         })
     return inventory
 
@@ -654,6 +687,8 @@ def format_inventory_entry(entry: dict) -> str:
     """Canonical reference text for an inventory entry — built from OUR data so
     the References section never carries model-invented bibliographic detail."""
     n = entry["n"]
+    if entry.get("record"):
+        return f"[{n}] {format_entry(entry['record'])}"
     if entry.get("kind") == "paper":
         head = f"{entry.get('authors') or 'Unknown authors'} ({entry.get('year') or 'n.d.'})"
         tail = f" {entry.get('venue')}." if entry.get("venue") else ""
@@ -778,6 +813,19 @@ def verify_background_citations(
         "unresolved_count": len(issues),
     }
     return references, report
+
+
+def cited_source_records(references: list[str], inventory: list[dict]) -> list[dict]:
+    """The references the text keeps, as records with the number ``n`` the
+    text cites each by (only those the gatherer kept as records)."""
+    by_n = {e["n"]: e for e in inventory}
+    out: list[dict] = []
+    for line in references:
+        m = re.match(r"^\[(\d+)\]", line.strip())
+        entry = by_n.get(int(m.group(1))) if m else None
+        if entry and entry.get("record"):
+            out.append({**entry["record"], "n": entry["n"]})
+    return out
 
 
 def distill_abstract_background(

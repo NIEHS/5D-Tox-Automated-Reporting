@@ -734,7 +734,8 @@ def load_session_data(
             for issue in (bg.get("citation_report") or {}).get("issues") or []
             if isinstance(issue, dict))
         # The Background cites its own numbered list of public sources.
-        bg_sources, bg_slug_by_number = background_sources(bg.get("references") or [])
+        bg_sources, bg_slug_by_number = background_sources(bg.get("references") or [],
+                                                            bg.get("sources"))
         bg_slug_by_number = {n: merge_sources(data["sources"], {slug: bg_sources[slug]})[slug]
                              for n, slug in bg_slug_by_number.items()}
         if bg.get("paragraphs"):
