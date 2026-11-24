@@ -48,6 +48,15 @@ DATA_TYPES = {
     "gene_expression": "gene expression",
 }
 
+#: Kinds of data the application reads for itself, from a file a person brings
+#: in alongside the study's data. Nobody states these: the file either is one
+#: or it is not, and the check reads which.
+READ_FOR_ITSELF = {
+    "sample_sheet": "which animal each genomic sample came from",
+    "removal_reasons": "why each animal left the study",
+    "excluded_values": "the values left out of the analysis",
+}
+
 #: Which kinds of data each kind of file can hold.
 BY_KIND: dict[str, tuple[str, ...]] = {
     "workbook": ("tox_study",),
