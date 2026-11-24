@@ -33,6 +33,13 @@ def require_add_files(dtxsid: str, store=None) -> None:
     require(dtxsid, Action.ADD_FILES, store)
 
 
+def bring_in_step(dtxsid: str, batch_dir, store, *, answers: dict | None = None,
+                  apply: bool = True) -> dict:
+    """Bringing a batch of files into a study, each one checked first."""
+    require(dtxsid, Action.ADD_FILES, store)
+    return _steps.bring_in_step(dtxsid, batch_dir, store, answers=answers, apply=apply)
+
+
 def require_reset(dtxsid: str, store=None) -> None:
     """Clearing a study's files and all derived from them."""
     require(dtxsid, Action.RESET, store)

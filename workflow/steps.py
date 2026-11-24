@@ -269,6 +269,79 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# bring files in
+# ---------------------------------------------------------------------------
+
+#: The verdicts that put a file into the study (pipeline.intake).
+_BRINGS_IN = ("add", "units", "replace", "copy", "units_missing")
+
+
+@step_provenance
+def bring_in_step(dtxsid: str, batch_dir, store: PoolStore, *,
+                  answers: dict | None = None, apply: bool = True) -> dict:
+    """Bring a batch of files waiting in `batch_dir` into the study.
+
+    What each file is and what would happen to it is `pipeline.intake.plan`;
+    this step carries it out. Nothing is brought in while any row still waits
+    on a person's answer — the plan comes back with `applied: False` and the
+    rows that wait, so the answer is given against what was actually found
+    rather than against a guess. `apply=False` plans and carries out nothing,
+    which is the dry run the page shows first.
+
+    A file that replaces one already in the study goes through
+    `remove_pool_file`, so the old one is kept among the removed files with
+    everything that rode on it, and what a person said it was goes with it.
+
+    Returns `{ok, applied, rows, counts, brought_in, replaced}`.
+    """
+    from pipeline.intake import counts as intake_counts
+    from pipeline.intake import plan as intake_plan
+    from pipeline.pool_state import (
+        invalidate_pool_artifacts, pool_has_progressed, remove_pool_file,
+    )
+
+    from pipeline.session_store import session_path
+
+    # `store.session_dir` creates the folder; bringing files in must not
+    # conjure a study that was never created.
+    if not session_path(dtxsid).is_dir():
+        raise StepError(f"No session found for {dtxsid}", status_code=404)
+    session_dir = store.session_dir(dtxsid)
+
+    rows = intake_plan(session_dir, batch_dir, answers)
+    counts = intake_counts(rows)
+    out = {"ok": True, "applied": False,
+           "rows": [r.as_dict() for r in rows], "counts": counts,
+           "brought_in": [], "replaced": []}
+    if not apply or counts["needs_answer"]:
+        return out
+
+    files_dir = session_dir / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    progressed = pool_has_progressed(dtxsid)
+    brought_in, replaced = [], []
+    for row in rows:
+        if row.verdict not in _BRINGS_IN or row.needs_answer or row.path is None:
+            continue
+        if row.verdict == "replace":
+            remove_pool_file(dtxsid, row.name)
+            replaced.append(row.name)
+        shutil.move(str(row.path), str(files_dir / row.name))
+        brought_in.append(row.name)
+
+    if brought_in:
+        # The next check reads the study's files as they are now.
+        from pipeline.pool_globals import get_pool_fingerprints
+        get_pool_fingerprints().pop(dtxsid, None)
+        if progressed:
+            invalidate_pool_artifacts(dtxsid)
+
+    logger.info("%s: %d files brought in, %d replaced", dtxsid, len(brought_in), len(replaced))
+    out.update(applied=True, brought_in=brought_in, replaced=replaced)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # start the files over
 # ---------------------------------------------------------------------------
 
