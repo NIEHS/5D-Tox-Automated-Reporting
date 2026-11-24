@@ -1087,6 +1087,55 @@ combined datasets (C12).
 **Built, on `ui-redesign`:** `ui_api/files.py` (`GET …/files`),
 `web_routes/v2_files_routes.py`, and `ui/src/modules/m2/`.
 
+### The two acts (the same day, after the read)
+
+Bringing files in and checking them are built; saying what a file is, removing
+one and starting over are not.
+
+**On `main`:**
+- `pipeline/intake.py` — a batch of files planned against the study as it
+  stands, writing nothing. Each file gets a verdict (`add`, `units`, `replace`,
+  `unchanged`, `copy`, `units_missing`, `refused`, `left_out`), the words for
+  it, and the question it waits on. Contents are checked against the ending, so
+  a text table renamed `.bm2` is caught before anything reads it as a
+  BMDExpress project. A zip stands for the data files inside it; what a real
+  package also carries (PDFs, supplementary archives) is listed as left out
+  rather than dropped in silence.
+- `workflow.steps.bring_in_step` — carries the plan out, behind
+  `guarded.bring_in_step` (ADD_FILES). **The batch is one act**: while any file
+  waits on an answer nothing at all is written. A replaced file goes through
+  `remove_pool_file`, so the old one is kept among the removed files with its
+  companions and its statement. The study's existence is checked with
+  `session_path`, not `store.session_dir`, which creates the folder.
+
+**On `ui-redesign`:** `ui_api/files_acts.py`, `POST …/files` (multipart) and
+`POST …/check` (an NDJSON act over `ui_api/long_acts.py`),
+`ui/src/modules/m2/BringIn.tsx`, and `sendForm` in `ui/src/api/client.ts`.
+
+Files are chosen from a dialog **and** by dropping them on the page — either
+alone fails someone. Nothing is sent until "Bring them in" is pressed, and the
+browser checks nothing: the backend plans the batch and the page shows its
+words. A batch that waits on an answer is shown with a box to tick per
+question; ticking and sending again is the same batch, from the files the
+browser still holds. A check of a study with no files is refused in the shared
+catalog's words rather than writing a report of nothing — which would leave
+the page reading the study as checked.
+
+Verified end to end in the real app on 9000: a study created from nothing,
+NIEHS-13's nine real files brought in (9 added, 0 refused), the check run in
+3.2 s (15 files, nothing blocking), a changed file refused until its
+replacement was answered for and the old one kept in `_removed/`, and the
+study deleted afterwards.
+
+**Departures from the spec, for these two acts**
+- There is no staging area: the batch is sent, planned and either carried out
+  or refused in one request. A batch needing an answer is sent again with the
+  answers rather than resumed from a kept plan, so the server keeps no state
+  between the two.
+- No per-file progress bar; one request carries the batch.
+- The dry run (`dry_run=true`) exists on the route but the page does not use
+  it yet: the plan a person sees is the one the server refused with.
+
 **Where this differs from the spec above**
 - `GET …/files` lives in `ui_api/`, not `workflow.files`, following
   `ui_api/dataset.py` and the branch rule (the core keeps only what the command
