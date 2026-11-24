@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { ReviewPage } from '../modules/d1'
 import { WritingPage } from '../modules/d2'
+import { FilesPage } from '../modules/m2'
 import { CombinedData } from '../modules/m3'
 import { ProcessPage } from '../modules/p1'
 
@@ -11,6 +12,7 @@ import { ProcessPage } from '../modules/p1'
  * the route: its header and its menu depend on it.
  */
 export const MODULE_PAGES: Record<string, ComponentType> = {
+  files: FilesPage, // M2 Study files: bring in, check, say what each one is
   dataset: CombinedData, // M3 Combined data (the demo path's S1)
   process: ProcessPage, // P1 Process (the demo path's S2)
   writing: WritingPage, // D2 Written sections and its Citations tab (S3, S4)

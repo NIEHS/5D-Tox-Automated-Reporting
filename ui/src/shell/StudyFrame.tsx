@@ -26,9 +26,10 @@ function groupsFor(kind: SessionKind | (string & {})): readonly ('data' | 'compu
 
 /**
  * Pages of a study's data that answer for a report themselves: reached on a
- * report, they offer the choice of its studies (the demo path, spec §4).
+ * report, they offer the choice of its studies (the demo path, spec §4), or
+ * say why a report has none of its own (Study files, M2 spec §2).
  */
-const REPORT_OFFERS_ITS_STUDIES = new Set(['dataset', 'process'])
+const REPORT_OFFERS_ITS_STUDIES = new Set(['files', 'dataset', 'process'])
 
 function StudyMenu({ studyId, kind, current, onPick }: { studyId: string; kind: string; current?: string; onPick?: () => void }) {
   const groups = groupsFor(kind).map((g) => ({

@@ -1,0 +1,1604 @@
+{
+  "id": "DTXSID6020430_rat",
+  "phase": "APPROVED",
+  "takes_files": {
+    "allowed": true,
+    "code": null,
+    "say": null
+  },
+  "files_token": "sha256:637eead943296290",
+  "progress": [
+    {
+      "step": "bring_in",
+      "status": "done",
+      "say": "9 files in the study"
+    },
+    {
+      "step": "check",
+      "status": "done",
+      "say": "Nothing blocks"
+    },
+    {
+      "step": "confirm",
+      "status": "todo",
+      "say": "6 of 6 not yet confirmed"
+    }
+  ],
+  "next": {
+    "act": "CONFIRM_CLASSIFICATION",
+    "say": "Confirm what each file is",
+    "fix": "M2"
+  },
+  "acts": {
+    "add": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "check": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "classify": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "resolve": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "remove": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "reset": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    }
+  },
+  "files": [
+    {
+      "name": "108020006_2D_Genomic_Rats.bm2",
+      "kind": "bm2",
+      "kind_say": "BMDExpress project",
+      "type": "bm2",
+      "size": 17667359,
+      "added_at": "2026-11-20T15:44:17.692101+00:00",
+      "companions": [],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [],
+      "bm2": {
+        "experiments": [
+          "rat_2D_HE_No0",
+          "rat_2D_KI_No0",
+          "rat_2D_LI_No0",
+          "rat_2D_LU_No0",
+          "rat_2D_OV_No0"
+        ],
+        "species": "Rattus norvegicus",
+        "genes": 1867
+      },
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": null,
+      "checked": true,
+      "classification": {
+        "platform": null,
+        "data_type": "gene_expression",
+        "say": "gene expression",
+        "detected": {
+          "platform": null,
+          "data_type": "gene_expression",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "gene expression"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_d85a0709d7",
+        "iss_7d94ad5ab4"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 8581,
+      "added_at": "2026-11-20T15:44:18.438368+00:00",
+      "companions": [
+        {
+          "name": "tissue_conc_truth_female.sidecar.json",
+          "role": "sidecar",
+          "say": "What the check recorded of the table"
+        },
+        {
+          "name": "tissue_conc_truth_female.txt",
+          "role": "table",
+          "say": "The table the check wrote from it (recorded in the table)"
+        }
+      ],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": null,
+          "animals": 42,
+          "animals_by_dose": {
+            "0.0": 6,
+            "1.0": 6,
+            "10.0": 6,
+            "30.0": 6,
+            "100.0": 6,
+            "250.0": 6,
+            "500.0": 6
+          },
+          "measurements": 6,
+          "measurement_sample": [
+            "Blood 1,2-DCB Concentration",
+            "Blood 1,2-DCB LOD",
+            "Liver 1,2-DCB Concentration",
+            "Liver 1,2-DCB LOD",
+            "Lung 1,2-DCB Concentration"
+          ],
+          "selection_groups": []
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": "Tissue Concentration",
+        "data_type": "tox_study",
+        "say": "Tissue Concentration \u00b7 the study's own measurements",
+        "detected": {
+          "platform": "Tissue Concentration",
+          "data_type": "tox_study",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "Tissue Concentration \u00b7 the study's own measurements"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_5168a82855",
+        "iss_203acc7f09"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 14731,
+      "added_at": "2026-11-20T15:44:19.043623+00:00",
+      "companions": [
+        {
+          "name": "body_weight_truth_female.sidecar.json",
+          "role": "sidecar",
+          "say": "What the check recorded of the table"
+        },
+        {
+          "name": "body_weight_truth_female.txt",
+          "role": "table",
+          "say": "The table the check wrote from it (recorded in the table)"
+        }
+      ],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 61,
+          "animals_by_dose": {
+            "0.0": 13,
+            "1.0": 8,
+            "10.0": 8,
+            "30.0": 8,
+            "100.0": 8,
+            "250.0": 8,
+            "500.0": 8
+          },
+          "measurements": 1,
+          "measurement_sample": [
+            "Body Weight"
+          ],
+          "selection_groups": [
+            "Biosample Animals",
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": "Body Weight",
+        "data_type": "tox_study",
+        "say": "Body Weight \u00b7 the study's own measurements",
+        "detected": {
+          "platform": "Body Weight",
+          "data_type": "tox_study",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "Body Weight \u00b7 the study's own measurements"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_7649397199",
+        "iss_3f27d0fb10"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 18292,
+      "added_at": "2026-11-20T15:44:19.118322+00:00",
+      "companions": [
+        {
+          "name": "clin_chem_truth_female.sidecar.json",
+          "role": "sidecar",
+          "say": "What the check recorded of the table"
+        },
+        {
+          "name": "clin_chem_truth_female.txt",
+          "role": "table",
+          "say": "The table the check wrote from it (recorded in the table)"
+        }
+      ],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 40,
+          "animals_by_dose": {
+            "0.0": 10,
+            "1.0": 5,
+            "10.0": 5,
+            "30.0": 5,
+            "100.0": 5,
+            "250.0": 5,
+            "500.0": 5
+          },
+          "measurements": 17,
+          "measurement_sample": [
+            "Alanine aminotransferase",
+            "Albumin",
+            "Alkaline phosphatase",
+            "Aspartate Aminotransferase",
+            "Bile salts/acids"
+          ],
+          "selection_groups": [
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": "Clinical Chemistry",
+        "data_type": "tox_study",
+        "say": "Clinical Chemistry \u00b7 the study's own measurements",
+        "detected": {
+          "platform": "Clinical Chemistry",
+          "data_type": "tox_study",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "Clinical Chemistry \u00b7 the study's own measurements"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_f952f0ea6e",
+        "iss_8913ed020d"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 9345,
+      "added_at": "2026-11-20T15:44:19.227693+00:00",
+      "companions": [
+        {
+          "name": "clinical_obs_truth_female.csv",
+          "role": "table",
+          "say": "The table the check wrote from it (recorded by the check)"
+        }
+      ],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 61,
+          "animals_by_dose": {
+            "0.0": 13,
+            "1.0": 8,
+            "10.0": 8,
+            "30.0": 8,
+            "100.0": 8,
+            "250.0": 8,
+            "500.0": 8
+          },
+          "measurements": 0,
+          "measurement_sample": [],
+          "selection_groups": [
+            "Biosample Animals",
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": "Clinical",
+        "data_type": "tox_study",
+        "say": "Clinical \u00b7 the study's own measurements",
+        "detected": {
+          "platform": "Clinical",
+          "data_type": "tox_study",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "Clinical \u00b7 the study's own measurements"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_cb8f44271e"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 6927,
+      "added_at": "2026-11-20T15:44:19.261143+00:00",
+      "companions": [
+        {
+          "name": "organ_weights_truth_female.sidecar.json",
+          "role": "sidecar",
+          "say": "What the check recorded of the table"
+        },
+        {
+          "name": "organ_weights_truth_female.txt",
+          "role": "table",
+          "say": "The table the check wrote from it (recorded in the table)"
+        }
+      ],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 40,
+          "animals_by_dose": {
+            "0.0": 10,
+            "1.0": 5,
+            "10.0": 5,
+            "30.0": 5,
+            "100.0": 5,
+            "250.0": 5,
+            "500.0": 5
+          },
+          "measurements": 6,
+          "measurement_sample": [
+            "Heart",
+            "Kidney-Left",
+            "Kidney-Right",
+            "Liver",
+            "Lungs"
+          ],
+          "selection_groups": [
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": "Organ Weight",
+        "data_type": "tox_study",
+        "say": "Organ Weight \u00b7 the study's own measurements",
+        "detected": {
+          "platform": "Organ Weight",
+          "data_type": "tox_study",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "Organ Weight \u00b7 the study's own measurements"
+        },
+        "stated": null,
+        "status": "unconfirmed",
+        "flags": []
+      },
+      "issues": [
+        "iss_a695a8f7af",
+        "iss_26f1996ce3"
+      ],
+      "pending": [
+        {
+          "what": "classification",
+          "say": "[not confirmed]",
+          "fix": "M2"
+        }
+      ],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Removal_Reasons_Data.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 16129,
+      "added_at": "2026-11-20T15:44:19.291601+00:00",
+      "companions": [],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 61,
+          "animals_by_dose": {
+            "0.0": 13,
+            "1.0": 8,
+            "10.0": 8,
+            "30.0": 8,
+            "100.0": 8,
+            "250.0": 8,
+            "500.0": 8
+          },
+          "measurements": 0,
+          "measurement_sample": [],
+          "selection_groups": [
+            "Biosample Animals",
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": null,
+        "data_type": "removal_reasons",
+        "say": "why each animal left the study",
+        "detected": {
+          "platform": null,
+          "data_type": "removal_reasons",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "why each animal left the study"
+        },
+        "stated": null,
+        "status": "read_for_itself",
+        "flags": []
+      },
+      "issues": [
+        "iss_f24909fd99"
+      ],
+      "pending": [],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "108020006_Individual_Animal_Removal_Reasons_Data_Rats.xlsx",
+      "kind": "workbook",
+      "kind_say": "Study workbook",
+      "type": "xlsx",
+      "size": 6530,
+      "added_at": "2026-11-20T15:44:19.340436+00:00",
+      "companions": [],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [
+            "Female"
+          ],
+          "doses": [
+            0.0,
+            1.0,
+            10.0,
+            30.0,
+            100.0,
+            250.0,
+            500.0
+          ],
+          "dose_unit": "ppm",
+          "animals": 61,
+          "animals_by_dose": {
+            "0.0": 13,
+            "1.0": 8,
+            "10.0": 8,
+            "30.0": 8,
+            "100.0": 8,
+            "250.0": 8,
+            "500.0": 8
+          },
+          "measurements": 0,
+          "measurement_sample": [],
+          "selection_groups": [
+            "Biosample Animals",
+            "Core Animals"
+          ]
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": "108020006",
+      "checked": true,
+      "classification": {
+        "platform": null,
+        "data_type": "removal_reasons",
+        "say": "why each animal left the study",
+        "detected": {
+          "platform": null,
+          "data_type": "removal_reasons",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "why each animal left the study"
+        },
+        "stated": null,
+        "status": "read_for_itself",
+        "flags": []
+      },
+      "issues": [
+        "iss_f24909fd99"
+      ],
+      "pending": [],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    },
+    {
+      "name": "NIEHS-12_Excluded_Values_Rats.csv",
+      "kind": "table",
+      "kind_say": "Study table",
+      "type": "csv",
+      "size": 595,
+      "added_at": "2026-11-20T15:44:19.373792+00:00",
+      "companions": [],
+      "units": {
+        "state": "not_needed",
+        "values": {},
+        "say": null
+      },
+      "tables": [
+        {
+          "sexes": [],
+          "doses": [],
+          "dose_unit": null,
+          "animals": 1,
+          "animals_by_dose": {},
+          "measurements": 1,
+          "measurement_sample": [
+            "202 | Bile salts/acids | SD5 | as published"
+          ],
+          "selection_groups": []
+        }
+      ],
+      "bm2": null,
+      "bm2_changes": null,
+      "narrow_choices": null,
+      "study_number": null,
+      "checked": true,
+      "classification": {
+        "platform": null,
+        "data_type": "excluded_values",
+        "say": "the values left out of the analysis",
+        "detected": {
+          "platform": null,
+          "data_type": "excluded_values",
+          "basis": "file_name",
+          "say": "From the file's name",
+          "say_full": "the values left out of the analysis"
+        },
+        "stated": null,
+        "status": "read_for_itself",
+        "flags": []
+      },
+      "issues": [
+        "iss_20663f0340"
+      ],
+      "pending": [],
+      "acts": {
+        "remove": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "classify": {
+          "allowed": true,
+          "code": null,
+          "say": null
+        },
+        "narrow": null
+      }
+    }
+  ],
+  "check": {
+    "run_at": "2026-11-20T15:44:19.683389+00:00",
+    "current": true,
+    "why_not_current": null,
+    "counts": {
+      "fix": 0,
+      "look": 2,
+      "expected": 15
+    },
+    "not_shown": null
+  },
+  "issues": [
+    {
+      "id": "iss_d6c3cb9eba",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "tissue_conc_truth_female.txt holds 42 of the study's 61 Female animals; 19 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "tissue_conc_truth_female.txt"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "tissue_conc_truth_female.txt (Female): 42/61 animals \u2014 missing 19 (10, 204, 305, 604, 8)",
+      "details": {
+        "sex": "Female",
+        "file_count": 42,
+        "roster_count": 61,
+        "missing_count": 19
+      }
+    },
+    {
+      "id": "iss_5168a82855",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx holds 42 of the study's 61 Female animals; 19 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx (Female): 42/61 animals \u2014 missing 19 (10, 204, 305, 604, 8)",
+      "details": {
+        "sex": "Female",
+        "file_count": 42,
+        "roster_count": 61,
+        "missing_count": 19
+      }
+    },
+    {
+      "id": "iss_99819a95d0",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "body_weight_truth_female.txt holds 40 of the study's 61 Female animals; 21 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "body_weight_truth_female.txt"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "body_weight_truth_female.txt (Female): 40/61 animals \u2014 missing 21 (11, 12, 406, 408, 607)",
+      "details": {
+        "sex": "Female",
+        "file_count": 40,
+        "roster_count": 61,
+        "missing_count": 21
+      }
+    },
+    {
+      "id": "iss_3e029ca5e2",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "clin_chem_truth_female.txt holds 40 of the study's 61 Female animals; 21 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "clin_chem_truth_female.txt"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "clin_chem_truth_female.txt (Female): 40/61 animals \u2014 missing 21 (11, 12, 406, 408, 607)",
+      "details": {
+        "sex": "Female",
+        "file_count": 40,
+        "roster_count": 61,
+        "missing_count": 21
+      }
+    },
+    {
+      "id": "iss_f952f0ea6e",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx holds 40 of the study's 61 Female animals; 21 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx (Female): 40/61 animals \u2014 missing 21 (11, 12, 406, 408, 607)",
+      "details": {
+        "sex": "Female",
+        "file_count": 40,
+        "roster_count": 61,
+        "missing_count": 21
+      }
+    },
+    {
+      "id": "iss_ce03e27f9c",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "organ_weights_truth_female.txt holds 40 of the study's 61 Female animals; 21 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "organ_weights_truth_female.txt"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "organ_weights_truth_female.txt (Female): 40/61 animals \u2014 missing 21 (11, 12, 406, 408, 607)",
+      "details": {
+        "sex": "Female",
+        "file_count": 40,
+        "roster_count": 61,
+        "missing_count": 21
+      }
+    },
+    {
+      "id": "iss_a695a8f7af",
+      "type": "roster_subset",
+      "group": "expected",
+      "severity": "info",
+      "say": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx holds 40 of the study's 61 Female animals; 21 are not in it.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx (Female): 40/61 animals \u2014 missing 21 (11, 12, 406, 408, 607)",
+      "details": {
+        "sex": "Female",
+        "file_count": 40,
+        "roster_count": 61,
+        "missing_count": 21
+      }
+    },
+    {
+      "id": "iss_d85a0709d7",
+      "type": "samples_unresolved",
+      "group": "look",
+      "severity": "warning",
+      "say": "108020006_2D_Genomic_Rats.bm2: 198 sample(s) not traced to an animal (no sample sheet names them, and their names don't end in an animal number): 2DR1F7HE_S86_R1_001, 2DR1F2HE_S109_R1_001, 2DR1F1HE_S78_R1_001, 2DR1F9HE_S93_R1_001, 2DR1F4HE_S88_R1_001, 2DR1F3HE_S91_R1_001, 2DR1F6HE_S99_R1_001, 2DR1F8HE_S110_R1_001 \u2026",
+      "what_to_do": "A sample that cannot be traced to an animal is left out of the dataset. A sample sheet naming them would place them.",
+      "files": [
+        "108020006_2D_Genomic_Rats.bm2"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "108020006_2D_Genomic_Rats.bm2: 198 sample(s) not traced to an animal (no sample sheet names them, and their names don't end in an animal number): 2DR1F7HE_S86_R1_001, 2DR1F2HE_S109_R1_001, 2DR1F1HE_S78_R1_001, 2DR1F9HE_S93_R1_001, 2DR1F4HE_S88_R1_001, 2DR1F3HE_S91_R1_001, 2DR1F6HE_S99_R1_001, 2DR1F8HE_S110_R1_001 \u2026",
+      "details": {
+        "samples": [
+          "2DR1F7HE_S86_R1_001",
+          "2DR1F2HE_S109_R1_001",
+          "2DR1F1HE_S78_R1_001",
+          "2DR1F9HE_S93_R1_001",
+          "2DR1F4HE_S88_R1_001",
+          "2DR1F3HE_S91_R1_001",
+          "2DR1F6HE_S99_R1_001",
+          "2DR1F8HE_S110_R1_001",
+          "2DR1F5HE_S98_R1_001",
+          "2DR1F10HE_S92_R1_001",
+          "2DR2F101HE_S100_R1_001",
+          "2DR2F103HE_S104_R1_001",
+          "2DR2F105HE_S73_R1_001",
+          "2DR2F102HE_S112_R1_001",
+          "2DR2F104HE_S79_R1_001",
+          "2DR3F204HE_S111_R1_001",
+          "2DR3F202HE_S83_R1_001",
+          "2DR3F205HE_S90_R1_001",
+          "2DR3F201HE_S89_R1_001",
+          "2DR3F203HE_S94_R1_001",
+          "2DR4F301HE_S95_R1_001",
+          "2DR4F304HE_S76_R1_001",
+          "2DR4F302HE_S74_R1_001",
+          "2DR4F303HE_S103_R1_001",
+          "2DR4F305HE_S81_R1_001",
+          "2DR5F405HE_S87_R1_001",
+          "2DR5F404HE_S77_R1_001",
+          "2DR5F401HE_S106_R1_001",
+          "2DR5F403HE_S97_R1_001",
+          "2DR5F402HE_S108_R1_001",
+          "2DR6F502HE_S107_R1_001",
+          "2DR6F501HE_S105_R1_001",
+          "2DR6F503HE_S75_R1_001",
+          "2DR6F504HE_S101_R1_001",
+          "2DR6F505HE_S96_R1_001",
+          "2DR7F604HE_S102_R1_001",
+          "2DR7F601HE_S84_R1_001",
+          "2DR7F603HE_S82_R1_001",
+          "2DR7F602HE_S80_R1_001",
+          "2DR7F605HE_S85_R1_001",
+          "2DR1F4KI_S88_R1_001",
+          "2DR1F9KI_S93_R1_001",
+          "2DR1F3KI_S91_R1_001",
+          "2DR1F7KI_S86_R1_001",
+          "2DR1F5KI_S98_R1_001",
+          "2DR1F6KI_S99_R1_001",
+          "2DR1F2KI_S109_R1_001",
+          "2DR1F8KI_S110_R1_001",
+          "2DR1F10KI_S92_R1_001",
+          "2DR2F104KI_S79_R1_001",
+          "2DR2F103KI_S104_R1_001",
+          "2DR2F101KI_S100_R1_001",
+          "2DR2F105KI_S73_R1_001",
+          "2DR2F102KI_S112_R1_001",
+          "2DR3F203KI_S94_R1_001",
+          "2DR3F201KI_S89_R1_001",
+          "2DR3F204KI_S111_R1_001",
+          "2DR3F202KI_S83_R1_001",
+          "2DR3F205KI_S90_R1_001",
+          "2DR4F303KI_S103_R1_001",
+          "2DR4F305KI_S81_R1_001",
+          "2DR4F301KI_S95_R1_001",
+          "2DR4F302KI_S74_R1_001",
+          "2DR4F304KI_S76_R1_001",
+          "2DR5F403KI_S97_R1_001",
+          "2DR5F405KI_S87_R1_001",
+          "2DR5F401KI_S106_R1_001",
+          "2DR5F402KI_S108_R1_001",
+          "2DR5F404KI_S77_R1_001",
+          "2DR6F502KI_S107_R1_001",
+          "2DR6F504KI_S101_R1_001",
+          "2DR6F503KI_S75_R1_001",
+          "2DR6F501KI_S105_R1_001",
+          "2DR6F505KI_S96_R1_001",
+          "2DR7F601KI_S84_R1_001",
+          "2DR7F603KI_S82_R1_001",
+          "2DR7F602KI_S80_R1_001",
+          "2DR7F604KI_S102_R1_001",
+          "2DR7F605KI_S85_R1_001",
+          "2DR1F6LI_S107_R1_001",
+          "2DR1F8LI_S78_R1_001",
+          "2DR1F5LI_S106_R1_001",
+          "2DR1F10LI_S100_R1_001",
+          "2DR1F3LI_S99_R1_001",
+          "2DR1F2LI_S77_R1_001",
+          "2DR1F4LI_S96_R1_001",
+          "2DR1F1LI_S86_R1_001",
+          "2DR1F9LI_S101_R1_001",
+          "2DR1F7LI_S94_R1_001",
+          "2DR2F104LI_S87_R1_001",
+          "2DR2F105LI_S81_R1_001",
+          "2DR2F102LI_S80_R1_001",
+          "2DR2F101LI_S108_R1_001",
+          "2DR2F103LI_S112_R1_001",
+          "2DR3F203LI_S102_R1_001",
+          "2DR3F205LI_S98_R1_001",
+          "2DR3F201LI_S97_R1_001",
+          "2DR3F204LI_S79_R1_001",
+          "2DR3F202LI_S91_R1_001",
+          "2DR4F305LI_S89_R1_001",
+          "2DR4F303LI_S111_R1_001",
+          "2DR4F302LI_S82_R1_001",
+          "2DR4F301LI_S103_R1_001",
+          "2DR4F304LI_S84_R1_001",
+          "2DR5F405LI_S95_R1_001",
+          "2DR5F402LI_S76_R1_001",
+          "2DR5F403LI_S105_R1_001",
+          "2DR5F401LI_S114_R1_001",
+          "2DR5F404LI_S85_R1_001",
+          "2DR6F502LI_S115_R1_001",
+          "2DR6F505LI_S104_R1_001",
+          "2DR6F501LI_S113_R1_001",
+          "2DR6F503LI_S83_R1_001",
+          "2DR6F504LI_S109_R1_001",
+          "2DR7F605LI_S93_R1_001",
+          "2DR7F603LI_S90_R1_001",
+          "2DR7F602LI_S88_R1_001",
+          "2DR7F604LI_S110_R1_001",
+          "2DR7F601LI_S92_R1_001",
+          "2DR1F5LU_S106_R1_001",
+          "2DR1F3LU_S99_R1_001",
+          "2DR1F2LU_S77_R1_001",
+          "2DR1F10LU_S100_R1_001",
+          "2DR1F1LU_S86_R1_001",
+          "2DR1F9LU_S101_R1_001",
+          "2DR1F6LU_S107_R1_001",
+          "2DR1F8LU_S78_R1_001",
+          "2DR1F4LU_S96_R1_001",
+          "2DR1F7LU_S94_R1_001",
+          "2DR2F101LU_S108_R1_001",
+          "2DR2F103LU_S112_R1_001",
+          "2DR2F105LU_S81_R1_001",
+          "2DR2F102LU_S80_R1_001",
+          "2DR2F104LU_S87_R1_001",
+          "2DR3F203LU_S102_R1_001",
+          "2DR3F205LU_S98_R1_001",
+          "2DR3F202LU_S91_R1_001",
+          "2DR3F204LU_S79_R1_001",
+          "2DR3F201LU_S97_R1_001",
+          "2DR4F302LU_S82_R1_001",
+          "2DR4F305LU_S89_R1_001",
+          "2DR4F301LU_S103_R1_001",
+          "2DR4F303LU_S111_R1_001",
+          "2DR4F304LU_S84_R1_001",
+          "2DR5F404LU_S85_R1_001",
+          "2DR5F401LU_S114_R1_001",
+          "2DR5F403LU_S105_R1_001",
+          "2DR5F402LU_S76_R1_001",
+          "2DR5F405LU_S95_R1_001",
+          "2DR6F503LU_S83_R1_001",
+          "2DR6F505LU_S104_R1_001",
+          "2DR6F502LU_S115_R1_001",
+          "2DR6F501LU_S113_R1_001",
+          "2DR6F504LU_S109_R1_001",
+          "2DR7F603LU_S90_R1_001",
+          "2DR7F605LU_S93_R1_001",
+          "2DR7F602LU_S88_R1_001",
+          "2DR7F604LU_S110_R1_001",
+          "2DR1F8OV_S4_R1_001",
+          "2DR1F5OV_S32_R1_001",
+          "2DR1F3OV_S25_R1_001",
+          "2DR1F4OV_S22_R1_001",
+          "2DR1F7OV_S20_R1_001",
+          "2DR1F1OV_S12_R1_001",
+          "2DR1F9OV_S27_R1_001",
+          "2DR1F6OV_S33_R1_001",
+          "2DR1F2OV_S3_R1_001",
+          "2DR1F10OV_S26_R1_001",
+          "2DR2F105OV_S7_R1_001",
+          "2DR2F101OV_S34_R1_001",
+          "2DR2F102OV_S6_R1_001",
+          "2DR2F103OV_S38_R1_001",
+          "2DR2F104OV_S13_R1_001",
+          "2DR3F201OV_S23_R1_001",
+          "2DR3F205OV_S24_R1_001",
+          "2DR3F204OV_S5_R1_001",
+          "2DR3F203OV_S28_R1_001",
+          "2DR3F202OV_S17_R1_001",
+          "2DR4F302OV_S8_R1_001",
+          "2DR4F301OV_S29_R1_001",
+          "2DR4F303OV_S37_R1_001",
+          "2DR4F305OV_S15_R1_001",
+          "2DR4F304OV_S10_R1_001",
+          "2DR5F404OV_S11_R1_001",
+          "2DR5F402OV_S2_R1_001",
+          "2DR5F401OV_S40_R1_001",
+          "2DR5F405OV_S21_R1_001",
+          "2DR5F403OV_S31_R1_001",
+          "2DR6F505OV_S30_R1_001",
+          "2DR6F501OV_S39_R1_001",
+          "2DR6F502OV_S41_R1_001",
+          "2DR6F503OV_S9_R1_001",
+          "2DR6F504OV_S35_R1_001",
+          "2DR7F603OV_S16_R1_001",
+          "2DR7F605OV_S19_R1_001",
+          "2DR7F601OV_S18_R1_001",
+          "2DR7F602OV_S14_R1_001",
+          "2DR7F604OV_S36_R1_001"
+        ]
+      }
+    },
+    {
+      "id": "iss_7d94ad5ab4",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Gene expression: the BMDExpress project is the only record of it. The table it was analyzed from is not in the study.",
+      "what_to_do": null,
+      "files": [
+        "108020006_2D_Genomic_Rats.bm2"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "gene_expression: no txt/csv gene expression input data found",
+      "details": {}
+    },
+    {
+      "id": "iss_203acc7f09",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Tissue Concentration: no BMDExpress project. Process computes this assay's benchmark doses itself.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+        "tissue_conc_truth_female.txt"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "Tissue Concentration|tox_study: no .bm2 (BMDExpress analysis) found",
+      "details": {}
+    },
+    {
+      "id": "iss_7649397199",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Body Weight: no BMDExpress project. Process computes this assay's benchmark doses itself.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+        "body_weight_truth_female.txt"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "Body Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+      "details": {}
+    },
+    {
+      "id": "iss_3f27d0fb10",
+      "type": "animal_count_mismatch",
+      "group": "look",
+      "severity": "warning",
+      "say": "Body Weight: the study workbook records 61 animals and the tables 40.",
+      "what_to_do": "An animal the tables leave out is accounted for in the data review. An animal the study workbook does not have must be corrected outside the application.",
+      "files": [
+        "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+        "body_weight_truth_female.txt"
+      ],
+      "feeds": "M6",
+      "settle": null,
+      "known": true,
+      "message": "Body Weight|tox_study: txt/csv files have 40 unique animals vs 61 in xlsx (21 excluded)",
+      "details": {
+        "xlsx_count": 61,
+        "txt_csv_count": 40
+      }
+    },
+    {
+      "id": "iss_8913ed020d",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Clinical Chemistry: no BMDExpress project. Process computes this assay's benchmark doses itself.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+        "clin_chem_truth_female.txt"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "Clinical Chemistry|tox_study: no .bm2 (BMDExpress analysis) found",
+      "details": {}
+    },
+    {
+      "id": "iss_cb8f44271e",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Clinical: no BMDExpress project. Process computes this assay's benchmark doses itself.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+        "clinical_obs_truth_female.csv"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "Clinical|tox_study: no .bm2 (BMDExpress analysis) found",
+      "details": {}
+    },
+    {
+      "id": "iss_26f1996ce3",
+      "type": "missing_tier",
+      "group": "expected",
+      "severity": "warning",
+      "say": "Organ Weight: no BMDExpress project. Process computes this assay's benchmark doses itself.",
+      "what_to_do": null,
+      "files": [
+        "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+        "organ_weights_truth_female.txt"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "Organ Weight|tox_study: no .bm2 (BMDExpress analysis) found",
+      "details": {}
+    },
+    {
+      "id": "iss_f24909fd99",
+      "type": "redundant_files",
+      "group": "expected",
+      "severity": "info",
+      "say": "108020006_Individual_Animal_Removal_Reasons_Data_Rats.xlsx and 108020006_Individual_Animal_Removal_Reasons_Data.xlsx hold the same data. Both would be combined, so it would count twice.",
+      "what_to_do": "Keep one: remove the other, or correct it outside the application and check again.",
+      "files": [
+        "108020006_Individual_Animal_Removal_Reasons_Data_Rats.xlsx",
+        "108020006_Individual_Animal_Removal_Reasons_Data.xlsx"
+      ],
+      "feeds": null,
+      "settle": "outside",
+      "known": true,
+      "message": "108020006_Individual_Animal_Removal_Reasons_Data_Rats.xlsx and 108020006_Individual_Animal_Removal_Reasons_Data.xlsx appear to contain the same data (same platform, sexes, doses, endpoints)",
+      "details": {}
+    },
+    {
+      "id": "iss_20663f0340",
+      "type": "excluded_values_applied",
+      "group": "expected",
+      "severity": "info",
+      "say": "1 value(s) left out of the analysis: animal 202, Bile salts/acids, SD5 (the published report left it out)",
+      "what_to_do": null,
+      "files": [
+        "NIEHS-12_Excluded_Values_Rats.csv"
+      ],
+      "feeds": null,
+      "settle": null,
+      "known": true,
+      "message": "NIEHS-12_Excluded_Values_Rats.csv: 1 value(s) left out of the analysis: animal 202, Bile salts/acids, SD5 (the published report left it out)",
+      "details": {
+        "values": [
+          {
+            "platform": "Clinical Chemistry",
+            "sex": "Female",
+            "animal_id": "202",
+            "dose": 10.0,
+            "selection": "Core Animals",
+            "endpoint": "Bile salts/acids",
+            "day": "SD5",
+            "value": "0",
+            "reason": "as published",
+            "note": "NIEHS-12 Table 4 prints the bile salts/acids of the 10 ppm rats as 9.3 \u00b1 3.0 (4), four of the five animals; footnote c: \"Clinical chemistry data not reported were removed as outliers or were due to preanalytical or analytical conditions or errors, including but not limited to below linearity, short sample, quantity not sufficient, or extreme hemolysis.\" The deposited workbook records 0 for this animal. Without it the group prints as published and the benchmark dose is the published 143.8 (45.9) ppm.",
+            "source": "NIEHS-12_Excluded_Values_Rats.csv"
+          }
+        ]
+      }
+    }
+  ],
+  "conflicts": [],
+  "coverage": [
+    {
+      "key": "Body Weight|tox_study",
+      "assay": "Body Weight",
+      "data_type": "tox_study",
+      "data_type_say": "the study's own measurements",
+      "workbook": "108020006_Individual_Animal_Body_Weight_Data_Rats.xlsx",
+      "tables": [
+        "body_weight_truth_female.txt"
+      ],
+      "bm2": null,
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    },
+    {
+      "key": "Clinical Chemistry|tox_study",
+      "assay": "Clinical Chemistry",
+      "data_type": "tox_study",
+      "data_type_say": "the study's own measurements",
+      "workbook": "108020006_Individual_Animal_Clinical_Chemistry_Data_Rats.xlsx",
+      "tables": [
+        "clin_chem_truth_female.txt"
+      ],
+      "bm2": null,
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    },
+    {
+      "key": "Clinical|tox_study",
+      "assay": "Clinical",
+      "data_type": "tox_study",
+      "data_type_say": "the study's own measurements",
+      "workbook": "108020006_Individual_Animal_Clinical_Observations_Data_Rats.xlsx",
+      "tables": [
+        "clinical_obs_truth_female.csv"
+      ],
+      "bm2": null,
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    },
+    {
+      "key": "Organ Weight|tox_study",
+      "assay": "Organ Weight",
+      "data_type": "tox_study",
+      "data_type_say": "the study's own measurements",
+      "workbook": "108020006_Individual_Animal_Organ_Weight_Data_Rats.xlsx",
+      "tables": [
+        "organ_weights_truth_female.txt"
+      ],
+      "bm2": null,
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    },
+    {
+      "key": "Tissue Concentration|tox_study",
+      "assay": "Tissue Concentration",
+      "data_type": "tox_study",
+      "data_type_say": "the study's own measurements",
+      "workbook": "108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx",
+      "tables": [
+        "tissue_conc_truth_female.txt"
+      ],
+      "bm2": null,
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    },
+    {
+      "key": "gene_expression",
+      "assay": "Gene expression",
+      "data_type": "gene_expression",
+      "data_type_say": "gene expression",
+      "workbook": null,
+      "tables": [],
+      "bm2": "108020006_2D_Genomic_Rats.bm2",
+      "level": "ok",
+      "say": "This assay's data would be combined."
+    }
+  ],
+  "removed": [],
+  "removed_size": 0,
+  "records": {
+    "files": {
+      "count": null
+    },
+    "datasets": {
+      "count": 0,
+      "current": null
+    }
+  },
+  "integration": {
+    "state": "current",
+    "say": "These files were combined into one dataset. Changing them means combining them again, and processing again.",
+    "fix": "M3"
+  },
+  "classification_choices": {
+    "workbook": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "table": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "bm2": [
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "gene_expression",
+        "label": "gene expression",
+        "platforms": []
+      }
+    ]
+  },
+  "limits": {
+    "accepted": [
+      ".bm2",
+      ".csv",
+      ".txt",
+      ".xlsx",
+      ".zip",
+      ".units.json"
+    ]
+  }
+}

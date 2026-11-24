@@ -77,8 +77,8 @@ describe('the first page', () => {
       expect(within(steps).getByText(m.title)).toBeInTheDocument()
       expect(within(steps).getByText(m.purpose)).toBeInTheDocument()
     }
-    for (const built of ['dataset', 'process', 'writing', 'review']) expect(screen.queryByTestId(`home-not-built-${built}`)).toBeNull()
-    expect(screen.getByTestId('home-not-built-files')).toHaveTextContent('page not built yet')
+    for (const built of ['files', 'dataset', 'process', 'writing', 'review']) expect(screen.queryByTestId(`home-not-built-${built}`)).toBeNull()
+    expect(screen.getByTestId('home-not-built-facts')).toHaveTextContent('page not built yet')
   })
 
   it('says so when the studies cannot be read, and still shows the rest', async () => {

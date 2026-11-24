@@ -1,0 +1,156 @@
+{
+  "id": "DTXSID9000001",
+  "phase": "EMPTY",
+  "takes_files": {
+    "allowed": true,
+    "code": null,
+    "say": null
+  },
+  "files_token": "sha256:637eead943296290",
+  "progress": [
+    {
+      "step": "bring_in",
+      "status": "todo",
+      "say": "No files yet"
+    },
+    {
+      "step": "check",
+      "status": "waiting",
+      "say": "Not checked yet"
+    },
+    {
+      "step": "confirm",
+      "status": "waiting",
+      "say": "No files yet"
+    }
+  ],
+  "next": {
+    "act": "ADD_FILES",
+    "say": "Bring in the study's files",
+    "fix": "M2"
+  },
+  "acts": {
+    "add": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "check": {
+      "allowed": false,
+      "code": "no_files",
+      "say": "Bring in the study's files first."
+    },
+    "classify": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "resolve": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "remove": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    },
+    "reset": {
+      "allowed": true,
+      "code": null,
+      "say": null
+    }
+  },
+  "files": [],
+  "check": null,
+  "issues": [],
+  "conflicts": [],
+  "coverage": [],
+  "removed": [],
+  "removed_size": 0,
+  "records": {
+    "files": {
+      "count": null
+    },
+    "datasets": {
+      "count": 0,
+      "current": null
+    }
+  },
+  "integration": null,
+  "classification_choices": {
+    "workbook": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "table": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "bm2": [
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "gene_expression",
+        "label": "gene expression",
+        "platforms": []
+      }
+    ]
+  },
+  "limits": {
+    "accepted": [
+      ".bm2",
+      ".csv",
+      ".txt",
+      ".xlsx",
+      ".zip",
+      ".units.json"
+    ]
+  }
+}

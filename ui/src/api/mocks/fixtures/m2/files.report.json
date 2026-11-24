@@ -1,0 +1,140 @@
+{
+  "id": "DTXSID6020430",
+  "phase": "EMPTY",
+  "takes_files": {
+    "allowed": false,
+    "code": "takes_no_files",
+    "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+  },
+  "files_token": null,
+  "progress": [],
+  "next": {
+    "act": null,
+    "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse.",
+    "fix": "M1"
+  },
+  "acts": {
+    "add": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    },
+    "check": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    },
+    "classify": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    },
+    "resolve": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    },
+    "remove": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    },
+    "reset": {
+      "allowed": false,
+      "code": "takes_no_files",
+      "say": "A report over several studies takes no files: its studies do. Bring the files into DTXSID6020430_rat, DTXSID6020430_mouse."
+    }
+  },
+  "files": [],
+  "check": null,
+  "issues": [],
+  "conflicts": [],
+  "coverage": [],
+  "removed": [],
+  "removed_size": 0,
+  "records": {
+    "files": {
+      "count": null
+    },
+    "datasets": {
+      "count": 0,
+      "current": null
+    }
+  },
+  "integration": null,
+  "classification_choices": {
+    "workbook": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "table": [
+      {
+        "data_type": "tox_study",
+        "label": "the study's own measurements",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      }
+    ],
+    "bm2": [
+      {
+        "data_type": "inferred",
+        "label": "gap-filled for benchmark dose modeling",
+        "platforms": [
+          "Body Weight",
+          "Clinical",
+          "Clinical Chemistry",
+          "Hematology",
+          "Hormones",
+          "Organ Weight",
+          "Tissue Concentration"
+        ]
+      },
+      {
+        "data_type": "gene_expression",
+        "label": "gene expression",
+        "platforms": []
+      }
+    ]
+  },
+  "limits": {
+    "accepted": [
+      ".bm2",
+      ".csv",
+      ".txt",
+      ".xlsx",
+      ".zip",
+      ".units.json"
+    ]
+  }
+}

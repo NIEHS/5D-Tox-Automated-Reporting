@@ -64,6 +64,30 @@ groups:
           - ui_api.demo.reset_live_copy
           - tooling.demo_copy.reset
 
+  - key: files
+    operations:
+      - op: GET /api/v2/studies/{dtxsid}/files
+        title: Show a study's data files and what the file check made of them (new interface)
+        does: >
+          One row per file a person brought in, with what the check recognized
+          it as and whether a person has said otherwise; the companions each
+          file carries (its units, the table written from a workbook, the
+          check's own note); when the check last ran and whether it still
+          describes these files; what it found, in plain words, grouped into
+          what must be fixed, what is worth a look and what is expected of
+          this kind of package; what the report would be built from, per
+          assay; and each act with the reason when it is not allowed. A
+          published book's companion and a report over several studies answer
+          that they take no data files, and where the files belong instead.
+          Nothing is changed by asking: no file is re-read and no file is
+          recognized again.
+        reads: >
+          the listing of `files/`, `_originals/` and `_removed/`,
+          `_fingerprints.json`, `validation_report.json`, the converted
+          tables' `.sidecar.json` and `.units.json` files, and
+          `classifications.json` (what a person said each file is).
+        code: ui_api.files.files_view
+        notebook: 5. Validate
   - key: dataset
     operations:
       - op: GET /api/v2/studies/{dtxsid}/dataset
