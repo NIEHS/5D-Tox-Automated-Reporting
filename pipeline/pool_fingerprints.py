@@ -485,4 +485,10 @@ def ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
         fid = f"scan-{data_file.name}"
         fingerprint_and_store(fid, data_file.name, str(data_file), ext, dtxsid)
 
-    return _pool_fingerprints.get(dtxsid, {})
+    fps = _pool_fingerprints.get(dtxsid, {})
+    # What a person said a file is stands over what the name suggested
+    # (pipeline.classifications).  Applied here, so every check honors it.
+    from pipeline.classifications import apply as apply_statements
+    if apply_statements(_session_dir(dtxsid), fps):
+        _save_fingerprints_to_disk(dtxsid)
+    return fps

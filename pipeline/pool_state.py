@@ -312,17 +312,33 @@ class PoolFileError(ValueError):
 
 
 _SIDECAR_SUFFIX = ".sidecar.json"
+_UNITS_SUFFIX = ".units.json"
+
+
+def _companion_stem(name: str) -> str:
+    """The name a file shares with its companions.
+
+    A units file is ``<stem>.units.json``, so plain ``splitext`` would leave
+    ``<stem>.units`` and miss it — which is how a removed table used to leave
+    its units file behind, for the next check to find with no table.
+    """
+    for suffix in (_UNITS_SUFFIX, _SIDECAR_SUFFIX):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return os.path.splitext(name)[0]
 
 
 def remove_pool_file(dtxsid: str, filename: str) -> dict:
     """Remove ONE file from a session's pool, with everything that rides on it.
 
     Removes the file plus its companions — the `.sidecar.json` written next to a
-    pivoted data file, and the long-format original that conversion parked in
-    `_originals/` — drops its fingerprint (in memory AND the filename-keyed
-    `_fingerprints.json` cache that session restore reuses), and invalidates
-    downstream artifacts when the pool had already progressed (the pool's
-    composition changed, so validation/integration must be redone).
+    pivoted data file, the `.units.json` that carries its measurements' units,
+    and the long-format original that conversion parked in `_originals/` —
+    drops its fingerprint (in memory AND the filename-keyed
+    `_fingerprints.json` cache that session restore reuses) and what a person
+    said it is (`classifications.json`), and invalidates downstream artifacts
+    when the pool had already progressed (the pool's composition changed, so
+    validation/integration must be redone).
 
     Reversible: files are MOVED to `_removed/<timestamp>/` rather than deleted.
 
@@ -345,12 +361,13 @@ def remove_pool_file(dtxsid: str, filename: str) -> dict:
     if not target.is_file():
         raise PoolFileError(f"No file {name!r} in the pool for {dtxsid}")
 
-    stem = os.path.splitext(name)[0]
-    companions = [files_dir / f"{stem}{_SIDECAR_SUFFIX}"]
+    stem = _companion_stem(name)
+    companions = [files_dir / f"{stem}{_SIDECAR_SUFFIX}",
+                  files_dir / f"{stem}{_UNITS_SUFFIX}"]
     originals = d / "_originals"
     if originals.is_dir():
         companions += [p for p in originals.iterdir()
-                       if p.is_file() and os.path.splitext(p.name)[0] == stem]
+                       if p.is_file() and _companion_stem(p.name) == stem]
 
     progressed = pool_has_progressed(dtxsid)
 
@@ -378,6 +395,12 @@ def remove_pool_file(dtxsid: str, filename: str) -> dict:
             for k in moved:
                 cache.pop(k, None)
             cache_path.write_text(json.dumps(cache, indent=2, default=str), encoding="utf-8")
+
+    # What a person said this file is goes with it: a different file brought in
+    # later under the same name must not inherit a stranger's statement.
+    from pipeline.classifications import clear as clear_statement
+    for gone in moved:
+        clear_statement(d, gone)
 
     invalidated = invalidate_pool_artifacts(dtxsid) if progressed else None
     logger.info("Removed %s from pool %s → %s (invalidated=%s)",

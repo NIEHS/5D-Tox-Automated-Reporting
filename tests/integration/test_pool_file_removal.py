@@ -96,6 +96,47 @@ def test_reset_deletes_the_integration_basis(client, sessions_dir):
     assert not (d / "integration_basis.json").exists()
 
 
+def test_removing_a_table_takes_its_units_file_and_its_statement(client, sessions_dir):
+    """A units file is `<stem>.units.json`, so it shares the table's stem. Left
+    behind, the next check finds a units file with no table."""
+    d = _seed(sessions_dir)
+    (d / "files" / "body_weight_truth_male.units.json").write_text('{"Body Weight": "grams"}')
+    (d / "classifications.json").write_text(json.dumps({
+        "body_weight_truth_male.txt": {"platform": "Body Weight",
+                                       "data_type": "tox_study", "by": "person"}}))
+
+    r = client.delete(f"/api/pool/{DTX}/files/body_weight_truth_male.txt")
+    assert r.status_code == 200, r.text
+    assert "body_weight_truth_male.units.json" in r.json()["removed"]
+    assert not (d / "files" / "body_weight_truth_male.units.json").exists()
+    # And a file brought in later under that name inherits nothing.
+    assert json.loads((d / "classifications.json").read_text()) == {}
+
+
+def test_reset_keeps_the_files_removed_earlier(client, sessions_dir):
+    """Starting over takes the current files out, but a file removed before is
+    kept: `_removed/` holds the only copy left of it."""
+    d = _seed(sessions_dir)
+    kept = d / "_removed" / "2026-11-01T10-00-00"
+    kept.mkdir(parents=True)
+    (kept / "organ_weight_truth_male.txt").write_text("removed earlier")
+
+    assert client.post(f"/api/pool/reset/{DTX}").status_code == 200
+    assert (kept / "organ_weight_truth_male.txt").read_text() == "removed earlier"
+
+
+def test_reset_drops_what_was_said_about_the_old_files(client, sessions_dir):
+    """A statement is keyed by file name, so leaving it would hand a later file
+    of the same name what a person said about a file that is gone."""
+    d = _seed(sessions_dir)
+    (d / "classifications.json").write_text(json.dumps({
+        "body_weight_truth_male.txt": {"platform": "Body Weight",
+                                       "data_type": "tox_study", "by": "person"}}))
+
+    assert client.post(f"/api/pool/reset/{DTX}").status_code == 200
+    assert not (d / "classifications.json").exists()
+
+
 def test_a_guard_refusal_reaches_a_client_explained(sessions_dir):
     """The refusal a guarded act raises reaches a web client in the app's
     {"error": message} body with its explanation beside it (code, say, fix:

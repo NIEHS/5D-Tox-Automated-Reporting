@@ -365,17 +365,45 @@ def test_resolve_and_confirm_are_refused_before_validation():
 
 # --- confirm-metadata ------------------------------------------------------
 
-def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
+def test_confirm_metadata_step_updates_dict_fingerprint_and_persists(tmp_path):
     # dict-style fingerprint that is NOT txt/csv → no header write, but the
     # correction is applied and fingerprints are re-persisted through the store.
     fps = {"f1": {"filename": "gene.bm2", "file_type": "bm2", "platform": "?"}}
-    store = FakeStore(fingerprints=fps, docs=_validated())
+    store = FakeStore(fingerprints=fps, docs=_validated(), real_dir=tmp_path)
     result = confirm_metadata_step(
-        "DTXSID_VC", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
+        "DTXSID_VC", {"f1": {"platform": None, "data_type": "gene_expression"}}, store
     )
     assert result == {"ok": True, "updated": 0}
-    assert fps["f1"]["platform"] == "Body Weight"
+    assert fps["f1"]["data_type"] == "gene_expression"
     assert "_fingerprints.json" in store._docs
+    # And the statement is kept, so the next file check honors it.
+    import json
+    kept = json.loads((tmp_path / "classifications.json").read_text())
+    assert kept["gene.bm2"]["data_type"] == "gene_expression"
+
+
+def test_confirm_metadata_step_refuses_what_a_kind_of_file_cannot_hold(tmp_path):
+    """A BMDExpress project is never the study's own measurements; saying so is
+    refused before anything is written."""
+    fps = {"f1": {"filename": "gene.bm2", "file_type": "bm2", "platform": "?"}}
+    store = FakeStore(fingerprints=fps, docs=_validated(), real_dir=tmp_path)
+    with pytest.raises(StepError) as refusal:
+        confirm_metadata_step(
+            "DTXSID_VC", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
+        )
+    assert "not the study's own measurements" in str(refusal.value)
+    assert not (tmp_path / "classifications.json").exists()
+
+
+def test_confirm_metadata_step_takes_a_file_name_as_well_as_an_id(tmp_path):
+    """The new interface says which file by its name; the older routes still
+    send the id."""
+    fps = {"scan-gene.bm2": {"filename": "gene.bm2", "file_type": "bm2"}}
+    store = FakeStore(fingerprints=fps, docs=_validated(), real_dir=tmp_path)
+    confirm_metadata_step(
+        "DTXSID_VC", {"gene.bm2": {"platform": None, "data_type": "gene_expression"}}, store
+    )
+    assert fps["scan-gene.bm2"]["data_type"] == "gene_expression"
 
 
 # --- materialize result sections (ADR-0018 Phase 1) ------------------------

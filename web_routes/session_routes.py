@@ -1360,10 +1360,11 @@ async def api_pool_reset(dtxsid: Dtxsid):
       - _integrated_pool[dtxsid]
       - _data_uploads entries for this session's files
 
-    Also deletes everything derived from the pool: the fingerprint cache, all
-    processing caches, the genomics sidecar, session.duckdb / session_parquet,
-    rendered previews, converted-file originals (_originals/) and the
-    per-file-removal holding area (_removed/).
+    Also deletes everything derived from the pool: the fingerprint cache, the
+    statements about the files, all processing caches, the genomics sidecar,
+    session.duckdb / session_parquet, rendered previews and converted-file
+    originals (_originals/).  It KEEPS the files removed earlier (_removed/):
+    they are the only copy left of them.
 
     Every section file is archived to history/ before it is deleted, with a
     `discard` event (act "pool_reset"), so it can be restored (C2).
@@ -1378,116 +1379,23 @@ async def api_pool_reset(dtxsid: Dtxsid):
     After reset, the session directory still exists but is effectively empty
     (just meta.json and identity.json), ready for fresh uploads.
     """
-    _bm2_uploads = get_bm2_uploads()
-    _csv_uploads = get_csv_uploads()
-    _pool_fingerprints = get_pool_fingerprints()
-    _data_uploads = get_data_uploads()
-    _integrated_pool = get_integrated_pool()
-
     d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
-        return JSONResponse(
-            {"error": f"No session found for {dtxsid}"},
-            status_code=404,
-        )
-    # The safeguards (R6, C1): no reset of a companion or a report, nor of a
-    # study with no files.
-    from safeguards.guarded import require_reset
+        return JSONResponse({"error": f"No session found for {dtxsid}"}, status_code=404)
+    # The safeguards (R6, C1) then the core step, which both this route and
+    # the new interface call (workflow.steps.reset_files_step).
+    from safeguards.guarded import reset_files_step
+    from workflow.store import DiskPoolStore
     try:
-        require_reset(dtxsid)
+        result = reset_files_step(dtxsid, DiskPoolStore())
     except StepError as e:
         return _step_refusal(e)
-
-    deleted_items = []
-
-    # 1. Delete files/ directory (all uploaded raw data)
-    files_dir = d / "files"
-    if files_dir.exists():
-        shutil.rmtree(files_dir)
-        deleted_items.append("files/")
-
-    # 2. Delete integration artifacts and everything DERIVED from the pool.
-    #    _fingerprints.json matters most: it is a filename-keyed cache that
-    #    session restore reuses, so leaving it would resurrect a deleted file's
-    #    classification for a different file later uploaded under the same name.
-    for artifact in ("integrated.json", "integrated.bm2",
-                     "metadata_approved.json", "validation_report.json",
-                     "precedence.json", "animal_report.json",
-                     "integration_basis.json",
-                     "_fingerprints.json", "_category_lookup.json",
-                     "genomics.sidecar.json", "session.duckdb",
-                     ".session_db.fingerprint", ".prepare_content.fingerprint",
-                     ".prepare_content.outputs.json"):
-        p = d / artifact
-        if p.exists():
-            p.unlink()
-            deleted_items.append(artifact)
-    for cache_file in d.glob("_cache_*.json"):
-        cache_file.unlink()
-        deleted_items.append(cache_file.name)
-    #    Converted-file originals, per-file-removal holding area, the session's
-    #    parquet export and rendered previews — all derived from the old pool.
-    for sub in ("_originals", "_removed", "session_parquet", "preview"):
-        p = d / sub
-        if p.is_dir():
-            shutil.rmtree(p)
-            deleted_items.append(f"{sub}/")
-
-    # 3. Delete the section files derived from the pool (bm2_*, genomics_*,
-    #    methods, …). Each is archived first and its discard recorded (C2
-    #    §4.15), so a reset section can be restored.
-    from workflow.section_writes import discard as _discard_section
-    from workflow.store import DiskPoolStore
-    _store = DiskPoolStore()
-
-    def _reset_section(stem: str) -> None:
-        _discard_section(dtxsid, stem, _store, act="pool_reset", actor="person",
-                         reason="pool reset")
-        deleted_items.append(f"{stem}.json")
-
-    for pattern in ("bm2_*.json", "genomics_*.json"):
-        for f in sorted(d.glob(pattern)):
-            _reset_section(f.stem)
-
-    # Singleton report sections derived from the DATA pool. Enumerated from the
-    # section catalog (rather than a hand-kept literal) but with background.json
-    # EXCLUDED on purpose: Background is generated from the chemical IDENTITY,
-    # which survives a pool reset (identity.json/meta.json are preserved below),
-    # so wiping it here would discard authored work a reset must not touch.
-    from workflow.section_catalog import singleton_section_files
-    for section_file in singleton_section_files():
-        if section_file == "background.json":
-            continue
-        if (d / section_file).exists():
-            _reset_section(section_file[:-5])
-
-    # 4. Clear in-memory server state for this DTXSID.
-    #    Remove bm2/csv/data upload entries whose temp_path pointed into
-    #    this session's files/ directory (now deleted).  Also remove any
-    #    entries whose temp files no longer exist on disk (stale uploads).
-    session_files_prefix = str(files_dir)
-    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
-        stale_ids = [
-            fid for fid, info in store.items()
-            if info.get("temp_path", "").startswith(session_files_prefix)
-            or not os.path.exists(info.get("temp_path", ""))
-        ]
-        for fid in stale_ids:
-            del store[fid]
-
-    # Clear pool fingerprints and integrated pool for this chemical
-    _pool_fingerprints.pop(dtxsid, None)
-    _integrated_pool.pop(dtxsid, None)
-
-    logger.info(
-        "Pool reset for %s: deleted %d items: %s",
-        dtxsid, len(deleted_items), ", ".join(deleted_items),
-    )
-
-    return JSONResponse({
-        "ok": True,
-        "deleted": deleted_items,
-    })
+    # The gene-level CSV registry is this layer's own; the core clears the rest.
+    csv_uploads = get_csv_uploads()
+    for fid in [fid for fid, info in csv_uploads.items()
+                if not os.path.exists(info.get("temp_path", ""))]:
+        del csv_uploads[fid]
+    return JSONResponse({"ok": True, "deleted": result["deleted"]})
 
 
 # ---------------------------------------------------------------------------
