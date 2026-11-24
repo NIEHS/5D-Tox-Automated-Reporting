@@ -269,6 +269,107 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# start the files over
+# ---------------------------------------------------------------------------
+
+#: What a reset deletes beside the files: the dataset and everything derived
+#: from the files.  `_fingerprints.json` and `classifications.json` matter most
+#: — both are keyed by file name, so leaving them would hand a later file of
+#: the same name what was recorded about a file that is gone.
+RESET_ARTIFACTS = (
+    "integrated.json", "integrated.bm2", "metadata_approved.json",
+    "validation_report.json", "precedence.json", "animal_report.json",
+    "integration_basis.json", "_fingerprints.json", "classifications.json",
+    "_category_lookup.json", "genomics.sidecar.json", "session.duckdb",
+    ".session_db.fingerprint", ".prepare_content.fingerprint",
+    ".prepare_content.outputs.json",
+)
+
+#: Directories a reset deletes.  `_removed/` is NOT among them: a file removed
+#: earlier is kept there, and it is the only copy left of it.
+RESET_DIRECTORIES = ("_originals", "session_parquet", "preview")
+
+
+@step_provenance
+def reset_files_step(dtxsid: str, store: PoolStore) -> dict:
+    """Take every data file out of the study and delete what was made from them.
+
+    Kept: what people stated (the identity, the design, the pins), the
+    Background, the section history, and the files removed earlier
+    (`_removed/`). Every section derived from the data is archived with a
+    `discard` event before it goes, so it can be restored (C2).
+
+    Returns `{ok, deleted}`; `deleted` names what went, for the record and for
+    the dry run that shows it beforehand.
+    """
+    session_dir = store.session_dir(dtxsid)
+    if not session_dir.exists():
+        raise StepError(f"No session found for {dtxsid}", status_code=404)
+
+    deleted: list[str] = []
+
+    files_dir = session_dir / "files"
+    if files_dir.exists():
+        shutil.rmtree(files_dir)
+        deleted.append("files/")
+
+    for artifact in RESET_ARTIFACTS:
+        p = session_dir / artifact
+        if p.exists():
+            p.unlink()
+            deleted.append(artifact)
+    for cache_file in sorted(session_dir.glob("_cache_*.json")):
+        cache_file.unlink()
+        deleted.append(cache_file.name)
+    for sub in RESET_DIRECTORIES:
+        p = session_dir / sub
+        if p.is_dir():
+            shutil.rmtree(p)
+            deleted.append(f"{sub}/")
+
+    # The sections the data produced.  Background is left alone on purpose: it
+    # is written from the chemical's identity, which a reset keeps.
+    from workflow.section_catalog import singleton_section_files
+    from workflow.section_writes import discard as discard_section
+
+    def drop(stem: str) -> None:
+        discard_section(dtxsid, stem, store, act="pool_reset", actor="person",
+                        reason="pool reset")
+        deleted.append(f"{stem}.json")
+
+    for pattern in ("bm2_*.json", "genomics_*.json"):
+        for f in sorted(session_dir.glob(pattern)):
+            drop(f.stem)
+    for section_file in singleton_section_files():
+        if section_file != "background.json" and (session_dir / section_file).exists():
+            drop(section_file[:-5])
+
+    _forget_pool(dtxsid, files_dir)
+    logger.info("Files of %s started over: %d items deleted", dtxsid, len(deleted))
+    return {"ok": True, "deleted": deleted}
+
+
+def _forget_pool(dtxsid: str, files_dir: Path) -> None:
+    """Drop what the running server holds of this study's old files.
+
+    Only the registries the core owns (`pipeline.pool_globals`). The gene-level
+    CSV registry belongs to the HTTP layer, which clears its own.
+    """
+    from pipeline.pool_globals import (
+        _bm2_uploads, get_data_uploads, get_integrated_pool, get_pool_fingerprints,
+    )
+    prefix = str(files_dir)
+    for uploads in (_bm2_uploads, get_data_uploads()):
+        stale = [fid for fid, info in uploads.items()
+                 if info.get("temp_path", "").startswith(prefix)
+                 or not os.path.exists(info.get("temp_path", ""))]
+        for fid in stale:
+            del uploads[fid]
+    get_pool_fingerprints().pop(dtxsid, None)
+    get_integrated_pool().pop(dtxsid, None)
+
+
+# ---------------------------------------------------------------------------
 # resolve
 # ---------------------------------------------------------------------------
 
@@ -303,20 +404,31 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
 
 @step_provenance
 def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dict:
-    """Apply user metadata corrections to fingerprints and write txt/csv headers.
+    """Keep what a person says each file is, and write the txt/csv headers.
 
-    `confirmed` maps file_id -> {platform, data_type}. Returns
-    {ok, updated} where `updated` counts files whose headers were rewritten.
-    A correction made after integration takes effect at the next integration.
+    `confirmed` maps a file NAME -> {platform, data_type}; a file_id is still
+    accepted, for the older routes. Returns {ok, updated} where `updated`
+    counts files whose headers were rewritten.
+
+    The statement is kept with the study (`pipeline.classifications`), so the
+    next file check honors it instead of putting the detected value back. A
+    correction made after integration takes effect at the next integration.
     """
+    from pipeline import classifications
+
     session_dir = store.session_dir(dtxsid)
     files_dir = session_dir / "files"
 
     fps = store.get_fingerprints(dtxsid)
+    by_name = {(fp.filename if hasattr(fp, "filename") else fp.get("filename", "")): (fid, fp)
+               for fid, fp in fps.items()}
     updated = 0
 
-    for fid, corrections in (confirmed or {}).items():
-        fp = fps.get(fid)
+    for key, corrections in (confirmed or {}).items():
+        if key in by_name:
+            fid, fp = by_name[key]
+        else:
+            fid, fp = key, fps.get(key)
         if not fp:
             continue
 
@@ -333,6 +445,23 @@ def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dic
 
         fname = fp.filename if hasattr(fp, "filename") else fp.get("filename", "")
         ftype = fp.file_type if hasattr(fp, "file_type") else fp.get("file_type", "")
+
+        # Keep the statement, so the next check does not revert it.  A value
+        # the kind of file cannot hold is refused, naming why.
+        said_type = new_data_type or (fp.data_type if hasattr(fp, "data_type") else fp.get("data_type"))
+        if said_type == "gene_expression":
+            # Gene expression has no assay of its own, by rule — not by taking
+            # whatever the file's name happened to suggest.
+            said_platform = new_platform
+        else:
+            said_platform = new_platform or (
+                fp.platform if hasattr(fp, "platform") else fp.get("platform"))
+        if said_type in classifications.DATA_TYPES:
+            try:
+                classifications.state(session_dir, fname, said_platform, said_type,
+                                      classifications.kind_of(ftype))
+            except ValueError as exc:
+                raise StepError(str(exc), status_code=400) from exc
 
         if ftype in ("txt", "csv"):
             file_path = files_dir / fname

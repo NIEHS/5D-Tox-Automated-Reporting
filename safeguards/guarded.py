@@ -38,6 +38,12 @@ def require_reset(dtxsid: str, store=None) -> None:
     require(dtxsid, Action.RESET, store)
 
 
+def reset_files_step(dtxsid: str, store) -> dict:
+    """Taking every data file out of a study, and all that was made from them."""
+    require(dtxsid, Action.RESET, store)
+    return _steps.reset_files_step(dtxsid, store)
+
+
 def remove_pool_file(dtxsid: str, filename: str) -> dict:
     from pipeline.pool_state import remove_pool_file as _remove
     require(dtxsid, Action.REMOVE_FILE)
