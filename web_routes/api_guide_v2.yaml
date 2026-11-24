@@ -88,6 +88,47 @@ groups:
           `classifications.json` (what a person said each file is).
         code: ui_api.files.files_view
         notebook: 5. Validate
+      - op: POST /api/v2/studies/{dtxsid}/files
+        title: Bring a batch of data files into a study (new interface)
+        does: >
+          Every file sent is checked before it is written: the name is usable,
+          the file is not empty, its ending is one a study's data comes in, and
+          its contents match that ending, so a text table renamed `.bm2` is
+          caught before anything reads it as a BMDExpress project. A zip stands
+          for the data files inside it, and what a package also carries — PDFs,
+          supplementary archives — is listed as left out rather than dropped in
+          silence. The batch is one act: while any file waits on a person's
+          answer (it would replace one already in the study, it repeats
+          another's contents under a new name, or a per-animal table came with
+          no units file) nothing at all is brought in, and the plan comes back
+          so the answer is given against what was actually found. A file that
+          replaces another is not overwritten: the old one is kept among the
+          removed files with its companions. `dry_run` plans and carries
+          nothing out.
+        writes: >
+          `files/` (the files brought in), `_removed/<time>/` (a file that was
+          replaced), and, where the study had already progressed, what was
+          derived from the old files is cleared.
+        code:
+          - ui_api.files_acts.bring_in
+          - pipeline.intake.plan
+          - workflow.steps.bring_in_step
+        notebook: 4. Import
+      - op: POST /api/v2/studies/{dtxsid}/check
+        title: Check a study's data files (new interface)
+        does: >
+          Reads every file in the study and checks them against each other and
+          against the study workbook — the doses, the sexes, the animals, the
+          endpoints — and writes what it found. A stream of events, because a
+          large BMDExpress project takes about half a minute the first time it
+          is read. Refused while another long act runs on the study.
+        writes: >
+          `validation_report.json`, `_fingerprints.json`, and the converted
+          tables with their `.sidecar.json` companions.
+        code:
+          - ui_api.files_acts.start_check
+          - workflow.steps.validate_step
+        notebook: 5. Validate
   - key: dataset
     operations:
       - op: GET /api/v2/studies/{dtxsid}/dataset

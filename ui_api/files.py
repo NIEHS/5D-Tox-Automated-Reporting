@@ -420,6 +420,14 @@ def _verdict(allowed: bool, code: str | None = None, say: str | None = None) -> 
     return {"allowed": allowed, "code": code, "say": say}
 
 
+def _say(code: str, **fields) -> str:
+    """A refusal's words from the catalog, so an act and the page that offers
+    it never word the same refusal twice."""
+    from ui_api import files_acts  # noqa: F401  (registers this page's codes)
+    from ui_api.refusals import say
+    return say(code, **fields)
+
+
 def _acts(state: dict, has_files: bool, checked: bool) -> dict:
     """Each act with whether it is allowed now, and the reason when it is not.
     Which acts are legal is the backend's (workflow.phases)."""
@@ -439,7 +447,8 @@ def _acts(state: dict, has_files: bool, checked: bool) -> dict:
         "add": by("ADD_FILES", f"Files cannot be brought in now ({stands})."),
         "check": (by("VALIDATE", f"The files cannot be checked now ({stands}).")
                   if has_files else
-                  _verdict(False, "no_files", "Bring in the study's files first.")),
+                  # The act refuses this in the same words (ui_api.files_acts).
+                  _verdict(False, "no_files", _say("no_files"))),
         "classify": (by("CONFIRM_CLASSIFICATION",
                         "Run the file check first: it says what each file is.")
                      if checked else
