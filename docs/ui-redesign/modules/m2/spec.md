@@ -1054,6 +1054,54 @@ S5, C8 item 9, and C12.
   question warns as it happens; the check then flags it. Is the extra answer
   wanted, or should the copy just come in with a warning?
 
+## What was built (2026-11-24)
+
+The maintainer chose the working path: bring files in, check them, say what
+each file is. The **read** of that path is built and released; the acts come
+next. Left for later, as decided: the staging area and its two-step intake
+plan, settling a conflict inside the application, narrowing a shared `.bm2`,
+restoring a removed file, the record of the files (C8) and the record of
+combined datasets (C12).
+
+**Built, on `main`:**
+- `pipeline/classifications.py` — what a person says a file is, kept in
+  `classifications.json`, keyed by the file's name, applied by fingerprinting
+  so no check reverts it (the finding 4 of §10). A value outside the
+  vocabulary, or a pair a kind of file cannot hold, is refused with words.
+  `seen` records the file's size and time, not a content hash: reading every
+  byte of a 250 MB project to draw a page is not worth it, and the statement
+  is a person's word about a file, not a seal on its contents.
+- `confirm_metadata_step` takes a file name as well as an id, and keeps the
+  statement.
+- `workflow/file_issues.py` — each finding of the check in plain words, with
+  its group and what to do. A kind of finding it does not know keeps the
+  check's own message and is marked as not recognized. Every finding of both
+  NIEHS-12 studies is recognized.
+- Removing a file takes its `.units.json` (the stem rule missed it) and the
+  statement about it; "start the files over" moved into the core
+  (`workflow.steps.reset_files_step`) behind the RESET guard, keeps
+  `_removed/`, and deletes `classifications.json`.
+- `READ_FOR_ITSELF`: a sample sheet, the removal reasons and the excluded
+  values are not stated by anyone, so the page does not ask.
+
+**Built, on `ui-redesign`:** `ui_api/files.py` (`GET …/files`),
+`web_routes/v2_files_routes.py`, and `ui/src/modules/m2/`.
+
+**Where this differs from the spec above**
+- `GET …/files` lives in `ui_api/`, not `workflow.files`, following
+  `ui_api/dataset.py` and the branch rule (the core keeps only what the command
+  line shares: the issue words and the vocabulary).
+- There is no `content_hash` per row yet; a row carries `null` where the
+  contract shows one, which the page reads as "not recorded".
+- `conflicts` is served empty: every conflict the check finds today is settled
+  outside the application, and each one says so.
+- `removed` lists what is kept but offers no restore; the entry says so.
+- The check is used as it stands, so three findings the spec expects are not
+  raised yet: an exact copy under another name is information rather than a
+  blocker (`redundant_files`), a `.bm2` holding several test articles does not
+  block, and a file is still recognized from its name rather than its content.
+  These are named on the page and are the next slice's list.
+
 ## 12. Acceptance criteria
 
 Tested in a headed browser against the app on a **scratch store**, with
