@@ -1,4 +1,5 @@
-import { API_V2, getJson } from './client'
+import { API_V2, getJson, sendForm, streamRun } from './client'
+import type { RunEvent } from './types'
 
 /**
  * The "Study files" page (M2): docs/ui-redesign/modules/m2/. The backend is
@@ -13,6 +14,7 @@ const enc = encodeURIComponent
 
 export const filesPaths = {
   files: (id: string) => `${API_V2}/studies/${enc(id)}/files`,
+  check: (id: string) => `${API_V2}/studies/${enc(id)}/check`,
 }
 
 /** An act, with the reason when it is not allowed now. */
@@ -167,4 +169,80 @@ export interface FilesView {
 
 export function getFiles(id: string, signal?: AbortSignal): Promise<FilesView> {
   return getJson<FilesView>(filesPaths.files(id), signal)
+}
+
+// ---------------------------------------------------------------------------
+// Bringing files in
+// ---------------------------------------------------------------------------
+
+/** What would happen to one file of a batch. The server decides every field. */
+export interface IntakeRow {
+  name: string
+  size: number
+  type: string
+  verdict: 'add' | 'units' | 'replace' | 'unchanged' | 'copy' | 'units_missing' | 'refused' | 'left_out' | (string & {})
+  say: string
+  code: string | null
+  /** The question this file waits on, or null when it waits on nothing. */
+  needs_answer: 'replace' | 'copy' | 'without_units' | null
+  from_zip: string | null
+  pairs_with: string | null
+  replaces: { name: string; size: number } | null
+  copy_of: { name: string; where: 'study' | 'batch' | (string & {}) } | null
+}
+
+export interface IntakeCounts {
+  add: number
+  unchanged: number
+  refused: number
+  left_out: number
+  needs_answer: number
+}
+
+export interface IntakePlan {
+  id: string
+  applied: boolean
+  dry_run: boolean
+  rows: IntakeRow[]
+  counts: IntakeCounts
+  brought_in: string[]
+  replaced: string[]
+  files_token: string
+}
+
+/** The names a person answered for, by the question that was asked. */
+export interface IntakeAnswers {
+  replace?: string[]
+  copy_anyway?: string[]
+  without_units?: string[]
+}
+
+/**
+ * Bring a batch of files into the study. The batch is one act: when any file
+ * waits on an answer the server brings none of them in and refuses with the
+ * plan in its details, which is what the page then shows.
+ */
+export function bringInFiles(
+  id: string,
+  files: File[],
+  opts: { answers?: IntakeAnswers; filesToken?: string | null; dryRun?: boolean } = {},
+): Promise<IntakePlan> {
+  const form = new FormData()
+  for (const file of files) form.append('files', file, file.name)
+  if (opts.answers) form.append('answers', JSON.stringify(opts.answers))
+  if (opts.filesToken) form.append('files_token', opts.filesToken)
+  if (opts.dryRun) form.append('dry_run', 'true')
+  return sendForm<IntakePlan>(filesPaths.files(id), form)
+}
+
+export interface CheckSummary {
+  files: number
+  fix: number
+  look: number
+  expected: number
+}
+
+/** Check the study's files: the §4.4 event stream. */
+export function runCheck(id: string): AsyncGenerator<RunEvent> {
+  return streamRun(filesPaths.check(id))
 }

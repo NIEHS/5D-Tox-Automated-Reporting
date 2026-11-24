@@ -210,3 +210,84 @@ export const SETTLED_OUTSIDE =
   'The application does not choose between these files. Correct or remove one outside the application, then check the files again.'
 
 export const NOT_BUILT_YET = 'This part of the page is not built yet.'
+
+// ---------------------------------------------------------------------------
+// Bringing files in
+// ---------------------------------------------------------------------------
+
+export const BRING_IN_TITLE = 'Bring in files'
+export const BRING_IN_EXPLAIN =
+  'Every file is checked before it is written into the study: what it is named, whether it ' +
+  'is already there, and whether its contents match its ending. Nothing is written until ' +
+  'every file of the batch is settled.'
+export const DROP_EXPLAIN = 'Drop the study’s data files here, or click to choose them'
+export const DROP_HINT =
+  'Several files at once, or a CEBS package as a zip. Nothing is sent until “' +
+  'Bring them in” is pressed.'
+export const BRING_IN_BUTTON = 'Bring them in'
+
+export function CHOSEN(n: number): string {
+  return `${count(n, 'file')} chosen.`
+}
+
+export function acceptedWords(accepted: string[] = ACCEPTED_DEFAULT): string {
+  return `A study's data comes as ${accepted.join(', ')}.`
+}
+
+const ACCEPTED_DEFAULT = ['.bm2', '.csv', '.txt', '.xlsx', '.zip']
+
+export const ANSWERS = {
+  title: 'These need an answer first',
+  explain:
+    'The batch is one act: nothing is brought in until each of these is answered. Tick what ' +
+    'should happen, then press “Bring them in” again.',
+  question: {
+    replace: 'Replace the file already in the study (the old one is kept among the removed files).',
+    copy: 'Bring it in anyway, knowing the same data is already in the study under another name.',
+    without_units: 'Bring it in without its units, knowing its tables will print [units pending].',
+  } as Record<string, string>,
+}
+
+export function broughtInWords(plan: { brought_in: string[]; replaced: string[] }): string {
+  const parts = [`${count(plan.brought_in.length, 'file')} brought into the study`]
+  if (plan.replaced.length) parts.push(`${count(plan.replaced.length, 'file')} replaced`)
+  return `${parts.join('; ')}.`
+}
+
+export const planWords = {
+  title: 'What happened to each file',
+  file: 'File',
+  what: 'What happened',
+  say: 'Why',
+  fromZip: (folder: string) => `From ${folder}`,
+}
+
+const VERDICT_MARKS: Record<string, { label: string; tone: Mark['tone'] }> = {
+  add: { label: 'Brought in', tone: 'success' },
+  units: { label: 'Units of a table', tone: 'success' },
+  replace: { label: 'Replaces a file', tone: 'warning' },
+  copy: { label: 'The same data twice', tone: 'warning' },
+  units_missing: { label: 'No units', tone: 'warning' },
+  unchanged: { label: 'Already there', tone: 'default' },
+  refused: { label: 'Not brought in', tone: 'error' },
+  left_out: { label: 'Left out of the package', tone: 'default' },
+}
+
+export function verdictMark(verdict: string): { label: string; tone: Mark['tone'] } {
+  return VERDICT_MARKS[verdict] ?? { label: `Marked "${verdict}"`, tone: 'error' }
+}
+
+// ---------------------------------------------------------------------------
+// The check, as an act
+// ---------------------------------------------------------------------------
+
+export const CHECK_BUTTON = 'Check the files'
+export const CHECK_AGAIN = 'Check the files again'
+export const CHECK_RAN = 'The file check ran.'
+
+export function checkRanWords(summary: { files?: number; fix?: number; look?: number; expected?: number }): string {
+  const files = count(summary.files ?? 0, 'file')
+  const fix = summary.fix ?? 0
+  if (fix) return `${files} checked. ${count(fix, 'problem')} must be fixed before anything is combined.`
+  return `${files} checked. Nothing blocks.`
+}

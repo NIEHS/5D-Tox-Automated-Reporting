@@ -105,7 +105,7 @@ export const PRINTED_TITLE = "The check of the report's citations"
 
 /** What a finished check says of itself, from the run's summary (the backend's counts). */
 export function checkOutcome(summary: Record<string, unknown>): string {
-  const n = (key: string) => (typeof summary[key] === 'number' ? (summary[key] as number) : 0)
+  const n = (key: string) => (typeof summary[key] === 'number' ? summary[key] : 0)
   const found =
     n('errors') > 0
       ? `${plural(n('errors'), 'error was', 'errors were')} found; each is listed below.`

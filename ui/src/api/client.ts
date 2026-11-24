@@ -62,6 +62,14 @@ export async function sendJson<T>(
   return readJson<WithNoop<T>>(await send(path, init))
 }
 
+/**
+ * Send a multipart body (files a person chose). The Content-Type is left to
+ * the browser, which writes the boundary; setting it by hand breaks the body.
+ */
+export async function sendForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
+  return readJson<T>(await send(path, { method: 'POST', body: form, signal }))
+}
+
 /** The "success that did nothing" carried by a response, if any (§4.2). */
 export function noopOf(body: unknown): Noop | null {
   if (typeof body !== 'object' || body === null) return null

@@ -186,10 +186,10 @@ describe('files that cannot be read', () => {
 })
 
 describe('what the page does not do yet', () => {
-  it('says the acts are not built, rather than offering one that would refuse', async () => {
+  it('names the acts that are not built, rather than offering one that would refuse', async () => {
     await open(CHECKED)
-    expect(await screen.findByTestId('acts-not-built')).toHaveTextContent(
-      'The acts of this page are not built yet',
-    )
+    const said = await screen.findByTestId('acts-not-built')
+    expect(said).toHaveTextContent('Saying what a file is, is not built on this page yet')
+    expect(said).toHaveTextContent('Bringing files in and checking them are done here.')
   })
 })

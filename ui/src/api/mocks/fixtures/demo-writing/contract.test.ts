@@ -83,7 +83,7 @@ describe('the Written sections fixtures are real answers in the typed shape', ()
       const study = DEMO_REFERENCES[id]!
       expect(study.printed, id).toBeNull()
       expect(study.entries, id).toEqual([])
-      expect(study.report?.id, id).toBe(DEMO_STATES[id]!.relations!.parent)
+      expect(study.report?.id, id).toBe(DEMO_STATES[id]!.relations.parent)
     }
   })
 })

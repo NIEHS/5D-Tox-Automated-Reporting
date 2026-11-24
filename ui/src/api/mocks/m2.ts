@@ -48,5 +48,46 @@ export function createM2Handlers() {
       }
       return HttpResponse.json(view)
     }),
+
+    // Bringing a batch in: the plan is the server's, so the mock answers with
+    // one row per file sent, all of them brought in.
+    http.post(`${API_V2}/studies/:id/files`, async ({ request, params }) => {
+      const form = await request.formData()
+      const sent = form.getAll('files').filter((one): one is File => typeof one !== 'string')
+      const rows = sent.map((file) => ({
+        name: file.name,
+        size: file.size,
+        type: file.name.split('.').pop() ?? '',
+        verdict: 'add',
+        say: 'Will be added.',
+        code: null,
+        needs_answer: null,
+        from_zip: null,
+        pairs_with: null,
+        replaces: null,
+        copy_of: null,
+      }))
+      return HttpResponse.json({
+        id: String(params.id),
+        applied: true,
+        dry_run: false,
+        rows,
+        counts: { add: rows.length, unchanged: 0, refused: 0, left_out: 0, needs_answer: 0 },
+        brought_in: rows.map((row) => row.name),
+        replaced: [],
+        files_token: 'sha256:after-the-batch',
+      })
+    }),
+
+    http.post(`${API_V2}/studies/:id/check`, () =>
+      HttpResponse.text(
+        [
+          JSON.stringify({ event: 'step', unit: 'check', status: 'computing', say: 'Checking the study’s files' }),
+          JSON.stringify({ event: 'step', unit: 'check', status: 'done', say: 'Checking the study’s files', ms: 2100 }),
+          JSON.stringify({ event: 'result', ok: true, summary: { files: 9, fix: 0, look: 2, expected: 3 } }),
+        ].join('\n') + '\n',
+        { headers: { 'Content-Type': 'application/x-ndjson' } },
+      ),
+    ),
   ]
 }

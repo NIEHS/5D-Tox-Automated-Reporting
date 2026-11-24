@@ -1,12 +1,20 @@
-import { Alert, Card, Collapse, Descriptions, Empty, Skeleton, Space, Steps, Table, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Card, Collapse, Descriptions, Empty, Skeleton, Space, Steps, Table, Tag, Tooltip, Typography } from 'antd'
+import { useState } from 'react'
 import { useParams } from 'react-router'
 import type { Companion, CoverageRow, FileRow, Finding, FilesView } from '../../api/files'
+import { runCheck } from '../../api/files'
 import { Refusal } from '../../kit/Refusal'
 import { ItemList } from '../../kit/ItemList'
 import { Pending } from '../../kit/Pending'
+import { Wait } from '../../kit/Wait'
+import { BringIn } from './BringIn'
 import { useFiles } from './queries'
 import {
+  CHECK_AGAIN,
+  CHECK_BUTTON,
   CHECK_NOTE,
+  CHECK_RUNNING,
+  checkRanWords,
   COVERAGE_EXPLAIN,
   COVERAGE_TITLE,
   EMPTY_FILES,
@@ -35,14 +43,16 @@ import {
  * file is, not which group a finding belongs in.
  *
  * Built so far: the study's files and what each one is taken to be, the file
- * check's findings in plain words, and what the report would be built from.
- * Bringing files in, running the check and confirming what a file is are the
- * acts, and they are not built yet; the page says so rather than offering a
- * control that would refuse.
+ * check's findings in plain words, what the report would be built from, and
+ * two of the acts — bringing files in and running the check. Saying what a
+ * file is is not built yet; the page says so rather than offering a control
+ * that would refuse.
  */
 export function FilesPage() {
   const { id = '' } = useParams()
   const files = useFiles(id)
+  const [checking, setChecking] = useState(false)
+  const [lastCheck, setLastCheck] = useState<Record<string, unknown> | null>(null)
 
   if (files.isPending) return <Skeleton active paragraph={{ rows: 8 }} />
   if (files.error) {
@@ -71,27 +81,51 @@ export function FilesPage() {
   }
 
   return (
-    <Space orientation="vertical" size="middle" style={{ display: 'flex' }}>
-      <div>
-        <Typography.Title level={3}>{TITLE}</Typography.Title>
-        <Typography.Paragraph type="secondary">{LEDE}</Typography.Paragraph>
-      </div>
-
-      <Progress view={view} />
-      {view.integration && (
-        <Alert
-          type={view.integration.state === 'current' ? 'info' : 'warning'}
-          showIcon
-          message={view.integration.say}
-          data-testid="integration"
+    <>
+      {/* Beside the page, never among its parts: a part that appears while the
+          act runs would move the wait, and a moved wait starts the act again. */}
+      {checking && (
+        <Wait
+          studyId={id}
+          title={CHECK_RUNNING}
+          note={CHECK_NOTE}
+          start={() => runCheck(id)}
+          onFinish={(outcome) => {
+            if (outcome.ok) setLastCheck(outcome.summary)
+          }}
+          onClose={() => setChecking(false)}
         />
       )}
+      <Space orientation="vertical" size="middle" style={{ display: 'flex' }}>
+        <div>
+          <Typography.Title level={3}>{TITLE}</Typography.Title>
+          <Typography.Paragraph type="secondary">{LEDE}</Typography.Paragraph>
+        </div>
 
-      <Files view={view} />
-      <Check view={view} />
-      <Coverage rows={view.coverage} />
-      <ActsNotBuilt view={view} />
-    </Space>
+        <Progress view={view} />
+        {view.integration && (
+          <Alert
+            type={view.integration.state === 'current' ? 'info' : 'warning'}
+            showIcon
+            message={view.integration.say}
+            data-testid="integration"
+          />
+        )}
+
+        <BringIn id={id} act={view.acts.add} filesToken={view.files_token} />
+        <Files view={view} />
+        <Check
+          view={view}
+          lastCheck={lastCheck}
+          onCheck={() => {
+            setLastCheck(null)
+            setChecking(true)
+          }}
+        />
+        <Coverage rows={view.coverage} />
+        <ActsNotBuilt view={view} />
+      </Space>
+    </>
   )
 }
 
@@ -290,10 +324,45 @@ function FileDetail({ row, view }: { row: FileRow; view: FilesView }) {
 // The file check
 // ---------------------------------------------------------------------------
 
-function Check({ view }: { view: FilesView }) {
+function Check({
+  view,
+  lastCheck,
+  onCheck,
+}: {
+  view: FilesView
+  lastCheck: Record<string, unknown> | null
+  onCheck: () => void
+}) {
   const summary = checkSummary(view.check?.counts)
+  const act = view.acts.check
   return (
-    <Card size="small" title="The file check" data-testid="check">
+    <Card
+      size="small"
+      title="The file check"
+      data-testid="check"
+      extra={
+        act.allowed ? (
+          <Button type="primary" onClick={onCheck} data-testid="check-run">
+            {view.check === null ? CHECK_BUTTON : CHECK_AGAIN}
+          </Button>
+        ) : (
+          <Tooltip title={act.say}>
+            <Button disabled data-testid="check-run">
+              {CHECK_BUTTON}
+            </Button>
+          </Tooltip>
+        )
+      }
+    >
+      {lastCheck && (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={checkRanWords(lastCheck)}
+          data-testid="check-ran"
+        />
+      )}
       {view.check === null ? (
         <Typography.Paragraph type="secondary" data-testid="check-not-run">
           {NOT_CHECKED} {CHECK_NOTE}
@@ -445,12 +514,13 @@ function ActsNotBuilt({ view }: { view: FilesView }) {
       type="info"
       showIcon
       data-testid="acts-not-built"
-      message="The acts of this page are not built yet"
+      message="Saying what a file is, is not built on this page yet"
       description={
         <Space orientation="vertical" size={2}>
           <Typography.Text>
-            Bringing files in, running the file check, and saying what each file is are done from the
-            API page or the notebook for now. This page reads; it does not yet act.
+            Correcting what the check read a file as, confirming the files, removing one and
+            starting the files over are done from the API page or the notebook for now. Bringing
+            files in and checking them are done here.
           </Typography.Text>
           <Typography.Text type="secondary">
             The next step for this study is: {view.next.say}.
