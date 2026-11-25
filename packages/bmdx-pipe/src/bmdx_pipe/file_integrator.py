@@ -41,6 +41,7 @@ Usage:
 # Imports
 # ---------------------------------------------------------------------------
 
+import hashlib
 import json
 import logging
 import os
@@ -386,7 +387,7 @@ def _deduce_metadata_from_experiments(
         import anthropic
         client = anthropic.Anthropic(base_url=base_url)
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=_gateway_model_name(_METADATA_MODEL),
             max_tokens=512,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
@@ -434,6 +435,115 @@ def _deduce_metadata_from_experiments(
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
+
+#: The model that reads a project's experiment names.  Canonical (hyphenated)
+#: id; `_gateway_model_name` puts it in the convention the endpoint expects.
+_METADATA_MODEL = "claude-haiku-4-5"
+
+
+def _gateway_model_name(model: str) -> str:
+    """The model id in the convention the configured endpoint expects.
+
+    The walled gateway names versions with a dot (`claude-haiku-4.5`) while
+    the canonical id is hyphenated (`claude-haiku-4-5`), and sending the wrong
+    one is a 400 "Invalid model name".  Until now this module sent a dated id
+    (`claude-haiku-4-5-20251001`) that the gateway does not serve at all, so
+    every metadata reading here silently failed and fell back to the name
+    patterns — which is why real BMDExpress projects carry so little.
+
+    `ANTHROPIC_MODEL_MAP` ("src=dst,…") overrides, as elsewhere.  This mirrors
+    `styling_export.llm_endpoints.resolve_model_name`, which this package
+    cannot import: bmdx-pipe is the dependency, not the dependent.
+    """
+    for entry in (os.environ.get("ANTHROPIC_MODEL_MAP") or "").split(","):
+        if "=" in entry:
+            src, dst = entry.split("=", 1)
+            if model == src.strip():
+                return dst.strip()
+    if not (os.environ.get("ANTHROPIC_BASE_URL") or "").strip():
+        return model
+    m = re.match(r"^(claude-\w+)-(\d+)-(\d+)$", model)
+    return f"{m.group(1)}-{m.group(2)}.{m.group(3)}" if m else model
+
+
+#: How many of a project's experiment names are read for their test article.
+#: Real projects have a handful (one per organ × sex); a project with more is
+#: read this far and no further, and says so.
+_MAX_EXPERIMENTS_READ = 24
+
+
+def _same_article(a: str, b: str) -> bool:
+    """Whether two readings name the same test article.
+
+    A chemical goes by more than one name — "PFHxSAm" is "Perfluorohexane
+    sulfonamide" — and two spellings must never be read as two compounds,
+    because that reading BLOCKS a study.  So the test leans toward "the same":
+    equal ignoring case and punctuation, one contained in the other, or the
+    shorter running through the longer in order (which is what an abbreviation
+    does: p-f-h-x-s-a-m through perfluorohexanesulfonamide).
+
+    Leaning this way can only hide a project that genuinely holds two
+    chemicals whose names run through each other — which no pair of real
+    chemical names does.  Leaning the other way would stop real work on a
+    study that is perfectly sound, which is the worse mistake.
+    """
+    x = re.sub(r"[^a-z0-9]", "", a.lower())
+    y = re.sub(r"[^a-z0-9]", "", b.lower())
+    if not x or not y:
+        return True
+    if x == y or x in y or y in x:
+        return True
+    short, long = (x, y) if len(x) <= len(y) else (y, x)
+    letters = iter(long)
+    return all(c in letters for c in short)
+
+
+def read_test_articles(
+    experiment_names: list[str],
+    probe_sample: list[str] | None = None,
+    chip_info: dict | None = None,
+) -> tuple[list[str], str]:
+    """The test article(s) a project's experiment names speak of, and where
+    that reading came from.
+
+    Returns `(articles, basis)`.  `basis` is one of:
+      "experiment_names_llm" — a language model read the names and found one
+                               or more test articles;
+      "none"                 — the names were read and carry no test article
+                               (NIEHS-13's are `rat_4D_HE_No0`), so nothing
+                               can be said from them;
+      "unavailable"          — the names could not be read at all (the model
+                               was unreachable), so nothing WAS said.
+
+    The distinction between the last two matters: one is a finding, the other
+    is a check that did not happen, and a page must not show them alike.
+
+    Each distinct name is read on its own, so a project whose experiments name
+    two chemicals yields two.  Two spellings of one chemical yield one
+    (`_same_article`).
+    """
+    names = [n for n in dict.fromkeys(experiment_names) if n]
+    if not names:
+        return [], "unavailable"
+
+    found: list[str] = []
+    answered = 0
+    for name in names[:_MAX_EXPERIMENTS_READ]:
+        meta = _deduce_metadata_from_experiments([name], probe_sample, chip_info)
+        if not meta:
+            continue
+        answered += 1
+        article = meta.get("test_article")
+        if not isinstance(article, str) or not article.strip():
+            continue
+        article = article.strip()
+        if not any(_same_article(article, seen) for seen in found):
+            found.append(article)
+
+    if not answered:
+        return [], "unavailable"
+    return sorted(found), ("experiment_names_llm" if found else "none")
 
 
 @dataclass
@@ -534,6 +644,26 @@ class FileFingerprint:
     # The study workbook a txt/csv was written from (a pivot's sidecar
     # "source", a CSV's "# Source:" line); None for an original file.
     derived_from: str | None = None
+
+    # The file's contents as one short value (sha256, first 16 hex), or None
+    # when it could not be read.  Two files of one content_hash are the same
+    # data under two names — the one duplication a structural comparison
+    # cannot prove and the one that would be combined twice.
+    content_hash: str | None = None
+
+    # What a BMDExpress project calls its experiments, kept whatever the
+    # project holds.  Apical projects used to lose these (endpoint_names keeps
+    # the probe names instead), so nothing could be said about what a project
+    # was of.
+    experiment_names: list[str] = field(default_factory=list)
+
+    # The test article(s) the experiment names speak of, and where that
+    # reading came from: "experiment_names_llm" (a language model read the
+    # names), "experiment_names_regex" (a name pattern), or "none" (the names
+    # carry no test article, so the application cannot tell).  More than one
+    # means the project holds another study's data.
+    test_articles: list[str] = field(default_factory=list)
+    test_article_basis: str | None = None
 
     # Long-format flag — True when a txt/csv file has NTP long format
     # (one row per animal × observation, with Concentration/Animal ID/Sex
@@ -1393,14 +1523,23 @@ def fingerprint_bm2(
         # already detected from filename; we just can't extract dose groups
         # or experiment names without the JSON.
         logger.debug("No cached JSON for %s — partial fingerprint only", filename)
+        # The project was never opened, so nothing was read from it and
+        # nothing may be concluded: a page must not show this as "no test
+        # article found".
+        fp.test_article_basis = "project_not_read"
         return fp
 
     # --- Extract structural data from doseResponseExperiments ---
     experiments = bm2_json.get("doseResponseExperiments", [])
     if not experiments:
+        fp.test_article_basis = "project_not_read"
         return fp
 
     experiment_names = [exp.get("name", "") for exp in experiments]
+    # Kept whatever the project holds.  An apical project's experiment names
+    # used to be lost here (endpoint_names keeps the probe names instead), so
+    # nothing could be said about what the project was OF.
+    fp.experiment_names = [name for name in experiment_names if name]
 
     # --- Extract probe/endpoint IDs from all experiments ---
     # For apical files, these are the actual clinical endpoint names
@@ -1597,6 +1736,14 @@ def fingerprint_bm2(
         # row labels in the NTP tables.
         fp.endpoint_names = unique_probes
 
+    # --- What the project is OF: the test article(s) its experiments name ---
+    # A project holding two chemicals carries another study's data, and
+    # nothing downstream separates them.  The reading is kept with where it
+    # came from, so a page never shows "none found" and "could not look" alike.
+    fp.test_articles, fp.test_article_basis = read_test_articles(
+        fp.experiment_names, unique_probes[:15], chip_info,
+    )
+
     # --- Study metadata from project-level fields ---
     for key in ("name", "projectName", "studyName"):
         val = bm2_json.get(key, "")
@@ -1667,18 +1814,17 @@ def fingerprint_file(
         FileFingerprint with as much metadata as could be extracted.
     """
     if file_type == "xlsx":
-        return fingerprint_xlsx(file_id, filename, path, ts_added)
+        fp = fingerprint_xlsx(file_id, filename, path, ts_added)
     elif file_type in ("txt", "csv"):
         fp = fingerprint_txt_csv(file_id, filename, path, file_type, ts_added)
         fp.derived_from = derived_source(path)
         fp.dose_unit = fp.dose_unit or sidecar_dose_unit(path)
-        return fp
     elif file_type == "bm2":
-        return fingerprint_bm2(file_id, filename, path, ts_added, bm2_json)
+        fp = fingerprint_bm2(file_id, filename, path, ts_added, bm2_json)
     else:
         # Unknown file type — return a minimal fingerprint
         logger.warning("Unknown file type '%s' for %s", file_type, filename)
-        return FileFingerprint(
+        fp = FileFingerprint(
             file_id=file_id,
             filename=filename,
             file_type=file_type,
@@ -1686,6 +1832,27 @@ def fingerprint_file(
             ts_added=ts_added,
             ts_filesystem=_get_filesystem_timestamp(path),
         )
+    # What the file IS, as against what it holds: two names over one content
+    # are the same data twice, which no structural comparison can prove.
+    fp.content_hash = content_hash_of(path)
+    return fp
+
+
+def content_hash_of(path: str) -> str | None:
+    """A file's content as one short value, or None when it cannot be read.
+
+    Cheap enough to take for every file on every check: a whole real study
+    (17 MB, the largest .bm2 on file being 16.8 MB) hashes in 0.04 s.
+    """
+    try:
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError:
+        logger.warning("Could not read %s to hash it", path)
+        return None
+    return "sha256:" + digest.hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -2075,6 +2242,150 @@ def _check_sex_coverage(
     return issues
 
 
+def _check_duplicate_contents(
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Detect the same file under two names: identical contents, byte for byte.
+
+    This is the one duplication that admits no doubt, and the one a structural
+    comparison (`_check_redundancy`) cannot prove: two names over one content
+    are the same data, and integration would combine it twice — every animal
+    counted twice, every mean drawn from a doubled sample.
+
+    An error, therefore, not a note: the study cannot be combined until one of
+    the two goes.  Either one; they are the same file.  Measured against the
+    twelve published studies and the eight others on file (453 files), no real
+    package contains such a pair.
+
+    Files whose contents could not be read carry no hash and are skipped.
+    """
+    issues = []
+    by_content: dict[str, list[str]] = {}
+    for fid, fp in fingerprints.items():
+        if fp.content_hash:
+            by_content.setdefault(fp.content_hash, []).append(fid)
+
+    for fids in by_content.values():
+        if len(fids) < 2:
+            continue
+        names = sorted(fingerprints[fid].filename for fid in fids)
+        issues.append(ValidationIssue(
+            severity="error",
+            platform=fingerprints[fids[0]].platform or "unknown",
+            issue_type="duplicate_files",
+            message=(
+                f"{' and '.join(names)} are the same file under different "
+                f"names (identical contents). Combining both would count the "
+                f"same data twice."
+            ),
+            files_involved=sorted(fids),
+            details={"filenames": names},
+        ))
+    return issues
+
+
+def _check_test_articles(
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Detect a BMDExpress project that holds more than one test article.
+
+    A project whose experiments name two chemicals carries another study's
+    data, and nothing downstream separates them: its benchmark doses would be
+    read as this study's.  An error, so the study cannot be combined until a
+    person settles it (narrowing a project to one study's experiments is not
+    done inside the application).
+
+    Silence is not agreement.  Where the experiment names carry no test
+    article at all — NIEHS-13's are `rat_4D_HE_No0` — nothing is raised and
+    the fingerprint's `test_article_basis` says "none", so the page can say
+    the application cannot tell rather than implying it checked.
+    """
+    issues = []
+    for fid, fp in fingerprints.items():
+        if fp.file_type != "bm2" or len(fp.test_articles) < 2:
+            continue
+        named = sorted(fp.test_articles)
+        issues.append(ValidationIssue(
+            severity="error",
+            platform=fp.platform or "unknown",
+            issue_type="several_test_articles",
+            message=(
+                f"{fp.filename} holds experiments of more than one test "
+                f"article ({', '.join(named)}). Only one of them is this "
+                f"study's."
+            ),
+            files_involved=[fid],
+            details={"test_articles": named,
+                     "basis": fp.test_article_basis,
+                     "experiment_names": list(fp.experiment_names)},
+        ))
+    return issues
+
+
+def _check_name_against_contents(
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Detect a file whose contents belong to an assay other than its name's.
+
+    A file is recognized from its name (`detect_platform_and_type`), so a
+    correctly named file holding something else is taken at its word.  This
+    reads the other way: a table's endpoints are compared with the endpoints
+    of the study's OWN authoritative workbooks, and a file is flagged only
+    when another assay's workbook matches STRICTLY BETTER than the assay its
+    name claims.
+
+    Comparative, never absolute.  Requiring a file to overlap its own assay
+    would misfire on 24 real files — a body-weight workbook's endpoints are
+    study-day columns while its table's are not — so the absence of overlap
+    says nothing and only a better match elsewhere is evidence.
+
+    The authority is the study's own workbooks, so no list of which endpoints
+    belong to which assay is written down anywhere (CONTEXT.md: no hard-coded
+    report facts).  Nothing is reclassified here: the finding is reported and
+    a person's statement remains the only thing that changes what a file is.
+    """
+    authority: dict[str, set[str]] = {}
+    for fp in fingerprints.values():
+        if fp.file_type == "xlsx" and fp.platform and fp.endpoint_names:
+            authority.setdefault(fp.platform, set()).update(fp.endpoint_names)
+    if len(authority) < 2:
+        return []   # nothing to be mistaken for
+
+    issues = []
+    for fid, fp in fingerprints.items():
+        if fp.file_type not in ("txt", "csv") or not fp.platform or not fp.endpoint_names:
+            continue
+        if fp.platform not in authority:
+            continue
+        mine = set(fp.endpoint_names)
+        share = len(mine & authority[fp.platform]) / len(mine)
+        better = [(len(mine & eps) / len(mine), other)
+                  for other, eps in authority.items()
+                  if other != fp.platform and len(mine & eps) / len(mine) > share]
+        if not better:
+            continue
+        best_share, best = max(better)
+        issues.append(ValidationIssue(
+            severity="error",
+            platform=fp.platform,
+            issue_type="name_disagrees_with_contents",
+            message=(
+                f"{fp.filename} is named for {fp.platform}, but what it "
+                f"measures matches {best} better "
+                f"({best_share:.0%} of its measurements against "
+                f"{share:.0%} for {fp.platform})."
+            ),
+            files_involved=[fid],
+            details={"named": fp.platform, "contents_match": best,
+                     "share_named": round(share, 3),
+                     "share_contents": round(best_share, 3)},
+        ))
+    return issues
+
+
 def _check_redundancy(
     fingerprints: dict[str, FileFingerprint],
 ) -> list[ValidationIssue]:
@@ -2431,6 +2742,11 @@ def validate_pool(
 
     # Cross-domain checks
     all_issues.extend(_check_redundancy(fingerprints))
+    # What the step promises: nothing twice, nothing from another study,
+    # nothing that is not what its name says.  Each of these blocks.
+    all_issues.extend(_check_duplicate_contents(fingerprints))
+    all_issues.extend(_check_test_articles(fingerprints))
+    all_issues.extend(_check_name_against_contents(fingerprints))
 
     # Compute completeness — every domain with any file should have all
     # applicable tiers.  Gene expression doesn't need xlsx.

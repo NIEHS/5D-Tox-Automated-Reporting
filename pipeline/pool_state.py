@@ -40,6 +40,7 @@ pool_orchestrator.py re-exports the three names so the original API
 import json
 import os
 import logging
+from pathlib import Path
 
 from pipeline.pool_globals import (
     _session_dir,
@@ -328,6 +329,79 @@ def _companion_stem(name: str) -> str:
     return os.path.splitext(name)[0]
 
 
+def _would_move(dtxsid: str, name: str) -> tuple[Path, list[Path]]:
+    """The file itself and everything that rides on it: its sidecar, its
+    units, and the long-format original conversion parked in `_originals/`.
+
+    Raises PoolFileError when there is no such file in the pool.
+    """
+    d = _session_dir(dtxsid)
+    files_dir = d / "files"
+    target = files_dir / name
+    if not target.is_file():
+        raise PoolFileError(f"No file {name!r} in the pool for {dtxsid}")
+
+    stem = _companion_stem(name)
+    companions = [files_dir / f"{stem}{_SIDECAR_SUFFIX}",
+                  files_dir / f"{stem}{_UNITS_SUFFIX}"]
+    originals = d / "_originals"
+    if originals.is_dir():
+        companions += [p for p in originals.iterdir()
+                       if p.is_file() and _companion_stem(p.name) == stem]
+    return target, [p for p in companions if p.is_file()]
+
+
+def would_remove(dtxsid: str, filename: str) -> dict:
+    """What removing this file would take with it, and what it would cost.
+
+    The dry run a person is shown before the act. It calls the same listing
+    the act itself uses, so the two can never disagree — a dry run that
+    promises something other than what happens is worse than none.
+
+    Raises PoolFileError for a name that is not a plain file in `files/`, or
+    for a sidecar (it belongs to its data file).
+    """
+    name = _checked_name(filename)
+    target, companions = _would_move(dtxsid, name)
+    return {
+        "file": name,
+        "companions": [{"name": p.name,
+                        "say": _COMPANION_SAY.get(_companion_role(p.name, name),
+                                                  "written beside it")}
+                       for p in companions],
+        "size": sum(p.stat().st_size for p in [target, *companions] if p.is_file()),
+        "invalidates": pool_has_progressed(dtxsid),
+        "kept": True,
+    }
+
+
+#: What a file riding on another is, as a person reads it.
+_COMPANION_SAY = {
+    "sidecar": "what the check recorded about it",
+    "units": "the units of its measurements",
+    "original": "the long-format file it was converted from",
+}
+
+
+def _companion_role(name: str, of: str) -> str:
+    if name.endswith(_SIDECAR_SUFFIX):
+        return "sidecar"
+    if name.endswith(_UNITS_SUFFIX):
+        return "units"
+    return "original"
+
+
+def _checked_name(filename: str) -> str:
+    """The bare file name, refused when it is not one a pool file can have."""
+    name = os.path.basename(filename or "")
+    if not name or name != filename or name.startswith("."):
+        raise PoolFileError(f"Not a pool file name: {filename!r}")
+    if name.endswith(_SIDECAR_SUFFIX):
+        raise PoolFileError(
+            f"{name} is companion metadata for a data file; remove the data file instead")
+    return name
+
+
 def remove_pool_file(dtxsid: str, filename: str) -> dict:
     """Remove ONE file from a session's pool, with everything that rides on it.
 
@@ -357,18 +431,7 @@ def remove_pool_file(dtxsid: str, filename: str) -> dict:
 
     d = _session_dir(dtxsid)
     files_dir = d / "files"
-    target = files_dir / name
-    if not target.is_file():
-        raise PoolFileError(f"No file {name!r} in the pool for {dtxsid}")
-
-    stem = _companion_stem(name)
-    companions = [files_dir / f"{stem}{_SIDECAR_SUFFIX}",
-                  files_dir / f"{stem}{_UNITS_SUFFIX}"]
-    originals = d / "_originals"
-    if originals.is_dir():
-        companions += [p for p in originals.iterdir()
-                       if p.is_file() and _companion_stem(p.name) == stem]
-
+    target, companions = _would_move(dtxsid, name)
     progressed = pool_has_progressed(dtxsid)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
