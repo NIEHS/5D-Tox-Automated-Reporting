@@ -57,6 +57,17 @@ def remove_pool_file(dtxsid: str, filename: str) -> dict:
     return _remove(dtxsid, filename)
 
 
+def would_remove(dtxsid: str, filename: str) -> dict:
+    """What removing this file would take with it — shown before the act.
+
+    Guarded like the act itself: a dry run of something that would be refused
+    must be refused in the same words, or it reads as an offer.
+    """
+    from pipeline.pool_state import would_remove as _would
+    require(dtxsid, Action.REMOVE_FILE)
+    return _would(dtxsid, filename)
+
+
 def validate_step(dtxsid: str, store) -> dict:
     require(dtxsid, Action.VALIDATE, store)
     return _steps.validate_step(dtxsid, store)

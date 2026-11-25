@@ -95,11 +95,31 @@ ISSUES: dict[str, Words] = {
         what_to_do="Correct the file outside the application, or remove it.",
         group="fix"),
     "redundant_files": Words(
-        say="{files} hold the same data. Both would be combined, so it would "
-            "count twice.",
-        what_to_do="Keep one: remove the other, or correct it outside the "
-                   "application and check again.",
+        say="{files} look alike: the same assay, the same sexes, the same "
+            "doses, the same measurements.",
+        what_to_do="Looking alike is not proof of being the same. Read both; "
+                   "if one of them is not this study's, remove it.",
         settle="outside"),
+    "duplicate_files": Words(
+        say="{files} are the same file under different names. Combining both "
+            "would count the same data twice.",
+        what_to_do="Remove either one — they are the same file.",
+        group="fix"),
+    "several_test_articles": Words(
+        say="{files} holds experiments of more than one test article: "
+            "{test_articles}. Only one of them is this study's.",
+        what_to_do="A project of two chemicals carries another study's data, "
+                   "and its benchmark doses would be read as this study's. "
+                   "Narrow the project to this study's experiments outside the "
+                   "application, or remove it.",
+        settle="outside"),
+    "name_disagrees_with_contents": Words(
+        say="{files} is named for {named}, but what it measures matches "
+            "{contents_match} better.",
+        what_to_do="A file is recognized from its name, so this one is taken "
+                   "for something it may not be. Say what it is, or remove it "
+                   "if it is not this study's data.",
+        group="fix"),
     "sex_mismatch": Words(
         say="{platform}: {message}"),
     "file_not_checked": Words(
@@ -188,14 +208,22 @@ class _Fields(dict):
         return f"[{key} not recorded]"
 
 
+def _listed(things: list) -> str:
+    """A list as a person reads one: "a", "a and b", "a, b and c"."""
+    said = [str(one) for one in things if one is not None]
+    if not said:
+        return "none"
+    if len(said) == 1:
+        return said[0]
+    return ", ".join(said[:-1]) + " and " + said[-1]
+
+
 def _files_say(issue: dict, names: dict[str, str]) -> str:
     """The files an issue involves, by the names a person brought them in under."""
     involved = [names.get(f, f) for f in (issue.get("files_involved") or [])]
     if not involved:
         return "the study's files"
-    if len(involved) == 1:
-        return involved[0]
-    return ", ".join(involved[:-1]) + " and " + involved[-1]
+    return _listed(involved)
 
 
 def _platform_say(platform: str | None) -> str:
@@ -318,7 +346,11 @@ def say(issue: dict, names: dict[str, str]) -> dict:
             files=_files_say(issue, names),
             message=_bare_message(issue, names),
             example=_example_say(details),
-            **{k: v for k, v in details.items() if isinstance(v, (str, int, float))},
+            # A detail the check recorded as a list is said as a list of
+            # things ("Triclosan and Bisphenol AF"), not as its repr.
+            **{k: (_listed(v) if isinstance(v, list) else v)
+               for k, v in details.items()
+               if isinstance(v, (str, int, float, list))},
         )
         said = words.say.format_map(fields)
         what_to_do = words.what_to_do

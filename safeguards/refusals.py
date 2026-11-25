@@ -99,6 +99,15 @@ REFUSALS: dict[str, Refusal] = {
     "files_not_recognised": Refusal(400, (
         "None of this study's files has been recognised yet. Add the files and run "
         "the file check, then try again."), "files"),
+    # Removing one file (pipeline.pool_state.PoolFileError).
+    "file_not_in_pool": Refusal(404, (
+        "This study has no such file. It may have been removed already, or renamed."),
+        "files"),
+    "companion_not_removable": Refusal(400, (
+        "That file is one the application wrote beside a data file, and it goes when "
+        "the data file goes. Remove the data file instead."), "files"),
+    "file_name_invalid": Refusal(400, (
+        "That is not the name of a file in this study."), "files"),
     "not_validated": Refusal(400, (
         "The study's files haven't been checked yet. Run the file check "
         "(validation) first, then try again."), "files"),
@@ -366,6 +375,10 @@ _MESSAGE_RULES: tuple[tuple[str, str, str], ...] = (
     ("StepError", r"^Content preparation failed:", "content_preparation_failed"),
     ("StepError", r"^No '(?P<key>[^']*)' section to (?P<act>\w+)", "section_not_found"),
     ("StepError", r"^dtxsid and section_key are required", "section_key_missing"),
+    # PoolFileError (pipeline/pool_state.py): removing one file
+    ("PoolFileError", r"^No file ", "file_not_in_pool"),
+    ("PoolFileError", r"companion metadata", "companion_not_removable"),
+    ("PoolFileError", r"", "file_name_invalid"),
     # GuardViolation (workflow/labels.py, workflow/currency.py)
     ("GuardViolation", r"requires a recorded reason", "release_reason_required"),
     ("GuardViolation", r"currency BLOCK", "stale_content"),
