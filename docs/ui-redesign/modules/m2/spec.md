@@ -1145,11 +1145,73 @@ study deleted afterwards.
 - `conflicts` is served empty: every conflict the check finds today is settled
   outside the application, and each one says so.
 - `removed` lists what is kept but offers no restore; the entry says so.
-- The check is used as it stands, so three findings the spec expects are not
-  raised yet: an exact copy under another name is information rather than a
-  blocker (`redundant_files`), a `.bm2` holding several test articles does not
-  block, and a file is still recognized from its name rather than its content.
-  These are named on the page and are the next slice's list.
+- ~~The check is used as it stands, so three findings the spec expects are not
+  raised yet.~~ **Closed 2026-11-25** — see "The three gaps, closed" below.
+
+### The three gaps, closed (2026-11-25)
+
+The step promises "nothing missing, nothing twice, nothing from another
+study". Three things the check let through now block it (severity `error` →
+phase `VALIDATION_ERRORS` → the files cannot be combined), and the page gained
+the act that clears a block.
+
+**On `main` (`d866e93`), in bmdx-pipe's check:**
+
+| Finding | What it catches |
+|---|---|
+| `duplicate_files` | the same file under two names (a content hash on every fingerprint) — the one duplication no structural comparison can prove, and the one that counts every animal twice. `redundant_files` keeps its weaker meaning: the files *look* alike |
+| `several_test_articles` | a BMDExpress project naming more than one test article. Its experiment names are now kept (an apical project's were thrown away) and read for what the project is *of* |
+| `name_disagrees_with_contents` | a table whose measurements match another assay's workbook **strictly better** than the assay its name claims |
+
+**Measured before being written, and again after:** on the 20 real studies on
+file (453 files, 117 derived tables, 24 BMDExpress projects) these rules fire
+**zero** times. Requiring a file to overlap its *own* assay was rejected
+because it would misfire on 24 real files — a body-weight workbook's endpoints
+are study-day columns while its table's are not — so only a strictly better
+match elsewhere counts as evidence. The authority is always the study's own
+data, so no list of what belongs where is written down anywhere.
+
+**Where a reading came from travels with it.** A project's test article has
+five states, and a person is never shown one as another: read by a language
+model, read by a name pattern, *the names carry none*, *the names could not be
+read*, and *the project was never opened*. Silence is not agreement. The row
+prefixes a model's reading with "A reading, not a record". Two spellings of
+one chemical are one chemical (PFHxSAm is Perfluorohexane sulfonamide, by the
+abbreviation test), because reading them as two would stop work on a sound
+study — the rule leans away from raising, since raising blocks.
+
+**The way out** (`ui-redesign`): `GET …/files/{name}/removal-preview` and
+`POST …/files/{name}/remove`, with a Remove control per row over
+`kit/ConfirmAct.tsx`. The dry run reads the same listing the act uses
+(`pipeline.pool_state.would_remove`), so it cannot promise what the act will
+not do. `PoolFileError` gained plain words rather than surfacing as a server
+error.
+
+**Verified end to end in the real app:** a study of two real files plus a
+deliberate copy → the check blocks (`VALIDATION_ERRORS`, "are the same file
+under different names") → the copy removed through the page's act, kept in
+`_removed/` → re-checked → `VALIDATED`. A real genomic project's row now lists
+its five experiments and says the application cannot tell what it is of, where
+before it showed nothing.
+
+**Found while doing it:** bmdx-pipe asked the gateway for
+`claude-haiku-4-5-20251001`, a name it does not serve, so **every** metadata
+reading in that module had been failing silently and falling back to name
+patterns — which is why real BMDExpress projects carry so little. The id is
+now put in the convention the endpoint expects. Separately, the Python clients
+in this container need `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` to
+verify the gateway (certifi does not carry the NIH CA); without it every
+reading is "unavailable" and says so.
+
+**What is still open, and is said rather than hidden:**
+- a mislabeled file whose contents match **no** assay better than its own is
+  still not caught. That needs a vocabulary of which endpoints belong to which
+  assay, which this repo has nowhere and which may not be invented by hand;
+  deriving one from the twelve published books is its own job;
+- a project whose experiment names carry no test article cannot be checked for
+  one — the row says so;
+- narrowing a shared `.bm2` to this study's experiments is still not built;
+  the finding says a person settles it outside.
 
 ## 12. Acceptance criteria
 

@@ -2,7 +2,8 @@ import { Alert, Button, Card, Collapse, Descriptions, Empty, Skeleton, Space, St
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import type { Companion, CoverageRow, FileRow, Finding, FilesView } from '../../api/files'
-import { runCheck } from '../../api/files'
+import { getRemovalPreview, removeFile, runCheck } from '../../api/files'
+import { ConfirmAct } from '../../kit/ConfirmAct'
 import { Refusal } from '../../kit/Refusal'
 import { ItemList } from '../../kit/ItemList'
 import { Pending } from '../../kit/Pending'
@@ -14,6 +15,9 @@ import {
   CHECK_BUTTON,
   CHECK_NOTE,
   CHECK_RUNNING,
+  READING_PREFIX,
+  REMOVE_CONFIRM,
+  REMOVE_LABEL,
   checkRanWords,
   COVERAGE_EXPLAIN,
   COVERAGE_TITLE,
@@ -44,9 +48,13 @@ import {
  *
  * Built so far: the study's files and what each one is taken to be, the file
  * check's findings in plain words, what the report would be built from, and
- * two of the acts — bringing files in and running the check. Saying what a
- * file is is not built yet; the page says so rather than offering a control
- * that would refuse.
+ * three acts — bringing files in, running the check, and taking a file out
+ * (the way out of a check that blocks). Saying what a file is, and starting
+ * the files over, are not built yet; the page says so rather than offering a
+ * control that would refuse.
+ *
+ * Where a reading rests on a language model, the row says so in those words:
+ * a reading is never shown as though the file had stated it.
  */
 export function FilesPage() {
   const { id = '' } = useParams()
@@ -233,9 +241,56 @@ function Files({ view }: { view: FilesView }) {
                 <Typography.Text type="secondary">None</Typography.Text>
               ),
           },
+          {
+            title: '',
+            key: 'remove',
+            render: (_: unknown, row) => <Remove row={row} view={view} />,
+          },
         ]}
       />
     </Card>
+  )
+}
+
+/**
+ * Taking one file out: the way out of a check that blocks. The dialog lists
+ * the backend's dry run — what goes with it, what it costs, and that nothing
+ * is deleted — never this page's own idea of it.
+ */
+function Remove({ row, view }: { row: FileRow; view: FilesView }) {
+  const act = row.acts.remove
+  return (
+    <ConfirmAct
+      studyId={view.id}
+      act="remove_file"
+      label={REMOVE_LABEL}
+      dialogTitle={`Take ${row.name} out of the study`}
+      confirmLabel={REMOVE_CONFIRM}
+      disabled={!act.allowed}
+      disabledReason={act.say ?? undefined}
+      buttonProps={{ size: 'small', danger: true, 'data-testid': `remove-${row.name}` }}
+      loadDryRun={async (signal) => {
+        const said = await getRemovalPreview(view.id, row.name, signal)
+        return {
+          act: 'remove_file',
+          strength: 'costly',
+          // The dialog shows each line's `say`, so each one names its file:
+          // what goes must be readable as a list of files, not of roles.
+          deletes: [
+            { what: said.file, say: `${said.file} — the data file` },
+            ...said.companions.map((one) => ({
+              what: one.name,
+              say: `${one.name} — ${one.say}`,
+            })),
+          ],
+          keeps: [{ what: 'The files themselves', say: said.kept_say }],
+          approvals_lost: [],
+          cost: said.invalidates_say ? { say: said.invalidates_say } : null,
+          reason_required: false,
+        }
+      }}
+      perform={() => removeFile(view.id, row.name, view.files_token)}
+    />
   )
 }
 
@@ -285,6 +340,22 @@ function FileDetail({ row, view }: { row: FileRow; view: FilesView }) {
       key: 'experiments',
       label: 'Its experiments',
       children: <Typography.Text>{row.bm2.experiments.join(', ') || NOT_RECORDED}</Typography.Text>,
+    })
+    // A project of more than one test article carries another study's data.
+    // The reading is shown with where it came from, so a language model's
+    // reading never passes for something the file stated.
+    items.push({
+      key: 'test_article',
+      label: 'What it is of',
+      children: (
+        <Space orientation="vertical" size={2}>
+          <Typography.Text>{row.bm2.test_article_say}</Typography.Text>
+          <Typography.Text type="secondary" data-testid={`of-${row.name}`}>
+            {row.bm2.test_article_is_a_reading ? READING_PREFIX : ''}
+            {row.bm2.test_article_from}.
+          </Typography.Text>
+        </Space>
+      ),
     })
   }
   const table = row.tables[0]
@@ -518,9 +589,9 @@ function ActsNotBuilt({ view }: { view: FilesView }) {
       description={
         <Space orientation="vertical" size={2}>
           <Typography.Text>
-            Correcting what the check read a file as, confirming the files, removing one and
-            starting the files over are done from the API page or the notebook for now. Bringing
-            files in and checking them are done here.
+            Correcting what the check read a file as, confirming the files, and starting the files
+            over are done from the API page or the notebook for now. Bringing files in, checking
+            them, and taking one out are done here.
           </Typography.Text>
           <Typography.Text type="secondary">
             The next step for this study is: {view.next.say}.

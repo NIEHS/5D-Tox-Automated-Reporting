@@ -200,3 +200,72 @@ def test_the_check_is_refused_on_a_study_with_no_files(client, study):
         r.read()
         assert r.status_code == 404
         assert json.loads(r.text)["error"]["code"] == "no_files"
+
+
+# ---------------------------------------------------------------------------
+# Taking a file out: the way out of a check that blocks
+# ---------------------------------------------------------------------------
+
+def test_the_dry_run_says_what_would_go_and_takes_nothing(client, study):
+    (study / "files" / "body_weight.txt").write_bytes(WIDE)
+    (study / "files" / "body_weight.units.json").write_text('{"Body Weight": "grams"}')
+
+    r = client.get(f"{FILES}/body_weight.txt/removal-preview")
+    assert r.status_code == 200, r.text
+    said = r.json()
+
+    assert said["file"] == "body_weight.txt"
+    assert [c["name"] for c in said["companions"]] == ["body_weight.units.json"]
+    assert "the units of its measurements" in said["companions"][0]["say"]
+    assert said["kept"] is True and "kept among" in said["kept_say"]
+    # Nothing moved.
+    assert (study / "files" / "body_weight.txt").exists()
+
+
+def test_a_file_is_taken_out_with_what_rides_on_it(client, study):
+    (study / "files" / "body_weight.txt").write_bytes(WIDE)
+    (study / "files" / "body_weight.units.json").write_text('{"Body Weight": "grams"}')
+
+    r = client.post(f"{FILES}/body_weight.txt/remove")
+    assert r.status_code == 200, r.text
+    done = r.json()
+
+    assert sorted(done["removed"]) == ["body_weight.txt", "body_weight.units.json"]
+    assert list((study / "files").iterdir()) == []
+    # Kept, not deleted.
+    assert [p for p in (study / "_removed").rglob("body_weight.txt")]
+
+
+def test_a_companion_is_not_removed_on_its_own(client, study):
+    (study / "files" / "body_weight.txt").write_bytes(WIDE)
+    (study / "files" / "body_weight.sidecar.json").write_text("{}")
+
+    r = client.post(f"{FILES}/body_weight.sidecar.json/remove")
+    assert r.status_code == 400
+    error = r.json()["error"]
+    assert error["code"] == "companion_not_removable"
+    assert "Remove the data file instead" in error["say"]
+    assert (study / "files" / "body_weight.sidecar.json").exists()
+
+
+def test_a_file_the_study_does_not_have_is_said_not_crashed(client, study):
+    (study / "files" / "body_weight.txt").write_bytes(WIDE)   # the study has files
+    r = client.post(f"{FILES}/gone.txt/remove")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "file_not_in_pool"
+
+
+def test_a_study_with_no_files_says_there_is_nothing_to_remove(client, study):
+    r = client.post(f"{FILES}/anything.txt/remove")
+    assert r.status_code == 409
+    assert r.json()["error"]["say"] == "This study has no files to remove."
+
+
+def test_a_removal_sent_against_files_that_changed_is_refused(client, study):
+    (study / "files" / "body_weight.txt").write_bytes(WIDE)
+
+    r = client.post(f"{FILES}/body_weight.txt/remove",
+                    data={"files_token": "sha256:not-the-one"})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "files_changed"
+    assert (study / "files" / "body_weight.txt").exists()

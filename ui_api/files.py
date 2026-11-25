@@ -241,6 +241,53 @@ def _classification(session: Path, name: str, fp: dict, kind: str,
     }
 
 
+#: What a reading of a project's test article rests on, in plain words, and
+#: whether it is a reading at all.  "none" and "project_not_read" are not the
+#: same thing and must never be shown alike: one says the names carry no test
+#: article, the other says nothing was read.
+_TEST_ARTICLE_BASIS = {
+    "experiment_names_llm": (
+        "read by a language model from the names of the project's experiments"),
+    "experiment_names_regex": (
+        "read from the names of the project's experiments by a name pattern"),
+    "none": (
+        "the names of the project's experiments carry no test article, so the "
+        "application cannot tell what this project is of"),
+    "unavailable": (
+        "the names of the project's experiments could not be read, so this was "
+        "not checked"),
+    "project_not_read": (
+        "the project itself was not opened, so nothing in it has been read"),
+}
+
+
+def _bm2_of(fp: dict) -> dict:
+    """What a BMDExpress project holds, and on whose word.
+
+    A project of more than one test article carries another study's data. The
+    reading travels with where it came from, so a person is never shown a
+    language model's reading as though the file had stated it, nor silence as
+    though it were agreement.
+    """
+    basis = fp.get("test_article_basis")
+    articles = list(fp.get("test_articles") or [])
+    experiments = list(fp.get("experiment_names") or fp.get("endpoint_names") or [])
+    return {
+        "experiments": experiments,
+        "species": fp.get("species"),
+        "genes": fp.get("gene_count"),
+        "test_articles": articles,
+        "test_article_basis": basis,
+        "test_article_say": (
+            f"Of {', '.join(articles)}" if articles else "Test article not established"),
+        "test_article_from": _TEST_ARTICLE_BASIS.get(basis or "", (
+            "where this reading came from is not recorded")),
+        # A reading by a language model is a reading, not a record.
+        "test_article_is_a_reading": basis in ("experiment_names_llm",
+                                               "experiment_names_regex"),
+    }
+
+
 def _tables_of(fp: dict) -> list[dict]:
     """What the check recorded of a file's contents. Read as written."""
     if not fp:
@@ -286,9 +333,7 @@ def _file_row(session: Path, name: str, files: dict[str, dict], fps: dict[str, d
         "companions": companions,
         "units": units,
         "tables": _tables_of(fp) if kind != "bm2" else [],
-        "bm2": ({"experiments": list(fp.get("endpoint_names") or []),
-                 "species": fp.get("species"),
-                 "genes": fp.get("gene_count")} if kind == "bm2" else None),
+        "bm2": (_bm2_of(fp) if kind == "bm2" else None),
         "bm2_changes": None,       # what a project fills in or leaves out: not built yet
         "narrow_choices": None,    # keeping only this study's experiments: not built yet
         "study_number": fp.get("study_number"),

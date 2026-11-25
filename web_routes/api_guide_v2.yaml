@@ -129,6 +129,42 @@ groups:
           - ui_api.files_acts.start_check
           - workflow.steps.validate_step
         notebook: 5. Validate
+      - op: GET /api/v2/studies/{dtxsid}/files/{name}/removal-preview
+        title: What removing one data file would take with it (new interface)
+        does: >
+          The file, everything the application wrote beside it (the units of
+          its measurements, what the check recorded about it, the long-format
+          file it was converted from), whether the dataset built from these
+          files would be cleared, and that nothing is deleted. It reads the
+          same listing the removal itself uses, so the two cannot promise
+          different things. Nothing is changed by asking.
+        reads: >
+          the listing of `files/` and `_originals/`, and whether the study has
+          been combined.
+        code:
+          - ui_api.files_acts.removal_dry_run
+          - pipeline.pool_state.would_remove
+        notebook: 4. Import
+      - op: POST /api/v2/studies/{dtxsid}/files/{name}/remove
+        title: Take one data file out of a study (new interface)
+        does: >
+          Removes one file with everything that rides on it. This is the way
+          out of a check that blocks: the same file under two names, a
+          BMDExpress project holding more than one test article, or a file
+          whose contents belong to an assay other than the one its name
+          claims. Reversible on disk — the files move to `_removed/<time>/`
+          rather than being deleted — and what a person said the file was goes
+          with it, so a later file of the same name inherits nothing. Where
+          the study had already been combined, what was derived from the files
+          is cleared.
+        writes: >
+          `_removed/<time>/` (the files moved there), `_fingerprints.json`,
+          `classifications.json`, and the derived artifacts when the study had
+          progressed.
+        code:
+          - ui_api.files_acts.remove_file
+          - pipeline.pool_state.remove_pool_file
+        notebook: 4. Import
   - key: dataset
     operations:
       - op: GET /api/v2/studies/{dtxsid}/dataset

@@ -23,6 +23,13 @@ function file(name: string, content = 'Dose\tBody Weight\n0\t188.1\n') {
   return new File([content], name, { type: 'text/plain' })
 }
 
+/** The fixture a study answers with; a missing one is the test's own mistake. */
+function served(id: string) {
+  const view = FILES_BY_ID[id]
+  if (!view) throw new Error(`no fixture for ${id}`)
+  return view
+}
+
 async function open(id: string) {
   renderApp(`/studies/${id}/files`)
   return screen.findByRole('heading', { level: 3, name: 'Study files' })
@@ -287,5 +294,65 @@ describe('checking the files', () => {
   it('does not offer the check where the backend does not allow it', async () => {
     await open(EMPTY)
     expect(await screen.findByTestId('check-run')).toBeDisabled()
+  })
+})
+
+describe('taking a file out', () => {
+  it('shows what would go with it before anything goes', async () => {
+    await open(CHECKED)
+    const view = served(CHECKED)
+    const row = view.files[0]!
+
+    await userEvent.click(await screen.findByTestId(`remove-${row.name}`))
+
+    // The dry run is fetched when the person clicks, so the list arrives after.
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(await dialog.findByText(new RegExp(`${row.name} .* the data file`))).toBeInTheDocument()
+    expect(await dialog.findByText(/the units of its measurements/)).toBeInTheDocument()
+    expect(await dialog.findByText(/kept among the study.s removed files/)).toBeInTheDocument()
+  })
+
+  it('does not offer the act where the backend does not allow it', async () => {
+    const view = served(CHECKED)
+    server.use(
+      http.get(`${API_V2}/studies/:id/files`, () =>
+        HttpResponse.json({
+          ...view,
+          files: view.files.map((f) => ({
+            ...f,
+            acts: {
+              ...f.acts,
+              remove: {
+                allowed: false,
+                code: 'phase_not_allowed',
+                say: 'A file cannot be removed now (the data is approved).',
+              },
+            },
+          })),
+        }),
+      ),
+    )
+    await open(CHECKED)
+    const row = view.files[0]!
+    expect(await screen.findByTestId(`remove-${row.name}`)).toBeDisabled()
+  })
+})
+
+describe('what a BMDExpress project is of', () => {
+  it('says where the reading came from, and never passes silence for agreement', async () => {
+    await open(CHECKED)
+    const view = served(CHECKED)
+    const project = view.files.find((f) => f.bm2)!
+
+    // The row's detail is behind the expander.
+    const table = within(await screen.findByTestId('files'))
+    const rows = table.getAllByRole('row')
+    const found = rows.find((r) => within(r).queryByText(project.name))!
+    await userEvent.click(within(found).getByRole('button', { expanded: false }))
+
+    expect(await screen.findByText('Test article not established')).toBeInTheDocument()
+    expect(await screen.findByTestId(`of-${project.name}`)).toHaveTextContent(
+      'carry no test article, so the application cannot tell what this project is of',
+    )
   })
 })

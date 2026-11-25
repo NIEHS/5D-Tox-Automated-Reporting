@@ -79,6 +79,35 @@ export function createM2Handlers() {
       })
     }),
 
+    // What taking one file out would cost, and doing it.
+    http.get(`${API_V2}/studies/:id/files/:name/removal-preview`, ({ params }) => {
+      const name = String(params.name)
+      return HttpResponse.json({
+        id: String(params.id),
+        file: name,
+        companions: [{ name: `${name}.units.json`, say: 'the units of its measurements' }],
+        size: 4096,
+        invalidates: false,
+        kept: true,
+        say: `${name} and 1 file written beside it would be taken out of the study.`,
+        kept_say:
+          "Nothing is deleted: the files are kept among the study's removed files, where they can be found again.",
+        invalidates_say: null,
+      })
+    }),
+
+    http.post(`${API_V2}/studies/:id/files/:name/remove`, ({ params }) => {
+      const name = String(params.name)
+      return HttpResponse.json({
+        id: String(params.id),
+        file: name,
+        removed: [name, `${name}.units.json`],
+        say: `${name} was taken out of the study, with 1 file written beside it.`,
+        kept_say: "The files are kept among the study's removed files.",
+        files_token: 'sha256:after-the-removal',
+      })
+    }),
+
     http.post(`${API_V2}/studies/:id/check`, () =>
       HttpResponse.text(
         [

@@ -15,6 +15,9 @@ const enc = encodeURIComponent
 export const filesPaths = {
   files: (id: string) => `${API_V2}/studies/${enc(id)}/files`,
   check: (id: string) => `${API_V2}/studies/${enc(id)}/check`,
+  remove: (id: string, name: string) => `${API_V2}/studies/${enc(id)}/files/${enc(name)}/remove`,
+  removalPreview: (id: string, name: string) =>
+    `${API_V2}/studies/${enc(id)}/files/${enc(name)}/removal-preview`,
 }
 
 /** An act, with the reason when it is not allowed now. */
@@ -67,6 +70,30 @@ export interface FileTable {
   selection_groups: string[]
 }
 
+/**
+ * What a BMDExpress project holds, and on whose word. A project of more than
+ * one test article carries another study's data, so the reading travels with
+ * where it came from — a language model's reading is never shown as though
+ * the file had stated it, nor silence as though it were agreement.
+ */
+export interface Bm2 {
+  experiments: string[]
+  species: string | null
+  genes: number | null
+  test_articles: string[]
+  test_article_basis:
+    | 'experiment_names_llm'
+    | 'experiment_names_regex'
+    | 'none'
+    | 'unavailable'
+    | 'project_not_read'
+    | null
+    | (string & {})
+  test_article_say: string
+  test_article_from: string
+  test_article_is_a_reading: boolean
+}
+
 /** One file a person brought in. */
 export interface FileRow {
   name: string
@@ -78,7 +105,7 @@ export interface FileRow {
   companions: Companion[]
   units: { state: string; values: Record<string, string>; say: string | null }
   tables: FileTable[]
-  bm2: { experiments: string[]; species: string | null; genes: number | null } | null
+  bm2: Bm2 | null
   bm2_changes: null
   narrow_choices: null
   study_number: string | null
@@ -245,4 +272,45 @@ export interface CheckSummary {
 /** Check the study's files: the §4.4 event stream. */
 export function runCheck(id: string): AsyncGenerator<RunEvent> {
   return streamRun(filesPaths.check(id))
+}
+
+// ---------------------------------------------------------------------------
+// Taking a file out
+// ---------------------------------------------------------------------------
+
+/** What removing one file would take with it. The server decides every word. */
+export interface RemovalPreview {
+  id: string
+  file: string
+  companions: { name: string; say: string }[]
+  size: number
+  invalidates: boolean
+  kept: boolean
+  say: string
+  kept_say: string
+  invalidates_say: string | null
+}
+
+export interface Removal {
+  id: string
+  file: string
+  removed: string[]
+  say: string
+  kept_say: string
+  files_token: string
+}
+
+export function getRemovalPreview(
+  id: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<RemovalPreview> {
+  return getJson<RemovalPreview>(filesPaths.removalPreview(id, name), signal)
+}
+
+/** Take one file out of the study, with everything that rides on it. */
+export function removeFile(id: string, name: string, filesToken?: string | null): Promise<Removal> {
+  const form = new FormData()
+  if (filesToken) form.append('files_token', filesToken)
+  return sendForm<Removal>(filesPaths.remove(id, name), form)
 }

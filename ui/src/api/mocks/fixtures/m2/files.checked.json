@@ -85,7 +85,12 @@
           "rat_2D_OV_No0"
         ],
         "species": "Rattus norvegicus",
-        "genes": 1867
+        "genes": 1867,
+        "test_articles": [],
+        "test_article_basis": "none",
+        "test_article_say": "Test article not established",
+        "test_article_from": "the names of the project's experiments carry no test article, so the application cannot tell what this project is of",
+        "test_article_is_a_reading": false
       },
       "bm2_changes": null,
       "narrow_choices": null,

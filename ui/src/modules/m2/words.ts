@@ -281,6 +281,16 @@ export function verdictMark(verdict: string): { label: string; tone: Mark['tone'
 // The check, as an act
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Taking a file out, and where a reading came from
+// ---------------------------------------------------------------------------
+
+export const REMOVE_LABEL = 'Remove'
+export const REMOVE_CONFIRM = 'Take it out of the study'
+
+/** A reading is a reading, never a record the file itself carries. */
+export const READING_PREFIX = 'A reading, not a record: '
+
 export const CHECK_BUTTON = 'Check the files'
 export const CHECK_AGAIN = 'Check the files again'
 export const CHECK_RAN = 'The file check ran.'

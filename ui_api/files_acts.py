@@ -191,4 +191,73 @@ def start_check(dtxsid: str) -> Iterator[str]:
                            path=f"/api/v2/studies/{dtxsid}/check")
 
 
-__all__ = ["bring_in", "answers_from", "start_check", "FILE_REFUSALS"]
+# ---------------------------------------------------------------------------
+# Removing one file
+# ---------------------------------------------------------------------------
+
+def removal_dry_run(dtxsid: str, name: str) -> dict:
+    """What removing this file would take with it — read before the act.
+
+    The same listing the act itself uses
+    (``pipeline.pool_state.would_remove``), so the two cannot promise
+    different things.  Guarded like the act: a dry run of something that
+    would be refused must be refused in the same words, or it reads as an
+    offer.
+    """
+    from safeguards import guarded
+    from ui_api.files import _session
+
+    _session(dtxsid)
+    said = guarded.would_remove(dtxsid, name)
+    said["say"] = (
+        f"{name} and {_count(len(said['companions']), 'file')} written beside it "
+        f"would be taken out of the study."
+        if said["companions"] else
+        f"{name} would be taken out of the study."
+    )
+    said["kept_say"] = ("Nothing is deleted: the files are kept among the study's "
+                        "removed files, where they can be found again.")
+    said["invalidates_say"] = (
+        "The files have already been combined, so the dataset and what was built "
+        "from it are cleared. The files must be combined again."
+        if said["invalidates"] else None)
+    return {"id": dtxsid, **said}
+
+
+def remove_file(dtxsid: str, name: str, *, files_token: str | None = None) -> dict:
+    """Take one file out of the study, with everything that rides on it.
+
+    Reversible on disk: the files move to ``_removed/<time>/`` rather than
+    being deleted. Refused on the finished side of a demo pair, when the act
+    is not legal in the study's phase, and when the study's files changed
+    after the page read them.
+    """
+    from safeguards import guarded
+    from ui_api.demo import require_not_reference
+    from ui_api.files import _listing, _session, _token
+
+    session = _session(dtxsid)
+    require_not_reference(dtxsid)
+    if files_token:
+        now = _token(_listing(session / "files"), session)
+        if now != files_token:
+            raise StudyRefusal("files_changed", f"files_token {files_token} is not {now}",
+                               409, {"sent": files_token, "now": now})
+
+    gone = guarded.remove_pool_file(dtxsid, name)
+    removed = list(gone.get("removed") or [])
+    logger.info("%s: %s removed (%d files)", dtxsid, name, len(removed))
+    return {"id": dtxsid, "removed": removed, "file": name,
+            "say": f"{name} was taken out of the study, with "
+                   f"{_count(len(removed) - 1, 'file')} written beside it."
+                   if len(removed) > 1 else f"{name} was taken out of the study.",
+            "kept_say": "The files are kept among the study's removed files.",
+            "files_token": _token(_listing(session / "files"), session)}
+
+
+def _count(n: int, one: str) -> str:
+    return f"{n} {one}" if n == 1 else f"{n} {one}s"
+
+
+__all__ = ["bring_in", "answers_from", "start_check", "remove_file",
+           "removal_dry_run", "FILE_REFUSALS"]

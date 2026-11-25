@@ -190,6 +190,6 @@ describe('what the page does not do yet', () => {
     await open(CHECKED)
     const said = await screen.findByTestId('acts-not-built')
     expect(said).toHaveTextContent('Saying what a file is, is not built on this page yet')
-    expect(said).toHaveTextContent('Bringing files in and checking them are done here.')
+    expect(said).toHaveTextContent('Bringing files in, checking them, and taking one out are done here.')
   })
 })

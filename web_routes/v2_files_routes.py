@@ -60,6 +60,27 @@ def api_v2_bring_in_files(dtxsid: str,
                                  files_token=files_token, dry_run=dry_run))
 
 
+@router.get("/studies/{dtxsid}/files/{name}/removal-preview")
+def api_v2_removal_preview(dtxsid: str, name: str):
+    """What removing this file would take with it (ui_api.files_acts.
+    removal_dry_run): the file, everything written beside it, whether the
+    dataset would be cleared, and that nothing is deleted. Reads the same
+    listing the act uses, so the two cannot promise different things."""
+    from ui_api.files_acts import removal_dry_run
+    return JSONResponse(removal_dry_run(dtxsid, name))
+
+
+@router.post("/studies/{dtxsid}/files/{name}/remove")
+def api_v2_remove_file(dtxsid: str, name: str, files_token: str | None = Form(default=None)):
+    """Take one file out of the study, with its companions
+    (ui_api.files_acts.remove_file). Reversible on disk: the files move to
+    `_removed/<time>/` rather than being deleted. This is the way out of a
+    check that blocks — a duplicate, a project of two test articles, a file
+    whose contents belong to another assay."""
+    from ui_api.files_acts import remove_file
+    return JSONResponse(remove_file(dtxsid, name, files_token=files_token))
+
+
 @router.post("/studies/{dtxsid}/check")
 def api_v2_check_files(dtxsid: str):
     """Check the study's files against each other and against its workbook
